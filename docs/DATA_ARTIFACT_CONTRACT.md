@@ -204,16 +204,24 @@ with any of these inconsistent:
 | `schema` | `"torch_artifact/1"` | equal |
 | `source_commit` | git commit of the TF repo that ran the export (the tool refuses a dirty tree) | 40 lowercase hex |
 | `coins` | coins in the artifact, in row order | non-empty, equals the dataset's `asset_bounds` names, none on the sealed list |
-| `sealed_excluded` | the WHOLE sealed list of the TF lock (`tools/holdout_guard.py`, `docs/research/plan/lock/holdout.json`) | non-empty; no coin of `coins` matches it (case and trailing `USDT` ignored) |
+| `sealed_excluded` | the WHOLE sealed list of the TF lock (`tools/holdout_guard.py`, `docs/research/plan/lock/holdout.json`) | exactly `EXPECTED_SEALED_COUNT` (183) names, pinned in `data_io/artifact.py`, not read from the manifest; no coin of `coins` matches it (case and trailing `USDT` ignored) |
+| `lock_sha256` | sha256 of the TF `holdout.json` the export ran against | equals `EXPECTED_LOCK_SHA256`, pinned in `data_io/artifact.py` (= the TF `holdout.sha256`); required |
 | `time_seal` | `2026-10-01T00:00:00+00:00` | equals the constant in `artifact.py` |
 | `max_bar_time` | latest LABEL bar open time (last window bar + `forecast_horizon` x base-tf bar) | `< time_seal`; the loader recomputes it from `last_candles` and refuses data that reaches later than the manifest says |
 | `data_sha256` | sha256 of the JSON of `files` (sorted keys); this is the `data_fingerprint` of `RunIdentity` | 64 lowercase hex |
 | `files` | sha256 of every file in the directory except `manifest.json` | format; re-hashed only by `verify_hashes` / `--verify-hashes` |
-| `sealed_found`, `lock_sha256`, `max_window_time`, `rows`, `rows_source`, `dropped_*`, `source_*` | provenance for the reader | not checked |
+| `sealed_found`, `max_window_time`, `rows`, `rows_source`, `dropped_*`, `source_*` | provenance for the reader | not checked |
 
-`build_run_identity(fit_settings, model_settings, artifact.manifest.data_fingerprint, code_sha=...)`
-(`trainer/identity.py`) is the one way a real run gets its `RunIdentity`; `Trainer.fit` raises `SeedMismatchError` when
-`identity.seed != settings.seed`.
+`build_run_identity(fit_settings, model_settings, trainer.config, trainer.optimizer, artifact.manifest.data_fingerprint,
+code_sha=...)` (`trainer/identity.py`) is the one way a real run gets its `RunIdentity`. Its `settings_hash` covers the
+fit settings (without `epochs`), the model settings, the WHOLE trainer config (targets with loss weights, loss with
+schedules, constraints) and the optimizer (class, defaults, every param group); all five are required arguments. A
+changed loss weight or learning rate therefore makes `Trainer.fit` refuse to resume (`ResumeMismatchError`).
+`Trainer.fit` raises `SeedMismatchError` when `identity.seed != settings.seed`.
+
+The two lock pins (`EXPECTED_SEALED_COUNT`, `EXPECTED_LOCK_SHA256`) are values of the TF lock at crypto-signal-prediction
+`cea9cd5` (`holdout.json`: 183 sealed coins, sha256 `70322ba6...`). They bind the manifest to that lock; they do not
+prove the listed names are the lock's names (see `docs/suggestions.csv`, T2 review).
 
 ### Run it once on Colab (Drive data)
 
