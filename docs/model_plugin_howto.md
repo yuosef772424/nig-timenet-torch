@@ -1,0 +1,33 @@
+# How to add a model
+
+A model plugs into this repo by matching a boundary contract, not by sharing internals. The trainer
+(`trainer/trainer.py`), `workflow/prediction_table.py` and `stats/metrics.py` only see the output dict.
+
+1. Implement a `torch.nn.Module` with `forward(x) -> dict[str, Tensor]`. `x` has shape `(batch, seq_len, n_features)`.
+   The output keys are the `HEAD_REGISTRY` names for every head you emit (`model/heads.py`):
+   - `nig_regression`: `y_{t}`, `y_{t}_nu`, `y_{t}_alpha`, `y_{t}_beta`, `y_{t}_confidence`, plus
+     `y_{t}_epistemic` and `y_{t}_aleatoric`.
+   - `binary_classification`: `y_{t}_class_logits`. This is a probability despite the name.
+
+   Each output is `(batch, 1)` float32. The simplest route is to reuse the head modules in `model/nig_layers.py`
+   and `heads.classification_head_forward`, as `TinyMLP` does. If you have kernel regularisers, add
+   `regularization_loss()`; the trainer adds it to the loss when present.
+2. Write a `build_fn(seq_len, n_features, **config)` and register it:
+   ```python
+   ARCHITECTURES.register("my_model", build_my_model, version=1, build_fn=build_my_model,
+                          default_config={...})
+   ```
+3. Check it. `check_contract(my_model, contract_of(reference_model, x), x)` (from `core/model_contract.py`) raises
+   with a field-level diff when a name, shape, dtype or head kind differs. Select it with
+   `ModelSettings(architecture="my_model")` and `build_model(settings, seq_len, n_features)`.
+
+You are done at that point: the same `Trainer`, `predict_table` and metrics run unchanged. See
+`tests/model/test_tiny_mlp_plugin.py` for the end-to-end proof.
+
+## How to add a probe point
+
+`model/probe.py:layer_probe_report(model, x, y, probe_points=[...])` probes any module by its name in
+`model.named_modules()`, such as `"patch_embed"`, `"block_1"` or `"trunk_norm"` (for a GRU encoder, `"step_proj"`,
+`"gru_1"`). To add a probe point, give the activation you want its own named submodule and put that name in
+`probe_points`; it appears as a row in the next report run. `"raw_input"` (the flattened raw window) is always the
+first row. The report gives numbers only: no conclusion is drawn from them in this repo.

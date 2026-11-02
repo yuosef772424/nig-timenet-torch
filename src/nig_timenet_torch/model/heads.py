@@ -31,7 +31,7 @@ class HeadSpec:
 
 HEAD_REGISTRY = Registry("head", Contract(
     "head", required_meta=("output_keys", "label_key", "task_type"),
-    optional_meta=("head_name", "label_encoding", "default_weight", "eval_role")))
+    optional_meta=("head_name", "label_encoding", "default_weight", "eval_role", "extra_output_keys")))
 
 
 def head_spec(kind: str, target: str) -> HeadSpec:
@@ -58,7 +58,9 @@ HEAD_REGISTRY.register(
     output_keys={"mu": "y_{target}", "nu": "y_{target}_nu", "alpha": "y_{target}_alpha", "beta": "y_{target}_beta",
                  "confidence": "y_{target}_confidence"},
     label_key="y_{target}_reg", task_type="evidential", label_encoding="continuous", default_weight=1.0,
-    eval_role="price")
+    eval_role="price",
+    # model outputs of this head kind that no loss reads (so not in output_keys); used by core.model_contract (P31)
+    extra_output_keys={"epistemic": "y_{target}_epistemic", "aleatoric": "y_{target}_aleatoric"})
 HEAD_REGISTRY.register(
     "binary_classification", classification_head_forward, version=1, head_name="{target}_class",
     output_keys={"logits": "y_{target}_class_logits"}, label_key="y_{target}_class", task_type="classification",
