@@ -1513,6 +1513,57 @@ and `docs/STATUS.md` agree.
 
 ---
 
+## 14. Follow-up batches B9-B10 (owner request, 2026-11-02)
+
+After B8 the owner asked for the rest of the upstream models, then a Colab notebook. These are new steps. P00-P39
+above are unchanged, and the same rules apply: section 0 tolerances, one branch and one PR per batch, the STATUS
+row updated in the same PR, and friction rows appended with the csv writer. This lifts the section 12
+"out of scope" line for the cross-asset PanelModel only. The slot/universe panel data side stays out of scope.
+
+### B9: remaining model variants (P40-P44)
+Oracle (P40-P43 all use it): `reference/export_reference_variants.py` -> `reference/data_variants/<case>/`, built
+from upstream code only and byte-identical across two runs (sha256 in `reference/README_variants.md`).
+
+- **P40 TCN encoder.** `encoder="tcn"`: `step_proj`, then n = max(1, ceil(log2 T) - 1) blocks of RMSNorm, causal
+  Conv1D(d, k=3, dilation 2^i, gelu), Dropout, residual add. Keras names are `tcn_norm_i`, `tcn_conv_i` and
+  `tcn_drop_i`. Accept: every weight loads exactly, the 24 outputs match at the forward tolerance, and the blocks
+  are causal (changing bars after j does not move positions <= j).
+- **P41 Multi-timeframe.** `seq_len`/`n_features` given as `{timeframe: value}` (`n_features` may stay an int).
+  Each timeframe gets its own encoder branch, every module name suffixed `_{tf}`, and the branch embeddings are
+  concatenated (`branch_concat`) before `trunk_norm`, whose width is d x n_tf. A one-key dict is the
+  single-timeframe graph. The input is a dict, or a sequence in timeframe order. `input_skip` stays
+  single-timeframe only. Accept: oracle parity, dict and sequence inputs give identical outputs, the names are
+  suffixed, and errors are explicit for mismatched or missing timeframes.
+- **P42 Multiclass head and loss.** Head kind `multiclass_classification`: Dense(relu), Dropout,
+  Dense(n_classes, softmax), output `y_{t}_class_logits` (probabilities, as upstream). `n_classes` is an int or a
+  dict per target. `classification_task_loss(binary=False)` follows Keras from_logits=False (renormalise, clip
+  eps, CE; label smoothing over K classes; argmax accuracy). Accept: forward parity, and loss plus accuracy at the
+  loss tolerance for ls in {0, 0.1}, weighted and unweighted.
+- **P43 Cross-asset PanelModel.** `model/panel.py` contains:
+  - `panel_encoder` (the NIG trunk up to `trunk_drop`, no heads);
+  - the masked cross-coin `CrossAssetBlock`, with Keras MultiHeadAttention layouts kept;
+  - (day, pos) scatter/gather;
+  - per-coin `logit`/`mu` heads.
+
+  Accept: oracle parity with `cross_attention` True and False. Also adapted from upstream `cross_asset/selftest.py`:
+  padding and other days are invisible, same-day coins interact only with attention on, and coin order is
+  irrelevant.
+- **P44 Review.** Full suite and ruff green; STATUS B9 row; friction rows.
+
+### B10: Colab notebook (P45)
+- **P45.** `notebooks/colab_nig_timenet_torch.ipynb` does the following:
+  1. Checks out the repo (public clone, or a private clone with a token typed at runtime and never stored in the
+     notebook).
+  2. Installs the package with `pip install -e .[dev]`, keeping Colab's own torch.
+  3. Optionally mounts Google Drive.
+  4. Runs the test suite, i.e. all oracle parity checks.
+  5. Builds each architecture and variant.
+  6. Trains a small model on the committed fixture, or on a dataset folder from Drive, using `Trainer`.
+  7. Writes a PredictionTable, then reports metrics and isotonic calibration.
+
+  The notebook stores no outputs and no secrets. Its device is `cuda` when available, otherwise CPU. Accept: a
+  test executes the notebook's code cells headless on CPU, using the fixture, with the Colab-only cells skipped.
+
 ## Change log of this plan itself
 
 - 2026-11-02: initial version, written by the planning session referenced in this repo's PR history.
@@ -1541,3 +1592,7 @@ and `docs/STATUS.md` agree.
     only `RunSettings.rolling` and `RollingSettings`. `RunIdentity` gained optional `fold`/`data_cut`.
   - The open judgment calls are all rows in `docs/friction_log.csv` marked "owner to confirm". None of them
     changed a tolerance or a default behaviour.
+- 2026-11-02 (owner request after B8): added section 14 with batches B9 (P40-P44: tcn, multi-timeframe,
+  multiclass, cross-asset PanelModel) and B10 (P45: Colab notebook). For the PanelModel only, this lifts the
+  section 12 out-of-scope line. The owner also allowed adapting upstream tests where nothing conflicts; the
+  adapted tests name their upstream source.

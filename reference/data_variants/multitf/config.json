@@ -1,0 +1,74 @@
+{
+  "seq_len": {
+    "1d": 32,
+    "4h": 24
+  },
+  "n_features": {
+    "1d": 6,
+    "4h": 5
+  },
+  "config": {
+    "d_model": 16,
+    "num_layers": 2
+  },
+  "constructor_kwargs": {
+    "d_model": 16,
+    "num_layers": 2,
+    "num_heads": 4,
+    "num_kv_heads": 2,
+    "patch_len": 4,
+    "stride": 2,
+    "kernel_sizes": [
+      3,
+      5,
+      9,
+      17
+    ],
+    "max_rel_pos": 16,
+    "dropout": 0.1,
+    "attn_dropout": 0.0,
+    "causal": false,
+    "window": null,
+    "use_instance_norm": true,
+    "use_decomposition": true,
+    "use_linear_path": true,
+    "price_targets": [
+      "high",
+      "low",
+      "close"
+    ],
+    "head_types": {
+      "high": [
+        "nig_regression",
+        "binary_classification"
+      ],
+      "low": [
+        "nig_regression",
+        "binary_classification"
+      ],
+      "close": [
+        "nig_regression",
+        "binary_classification"
+      ]
+    },
+    "enforce_order": true,
+    "head_hidden": 128,
+    "nu_min": 0.1,
+    "alpha_min": 2.0,
+    "beta_min": 0.01,
+    "unc_max": 20.0,
+    "class_head_hidden": 64,
+    "n_classes": 3,
+    "norm_eps": 0.0001,
+    "input_clip": null,
+    "stats_mode": "full",
+    "input_noise_std": 0.0,
+    "feature_dropout": 0.0,
+    "linear_path_l2": 0.0001,
+    "level_passthrough": false,
+    "level_norm": null
+  },
+  "upstream_commit": "aeafc564f25c78f252936affbd374f68aa49b8d9",
+  "tensorflow": "2.21.0",
+  "numpy": "2.4.6"
+}
