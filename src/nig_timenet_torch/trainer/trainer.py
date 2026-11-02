@@ -1,5 +1,5 @@
-"""Trainer state + compute_losses (source: crypto-signal-prediction trainer/trainer.py @ aeafc564, GenericTrainer
-__init__ and _compute_losses; BUILD_PLAN.md P18). The train/eval loop arrives in P22.
+"""Trainer + compute_losses (source: crypto-signal-prediction trainer/trainer.py @ aeafc564, GenericTrainer
+__init__ / _compute_losses / train_step / test_step; BUILD_PLAN.md P18, P22).
 
 L2 kernel regularisation: torch has no per-layer kernel_regularizer, so the model exposes
 ``regularization_loss()`` (``l2 * sum(w^2)``, no 0.5 factor, NOTES.md #6) and compute_losses adds it once to both
@@ -10,6 +10,7 @@ from collections.abc import Mapping
 
 import torch
 
+from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS, compute_selection_metric
 from nig_timenet_torch.trainer.task_weighting import UncertaintyWeightedLoss
 from nig_timenet_torch.trainer.tasks import TASK_REGISTRY
 
@@ -31,12 +32,13 @@ def weight_for_target(sample_weight, target_name: str, tcfg: dict):
 def compute_losses(model: torch.nn.Module, x, y, targets_cfg: dict, scheduled_vars: dict[str, float],
                    loss_weights: dict[str, float], uncertainty_layer: UncertaintyWeightedLoss | None,
                    kendall_task_names: list[str], fixed_task_names: list[str], sample_weight=None,
-                   training: bool = False):
+                   training: bool = False, outputs: dict | None = None):
     """-> (total_loss, raw_loss, per_target_losses, per_stat_values, per_constraint_values).
     raw_loss = sum of loss * loss_weight (no Kendall terms) + regularisation; total applies Kendall to
     kendall_task_names and adds fixed_task_names unweighted. ``training`` only gates flooding (the model's own
-    train()/eval() mode gates dropout)."""
-    outputs = model(x)
+    train()/eval() mode gates dropout). ``outputs``: precomputed model(x) (then x is not used)."""
+    if outputs is None:
+        outputs = model(x)
     per_target, per_stat = {}, {}
     for t, tcfg in targets_cfg.items():
         entry = TASK_REGISTRY[tcfg["task_type"]]
@@ -70,10 +72,17 @@ def compute_losses(model: torch.nn.Module, x, y, targets_cfg: dict, scheduled_va
 
 
 class Trainer:
-    """Minimal GenericTrainer state (P18): scheduled_vars (at their schedule ``start``), loss_weights, Kendall split.
-    ``config`` is the trainer config dict ({"targets", "loss", optional "constraints"})."""
+    """GenericTrainer: scheduled_vars (at their schedule ``start``), loss_weights, Kendall split, train/eval steps.
 
-    def __init__(self, model: torch.nn.Module, config: dict):
+    ``tasks_cfg`` is the trainer config dict ({"targets", "loss", optional "constraints"}). ``optimizer`` may be
+    None (losses only), a torch Optimizer (the Kendall log-variances are added to it as an extra param group if
+    missing), or a callable ``params -> Optimizer``. ``selection_metric`` must be a SELECTION_METRICS name (unknown
+    names raise UnknownNameError here, at construction)."""
+
+    def __init__(self, model: torch.nn.Module, tasks_cfg: dict, optimizer=None, selection_metric: str = "val_raw_loss"):
+        SELECTION_METRICS.entry(selection_metric)
+        self.selection_metric = selection_metric
+        config = tasks_cfg
         self.model, self.config = model, config
         self.target_names = list(config["targets"])
         loss_cfg = config["loss"]
@@ -88,13 +97,52 @@ class Trainer:
         constraints = list(loss_cfg.get("constraints", [])) + list(config.get("constraints", []))
         if constraints:
             raise NotImplementedError("output constraints are not ported yet")
+        self.optimizer = self._attach_optimizer(optimizer)
+
+    def _attach_optimizer(self, optimizer):
+        if optimizer is None or isinstance(optimizer, torch.optim.Optimizer):
+            if optimizer is not None and self.uncertainty_layer is not None:
+                have = {id(p) for g in optimizer.param_groups for p in g["params"]}
+                extra = [p for p in self.uncertainty_layer.parameters() if id(p) not in have]
+                if extra:
+                    optimizer.add_param_group({"params": extra})
+            return optimizer
+        return optimizer(list(self.parameters()))
 
     def parameters(self):
         yield from self.model.parameters()
         if self.uncertainty_layer is not None:
             yield from self.uncertainty_layer.parameters()
 
-    def compute_losses(self, x, y, sample_weight=None, training: bool = False):
+    def compute_losses(self, x, y, sample_weight=None, training: bool = False, outputs: dict | None = None):
         return compute_losses(self.model, x, y, self.config["targets"], self.scheduled_vars, self.loss_weights,
                               self.uncertainty_layer, self.kendall_task_names, self.fixed_task_names,
-                              sample_weight=sample_weight, training=training)
+                              sample_weight=sample_weight, training=training, outputs=outputs)
+
+    @staticmethod
+    def _logs(total, raw, per_target, stats) -> dict[str, float]:
+        logs = {"total_loss": float(total.detach()), "raw_loss": float(raw.detach())}
+        logs.update({f"{t}_loss": float(v.detach()) for t, v in per_target.items()})
+        logs.update({k: float(v.detach()) for k, v in stats.items()})
+        return logs
+
+    def train_step(self, x, y, sample_weight=None) -> dict[str, float]:
+        """One optimizer step on (x, y) with the model in train() mode; returns scalar logs."""
+        if self.optimizer is None:
+            raise RuntimeError("Trainer has no optimizer")
+        self.model.train()
+        self.optimizer.zero_grad(set_to_none=True)
+        total, raw, per_target, stats, _ = self.compute_losses(x, y, sample_weight=sample_weight, training=True)
+        total.backward()
+        self.optimizer.step()
+        return self._logs(total, raw, per_target, stats)
+
+    @torch.no_grad()
+    def eval_step(self, x, y, sample_weight=None) -> dict[str, float]:
+        """No-grad eval() pass; scalar logs + ``selection_metric`` (the value of ``self.selection_metric``)."""
+        self.model.eval()
+        outputs = self.model(x)
+        total, raw, per_target, stats, _ = self.compute_losses(x, y, sample_weight=sample_weight, outputs=outputs)
+        logs = self._logs(total, raw, per_target, stats)
+        logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, y, logs)
+        return logs
