@@ -7,7 +7,9 @@ import torch.nn.functional as F
 from torch import nn
 
 __all__ = ["InstanceNorm", "SymLog", "CausalMultiScaleDecomp", "keras_dense_weight_to_torch",
-           "keras_conv1d_weight_to_torch", "num_patches", "PatchEmbedding"]
+           "keras_conv1d_weight_to_torch", "num_patches", "PatchEmbedding",
+           "RMSNorm", "RelativeGQAttention", "SwiGLU", "TransformerBlock",
+           "LastToken", "AttentionPool", "FiLM", "GatedFusion"]
 
 
 class InstanceNorm(nn.Module):
@@ -138,3 +140,155 @@ class PatchEmbedding(nn.Module):
         if self.pad > 0:
             x = torch.cat([x[:, :1, :].expand(-1, self.pad, -1), x], dim=1)
         return self.proj(x.transpose(1, 2)).transpose(1, 2) + self.pos
+
+
+class RMSNorm(nn.Module):
+    """``scale * x * rsqrt(mean(x^2, -1) + eps)`` (source: model/transformer.py RMSNorm)."""
+
+    def __init__(self, d_model: int, epsilon: float = 1e-6):
+        super().__init__()
+        self.epsilon = epsilon
+        self.scale = nn.Parameter(torch.ones(d_model))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        ms = x.square().mean(dim=-1, keepdim=True)
+        return self.scale * x * torch.rsqrt(ms + self.epsilon)
+
+
+class RelativeGQAttention(nn.Module):
+    """Grouped-query self-attention with a learned relative-position bias (source: model/transformer.py).
+
+    wq/wk/wv/wo have no bias; k, v are repeated num_heads // num_kv_heads times along the head axis; scores =
+    q k^T / sqrt(d_h) + rel_bias[clip(i - j, -max_rel_pos, max_rel_pos) + max_rel_pos]; optional causal (i >= j) /
+    window (|i - j| <= window) mask fills with finfo.min; softmax; dropout; ctx = attn v; wo(ctx).
+    After each forward, ``last_scores_pre_softmax`` / ``last_attn_weights`` hold the (B, H, T, T) tensors.
+    """
+
+    def __init__(self, d_model: int, num_heads: int, num_kv_heads: int | None = None, max_rel_pos: int = 16,
+                 causal: bool = False, window: int | None = None, dropout: float = 0.0):
+        super().__init__()
+        num_kv_heads = num_kv_heads or num_heads
+        if d_model % num_heads or num_heads % num_kv_heads:
+            raise ValueError("d_model % num_heads and num_heads % num_kv_heads must both be 0")
+        self.d_model, self.h, self.hkv = d_model, num_heads, num_kv_heads
+        self.dh = d_model // num_heads
+        self.max_rel_pos, self.causal, self.window = max_rel_pos, causal, window
+        self.wq = nn.Linear(d_model, self.h * self.dh, bias=False)
+        self.wk = nn.Linear(d_model, self.hkv * self.dh, bias=False)
+        self.wv = nn.Linear(d_model, self.hkv * self.dh, bias=False)
+        self.wo = nn.Linear(d_model, d_model, bias=False)
+        self.rel_bias = nn.Parameter(torch.zeros(2 * max_rel_pos + 1, num_heads))
+        self.drop = nn.Dropout(dropout)
+        self.last_scores_pre_softmax: torch.Tensor | None = None
+        self.last_attn_weights: torch.Tensor | None = None
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        b, t, _ = x.shape
+        q = self.wq(x).reshape(b, t, self.h, self.dh)
+        k = self.wk(x).reshape(b, t, self.hkv, self.dh)
+        v = self.wv(x).reshape(b, t, self.hkv, self.dh)
+        if self.hkv != self.h:
+            rep = self.h // self.hkv
+            k, v = k.repeat_interleave(rep, dim=2), v.repeat_interleave(rep, dim=2)  # == tf.repeat (not tile)
+        q, k, v = (a.transpose(1, 2) for a in (q, k, v))  # (B, H, T, dh)
+
+        scores = torch.matmul(q, k.transpose(-1, -2)) * (float(self.dh) ** -0.5)
+        pos = torch.arange(t, device=x.device)
+        rel = pos[:, None] - pos[None, :]
+        idx = rel.clamp(-self.max_rel_pos, self.max_rel_pos) + self.max_rel_pos
+        scores = scores + self.rel_bias[idx].permute(2, 0, 1)[None].to(scores.dtype)
+
+        if self.causal or self.window is not None:
+            allowed = torch.ones_like(rel, dtype=torch.bool)
+            if self.causal:
+                allowed = allowed & (rel >= 0)
+            if self.window is not None:
+                allowed = allowed & (rel.abs() <= self.window)
+            scores = scores.masked_fill(~allowed[None, None], torch.finfo(scores.dtype).min)
+
+        self.last_scores_pre_softmax = scores
+        attn = torch.softmax(scores, dim=-1)
+        self.last_attn_weights = attn
+        ctx = torch.matmul(self.drop(attn), v).transpose(1, 2).reshape(b, t, self.d_model)
+        return self.wo(ctx)
+
+
+class SwiGLU(nn.Module):
+    """``w2(silu(w1 x) * w3 x)``, no biases, no inner dropout (source: model/transformer.py SwiGLU)."""
+
+    def __init__(self, d_model: int, dff: int | None = None):
+        super().__init__()
+        self.dff = dff or int(round(8 * d_model / 3 / 8) * 8)
+        self.w1 = nn.Linear(d_model, self.dff, bias=False)
+        self.w3 = nn.Linear(d_model, self.dff, bias=False)
+        self.w2 = nn.Linear(self.dff, d_model, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.w2(F.silu(self.w1(x)) * self.w3(x))
+
+
+class TransformerBlock(nn.Module):
+    """Pre-norm block (source: model/transformer.py TransformerBlock):
+    x = x + drop1(attn(norm1(x))); x = x + drop2(ffn(norm2(x))). Dropout is identity in eval()."""
+
+    def __init__(self, d_model, num_heads, num_kv_heads=None, max_rel_pos=16, causal=False, window=None,
+                 dropout=0.1, attn_dropout=0.0):
+        super().__init__()
+        self.norm1, self.norm2 = RMSNorm(d_model), RMSNorm(d_model)
+        self.attn = RelativeGQAttention(d_model, num_heads, num_kv_heads, max_rel_pos, causal, window, attn_dropout)
+        self.ffn = SwiGLU(d_model)
+        self.drop1, self.drop2 = nn.Dropout(dropout), nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x + self.drop1(self.attn(self.norm1(x)))
+        x = x + self.drop2(self.ffn(self.norm2(x)))
+        return x
+
+
+class LastToken(nn.Module):
+    """x[:, -1, :] (source: model/readout.py)."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x[:, -1, :]
+
+
+class AttentionPool(nn.Module):
+    """Learned-query attention pooling over all tokens (source: model/readout.py):
+    w = softmax(einsum("btd,d->bt", x, query) / sqrt(d)); out = einsum("bt,btd->bd", w, x)."""
+
+    def __init__(self, d_model: int):
+        super().__init__()
+        self.query = nn.Parameter(torch.randn(d_model) * 0.02)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        d = torch.tensor(float(x.shape[-1]), dtype=x.dtype, device=x.device)
+        w = torch.softmax(torch.einsum("btd,d->bt", x, self.query) / torch.sqrt(d), dim=-1)
+        return torch.einsum("bt,btd->bd", w, x)
+
+
+class FiLM(nn.Module):
+    """x * (1 + gamma(e)) + beta(e) per token, gamma/beta kernels zero-initialised (identity at start)
+    (source: model/readout.py). Not wired into the builder until P34 (level_film is off in both oracles)."""
+
+    def __init__(self, d_model: int, e_dim: int | None = None):
+        super().__init__()
+        e_dim = e_dim or d_model
+        self.to_gamma, self.to_beta = nn.Linear(e_dim, d_model), nn.Linear(e_dim, d_model)
+        for lin in (self.to_gamma, self.to_beta):
+            nn.init.zeros_(lin.weight)
+            nn.init.zeros_(lin.bias)
+
+    def forward(self, x: torch.Tensor, e: torch.Tensor) -> torch.Tensor:
+        return x * (1.0 + self.to_gamma(e)[:, None, :]) + self.to_beta(e)[:, None, :]
+
+
+class GatedFusion(nn.Module):
+    """g = sigmoid(W [a; b]); g * a + (1 - g) * b (source: model/readout.py). Not wired until P34 (two_tower off)."""
+
+    def __init__(self, d_model: int, b_dim: int | None = None):
+        super().__init__()
+        self.gate = nn.Linear(d_model + (b_dim or d_model), d_model)
+
+    def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        g = torch.sigmoid(self.gate(torch.cat([a, b], dim=-1)))
+        return g * a + (1.0 - g) * b

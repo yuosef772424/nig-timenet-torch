@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "reference" / "data"
 
 #: BUILD_PLAN.md section 0 tolerance table, as code. Never loosen without a docs/friction_log.csv row.
-TOLERANCE = {"forward": dict(rtol=1e-5, atol=1e-6), "loss": dict(rtol=1e-5, atol=1e-6),
+TOLERANCE = {"weights": dict(rtol=0.0, atol=0.0),  # exact (BUILD_PLAN.md section 0 tolerance table)
+             "forward": dict(rtol=1e-5, atol=1e-6), "loss": dict(rtol=1e-5, atol=1e-6),
              "grad": dict(rtol=1e-4, atol=1e-6)}
 
 #: The only entries whose stored .npy shape differs from the JSON-declared shape (ORACLE_REVIEW.md MAJOR-2).
