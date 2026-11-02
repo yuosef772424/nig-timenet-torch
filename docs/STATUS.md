@@ -4,7 +4,7 @@
 > each step's own tests green before the next step starts. Update your row in the same PR. Append real obstacles
 > to `friction_log.csv`. Keep this file under 60 lines.
 
-B1-B7 merged (M2, M3 gates green); B8 in progress. **One branch + one PR per batch** (owner decision, 2026-11-02 — see `BUILD_PLAN.md`
+**Plan complete**: B1-B8 merged, i.e. every step P00-P39 (incl. P33b) merged, none skipped; M2 and M3 gates green, both oracle suites (`reference/data`, `reference/data_default`) green. Open judgment calls: `friction_log.csv` rows marked "owner to confirm". **One branch + one PR per batch** (owner decision, 2026-11-02 — see `BUILD_PLAN.md`
 top + section 0b): the step list (P00-P39) is unchanged, only the PR/CI granularity moved from per-step to
 per-batch to cut round-trips; every step inside a batch still gets its own acceptance test before the next step
 in that batch starts.
@@ -18,6 +18,6 @@ in that batch starts.
 | B5 | P21-P24 | Metrics + trainer loop + run identity (M4) | merged | [#6](https://github.com/yuosef772424/nig-timenet-torch/pull/6) | needs B4 |
 | B6 | P25-P30 | SplitPlan + TargetCodec + PredictionTable + Calibrator (M5) | merged | [#7](https://github.com/yuosef772424/nig-timenet-torch/pull/7) | needs B1, B3; P28 is a wiring test, not a quality claim |
 | B7 | P31-P36 | Model contract + tiny_mlp + GRU second-oracle parity (P33b) + input_skip + probe report (M6) | merged | [#8](https://github.com/yuosef772424/nig-timenet-torch/pull/8) | needs B3, B4; P33b needs B1's second oracle; `input_skip` default stays "none" forever |
-| B8 | P37-P39 | Rolling/staleness seams + final review (M7) | in progress | | needs B5, B6; seams only, no experiment run |
+| B8 | P37-P39 | Rolling/staleness seams + final review (M7) | PR open | [#9](https://github.com/yuosef772424/nig-timenet-torch/pull/9) | needs B5, B6; seams only, no experiment run |
 
 States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`.
