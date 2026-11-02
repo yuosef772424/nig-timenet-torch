@@ -28,6 +28,7 @@ from nig_timenet_torch.model.layers import (
     keras_dense_weight_to_torch,
 )
 from nig_timenet_torch.model.nig_layers import ConfidenceHead, NIGHead, NIGUncertainty, OrderedMeans
+from nig_timenet_torch.model.parts import INPUT_SKIP_VARIANTS, build_input_skip
 
 __all__ = ["DEFAULT_HEAD_TYPES", "NigTimeNetV2", "build_nig_timenet_v2", "torch_param_name"]
 
@@ -36,7 +37,6 @@ HEAD_KINDS = ("nig_regression", "binary_classification")
 
 # option -> (value this port implements, step that adds the rest)
 _NOT_YET = {
-    "input_skip": ("none", "P34"),
     "use_instance_norm": (True, "P34"), "use_decomposition": (True, "P34"), "use_linear_path": (True, "P34"),
     "level_film": (False, "P34"), "architecture": ("fused", "P34"), "fusion": ("concat", "P34"), "n_coins": (0, "P34"),
 }
@@ -62,7 +62,8 @@ class NigTimeNetV2(nn.Module):
                  stride, kernel_sizes, max_rel_pos, dropout, attn_dropout, causal, window, price_targets,
                  head_types, enforce_order, head_hidden, nu_min, alpha_min, beta_min, unc_max, class_head_hidden,
                  norm_eps, linear_path_l2, encoder="transformer", input_clip=None, stats_mode="full",
-                 input_noise_std=0.0, feature_dropout=0.0, level_passthrough=False, level_norm=None):
+                 input_noise_std=0.0, feature_dropout=0.0, level_passthrough=False, level_norm=None,
+                 input_skip="none"):
         super().__init__()
         self.price_targets = tuple(price_targets)
         self.head_types = {t: list(head_types.get(t, [])) for t in self.price_targets}
@@ -94,24 +95,33 @@ class NigTimeNetV2(nn.Module):
             tok_width += n_features
         if self.use_stats and level_norm == "batch":
             self.stats_bn = BatchNormChannelsLast(2 * n_features)
+        self.input_skip = input_skip
+        seq_width = d_model  # width of the encoder output sequence
         if encoder == "transformer":
-            self.patch_embed = PatchEmbedding(tok_width, d_model, patch_len, stride, seq_len=seq_len)
+            if input_skip == "no_proj":
+                seq_width = tok_width
+            else:
+                self.patch_embed = PatchEmbedding(tok_width, d_model, patch_len, stride, seq_len=seq_len)
+            if input_skip != "none":  # "none" adds no module: P15 parameter names stay identical
+                self.skip = build_input_skip(input_skip, d_model=d_model, tok_width=tok_width, num_layers=num_layers,
+                                             patch_len=patch_len, stride=stride)
         else:
             self.step_proj = nn.Linear(tok_width, d_model)
         for i in range(num_layers):
             if encoder == "transformer":
-                setattr(self, f"block_{i + 1}", TransformerBlock(d_model, num_heads, num_kv_heads, max_rel_pos,
+                setattr(self, f"block_{i + 1}", TransformerBlock(seq_width, num_heads, num_kv_heads, max_rel_pos,
                                                                  causal, window, dropout, attn_dropout))
             else:  # RMSNorm -> GRU -> Dropout, residual add (upstream encoder == "gru")
                 setattr(self, f"gru_norm_{i + 1}", RMSNorm(d_model))
                 setattr(self, f"gru_{i + 1}", KerasGRU(d_model, d_model))
                 setattr(self, f"gru_drop_{i + 1}", nn.Dropout(dropout))
-        self.final_norm = RMSNorm(d_model)
+        self.final_norm = RMSNorm(seq_width)
         self.last_token = LastToken()
-        self.attn_pool = AttentionPool(d_model)
+        self.attn_pool = AttentionPool(seq_width)
         if self.use_stats:
             self.stats_proj = nn.Linear(2 * n_features, d_model)
-        self.readout_fc = nn.Linear((3 if self.use_stats else 2) * d_model, d_model)
+        extra = self.skip.readout_extra_dim if hasattr(self, "skip") else 0
+        self.readout_fc = nn.Linear(2 * seq_width + (d_model if self.use_stats else 0) + extra, d_model)
         lin_width = n_features * (2 if level_passthrough else 1)
         self.linear_path = nn.Linear(seq_len * lin_width, d_model)
         self.trunk_norm = RMSNorm(d_model)
@@ -147,9 +157,7 @@ class NigTimeNetV2(nn.Module):
         if stats is not None and hasattr(self, "stats_bn"):
             stats = self.stats_bn(stats)
         if self.encoder == "transformer":
-            h = self.patch_embed(tok)
-            for i in range(self.num_layers):
-                h = getattr(self, f"block_{i + 1}")(h)
+            h = self.encode_tokens(tok)
         else:
             h = self.step_proj(tok)
             for i in range(self.num_layers):
@@ -159,9 +167,22 @@ class NigTimeNetV2(nn.Module):
         parts = [self.last_token(h), self.attn_pool(h)]
         if stats is not None:
             parts.append(F.gelu(self.stats_proj(stats)))
+        if hasattr(self, "skip") and self.skip.readout_extra_dim:
+            parts.append(self.skip.readout_extra(tok))
         lin_in = z if lvl is None else torch.cat([z, lvl], dim=-1)
         h = F.gelu(self.readout_fc(torch.cat(parts, dim=-1))) + self.linear_path(lin_in.flatten(1))
         return self.trunk_drop(self.trunk_norm(h))
+
+    def encode_tokens(self, tok: torch.Tensor) -> torch.Tensor:
+        """Transformer encoder on the normalised token input (B, T, W) -> output sequence (the input_skip seam,
+        P34). Per-position: with causal=True, position j depends on no bar after the end of its patch (or bar)."""
+        blocks = [getattr(self, f"block_{i + 1}") for i in range(self.num_layers)]
+        if hasattr(self, "skip"):
+            return self.skip.encode(tok, getattr(self, "patch_embed", None), blocks)
+        h = self.patch_embed(tok)
+        for block in blocks:
+            h = block(h)
+        return h
 
     def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
         h = self.trunk(x)
@@ -245,9 +266,13 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         if encoder == "tcn":
             raise NotImplementedError("encoder='tcn' is not ported (not in BUILD_PLAN.md)")
         raise ValueError(f"encoder must be one of {ENCODERS + ('tcn',)}, not {encoder!r}")
+    if input_skip not in INPUT_SKIP_VARIANTS:
+        INPUT_SKIP_VARIANTS.entry(input_skip)  # raises UnknownNameError with the known names + did-you-mean
+    if input_skip != "none" and encoder != "transformer":
+        raise NotImplementedError(f"input_skip={input_skip!r} is defined on the transformer encoder only (P34)")
     if level_norm not in LEVEL_NORMS:
         raise ValueError(f"level_norm must be one of {LEVEL_NORMS}, not {level_norm!r}")
-    options = {"input_skip": input_skip, **options}
+    options = dict(options)
     for opt, value in options.items():
         if opt not in _NOT_YET:
             raise TypeError(f"build_nig_timenet_v2() got an unexpected keyword argument {opt!r}")
@@ -264,4 +289,4 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         head_hidden=head_hidden, nu_min=nu_min, alpha_min=alpha_min, beta_min=beta_min, unc_max=unc_max,
         class_head_hidden=class_head_hidden, norm_eps=norm_eps, linear_path_l2=linear_path_l2, encoder=encoder,
         input_clip=input_clip, stats_mode=stats_mode, input_noise_std=input_noise_std, feature_dropout=feature_dropout,
-        level_passthrough=level_passthrough, level_norm=level_norm)
+        level_passthrough=level_passthrough, level_norm=level_norm, input_skip=input_skip)
