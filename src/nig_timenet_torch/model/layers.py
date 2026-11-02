@@ -8,7 +8,7 @@ from torch import nn
 
 __all__ = ["InstanceNorm", "SymLog", "CausalMultiScaleDecomp", "keras_dense_weight_to_torch",
            "keras_conv1d_weight_to_torch", "num_patches", "PatchEmbedding",
-           "RMSNorm", "RelativeGQAttention"]
+           "RMSNorm", "RelativeGQAttention", "SwiGLU", "TransformerBlock"]
 
 
 class InstanceNorm(nn.Module):
@@ -210,3 +210,35 @@ class RelativeGQAttention(nn.Module):
         self.last_attn_weights = attn
         ctx = torch.matmul(self.drop(attn), v).transpose(1, 2).reshape(b, t, self.d_model)
         return self.wo(ctx)
+
+
+class SwiGLU(nn.Module):
+    """``w2(silu(w1 x) * w3 x)``, no biases, no inner dropout (source: model/transformer.py SwiGLU)."""
+
+    def __init__(self, d_model: int, dff: int | None = None):
+        super().__init__()
+        self.dff = dff or int(round(8 * d_model / 3 / 8) * 8)
+        self.w1 = nn.Linear(d_model, self.dff, bias=False)
+        self.w3 = nn.Linear(d_model, self.dff, bias=False)
+        self.w2 = nn.Linear(self.dff, d_model, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.w2(F.silu(self.w1(x)) * self.w3(x))
+
+
+class TransformerBlock(nn.Module):
+    """Pre-norm block (source: model/transformer.py TransformerBlock):
+    x = x + drop1(attn(norm1(x))); x = x + drop2(ffn(norm2(x))). Dropout is identity in eval()."""
+
+    def __init__(self, d_model, num_heads, num_kv_heads=None, max_rel_pos=16, causal=False, window=None,
+                 dropout=0.1, attn_dropout=0.0):
+        super().__init__()
+        self.norm1, self.norm2 = RMSNorm(d_model), RMSNorm(d_model)
+        self.attn = RelativeGQAttention(d_model, num_heads, num_kv_heads, max_rel_pos, causal, window, attn_dropout)
+        self.ffn = SwiGLU(d_model)
+        self.drop1, self.drop2 = nn.Dropout(dropout), nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x + self.drop1(self.attn(self.norm1(x)))
+        x = x + self.drop2(self.ffn(self.norm2(x)))
+        return x
