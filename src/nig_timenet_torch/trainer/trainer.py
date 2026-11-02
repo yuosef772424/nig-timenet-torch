@@ -120,6 +120,13 @@ class Trainer:
                               sample_weight=sample_weight, training=training, outputs=outputs)
 
     @staticmethod
+    def batch_indices(n: int, batch_size: int, shuffle: bool = True) -> list[torch.Tensor]:
+        """Mini-batch index tensors over n rows; the shuffle draws from torch's global RNG, so it derives from the
+        seed_everything(seed) call made before the Trainer is built."""
+        order = torch.randperm(n) if shuffle else torch.arange(n)
+        return list(order.split(batch_size))
+
+    @staticmethod
     def _logs(total, raw, per_target, stats) -> dict[str, float]:
         logs = {"total_loss": float(total.detach()), "raw_loss": float(raw.detach())}
         logs.update({f"{t}_loss": float(v.detach()) for t, v in per_target.items()})
