@@ -1,6 +1,9 @@
 # NOTES — nig-timenet-torch
 
-Task 1 (this commit): TensorFlow reference oracle only (`reference/`). No PyTorch code yet.
+History: the notes below were written with the TensorFlow reference oracle (`reference/`, task 1). The PyTorch port
+has been built and merged since (`src/nig_timenet_torch/`, batches B1-B10 in `docs/STATUS.md`); the items under OPEN
+are the questions raised then. They have NOT been re-triaged since the port (several were settled by it, see
+`docs/BUILD_PLAN.md`): read them as history, not as current status.
 
 ## OPEN
 

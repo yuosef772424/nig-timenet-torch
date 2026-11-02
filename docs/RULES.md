@@ -21,18 +21,18 @@ artifacts from it through its own tools.
 ## B. Changes and defaults
 | # | Rule | Why | Enforced by |
 |---|---|---|---|
-| B1 | A new option's default reproduces the old behaviour exactly; a default change needs an owner decision file `docs/decisions/D-nnn-*.md` in the SAME PR, and the PR title/description lists every behaviour change. | TF PR #62 changed 3 defaults under an "add profiler" title | `tests/test_decisions.py` (built in R0): a change to the pinned defaults fingerprint without a new decision file fails |
+| B1 | A new option's default reproduces the old behaviour exactly; a default change needs an owner decision file `docs/decisions/D-nnn-*.md` in the SAME PR, and the PR title/description lists every behaviour change. | TF PR #62 changed 3 defaults under an "add profiler" title | `tests/test_decisions.py` + `tests/pins/defaults.json`: a changed or removed default without a `docs/decisions/D-nnn-*.md` line fails; a new default must be pinned |
 | B2 | One change type per commit (`feat`/`fix`/`refactor`/`docs`/`test`/`exp`); a refactor proves equal outputs. | TF hardening discipline (kept, it worked) | manual + review |
 | B3 | A fix of a CLASS of problem lands with a guard test that scans for the class, not only the instance. | TF S02: first pass fixed 5 of 16 sites; the AST guard caught the rest | manual (review asks "where is the guard?") |
 | B4 | Every learned-state transform (normalizer, scaler, target codec, calibrator) is ONE registered component (`fit` on train only -> state, `transform`, `inverse`), stored with the model; consumers call it. Unknown names raise. | TF "one component, one interface" (kept) | `core/registry.py` + tests |
 | B5 | Strict settings: unknown keys / unregistered names raise; no silent `.get(k, default)` for config. | TF C2: 19 dead config keys, a false "unknown keys raise" doc claim | `core/config.py` tests |
-| B6 | Docs that state a fact about code are either generated or tested. A doc claim found false is fixed in the same PR that finds it. | TF `reference/README` "exactly as main.ipynb" was false (V1); `NOTES.md` here says "no PyTorch code yet" | `tests/test_docs_claims.py` (built in R0, grows per finding) |
+| B6 | Docs that state a fact about code are either generated or tested. A doc claim found false is fixed in the same PR that finds it. | TF `reference/README` "exactly as main.ipynb" was false (V1); `NOTES.md` here says "no PyTorch code yet" | `tests/test_docs_claims.py` (grows per finding) |
 
 ## C. Measurement (the model must be judged by numbers that mean something)
 | # | Rule | Why | Enforced by |
 |---|---|---|---|
-| C1 | Every metric used as evidence states what a trivial model scores on it (constant / last value / in-bar position / shuffled score). A metric that a trivial model already maxes out is not evidence. | TF: high/low "hit rate" 99 % for any model; class AUC 0.74-0.78 = range mechanics (F-0085) | a `trivial_baseline` test per metric in `stats/metrics.py` (built in R0) |
-| C2 | One implementation per metric (`stats/metrics.py`); no private copies. | TF C7: AUC defined 2x, rank-IC 5x | grep test over `src/` (built in R0) |
+| C1 | Every metric used as evidence states what a trivial model scores on it (constant / last value / in-bar position / shuffled score). A metric that a trivial model already maxes out is not evidence. | TF: high/low "hit rate" 99 % for any model; class AUC 0.74-0.78 = range mechanics (F-0085) | `tests/stats/test_metrics_trivial_baselines.py`: one `test_trivial_baseline_<metric>` per name in `stats.metrics.__all__`, coverage checked |
+| C2 | One implementation per metric (`stats/metrics.py`); no private copies. | TF C7: AUC defined 2x, rank-IC 5x | `tests/test_rules_growth.py::test_c2_*` (AST scan of `src/`, ratcheted in `tests/ratchets.json`) |
 | C3 | Best epoch is chosen by a registered selection metric with a fixed definition, independent of loss weights. | TF C7: selection = training objective | `trainer/selection_metric.py` tests |
 | C4 | A comparison between arms uses >= 2 seeds per arm on one commit and a paired, dependence-aware test; one seed is "a look", never a result. | TF E-norm-001 seeds on different commits were discarded | manual (card template) |
 | C5 | Exploratory results are labelled exploratory. Strict confirmation (holdout, forward data, realistic costs) happens only when the owner asks; until then the goal is to improve the model. | owner, 2026-11-02 | manual |
@@ -48,7 +48,7 @@ artifacts from it through its own tools.
 |---|---|---|---|
 | E1 | Every Colab job asserts the device it expects and writes `device`, torch/CUDA versions and GPU name into its output; a GPU job on CPU fails. | TF: months of "GPU" runs were on CPU (`tensorflow-cpu` pin) | job entry + output validator (built in T3) |
 | E2 | Run outputs are published so the next session can read them without the owner copying anything; a failed publish keeps a retry path (`republish`). Never depend on `/tmp` surviving a long job. | TF profile-005: results stuck on Drive (askpass.sh in /tmp vanished) | runner tests (built in T3) |
-| E3 | The fast test suite runs in < 5 minutes on CPU; slower tests are marked `slow` and run in CI only. Step sessions run the tests of what they touched. | TF: full suite > 50 min locally, died on session restart | CI `--durations` + a time budget check (built in R0) |
+| E3 | The fast test suite runs in < 5 minutes on CPU; slower tests are marked `slow` and run in CI only. Step sessions run the tests of what they touched. | TF: full suite > 50 min locally, died on session restart | `tests/conftest.py` + `tests/budget.py` fail the run when the non-`slow` tests exceed 300 s (or one exceeds 60 s); CI prints `--durations` |
 | E4 | Normal Python imports only (no shared-namespace loaders, no notebook globals). Notebooks are thin runners. | TF W1: implicit namespace edges made changes slow | `tests/test_package_imports.py` |
 
 ## G. Growth (problems that appear only as the project gets bigger)
@@ -58,14 +58,14 @@ here the counts start near zero.
 
 | # | Rule | Why (TF incident) | Enforced by |
 |---|---|---|---|
-| G1 | One source per concept: heads, targets and output names are defined once (`HeadSpec` / schema); every other list is derived from it. | TF C1: "a head" was defined in 4 vocabularies; each addition was an N-file edit | test: no output-name string literal outside the schema module (built in R0) |
-| G2 | No branching on a mode name (`if mode == "..."`): behaviour comes from a registered component. | TF C4: 20+ `entry_range` branches | ratchet count of `== "<registered name>"` comparisons (built in R0) |
-| G3 | Size budget: a module <= 400 lines, a function <= 80 lines; exceeding needs a one-line reason in the ratchet file. | TF: 700-line modules, a 180-line wiring function | ratchet in CI (built in R0) |
-| G4 | No dead setting: every settings field is read by code. | TF C2: 19 of 101 config keys read nowhere | test over `core/config.py` fields (built in R0) |
-| G5 | One system per job: one trainer, one evaluation path, one prediction table. New work extends them, never runs beside them. | TF: `cross_asset/` became a second trainer; evaluation had two producers | test: no `optimizer.step()` outside `trainer/` (built in R0) + review |
-| G6 | Notebooks and studies are runners: no `def` in notebooks; a study never imports another study; shared code is lifted into the package. | TF: logic piled up in notebooks; research scripts copied package code | tests (built in R0) |
-| G7 | Fixed layers: `core` imports nothing from the package; `stats` imports only `core`; `model` and `trainer` never import `workflow`. | TF tier rules (kept) | import-direction test (built in R0) |
-| G8 | Adding a component = one new file + one registration line; no orphan file in a registry folder. | TF audit "lens": explicit registration beats auto-discovery | test: every module in a registry folder is registered (built in R0) |
+| G1 | One source per concept: heads, targets and output names are defined once (`HeadSpec` / schema); every other list is derived from it. | TF C1: "a head" was defined in 4 vocabularies; each addition was an N-file edit | `tests/test_rules_growth.py::test_g1_*`: ratchet on output-name literals outside `model/heads.py` |
+| G2 | No branching on a mode name (`if mode == "..."`): behaviour comes from a registered component. | TF C4: 20+ `entry_range` branches | `tests/test_rules_growth.py::test_g2_*`: ratchet on `== "<registered name>"` comparisons |
+| G3 | Size budget: a module <= 400 lines, a function <= 80 lines; exceeding needs a one-line reason in the ratchet file. | TF: 700-line modules, a 180-line wiring function | `tests/test_rules_growth.py::test_g3_*`: module size exceptions listed with a reason, function ratchet |
+| G4 | No dead setting: every settings field is read by code. | TF C2: 19 of 101 config keys read nowhere | `tests/test_rules_growth.py::test_g4_*`: every `*Settings` / `*Config` dataclass field must be read as `obj.field` elsewhere |
+| G5 | One system per job: one trainer, one evaluation path, one prediction table. New work extends them, never runs beside them. | TF: `cross_asset/` became a second trainer; evaluation had two producers | `tests/test_rules_growth.py::test_g5_*`: no `.step()` / `.backward()` / `.zero_grad()` outside `trainer/`, one `Trainer` class; plus review |
+| G6 | Notebooks and studies are runners: no `def` in notebooks; a study never imports another study; shared code is lifted into the package. | TF: logic piled up in notebooks; research scripts copied package code | `tests/test_rules_growth.py::test_g6_*` (ratchet on notebook `def`s; no study imports a study) |
+| G7 | Fixed layers: `core` imports nothing from the package; `stats` imports only `core`; `model` and `trainer` never import `workflow`. | TF tier rules (kept) | `tests/test_rules_growth.py::test_g7_*`: ratchet on layer-import violations (module level and lazy) |
+| G8 | Adding a component = one new file + one registration line; no orphan file in a registry folder. | TF audit "lens": explicit registration beats auto-discovery | `tests/test_rules_growth.py::test_g8_*`: ratchet on modules of a registry folder that neither register nor are imported |
 
 ## F. Self-correction (why these rules do not decay)
 | # | Rule | Enforced by |

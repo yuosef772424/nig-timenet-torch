@@ -1,0 +1,18 @@
+{
+  "_doc": "Ratchet file (docs/RULES.md section G, C2). Each count is today's value of one bad pattern, measured by tests/scan.py. CI fails if a count GROWS, and also if it SHRINKS without this file being lowered (so it can never grow back). Keep every non-zero count in docs/bottlenecks.csv.",
+  "counts": {
+    "G1_output_name_literals_outside_heads": 22,
+    "G2_registered_name_comparisons": 11,
+    "G3_modules_over_400_lines": 1,
+    "G3_functions_over_80_lines": 0,
+    "G4_dead_settings_fields": 1,
+    "G5_optimizer_calls_outside_trainer": 0,
+    "G6_notebook_defs": 4,
+    "G7_layer_import_violations": 1,
+    "G8_orphan_modules_in_registry_folders": 4,
+    "C2_metric_definitions_outside_stats": 1
+  },
+  "G3_size_exceptions": {
+    "model/builder.py": "401 lines: the NIG-TimeNet v2 module plus its builder, one line over the 400 budget; split it before it grows (B-012)"
+  }
+}
