@@ -19,7 +19,7 @@ in that batch starts.
 | B6 | P25-P30 | SplitPlan + TargetCodec + PredictionTable + Calibrator (M5) | merged | [#7](https://github.com/yuosef772424/nig-timenet-torch/pull/7) | needs B1, B3; P28 is a wiring test, not a quality claim |
 | B7 | P31-P36 | Model contract + tiny_mlp + GRU second-oracle parity (P33b) + input_skip + probe report (M6) | merged | [#8](https://github.com/yuosef772424/nig-timenet-torch/pull/8) | needs B3, B4; P33b needs B1's second oracle; `input_skip` default stays "none" forever |
 | B8 | P37-P39 | Rolling/staleness seams + final review (M7) | merged | [#9](https://github.com/yuosef772424/nig-timenet-torch/pull/9) | needs B5, B6; seams only, no experiment run |
-| B9 | P40-P44 | tcn + multi-timeframe + multiclass + cross-asset PanelModel (section 14) | in progress | | new oracle `reference/data_variants/` |
+| B9 | P40-P44 | tcn + multi-timeframe + multiclass + cross-asset PanelModel (section 14) | merged | [#10](https://github.com/yuosef772424/nig-timenet-torch/pull/10) | new oracle `reference/data_variants/` |
 | B10 | P45 | Colab notebook (section 14) | todo | | needs B9 |
 
 States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`.
