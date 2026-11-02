@@ -21,7 +21,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+# Fast suite by default (rule E3: < 5 min on CPU, enforced by tests/conftest.py). CI runs everything: -m "slow or not slow".
+addopts = "-ra -m 'not slow'"
+markers = ["slow: takes more than a few seconds; excluded from the default run, executed in CI only (rule E3)"]
 
 [tool.ruff]
 line-length = 120
