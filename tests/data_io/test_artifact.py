@@ -25,6 +25,11 @@ from tests.trainer.test_fit import fit, make_trainer
 COMMIT = "a" * 40
 
 
+def sealed_list(*names) -> list[str]:
+    """A sealed list of the pinned size: ``names`` first, then filler names."""
+    return [*names, *[f"SEALED{i:03d}USDT" for i in range(artifact.EXPECTED_SEALED_COUNT - len(names))]]
+
+
 def _sha(path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -37,7 +42,8 @@ def export_block(path) -> dict:
     files["meta.pkl"] = _sha(path / "meta.pkl")
     last = pd.Timestamp(int(d["last_candles"][:, TS_COL].astype("int64").max()) + 3600 * 10**9, tz="UTC")
     return {"schema": artifact.SCHEMA, "source_commit": COMMIT, "coins": [b["name"] for b in d["asset_bounds"]],
-            "sealed_excluded": ["SEALAUSDT", "SEALBUSDT"], "sealed_found": [], "time_seal": "2026-10-01T00:00:00+00:00",
+            "sealed_excluded": sealed_list(), "sealed_found": [],
+            "lock_sha256": artifact.EXPECTED_LOCK_SHA256, "time_seal": "2026-10-01T00:00:00+00:00",
             "max_bar_time": last.isoformat(), "files": files,
             "data_sha256": hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()}
 
@@ -63,7 +69,8 @@ def test_a_complete_artifact_loads(art):
     a = load_artifact(art)
     m = a.manifest
     assert m.source_commit == COMMIT and m.coins == tuple(f"C{i}USDT" for i in range(6))
-    assert m.sealed_excluded == ("SEALAUSDT", "SEALBUSDT") and m.time_seal == artifact.TIME_SEAL
+    assert m.sealed_excluded == tuple(sealed_list()) and len(m.sealed_excluded) == 183
+    assert m.time_seal == artifact.TIME_SEAL
     assert m.max_bar_time < artifact.TIME_SEAL and len(m.data_fingerprint) == 64
     assert set(a.dataset) == set(npy_dir.load(DATASET_DIR))
     assert a.dataset["last_candles"].shape[0] == 1227
@@ -74,8 +81,8 @@ def test_the_plain_fixture_without_an_export_block_is_refused():
         load_artifact(DATASET_DIR)
 
 
-@pytest.mark.parametrize("field", ["source_commit", "coins", "sealed_excluded", "max_bar_time", "time_seal", "schema",
-                                   "data_sha256"])
+@pytest.mark.parametrize("field", ["source_commit", "coins", "sealed_excluded", "lock_sha256", "max_bar_time",
+                                   "time_seal", "schema", "data_sha256"])
 def test_each_missing_required_field_is_refused(art, field):
     write_manifest(art, **{field: ...})
     with pytest.raises(ArtifactError, match=f"lacks required fields.*{field}"):
@@ -103,11 +110,42 @@ def test_invalid_field_values_are_refused(art, changes, match):
 
 
 def test_a_sealed_coin_in_the_coin_list_is_refused_with_or_without_usdt_suffix(art):
-    write_manifest(art, sealed_excluded=["c3"])
+    write_manifest(art, sealed_excluded=sealed_list("c3"))
     with pytest.raises(ArtifactError, match="C3USDT.*sealed"):
         load_artifact(art)
-    write_manifest(art, sealed_excluded=["C0USDT"])
+    write_manifest(art, sealed_excluded=sealed_list("C0USDT"))
     with pytest.raises(ArtifactError, match="C0USDT.*sealed"):
+        load_artifact(art)
+
+
+def test_pinned_values_are_the_real_tf_lock():
+    """The two pins are the numbers of the TF lock this project was built against (crypto-signal-prediction
+    docs/research/plan/lock/holdout.json at cea9cd5: 183 sealed coins, holdout.sha256 below); a change is deliberate."""
+    assert artifact.EXPECTED_SEALED_COUNT == 183
+    assert artifact.EXPECTED_LOCK_SHA256 == "70322ba699d5068e4fbe7f8b014f85492aeebf15d3c743551fbf1062cd889b2c"
+
+
+@pytest.mark.parametrize("n", [0, 1, 2, 182, 184, 1000])
+def test_a_sealed_list_of_another_size_is_refused(art, n):
+    """The manifest cannot vouch for itself: a truncated or padded sealed list is refused whatever it contains."""
+    names = [f"SEALED{i:03d}USDT" for i in range(n)]
+    write_manifest(art, sealed_excluded=names or ["X"])
+    with pytest.raises(ArtifactError, match=r"pins\s+183"):
+        load_artifact(art)
+
+
+@pytest.mark.parametrize("value", ["0" * 64, artifact.EXPECTED_LOCK_SHA256.upper(), "", None, 5,
+                                   artifact.EXPECTED_LOCK_SHA256[:-1] + "0"])
+def test_another_lock_hash_is_refused(art, value):
+    write_manifest(art, lock_sha256=value)
+    with pytest.raises(ArtifactError, match="pinned TF lock"):
+        load_artifact(art)
+
+
+def test_the_pinned_pair_alone_is_not_enough_to_hide_a_sealed_coin(art):
+    """Count and hash pass, but a coin of the artifact is on the list: the older check still refuses it."""
+    write_manifest(art, sealed_excluded=sealed_list("C2USDT"), lock_sha256=artifact.EXPECTED_LOCK_SHA256)
+    with pytest.raises(ArtifactError, match="C2USDT.*sealed"):
         load_artifact(art)
 
 
@@ -169,11 +207,13 @@ def test_artifact_to_identity_to_fit(art, tmp_path):
     """T2 end to end on the fixture: load the artifact, build the identity from its manifest, train one epoch."""
     a = load_artifact(art)
     settings = FitSettings(epochs=1, batch_size=32, seed=4)
-    ident = build_run_identity(settings, ModelSettings(), a.manifest.data_fingerprint, code_sha=COMMIT)
+    trainer = make_trainer()
+    ident = build_run_identity(settings, ModelSettings(), trainer.config, trainer.optimizer,
+                               a.manifest.data_fingerprint, code_sha=COMMIT)
     assert ident.data_fingerprint == a.manifest.data_fingerprint and ident.seed == 4
     x, y = load_fixture(96 + 48)
     data = (x[:96], {k: v[:96] for k, v in y.items()}, x[96:], {k: v[96:] for k, v in y.items()})
-    assert fit(make_trainer(), data, settings, run_dir=tmp_path / "run", identity=ident).epochs_done == 1
+    assert fit(trainer, data, settings, run_dir=tmp_path / "run", identity=ident).epochs_done == 1
     with pytest.raises(SeedMismatchError):
         fit(make_trainer(), data, dataclasses.replace(settings, seed=5), run_dir=tmp_path / "run", identity=ident)
     other_data = dataclasses.replace(ident, data_fingerprint="0" * 64)

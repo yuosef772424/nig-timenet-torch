@@ -3,9 +3,10 @@
 The artifact is an ``npy_dir`` dataset (data_io/npy_dir.py) whose ``manifest.json`` carries an ``export`` block
 written by crypto-signal-prediction ``tools/export_torch_artifact.py``. ``load_artifact`` REFUSES an artifact without
 that block, or with any of the D1 fields missing or inconsistent: source commit, coin list, sealed coins excluded, max
-bar time below the time seal. It does not trust the manifest alone: the coin list must equal the dataset's own
-``asset_bounds``, no coin may be on the sealed list, and the max bar time is recomputed from ``last_candles`` and must
-not exceed what the manifest says.
+bar time below the time seal. It does not trust the manifest alone: the sealed list must have the size pinned in this
+module and the lock file hash must be the pinned one (``EXPECTED_SEALED_COUNT``, ``EXPECTED_LOCK_SHA256``); the coin
+list must equal the dataset's own ``asset_bounds``, no coin may be on the sealed list, and the max bar time is
+recomputed from ``last_candles`` and must not exceed what the manifest says.
 Pure numpy/pandas: no torch import here.
 
     python -m nig_timenet_torch.data_io.artifact <artifact dir> [--verify-hashes]
@@ -25,13 +26,20 @@ import pandas as pd
 from nig_timenet_torch.core.schema import TS_COL
 from nig_timenet_torch.data_io import npy_dir
 
-__all__ = ["ArtifactError", "ArtifactManifest", "Artifact", "SCHEMA", "TIME_SEAL", "read_manifest", "load_artifact",
-           "verify_hashes"]
+__all__ = ["ArtifactError", "ArtifactManifest", "Artifact", "SCHEMA", "TIME_SEAL", "EXPECTED_SEALED_COUNT",
+           "EXPECTED_LOCK_SHA256", "read_manifest", "load_artifact", "verify_hashes"]
 
 SCHEMA = "torch_artifact/1"
 #: The time seal of the TF holdout lock (docs/DATA_ARTIFACT_CONTRACT.md): no bar, and no label, at or after it.
 TIME_SEAL = pd.Timestamp("2026-10-01", tz="UTC")
-REQUIRED = ("schema", "source_commit", "coins", "sealed_excluded", "time_seal", "max_bar_time", "data_sha256")
+#: Pinned HERE, not read from the manifest: the TF holdout lock (crypto-signal-prediction
+#: docs/research/plan/lock/holdout.json, rule R0) seals this many coins and has this file sha256 (= its holdout.sha256).
+#: A manifest that reports another count or hash was exported against a different lock and is refused. If the TF lock is
+#: deliberately rebuilt, change both constants in a PR that says so (owner decision), never to make an artifact load.
+EXPECTED_SEALED_COUNT = 183
+EXPECTED_LOCK_SHA256 = "70322ba699d5068e4fbe7f8b014f85492aeebf15d3c743551fbf1062cd889b2c"
+REQUIRED = ("schema", "source_commit", "coins", "sealed_excluded", "lock_sha256", "time_seal", "max_bar_time",
+            "data_sha256")
 _SHA1 = re.compile(r"^[0-9a-f]{40}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -103,6 +111,13 @@ def read_manifest(path: str | Path) -> ArtifactManifest:
     if not isinstance(block["data_sha256"], str) or not _SHA256.match(block["data_sha256"]):
         raise ArtifactError(f"{path}: export.data_sha256 must be a 64-hex sha256")
     coins, sealed = _name_list(block, "coins"), _name_list(block, "sealed_excluded")
+    if len(sealed) != EXPECTED_SEALED_COUNT:
+        raise ArtifactError(f"{path}: export.sealed_excluded has {len(sealed)} coins, this project pins "
+                            f"{EXPECTED_SEALED_COUNT} (the TF holdout lock): the artifact was exported against another "
+                            f"lock or with a truncated sealed list")
+    if block["lock_sha256"] != EXPECTED_LOCK_SHA256:
+        raise ArtifactError(f"{path}: export.lock_sha256 {block['lock_sha256']!r} is not the pinned TF lock "
+                            f"{EXPECTED_LOCK_SHA256} (exported against another lock)")
     sealed_names = {_norm(s) for s in sealed}
     leaked = [c for c in coins if _norm(c) in sealed_names]
     if leaked:

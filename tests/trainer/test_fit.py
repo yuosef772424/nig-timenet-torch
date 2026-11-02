@@ -1,6 +1,7 @@
 """T1: Trainer.fit on the fixture - epoch loop, schedules applied, early stopping, best weights by the registered
 selection metric, checkpoint + resume (equal to an uninterrupted run), identity check, seeds."""
 
+import copy
 import dataclasses
 import json
 
@@ -8,8 +9,15 @@ import pytest
 import torch
 
 from nig_timenet_torch.core.seeds import seed_everything
+from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.trainer import checkpoint
-from nig_timenet_torch.trainer.identity import ResumeMismatchError, RunIdentity, SeedMismatchError, settings_hash
+from nig_timenet_torch.trainer.identity import (
+    ResumeMismatchError,
+    RunIdentity,
+    SeedMismatchError,
+    build_run_identity,
+    settings_hash,
+)
 from nig_timenet_torch.trainer.schedules import LrSettings, lr_at
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
@@ -26,11 +34,11 @@ def data():
     return x[:cut], {k: v[:cut] for k, v in y.items()}, x[cut:], {k: v[cut:] for k, v in y.items()}
 
 
-def make_trainer(selection_metric="val_raw_loss", init_seed=0) -> Trainer:
+def make_trainer(selection_metric="val_raw_loss", init_seed=0, config=None, lr=1e-3) -> Trainer:
     seed_everything(init_seed)  # model init draws from the global RNG
     model = build_model(16, 18, dropout=0.1)
-    return Trainer(model, trainer_config(), optimizer=lambda ps: torch.optim.AdamW(ps, lr=1e-3),
-                   selection_metric=selection_metric)
+    return Trainer(model, trainer_config() if config is None else config,
+                   optimizer=lambda ps: torch.optim.AdamW(ps, lr=lr), selection_metric=selection_metric)
 
 
 def identity_for(settings: FitSettings, seed=0) -> RunIdentity:
@@ -167,3 +175,31 @@ def test_fit_refuses_an_identity_with_another_seed(data, tmp_path):
     assert not (tmp_path / "r").exists()
     assert fit(make_trainer(), data, settings, identity=identity_for(settings, seed=3)).epochs_done == 1
     assert fit(make_trainer(), data, settings).epochs_done == 1  # no identity: nothing to compare
+
+
+def real_identity(trainer: Trainer, settings: FitSettings) -> RunIdentity:
+    """The identity a real run gets: built from the trainer's whole config and its optimizer (T2 review)."""
+    return build_run_identity(settings, ModelSettings(), trainer.config, trainer.optimizer, "fixture",
+                              code_sha="0" * 40)
+
+
+def test_resume_refuses_a_changed_loss_weight_or_optimizer_lr(data, tmp_path):
+    """T2 review: the identity covers the trainer config and the optimizer, so a run whose objective or learning rate
+    changed cannot resume as the same run; an unchanged one still resumes (and may get more epochs)."""
+    settings = FitSettings(epochs=1, batch_size=32)
+    first = make_trainer()
+    fit(first, data, settings, run_dir=tmp_path, identity=real_identity(first, settings))
+
+    more = dataclasses.replace(settings, epochs=2)
+    same = make_trainer(init_seed=5)
+    assert fit(same, data, more, run_dir=tmp_path, identity=real_identity(same, more)).epochs_done == 2
+
+    heavier = copy.deepcopy(trainer_config())
+    target = next(iter(heavier["targets"]))
+    heavier["targets"][target]["loss_weight"] = heavier["targets"][target].get("loss_weight", 1.0) + 1.0
+    for kwargs in ({"config": heavier}, {"lr": 2e-3}):
+        t = make_trainer(**kwargs)
+        ident = real_identity(t, dataclasses.replace(settings, epochs=3))
+        with pytest.raises(ResumeMismatchError, match="settings_hash"):
+            fit(t, data, dataclasses.replace(settings, epochs=3), run_dir=tmp_path, identity=ident)
+    assert checkpoint.load_checkpoint(tmp_path)["epochs_done"] == 2  # the refused resumes touched nothing
