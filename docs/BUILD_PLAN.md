@@ -1,9 +1,20 @@
 # BUILD_PLAN — PyTorch re-implementation of NIG-TimeNet v2
 
-Read `docs/STATUS.md` first, then only your own step below. One branch + one PR per step, one change type per
-commit (`feat`/`fix`/`refactor`/`docs`/`test`), CI green before merge. Update your row in `docs/STATUS.md` in the
-same PR. Append every real obstacle to `docs/friction_log.csv` (columns below) — this is not optional, it is how
-the plan self-corrects; a review step every 5 steps reads it and reorders what follows if needed.
+Read `docs/STATUS.md` first, then only your own batch below (see "Execution batches", section 0b) — within it,
+every step in order. **One branch + one PR per BATCH, not per step** (owner decision, 2026-11-02: this is a
+port of an already-fully-specified, already-oracle-verified reference, not exploratory research, so the
+per-step PR/CI round-trip of the original draft was cut to one per batch to save time). This does **not** mean
+"write the whole batch, then test once": inside a batch, **implement one step, run that step's acceptance
+test(s) and get them green, THEN move to the next step** — never write step N+1 on top of an unverified step N.
+The reason per-step tests stay mandatory even though this is "just a port, not new design": framework-to-
+framework conversion bugs (weight-layout transposes, axis/reduction order, gate order, residual order) are
+*silent* — the code runs and looks plausible but is numerically wrong — and a single end-to-end check at the end
+of a whole batch cannot localize which of several ported layers is wrong, so a failure there costs more time to
+debug than every small test combined would have cost to run. One change type per commit
+(`feat`/`fix`/`refactor`/`docs`/`test`) inside the batch's PR is still expected (separate commits, one PR).
+Update your row(s) in `docs/STATUS.md` in the same PR. Append every real obstacle to `docs/friction_log.csv`
+(columns below) — this is not optional, it is how the plan self-corrects; a review step every 5 steps (now:
+every 1-2 batches, see the table) reads it and reorders what follows if needed.
 
 You are a **builder**, not a researcher: no "architecture X is better" claims, no edits to
 `crypto-signal-prediction`'s `docs/research/failure_registry.csv` or recorded results, no touching the holdout
@@ -74,6 +85,28 @@ against the *second* oracle P01 produces. Do not blend the two configs in one mo
 
 Any test that needs a different tolerance states it explicitly in its own step and says why; it may never be
 *looser* than this table without a `docs/friction_log.csv` row.
+
+### 0b. Execution batches (one PR per batch; steps keep their own numbers and their own tests)
+
+The step list (P00-P39) is unchanged below — every step still names its own files/interfaces/tests. What changed
+is the PR/review granularity: steps are grouped into 8 batches, each one branch + one PR + one CI run, merged as
+a unit. **Inside a batch, steps are still done in listed order, each one's acceptance tests green before the
+next step starts** (see the rule at the top of this file). A review step (P05/P16/P20/P24/P30/P36/P39) always
+ends its batch, so every batch boundary is already a natural checkpoint.
+
+| Batch | Steps | Milestone | Why this grouping |
+|---|---|---|---|
+| B1 | P00-P05 | M1 | Pure scaffolding (skeleton, registry, schema, config, CI) — no oracle numerics involved yet, lowest-risk batch, fine to do in one PR |
+| B2 | P06-P10 | M2 (part 1) | Data/oracle loaders + the first 3 layer types (InstanceNorm/SymLog, Decomp, PatchEmbedding) — each still gets its own parity test against `reference/data/`; split from B3 so a weight-layout mistake here (the first place `Conv1d`/`Dense` transpose issues can appear, P10) is caught before attention is built on top of it |
+| B3 | P11-P16 | M2 (part 2) | Attention + TransformerBlock + readout + NIG heads + full assembly + the M2 review/exit-gate test (P15/P16) — the largest batch, deliberately not split further because P15's end-to-end oracle test is the thing that proves the whole encoder, and splitting it from the layers it assembles would just move the same debugging work across a PR boundary |
+| B4 | P17-P20 | M3 | Loss + Kendall + one optimizer step + review — self-contained, depends only on B3's finished model |
+| B5 | P21-P24 | M4 | Metrics + trainer loop + run identity + review — no oracle dependency beyond B3/B4's model and losses |
+| B6 | P25-P30 | M5 | SplitPlan + TargetCodec + PredictionTable + fixture evaluation + Calibrator + review |
+| B7 | P31-P36 (incl. P33b) | M6 | Model contract + `tiny_mlp` + the second-oracle GRU parity (P33b) + `input_skip` seam + probe report + review |
+| B8 | P37-P39 | M7 | Rolling/staleness seams + final review |
+
+`docs/STATUS.md`'s table gets one row per **batch** now (not per step); each batch's row lists its step range so
+the per-step detail stays traceable back to this file.
 
 ---
 
