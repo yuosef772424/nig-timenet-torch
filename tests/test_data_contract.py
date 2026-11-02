@@ -1,28 +1,11 @@
 """P01: the committed fixture and split dump match docs/DATA_ARTIFACT_CONTRACT.md's dict literal."""
 
-import ast
 import json
 import pickle
-import re
-from pathlib import Path
 
-import pytest
+from tests.contract_doc import DATASET_DIR, FIXTURES, contract, ndim
 
-ROOT = Path(__file__).resolve().parent.parent
-FIX = ROOT / "tests" / "fixtures"
-DATASET_DIR = FIX / "tiny_dataset.dataset"
-
-
-def contract():
-    text = (ROOT / "docs" / "DATA_ARTIFACT_CONTRACT.md").read_text(encoding="utf-8")
-    block = re.search(r"```python\n(CONTRACT = .*?)\n```", text, re.S).group(1)
-    return ast.literal_eval(block.split("=", 1)[1])
-
-
-def ndim(meaning):
-    """Rank declared at the start of a shape_meaning, e.g. '(N, T=16, F=18): ...' -> 3, '(): ...' -> 0."""
-    inside = re.match(r"\(([^)]*)\)", meaning).group(1).strip().rstrip(",")
-    return 0 if not inside else len(inside.split(","))
+FIX = FIXTURES
 
 
 def check_split(c, dump, path):
@@ -35,7 +18,6 @@ def check_split(c, dump, path):
             assert len(dump[k]["shape"]) == ndim(spec["shape_meaning"]), f"{path}/{k}: rank"
 
 
-@pytest.mark.xfail(raises=ModuleNotFoundError, strict=True, reason="data_io.npy_dir lands in P06")
 def test_fixture_loads():
     from nig_timenet_torch.data_io import npy_dir
 
