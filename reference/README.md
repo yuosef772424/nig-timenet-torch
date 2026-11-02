@@ -130,3 +130,34 @@ ad54ec4f72a59ba141145eafbaadaf2fdf50bd71196c09afbf0e55374c8d9ad9  outputs.npz
 11c078b627197f20eceb8a304af2e79793012a1f0355e4872566cab990e143f5  weights.json
 5856d27bc61379abe1fa8afaa2cfa6301a8f61d63a2a7d0bc757d073dc2b9939  weights.npz
 ```
+
+## Sub-layer internals (`sublayers.npz` / `sublayers.json`)
+
+Added after the first export (step 8 of the script, run after everything else; the 12 files above are unchanged,
+sha256 identical). For every `TransformerBlock` (block_1, block_2) and every `NIGHead` (nig_close, nig_high, nig_low),
+the upstream sub-layer objects of the already-built model are called directly, training=False, on the exact tensor each
+receives inside the parent's `call` (the parent input is taken from `layer_outputs.npz`). Key = `{parent}/{step}`;
+the JSON gives block, step, shape, dtype and how each value was obtained.
+
+- TransformerBlock steps: `00_block_input`, `01_norm1_out` (`norm1`), `02/03/04_attn_q/k/v_proj` (`attn.wq/wk/wv`,
+  before reshape and GQA repeat: q (8,15,16), k/v (8,15,8)), `05_attn_scores_pre_softmax` and `06_attn_weights`
+  ((8,4,15,15), the input and output of the single `tf.nn.softmax` call, captured by temporarily wrapping `tf.nn.softmax`
+  while calling `block.attn`; scores include q·kᵀ/√dh + relative bias; no mask is applied because causal=False and
+  window=None), `07_attn_out` (`attn`, after `wo`), `08_residual1` (x + `drop1`), `09_norm2_out` (`norm2`),
+  `10_swiglu_out` (`ffn`), `11_block_output` (residual1 + `drop2`).
+- NIGHead steps: `00_head_input` (trunk_drop output), `01_fc_out` (`fc`, swish, 128), `02_raw_params`
+  (`out(drop(fc_out))`, columns mu, nu, alpha, beta, before softplus/floor) and `03_raw_*` (its columns),
+  `04_softplus_nu/alpha/beta` (outputs of the 3 `tf.nn.softplus` calls captured the same way), `05_final_*`
+  (`head(h)` outputs = softplus + nu_min/alpha_min/beta_min; `05_final_mu` is the raw mu BEFORE `OrderedMeans`).
+- The two residual additions are the only arithmetic done in the script (the `+` of `TransformerBlock.call`; there
+  is no sub-layer object for them).
+- Checks (the script raises if any fails, compared byte for byte): recomputed `11_block_output` == `layer_outputs`
+  entry of the block, `block(x, training=False)` == the same entry, every `05_final_*` == the NIGHead entries in
+  `layer_outputs`, softplus inputs == `raw_params` columns. All passed.
+
+sha256 (two consecutive runs byte-identical):
+
+```
+b0f0158a660a6b820ebc6c468d328194cb80792e4f8406412f979407ad808808  sublayers.json
+a8a9ed4ba2eb61ed9399486bf106e60885cb2a47c36bb6053cee691fa156a0ac  sublayers.npz
+```

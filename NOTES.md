@@ -15,10 +15,6 @@ Task 1 (this commit): TensorFlow reference oracle only (`reference/`). No PyTorc
 3. Losses and gradients are computed with `training=False` (dropout off, deterministic). Training-mode behaviour
    (Dropout masks, label flooding `flood_level`) is NOT in the oracle — dropout masks cannot be matched across
    frameworks anyway.
-4. Only the top-level functional-graph layers are probed. Internals of composite layers (TransformerBlock: norm1 /
-   attn / ffn; RelativeGQAttention scores; NIGHead hidden layer; CausalMultiScaleDecomp gate) are not exported
-   separately, because doing so would require re-implementing upstream `call` code here. If per-sublayer checks are
-   needed, a follow-up can probe them by calling the upstream sublayer objects directly.
 5. Kendall `log_var_*` (trainer, not model) are included in weights/grads with prefix `trainer/`. The port must decide
    whether these belong to the model or to the training loop.
 6. `model.losses` (L2: NIGHead fc l2=1e-5, linear_path l2=1e-4) is part of the total loss. In Keras 3 the L2 term is
@@ -33,3 +29,13 @@ Task 1 (this commit): TensorFlow reference oracle only (`reference/`). No PyTorc
    memorization config are not covered (single timeframe, transformer encoder only, as requested).
 10. oneDNN is on (TF default on CPU). The outputs are byte-identical between runs on this machine; another CPU may give
     last-bit differences. The port should compare with tolerances, not bitwise.
+
+## RESOLVED
+
+- (was OPEN 4) Internals of composite layers: `reference/data/sublayers.npz` / `sublayers.json` now hold every
+  TransformerBlock step (norm1, q/k/v projections, pre-softmax scores, attention weights, attention output,
+  residual 1, norm2, SwiGLU, block output) and every NIGHead step (fc, raw params, softplus, final), obtained by
+  calling the upstream sub-layer objects directly; the softmax/softplus values are captured by wrapping
+  `tf.nn.softmax` / `tf.nn.softplus` during the upstream call. The recomputed block and head outputs equal
+  `layer_outputs.npz` byte for byte. Still not exported: the CausalMultiScaleDecomp gate and the attention
+  context before `wo`.

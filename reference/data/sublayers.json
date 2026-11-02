@@ -1,0 +1,756 @@
+[
+  {
+    "block": "block_1",
+    "step": "00_block_input",
+    "key": "block_1/00_block_input",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "layer_outputs['004_patch_embed'] (output of patch_embed)"
+  },
+  {
+    "block": "block_1",
+    "step": "01_norm1_out",
+    "key": "block_1/01_norm1_out",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "block.norm1(x)"
+  },
+  {
+    "block": "block_1",
+    "step": "02_attn_q_proj",
+    "key": "block_1/02_attn_q_proj",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "block.attn.wq(norm1_out)  (before reshape to heads)"
+  },
+  {
+    "block": "block_1",
+    "step": "03_attn_k_proj",
+    "key": "block_1/03_attn_k_proj",
+    "shape": [
+      8,
+      15,
+      8
+    ],
+    "dtype": "float32",
+    "how": "block.attn.wk(norm1_out)  (before reshape / GQA repeat)"
+  },
+  {
+    "block": "block_1",
+    "step": "04_attn_v_proj",
+    "key": "block_1/04_attn_v_proj",
+    "shape": [
+      8,
+      15,
+      8
+    ],
+    "dtype": "float32",
+    "how": "block.attn.wv(norm1_out)  (before reshape / GQA repeat)"
+  },
+  {
+    "block": "block_1",
+    "step": "05_attn_scores_pre_softmax",
+    "key": "block_1/05_attn_scores_pre_softmax",
+    "shape": [
+      8,
+      4,
+      15,
+      15
+    ],
+    "dtype": "float32",
+    "how": "input of tf.nn.softmax captured during block.attn(norm1_out, training=False): q·kᵀ/√dh + relative bias, no causal mask (causal=False); shape (B, heads, T, T)"
+  },
+  {
+    "block": "block_1",
+    "step": "06_attn_weights",
+    "key": "block_1/06_attn_weights",
+    "shape": [
+      8,
+      4,
+      15,
+      15
+    ],
+    "dtype": "float32",
+    "how": "output of the same captured tf.nn.softmax call (attention dropout is identity at training=False)"
+  },
+  {
+    "block": "block_1",
+    "step": "07_attn_out",
+    "key": "block_1/07_attn_out",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "block.attn(norm1_out, training=False)  (after wo)"
+  },
+  {
+    "block": "block_1",
+    "step": "08_residual1",
+    "key": "block_1/08_residual1",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "x + block.drop1(attn_out, training=False)  (the addition of TransformerBlock.call)"
+  },
+  {
+    "block": "block_1",
+    "step": "09_norm2_out",
+    "key": "block_1/09_norm2_out",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "block.norm2(residual1)"
+  },
+  {
+    "block": "block_1",
+    "step": "10_swiglu_out",
+    "key": "block_1/10_swiglu_out",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "block.ffn(norm2_out)  (SwiGLU, after w2)"
+  },
+  {
+    "block": "block_1",
+    "step": "11_block_output",
+    "key": "block_1/11_block_output",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "residual1 + block.drop2(swiglu_out, training=False)"
+  },
+  {
+    "block": "block_2",
+    "step": "00_block_input",
+    "key": "block_2/00_block_input",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "layer_outputs['005_block_1'] (output of block_1)"
+  },
+  {
+    "block": "block_2",
+    "step": "01_norm1_out",
+    "key": "block_2/01_norm1_out",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "block.norm1(x)"
+  },
+  {
+    "block": "block_2",
+    "step": "02_attn_q_proj",
+    "key": "block_2/02_attn_q_proj",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "block.attn.wq(norm1_out)  (before reshape to heads)"
+  },
+  {
+    "block": "block_2",
+    "step": "03_attn_k_proj",
+    "key": "block_2/03_attn_k_proj",
+    "shape": [
+      8,
+      15,
+      8
+    ],
+    "dtype": "float32",
+    "how": "block.attn.wk(norm1_out)  (before reshape / GQA repeat)"
+  },
+  {
+    "block": "block_2",
+    "step": "04_attn_v_proj",
+    "key": "block_2/04_attn_v_proj",
+    "shape": [
+      8,
+      15,
+      8
+    ],
+    "dtype": "float32",
+    "how": "block.attn.wv(norm1_out)  (before reshape / GQA repeat)"
+  },
+  {
+    "block": "block_2",
+    "step": "05_attn_scores_pre_softmax",
+    "key": "block_2/05_attn_scores_pre_softmax",
+    "shape": [
+      8,
+      4,
+      15,
+      15
+    ],
+    "dtype": "float32",
+    "how": "input of tf.nn.softmax captured during block.attn(norm1_out, training=False): q·kᵀ/√dh + relative bias, no causal mask (causal=False); shape (B, heads, T, T)"
+  },
+  {
+    "block": "block_2",
+    "step": "06_attn_weights",
+    "key": "block_2/06_attn_weights",
+    "shape": [
+      8,
+      4,
+      15,
+      15
+    ],
+    "dtype": "float32",
+    "how": "output of the same captured tf.nn.softmax call (attention dropout is identity at training=False)"
+  },
+  {
+    "block": "block_2",
+    "step": "07_attn_out",
+    "key": "block_2/07_attn_out",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "block.attn(norm1_out, training=False)  (after wo)"
+  },
+  {
+    "block": "block_2",
+    "step": "08_residual1",
+    "key": "block_2/08_residual1",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "x + block.drop1(attn_out, training=False)  (the addition of TransformerBlock.call)"
+  },
+  {
+    "block": "block_2",
+    "step": "09_norm2_out",
+    "key": "block_2/09_norm2_out",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "block.norm2(residual1)"
+  },
+  {
+    "block": "block_2",
+    "step": "10_swiglu_out",
+    "key": "block_2/10_swiglu_out",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "block.ffn(norm2_out)  (SwiGLU, after w2)"
+  },
+  {
+    "block": "block_2",
+    "step": "11_block_output",
+    "key": "block_2/11_block_output",
+    "shape": [
+      8,
+      15,
+      16
+    ],
+    "dtype": "float32",
+    "how": "residual1 + block.drop2(swiglu_out, training=False)"
+  },
+  {
+    "block": "nig_close",
+    "step": "00_head_input",
+    "key": "nig_close/00_head_input",
+    "shape": [
+      8,
+      16
+    ],
+    "dtype": "float32",
+    "how": "layer_outputs['017_trunk_drop'] (output of trunk_drop)"
+  },
+  {
+    "block": "nig_close",
+    "step": "01_fc_out",
+    "key": "nig_close/01_fc_out",
+    "shape": [
+      8,
+      128
+    ],
+    "dtype": "float32",
+    "how": "head.fc(h)  (Dense hidden, swish)"
+  },
+  {
+    "block": "nig_close",
+    "step": "02_raw_params",
+    "key": "nig_close/02_raw_params",
+    "shape": [
+      8,
+      4
+    ],
+    "dtype": "float32",
+    "how": "head.out(head.drop(fc_out, training=False)); columns = [mu, nu, alpha, beta] before softplus/floor"
+  },
+  {
+    "block": "nig_close",
+    "step": "03_raw_mu",
+    "key": "nig_close/03_raw_mu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 0:1]"
+  },
+  {
+    "block": "nig_close",
+    "step": "03_raw_nu",
+    "key": "nig_close/03_raw_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 1:2]"
+  },
+  {
+    "block": "nig_close",
+    "step": "03_raw_alpha",
+    "key": "nig_close/03_raw_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 2:3]"
+  },
+  {
+    "block": "nig_close",
+    "step": "03_raw_beta",
+    "key": "nig_close/03_raw_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 3:4]"
+  },
+  {
+    "block": "nig_close",
+    "step": "04_softplus_nu",
+    "key": "nig_close/04_softplus_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + nu_min"
+  },
+  {
+    "block": "nig_close",
+    "step": "04_softplus_alpha",
+    "key": "nig_close/04_softplus_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + alpha_min"
+  },
+  {
+    "block": "nig_close",
+    "step": "04_softplus_beta",
+    "key": "nig_close/04_softplus_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + beta_min"
+  },
+  {
+    "block": "nig_close",
+    "step": "05_final_mu",
+    "key": "nig_close/05_final_mu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[0]: no floor (mu is linear)"
+  },
+  {
+    "block": "nig_close",
+    "step": "05_final_nu",
+    "key": "nig_close/05_final_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[1]: softplus + nu_min=0.1"
+  },
+  {
+    "block": "nig_close",
+    "step": "05_final_alpha",
+    "key": "nig_close/05_final_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[2]: softplus + alpha_min=2.0"
+  },
+  {
+    "block": "nig_close",
+    "step": "05_final_beta",
+    "key": "nig_close/05_final_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[3]: softplus + beta_min=0.01"
+  },
+  {
+    "block": "nig_high",
+    "step": "00_head_input",
+    "key": "nig_high/00_head_input",
+    "shape": [
+      8,
+      16
+    ],
+    "dtype": "float32",
+    "how": "layer_outputs['017_trunk_drop'] (output of trunk_drop)"
+  },
+  {
+    "block": "nig_high",
+    "step": "01_fc_out",
+    "key": "nig_high/01_fc_out",
+    "shape": [
+      8,
+      128
+    ],
+    "dtype": "float32",
+    "how": "head.fc(h)  (Dense hidden, swish)"
+  },
+  {
+    "block": "nig_high",
+    "step": "02_raw_params",
+    "key": "nig_high/02_raw_params",
+    "shape": [
+      8,
+      4
+    ],
+    "dtype": "float32",
+    "how": "head.out(head.drop(fc_out, training=False)); columns = [mu, nu, alpha, beta] before softplus/floor"
+  },
+  {
+    "block": "nig_high",
+    "step": "03_raw_mu",
+    "key": "nig_high/03_raw_mu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 0:1]"
+  },
+  {
+    "block": "nig_high",
+    "step": "03_raw_nu",
+    "key": "nig_high/03_raw_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 1:2]"
+  },
+  {
+    "block": "nig_high",
+    "step": "03_raw_alpha",
+    "key": "nig_high/03_raw_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 2:3]"
+  },
+  {
+    "block": "nig_high",
+    "step": "03_raw_beta",
+    "key": "nig_high/03_raw_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 3:4]"
+  },
+  {
+    "block": "nig_high",
+    "step": "04_softplus_nu",
+    "key": "nig_high/04_softplus_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + nu_min"
+  },
+  {
+    "block": "nig_high",
+    "step": "04_softplus_alpha",
+    "key": "nig_high/04_softplus_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + alpha_min"
+  },
+  {
+    "block": "nig_high",
+    "step": "04_softplus_beta",
+    "key": "nig_high/04_softplus_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + beta_min"
+  },
+  {
+    "block": "nig_high",
+    "step": "05_final_mu",
+    "key": "nig_high/05_final_mu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[0]: no floor (mu is linear)"
+  },
+  {
+    "block": "nig_high",
+    "step": "05_final_nu",
+    "key": "nig_high/05_final_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[1]: softplus + nu_min=0.1"
+  },
+  {
+    "block": "nig_high",
+    "step": "05_final_alpha",
+    "key": "nig_high/05_final_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[2]: softplus + alpha_min=2.0"
+  },
+  {
+    "block": "nig_high",
+    "step": "05_final_beta",
+    "key": "nig_high/05_final_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[3]: softplus + beta_min=0.01"
+  },
+  {
+    "block": "nig_low",
+    "step": "00_head_input",
+    "key": "nig_low/00_head_input",
+    "shape": [
+      8,
+      16
+    ],
+    "dtype": "float32",
+    "how": "layer_outputs['017_trunk_drop'] (output of trunk_drop)"
+  },
+  {
+    "block": "nig_low",
+    "step": "01_fc_out",
+    "key": "nig_low/01_fc_out",
+    "shape": [
+      8,
+      128
+    ],
+    "dtype": "float32",
+    "how": "head.fc(h)  (Dense hidden, swish)"
+  },
+  {
+    "block": "nig_low",
+    "step": "02_raw_params",
+    "key": "nig_low/02_raw_params",
+    "shape": [
+      8,
+      4
+    ],
+    "dtype": "float32",
+    "how": "head.out(head.drop(fc_out, training=False)); columns = [mu, nu, alpha, beta] before softplus/floor"
+  },
+  {
+    "block": "nig_low",
+    "step": "03_raw_mu",
+    "key": "nig_low/03_raw_mu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 0:1]"
+  },
+  {
+    "block": "nig_low",
+    "step": "03_raw_nu",
+    "key": "nig_low/03_raw_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 1:2]"
+  },
+  {
+    "block": "nig_low",
+    "step": "03_raw_alpha",
+    "key": "nig_low/03_raw_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 2:3]"
+  },
+  {
+    "block": "nig_low",
+    "step": "03_raw_beta",
+    "key": "nig_low/03_raw_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 3:4]"
+  },
+  {
+    "block": "nig_low",
+    "step": "04_softplus_nu",
+    "key": "nig_low/04_softplus_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + nu_min"
+  },
+  {
+    "block": "nig_low",
+    "step": "04_softplus_alpha",
+    "key": "nig_low/04_softplus_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + alpha_min"
+  },
+  {
+    "block": "nig_low",
+    "step": "04_softplus_beta",
+    "key": "nig_low/04_softplus_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + beta_min"
+  },
+  {
+    "block": "nig_low",
+    "step": "05_final_mu",
+    "key": "nig_low/05_final_mu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[0]: no floor (mu is linear)"
+  },
+  {
+    "block": "nig_low",
+    "step": "05_final_nu",
+    "key": "nig_low/05_final_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[1]: softplus + nu_min=0.1"
+  },
+  {
+    "block": "nig_low",
+    "step": "05_final_alpha",
+    "key": "nig_low/05_final_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[2]: softplus + alpha_min=2.0"
+  },
+  {
+    "block": "nig_low",
+    "step": "05_final_beta",
+    "key": "nig_low/05_final_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[3]: softplus + beta_min=0.01"
+  }
+]
