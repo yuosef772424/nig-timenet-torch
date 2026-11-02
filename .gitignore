@@ -1,3 +1,5 @@
 .venv/
+.venv-torch/
 upstream/
 __pycache__/
+*.egg-info/

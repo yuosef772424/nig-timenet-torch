@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nig_timenet_torch"
+dynamic = ["version"]
+description = "PyTorch re-implementation of NIG-TimeNet v2 (parity-tested against the TensorFlow reference oracle)."
+requires-python = ">=3.11"
+dependencies = ["numpy==2.4.6", "torch>=2.15,<2.16"]
+
+[project.optional-dependencies]
+# torch: install the CPU wheel first (CI: --index-url https://download.pytorch.org/whl/cpu), then `pip install -e ".[dev]"`.
+dev = ["pytest~=9.1.1", "ruff==0.17.3"]
+
+[tool.setuptools.dynamic]
+version = {attr = "nig_timenet_torch.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["upstream", "reference"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]
