@@ -1,20 +1,54 @@
 """Trainer + compute_losses (source: crypto-signal-prediction trainer/trainer.py @ aeafc564, GenericTrainer
-__init__ / _compute_losses / train_step / test_step; BUILD_PLAN.md P18, P22).
+__init__ / _compute_losses / train_step / test_step; BUILD_PLAN.md P18, P22). ``Trainer.fit`` (ROADMAP T1) adds the
+epoch loop; its pieces live in schedules.py, tracker.py and checkpoint.py.
 
 L2 kernel regularisation: torch has no per-layer kernel_regularizer, so the model exposes
 ``regularization_loss()`` (``l2 * sum(w^2)``, no 0.5 factor, NOTES.md #6) and compute_losses adds it once to both
 total and raw loss, as the TF trainer adds ``model.losses``.
 """
 
+import json
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 
 import torch
 
+from nig_timenet_torch.core.config import from_dict
+from nig_timenet_torch.core.seeds import seed_everything
+from nig_timenet_torch.trainer import checkpoint
+from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
+from nig_timenet_torch.trainer.schedules import LrSettings, ParamSchedule, apply_schedules, lr_at
 from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS, compute_selection_metric
 from nig_timenet_torch.trainer.task_weighting import UncertaintyWeightedLoss
 from nig_timenet_torch.trainer.tasks import TASK_REGISTRY
+from nig_timenet_torch.trainer.tracker import BestTracker, EarlyStopSettings
 
-__all__ = ["Trainer", "compute_losses", "weight_for_target"]
+__all__ = ["Trainer", "compute_losses", "weight_for_target", "FitSettings", "FitResult"]
+
+
+@dataclass(frozen=True)
+class FitSettings:
+    """What ``Trainer.fit`` needs besides the data. ``epochs`` has no default (and is not part of the RunIdentity
+    hash, so a resumed run may be given more epochs); ``lr=None`` keeps the optimizer's own learning rate."""
+    epochs: int
+    batch_size: int = 64
+    seed: int = 0
+    early_stop: EarlyStopSettings = field(default_factory=EarlyStopSettings)
+    lr: LrSettings | None = None
+
+    def __post_init__(self):
+        if self.epochs < 1 or self.batch_size < 1:
+            raise ValueError("epochs and batch_size must be >= 1")
+
+
+@dataclass
+class FitResult:
+    history: list[dict]            # one dict per finished epoch: epoch, lr, train_*, val_*, selection_metric
+    epochs_done: int
+    best_epoch: int | None
+    best_value: float | None       # the smoothed selection metric at best_epoch
+    stopped_early: bool
+    restored_best: bool            # the model now holds the weights of best_epoch
 
 
 def weight_for_target(sample_weight, target_name: str, tcfg: dict):
@@ -72,7 +106,9 @@ def compute_losses(model: torch.nn.Module, x, y, targets_cfg: dict, scheduled_va
 
 
 class Trainer:
-    """GenericTrainer: scheduled_vars (at their schedule ``start``), loss_weights, Kendall split, train/eval steps.
+    """GenericTrainer: scheduled_vars (at their schedule ``start`` until ``fit`` sets them per epoch), loss_weights,
+    Kendall split, train/eval steps, and (T1) ``fit``: the epoch loop with schedules, early stopping, best weights,
+    checkpoint + resume.
 
     ``tasks_cfg`` is the trainer config dict ({"targets", "loss", optional "constraints"}). ``optimizer`` may be
     None (losses only), a torch Optimizer (the Kendall log-variances are added to it as an extra param group if
@@ -156,3 +192,96 @@ class Trainer:
         logs = self._logs(total, raw, per_target, stats)
         logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, y, logs)
         return logs
+
+    # ------------------------------------------------------------------------------------------------- fit (T1)
+    @torch.no_grad()
+    def evaluate(self, x, y, batch_size: int) -> dict[str, float]:
+        """eval() pass over ALL rows in batches; losses and the selection metric are computed once on the
+        concatenated outputs (an AUC must not be averaged over batches)."""
+        self.model.eval()
+        parts = [self.model(xb) for xb in x.split(batch_size)]
+        outputs = {k: torch.cat([p[k] for p in parts]) for k in parts[0]}
+        total, raw, per_target, stats, _ = self.compute_losses(None, y, outputs=outputs)
+        logs = self._logs(total, raw, per_target, stats)
+        logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, y, logs)
+        return logs
+
+    def _train_epoch(self, x, y, batch_size: int) -> dict[str, float]:
+        """One shuffled pass; the mean of every log, weighted by batch size."""
+        sums: dict[str, float] = {}
+        for ix in self.batch_indices(len(x), batch_size):
+            logs = self.train_step(x[ix], {k: v[ix] for k, v in y.items()})
+            for k, v in logs.items():
+                sums[k] = sums.get(k, 0.0) + v * len(ix)
+        return {k: v / len(x) for k, v in sums.items()}
+
+    def _begin_epoch(self, epoch: int, settings: FitSettings, schedules: dict[str, ParamSchedule]) -> float:
+        """Everything that must be a pure function of (settings, epoch) so that resume equals an uninterrupted
+        run: lambda schedules, learning rate, and the RNG (dropout masks, shuffle order) reseeded per epoch."""
+        apply_schedules(self.scheduled_vars, schedules, epoch)
+        if settings.lr is not None:
+            for group in self.optimizer.param_groups:
+                group["lr"] = lr_at(settings.lr, epoch)
+        torch.manual_seed(settings.seed * 1_000_003 + epoch)
+        return self.optimizer.param_groups[0]["lr"]
+
+    def _state(self, epochs_done: int, tracker: BestTracker, history: list[dict], identity: RunIdentity) -> dict:
+        return {"epochs_done": epochs_done, "model": self.model.state_dict(), "tracker": tracker.get_state(),
+                "optimizer": self.optimizer.state_dict(), "history": history,
+                "kendall": None if self.uncertainty_layer is None else self.uncertainty_layer.state_dict(),
+                "identity": json.dumps(identity.to_json(), sort_keys=True)}
+
+    def _restore(self, ckpt: dict, tracker: BestTracker, identity: RunIdentity) -> list[dict]:
+        check_resume(RunIdentity.from_json(json.loads(ckpt["identity"])), identity)
+        self.model.load_state_dict(ckpt["model"])
+        if self.uncertainty_layer is not None:
+            self.uncertainty_layer.load_state_dict(ckpt["kendall"])
+        self.optimizer.load_state_dict(ckpt["optimizer"])
+        tracker.load_state(ckpt["tracker"])
+        return list(ckpt["history"])
+
+    def fit(self, x_train, y_train, x_val, y_val, settings: FitSettings, *, run_dir=None,
+            identity: RunIdentity | None = None, resume: bool = True) -> FitResult:
+        """Epoch loop with lambda / LR schedules, early stopping and best weights chosen by ``selection_metric``.
+
+        With ``run_dir`` the state is saved after every epoch (checkpoint.py) and a run folder that already holds a
+        checkpoint is RESUMED (``resume=False`` raises instead of overwriting); resume refuses a changed
+        ``identity`` (ResumeMismatchError). Calling fit again with more ``epochs`` continues the run; the result
+        equals an uninterrupted run (bitwise on CPU). At the end the model holds the best weights if
+        ``early_stop.restore_best_weights``; the checkpoint keeps the LAST epoch's training state."""
+        if self.optimizer is None:
+            raise RuntimeError("Trainer has no optimizer")
+        if run_dir is not None and identity is None:
+            raise ValueError("run_dir needs an identity (RunIdentity) so that a resume can be checked")
+        seed_everything(settings.seed)
+        schedules = {n: from_dict(ParamSchedule, c) for n, c in self.config["loss"].get("schedules", {}).items()}
+        higher = SELECTION_METRICS.entry(self.selection_metric).meta["higher_is_better"]
+        tracker = BestTracker(settings.early_stop, higher)
+        history: list[dict] = []
+        best_weights = None
+        ckpt = None if run_dir is None else checkpoint.load_checkpoint(run_dir)
+        if ckpt is not None:
+            if not resume:
+                raise FileExistsError(f"{run_dir} already holds a checkpoint; resume=False refuses to overwrite it")
+            history = self._restore(ckpt, tracker, identity)
+            best_weights = None if tracker.best is None else checkpoint.load_best(run_dir)
+        for epoch in range(len(history), settings.epochs):
+            if tracker.should_stop():
+                break
+            lr = self._begin_epoch(epoch, settings, schedules)
+            row = {"epoch": epoch + 1, "lr": lr}
+            row.update({f"train_{k}": v for k, v in self._train_epoch(x_train, y_train, settings.batch_size).items()})
+            val = self.evaluate(x_val, y_val, settings.batch_size)
+            row.update({f"val_{k}": v for k, v in val.items()})
+            history.append(row)
+            if tracker.update(epoch + 1, val["selection_metric"]):
+                best_weights = {k: v.detach().clone() for k, v in self.model.state_dict().items()}
+                if run_dir is not None:
+                    checkpoint.save_best(run_dir, best_weights, {"best": tracker.best, "best_epoch": tracker.best_epoch,
+                                                                 "metric": self.selection_metric})
+            if run_dir is not None:
+                checkpoint.save_checkpoint(run_dir, self._state(epoch + 1, tracker, history, identity))
+        restored = settings.early_stop.restore_best_weights and best_weights is not None
+        if restored:
+            self.model.load_state_dict(best_weights)
+        return FitResult(history, len(history), tracker.best_epoch, tracker.best, tracker.should_stop(), restored)
