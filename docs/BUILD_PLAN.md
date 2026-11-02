@@ -1526,3 +1526,18 @@ and `docs/STATUS.md` agree.
   fixes carried forward (see `friction_log.csv`): P10 weight names are `patch_embed.proj.kernel/bias` and
   `patch_embed.pos_emb`, and `PatchEmbedding` takes an optional `seq_len=`; P15's builder accepts every upstream
   kwarg (unported values raise `NotImplementedError` naming P33b/P34); exact checks use `TOLERANCE["weights"]`.
+- 2026-11-02 (P39, final review): every step P00-P38 is merged (B1-B8, PRs #2-#9); no step skipped. Drift noted
+  against the sections above, history left as written:
+  - Section 11 (GRU risk): the text says Keras uses the same reset/update/new order as torch. That is wrong.
+    Keras GRU concatenates its gates as update|reset|new (z|r|h); torch uses r|z|n. P33b handles this with a
+    documented permutation (`KerasGRU.keras_weight_map`, which also splits the Keras (2, 3u) bias), checked per gate
+    slice on the second oracle's weights and by gru_1/gru_2 forward parity in isolation. No tolerance was widened.
+    One extra observation: a raw-input-to-final_norm chained check exceeds the forward tolerance (117%), traced to
+    TF's approximate float32 tanh. See friction_log.csv P33b.
+  - Section 13 decision 2: implemented as the plan assumed, as a preset (`ANTI_MEMORIZATION_CONFIG`, also
+    `ARCHITECTURES["nig_timenet_v2"].meta["anti_memorization_config"]`) rather than a second entry. It is still the
+    owner's call.
+  - P37 edits `workflow/settings.py`, which did not exist (P04 produced `core/config.py`). It was created, holding
+    only `RunSettings.rolling` and `RollingSettings`. `RunIdentity` gained optional `fold`/`data_cut`.
+  - The open judgment calls are all rows in `docs/friction_log.csv` marked "owner to confirm". None of them
+    changed a tolerance or a default behaviour.

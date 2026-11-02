@@ -29,10 +29,17 @@ class RunIdentity:
     data_fingerprint: str
     code_sha: str
     parent_hashes: tuple[str, ...] = ()
+    # P37 rolling seam: set only for a rolling-study fold; None is omitted from to_json, so a single-split
+    # identity (and its fingerprint) is unchanged
+    fold: int | None = None
+    data_cut: str | None = None
 
     def to_json(self) -> dict:
         d = dataclasses.asdict(self)
         d["parent_hashes"] = list(self.parent_hashes)
+        for k in ("fold", "data_cut"):
+            if d[k] is None:
+                del d[k]
         return d
 
     @classmethod
