@@ -11,7 +11,7 @@ dependencies = ["numpy==2.4.6", "torch>=2.15,<2.16"]
 
 [project.optional-dependencies]
 # torch: install the CPU wheel first (CI: --index-url https://download.pytorch.org/whl/cpu), then `pip install -e ".[dev]"`.
-dev = ["pytest~=9.1.1", "ruff==0.17.3"]
+dev = ["pytest~=9.1.1", "ruff==0.17.3", "scikit-learn~=1.9"]
 
 [tool.setuptools.dynamic]
 version = {attr = "nig_timenet_torch.__version__"}
