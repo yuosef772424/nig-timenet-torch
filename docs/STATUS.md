@@ -29,7 +29,7 @@ Model work moved here from TF (owner, 2026-11-02). PRs since last R-REVIEW: 1 (R
 
 | Step | Title | State | PR / job | Note |
 |---|---|---|---|---|
-| R0 | Make the rules checkable | PR open | PR_LINK | tests for B1, B6, C1, C2, E3, G1-G8 + `tests/ratchets.json`; 8 non-zero ratchets recorded as B-010..B-017 |
+| R0 | Make the rules checkable | PR open | [#14](https://github.com/yuosef772424/nig-timenet-torch/pull/14) | tests for B1, B6, C1, C2, E3, G1-G8 + `tests/ratchets.json`; 8 non-zero ratchets recorded as B-010..B-017 |
 | T1 | Complete the trainer | todo | | |
 | T2 | Real data in (TF export + manifest lock fields) | todo | | |
 | T3 | Colab runner (device assert, republish) | todo | | |
