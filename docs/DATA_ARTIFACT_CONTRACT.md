@@ -190,3 +190,47 @@ CONTRACT = {'dataset': {'base_params': {'dtype': 'float32',
 - `ns["split_data"](ds, config=ns["CONFIG"])` printed train <= 2025-02-25 / val <= 2025-03-04 although the dataset
   carries `split_dates = {train_end: 2025-02-08, val_end: 2025-02-22}`: the split used `CONFIG`'s own dates, not the
   dataset's. Recorded as produced by the plan's command; the split logic is ported later (P25), not here.
+
+## Export manifest (ROADMAP T2, rule D1)
+
+The real dataset reaches this project only as an artifact written by `crypto-signal-prediction`
+`tools/export_torch_artifact.py` (TF PR [#65](https://github.com/yuosef772424/crypto-signal-prediction/pull/65)). It is the
+`npy_dir` layout above, filtered, with an `export` block added to `manifest.json` (the npy_dir keys are unchanged, so
+`data_io/npy_dir.py` still reads it). `data_io/artifact.py::load_artifact` refuses a directory without the block, or
+with any of these inconsistent:
+
+| `export.` field | Meaning | Checked by the loader |
+|---|---|---|
+| `schema` | `"torch_artifact/1"` | equal |
+| `source_commit` | git commit of the TF repo that ran the export (the tool refuses a dirty tree) | 40 lowercase hex |
+| `coins` | coins in the artifact, in row order | non-empty, equals the dataset's `asset_bounds` names, none on the sealed list |
+| `sealed_excluded` | the WHOLE sealed list of the TF lock (`tools/holdout_guard.py`, `docs/research/plan/lock/holdout.json`) | non-empty; no coin of `coins` matches it (case and trailing `USDT` ignored) |
+| `time_seal` | `2026-10-01T00:00:00+00:00` | equals the constant in `artifact.py` |
+| `max_bar_time` | latest LABEL bar open time (last window bar + `forecast_horizon` x base-tf bar) | `< time_seal`; the loader recomputes it from `last_candles` and refuses data that reaches later than the manifest says |
+| `data_sha256` | sha256 of the JSON of `files` (sorted keys); this is the `data_fingerprint` of `RunIdentity` | 64 lowercase hex |
+| `files` | sha256 of every file in the directory except `manifest.json` | format; re-hashed only by `verify_hashes` / `--verify-hashes` |
+| `sealed_found`, `lock_sha256`, `max_window_time`, `rows`, `rows_source`, `dropped_*`, `source_*` | provenance for the reader | not checked |
+
+`build_run_identity(fit_settings, model_settings, artifact.manifest.data_fingerprint, code_sha=...)`
+(`trainer/identity.py`) is the one way a real run gets its `RunIdentity`; `Trainer.fit` raises `SeedMismatchError` when
+`identity.seed != settings.seed`.
+
+### Run it once on Colab (Drive data)
+
+Run in a Colab cell after mounting Drive (adjust the project folder if `project_name` is not `crypto_model`). Until TF
+PR #65 is merged, check out its branch (`-b claude/t2-export-torch-artifact`); afterwards use `master`.
+
+```bash
+git clone -q -b claude/t2-export-torch-artifact https://github.com/yuosef772424/crypto-signal-prediction /content/tf
+git clone -q https://github.com/yuosef772424/nig-timenet-torch /content/torch
+python /content/tf/tools/export_torch_artifact.py \
+  --dataset /content/drive/MyDrive/crypto_model/preprocessed_data/preprocessing_output_latest.dataset \
+  --out /content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1
+PYTHONPATH=/content/torch/src python -m nig_timenet_torch.data_io.artifact \
+  /content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1 --verify-hashes
+```
+
+Expected last line: `OK <path>: <N> windows, <coins> coins, source <10 hex>, max_bar_time 2026-09-30T..., sealed excluded <n>, ...
+(hashes verified)`. The loader needs only numpy and pandas (no torch install, so Colab's CUDA torch is left alone).
+Not yet run on the real Drive data (no Drive access in the build session): the first Colab run is the real check of
+memory use and of the assumption that `last_candles` column 3 is the bar OPEN time.
