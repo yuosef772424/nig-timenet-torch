@@ -14,7 +14,7 @@ from torch import nn
 
 from nig_timenet_torch.core.registry import Contract, Registry
 
-__all__ = ["HeadSpec", "HEAD_REGISTRY", "head_spec", "classification_head_forward"]
+__all__ = ["HeadSpec", "HEAD_REGISTRY", "head_spec", "classification_head_forward", "multiclass_head_forward"]
 
 
 @dataclass(frozen=True)
@@ -53,6 +53,16 @@ def classification_head_forward(x: torch.Tensor, fc: nn.Linear, out: nn.Linear,
     return torch.sigmoid(out(h))
 
 
+def multiclass_head_forward(x: torch.Tensor, fc: nn.Linear, out: nn.Linear,
+                            drop: nn.Module | None = None) -> torch.Tensor:
+    """Dense(relu) -> Dropout -> Dense(n_classes, softmax): class PROBABILITIES under the name
+    ``y_{target}_class_logits`` (upstream convention; the loss uses from_logits=False)."""
+    h = torch.relu(fc(x))
+    if drop is not None:
+        h = drop(h)
+    return torch.softmax(out(h), dim=-1)
+
+
 HEAD_REGISTRY.register(
     "nig_regression", None, version=1, head_name="{target}_reg",
     output_keys={"mu": "y_{target}", "nu": "y_{target}_nu", "alpha": "y_{target}_alpha", "beta": "y_{target}_beta",
@@ -65,3 +75,7 @@ HEAD_REGISTRY.register(
     "binary_classification", classification_head_forward, version=1, head_name="{target}_class",
     output_keys={"logits": "y_{target}_class_logits"}, label_key="y_{target}_class", task_type="classification",
     label_encoding="binary", default_weight=1.0, eval_role="direction")
+HEAD_REGISTRY.register(
+    "multiclass_classification", multiclass_head_forward, version=1, head_name="{target}_class",
+    output_keys={"logits": "y_{target}_class_logits"}, label_key="y_{target}_class", task_type="classification",
+    label_encoding="multiclass", default_weight=1.0, eval_role="direction")

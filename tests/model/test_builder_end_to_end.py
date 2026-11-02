@@ -51,8 +51,8 @@ def test_load_oracle_weights_rejects_partial():
 def test_unported_options_raise():
     with pytest.raises(NotImplementedError, match="P34"):
         build_nig_timenet_v2(32, 6, level_film=True)
-    with pytest.raises(NotImplementedError, match="tcn"):
-        build_nig_timenet_v2(32, 6, encoder="tcn")
+    with pytest.raises(ValueError, match="encoder must be one of"):
+        build_nig_timenet_v2(32, 6, encoder="lstm")
 
 
 def test_forward_matches_outputs_npz(model):

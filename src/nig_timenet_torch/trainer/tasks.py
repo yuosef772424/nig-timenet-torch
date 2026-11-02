@@ -11,6 +11,7 @@ import inspect
 import math
 
 import torch
+import torch.nn.functional as F
 
 from nig_timenet_torch.core.registry import Contract, Registry
 
@@ -158,12 +159,25 @@ register_task_type("regression", regression_task_loss, ["mae"], supports_sample_
 
 def classification_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_weight=None):
     """Binary: Keras binary_crossentropy on PROBABILITIES (the head ends in sigmoid; the oracle's reshape drops
-    Keras' cached logits, so it takes the clip-to-[eps, 1-eps] path, eps = 1e-7). Accuracy uses p >= 0.5."""
-    if not target_cfg.get("binary", True):
-        raise NotImplementedError("multiclass classification loss is not ported yet")
+    Keras' cached logits, so it takes the clip-to-[eps, 1-eps] path, eps = 1e-7). Accuracy uses p >= 0.5.
+    Multiclass (``binary=False``): the head ends in softmax, so Keras' from_logits=False path — probabilities
+    renormalised, clipped to [eps, 1-eps], cross-entropy against the integer label (label_smoothing: one-hot *
+    (1 - ls) + ls / K). Accuracy uses argmax."""
     keys = target_cfg["output_keys"]
     w = None if sample_weight is None else _flat(sample_weight)
     ls = float(target_cfg.get("label_smoothing", 0.0))
+    if not target_cfg.get("binary", True):
+        p = outputs[keys["logits"]]
+        y = y_true.reshape(-1).to(torch.int64)
+        q = torch.clamp(p / p.sum(dim=-1, keepdim=True), KERAS_EPSILON, 1.0 - KERAS_EPSILON)
+        if ls > 0:
+            k = p.shape[-1]
+            soft = F.one_hot(y, k).to(p.dtype) * (1.0 - ls) + ls / k
+            per = -(soft * torch.log(q)).sum(dim=-1)
+        else:
+            per = -torch.log_softmax(torch.log(q), dim=-1).gather(1, y[:, None])[:, 0]
+        acc = _wmean((p.argmax(dim=-1) == y).to(torch.float32), w)
+        return _wmean(per, w), {"accuracy": acc}
     y = _flat(y_true)
     p = _flat(outputs[keys["logits"]])
     y_loss = y * (1.0 - ls) + 0.5 * ls if ls > 0 else y
