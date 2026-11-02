@@ -1522,3 +1522,7 @@ and `docs/STATUS.md` agree.
   `docs/DATA_ARTIFACT_CONTRACT.md` notes); P25 must decide whether the dataset's `split_dates` or the pipeline
   CONFIG's dates are authoritative (the P01 split used CONFIG's); torch is pinned `2.15.0+cpu` and must be installed
   from the CPU index before `pip install -e ".[dev]"`.
+- 2026-11-02 (P16, B3 review): M2 (P06-P15) took two batches in one session as planned; no reordering. Plan-text
+  fixes carried forward (see `friction_log.csv`): P10 weight names are `patch_embed.proj.kernel/bias` and
+  `patch_embed.pos_emb`, and `PatchEmbedding` takes an optional `seq_len=`; P15's builder accepts every upstream
+  kwarg (unported values raise `NotImplementedError` naming P33b/P34); exact checks use `TOLERANCE["weights"]`.
