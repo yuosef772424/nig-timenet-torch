@@ -1516,3 +1516,9 @@ and `docs/STATUS.md` agree.
 ## Change log of this plan itself
 
 - 2026-11-02: initial version, written by the planning session referenced in this repo's PR history.
+- 2026-11-02 (P05, B1 review of `docs/friction_log.csv`): no reordering needed. Notes carried forward: P01's
+  `shapes()` snippet must recurse (test is `{asset: split}`); P06/P25 must treat `price_norm_mode`,
+  `price_pct_clip`, `holdout_start`, `higher_tf_mode` as optional dataset keys (absent from the fixture; see
+  `docs/DATA_ARTIFACT_CONTRACT.md` notes); P25 must decide whether the dataset's `split_dates` or the pipeline
+  CONFIG's dates are authoritative (the P01 split used CONFIG's); torch is pinned `2.15.0+cpu` and must be installed
+  from the CPU index before `pip install -e ".[dev]"`.
