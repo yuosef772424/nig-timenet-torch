@@ -18,7 +18,7 @@ from nig_timenet_torch.model.heads import classification_head_forward
 from nig_timenet_torch.model.nig_layers import ConfidenceHead, NIGHead, NIGUncertainty, OrderedMeans
 
 __all__ = ["ARCHITECTURES", "DEFAULT_ARCHITECTURE", "ModelSettings", "build_model", "NIG_TIMENET_V2_DEFAULT_CONFIG",
-           "TinyMLP", "build_tiny_mlp"]
+           "TinyMLP", "build_tiny_mlp", "ANTI_MEMORIZATION_CONFIG"]
 
 ARCHITECTURES = Registry("architecture", Contract("architecture", required_meta=("build_fn", "default_config")))
 DEFAULT_ARCHITECTURE = "nig_timenet_v2"
@@ -37,6 +37,15 @@ NIG_TIMENET_V2_DEFAULT_CONFIG: dict[str, Any] = {
 }
 
 
+# P33b: the TF side's ANTI_MEMORIZATION_CONFIG (model/config.py), a preset over the same builder (merged over
+# default_config), equal to reference/data_default/config.json "overrides" (asserted in tests)
+ANTI_MEMORIZATION_CONFIG: dict[str, Any] = {
+    "d_model": 64, "num_layers": 2, "head_hidden": 64, "class_head_hidden": 32, "dropout": 0.25, "input_clip": 4.0,
+    "stats_mode": "symlog", "input_noise_std": 0.1, "feature_dropout": 0.1, "linear_path_l2": 1e-3,
+    "level_passthrough": True, "level_norm": "batch", "encoder": "gru",
+}
+
+
 @dataclass(frozen=True)
 class ModelSettings:
     """Mirrors the TF side's ModelSettings.architecture (S23): which ARCHITECTURES entry to build, plus overrides
@@ -51,7 +60,8 @@ def build_model(settings: ModelSettings, seq_len: int, n_features: int) -> nn.Mo
 
 
 ARCHITECTURES.register("nig_timenet_v2", build_nig_timenet_v2, version=1, build_fn=build_nig_timenet_v2,
-                       default_config=NIG_TIMENET_V2_DEFAULT_CONFIG)
+                       default_config=NIG_TIMENET_V2_DEFAULT_CONFIG,
+                       anti_memorization_config=ANTI_MEMORIZATION_CONFIG)
 
 
 class TinyMLP(nn.Module):

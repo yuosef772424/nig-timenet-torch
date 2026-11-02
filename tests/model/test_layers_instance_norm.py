@@ -28,8 +28,11 @@ def test_instance_norm_clip_and_modes():
     torch.testing.assert_close(z_clip, 0.5 * torch.tanh(z_plain / 0.5))
     with pytest.raises(ValueError):
         InstanceNorm(3, stats_mode="bogus")
-    with pytest.raises(NotImplementedError):
-        InstanceNorm(3, stats_mode="symlog")
+    assert InstanceNorm(3, stats_mode="none")(x)[1] is None
+    _, full = InstanceNorm(3)(x)
+    _, sym = InstanceNorm(3, stats_mode="symlog", stats_clip=0.1)(x)
+    m = full[:, :3]
+    torch.testing.assert_close(sym, torch.cat([torch.sign(m) * torch.log1p(m.abs()), full[:, 3:].clamp(-0.1, 0.1)], -1))
 
 
 def test_symlog_formula():

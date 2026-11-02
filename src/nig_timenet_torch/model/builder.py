@@ -13,11 +13,16 @@ from torch import nn
 from nig_timenet_torch.model.heads import classification_head_forward
 from nig_timenet_torch.model.layers import (
     AttentionPool,
+    BatchNormChannelsLast,
     CausalMultiScaleDecomp,
+    GaussianNoise,
     InstanceNorm,
+    KerasGRU,
     LastToken,
     PatchEmbedding,
     RMSNorm,
+    SpatialDropout1D,
+    SymLog,
     TransformerBlock,
     keras_conv1d_weight_to_torch,
     keras_dense_weight_to_torch,
@@ -31,12 +36,12 @@ HEAD_KINDS = ("nig_regression", "binary_classification")
 
 # option -> (value this port implements, step that adds the rest)
 _NOT_YET = {
-    "encoder": ("transformer", "P34"), "input_skip": ("none", "P34"),
+    "input_skip": ("none", "P34"),
     "use_instance_norm": (True, "P34"), "use_decomposition": (True, "P34"), "use_linear_path": (True, "P34"),
-    "input_clip": (None, "P33b"), "stats_mode": ("full", "P33b"), "input_noise_std": (0.0, "P33b"),
-    "feature_dropout": (0.0, "P33b"), "level_passthrough": (False, "P33b"), "level_norm": (None, "P33b"),
     "level_film": (False, "P34"), "architecture": ("fused", "P34"), "fusion": ("concat", "P34"), "n_coins": (0, "P34"),
 }
+ENCODERS = ("transformer", "gru")  # upstream also has "tcn": not in BUILD_PLAN.md, raises NotImplementedError
+LEVEL_NORMS = (None, "batch")
 
 
 def torch_param_name(attr_path: str) -> str:
@@ -56,7 +61,8 @@ class NigTimeNetV2(nn.Module):
     def __init__(self, seq_len: int, n_features: int, *, d_model, num_layers, num_heads, num_kv_heads, patch_len,
                  stride, kernel_sizes, max_rel_pos, dropout, attn_dropout, causal, window, price_targets,
                  head_types, enforce_order, head_hidden, nu_min, alpha_min, beta_min, unc_max, class_head_hidden,
-                 norm_eps, linear_path_l2):
+                 norm_eps, linear_path_l2, encoder="transformer", input_clip=None, stats_mode="full",
+                 input_noise_std=0.0, feature_dropout=0.0, level_passthrough=False, level_norm=None):
         super().__init__()
         self.price_targets = tuple(price_targets)
         self.head_types = {t: list(head_types.get(t, [])) for t in self.price_targets}
@@ -67,18 +73,47 @@ class NigTimeNetV2(nn.Module):
         self.linear_path_l2 = linear_path_l2  # kernel L2 of linear_path, see regularization_loss()
         self.num_layers = num_layers
 
-        self.instance_norm = InstanceNorm(n_features, eps=norm_eps)
+        self.encoder = encoder
+        self.use_stats = stats_mode != "none"
+        self.instance_norm = InstanceNorm(n_features, eps=norm_eps, clip=input_clip, stats_mode=stats_mode)
+        if feature_dropout > 0:
+            self.feature_dropout = SpatialDropout1D(feature_dropout)
+        if input_noise_std > 0:
+            self.input_noise = GaussianNoise(input_noise_std)
         self.decomp = CausalMultiScaleDecomp(n_features, kernel_sizes)
-        self.patch_embed = PatchEmbedding(2 * n_features, d_model, patch_len, stride, seq_len=seq_len)
+        tok_width = 2 * n_features
+        self.level_passthrough = level_passthrough
+        if level_passthrough:  # anti-memorization: SymLog(raw level) re-enters the token path (P33b)
+            self.level_symlog = SymLog()
+            if level_norm == "batch":
+                self.level_bn = BatchNormChannelsLast(n_features)
+            if feature_dropout > 0:
+                self.level_feature_dropout = SpatialDropout1D(feature_dropout)
+            if input_noise_std > 0:
+                self.level_noise = GaussianNoise(input_noise_std)
+            tok_width += n_features
+        if self.use_stats and level_norm == "batch":
+            self.stats_bn = BatchNormChannelsLast(2 * n_features)
+        if encoder == "transformer":
+            self.patch_embed = PatchEmbedding(tok_width, d_model, patch_len, stride, seq_len=seq_len)
+        else:
+            self.step_proj = nn.Linear(tok_width, d_model)
         for i in range(num_layers):
-            setattr(self, f"block_{i + 1}", TransformerBlock(d_model, num_heads, num_kv_heads, max_rel_pos, causal,
-                                                             window, dropout, attn_dropout))
+            if encoder == "transformer":
+                setattr(self, f"block_{i + 1}", TransformerBlock(d_model, num_heads, num_kv_heads, max_rel_pos,
+                                                                 causal, window, dropout, attn_dropout))
+            else:  # RMSNorm -> GRU -> Dropout, residual add (upstream encoder == "gru")
+                setattr(self, f"gru_norm_{i + 1}", RMSNorm(d_model))
+                setattr(self, f"gru_{i + 1}", KerasGRU(d_model, d_model))
+                setattr(self, f"gru_drop_{i + 1}", nn.Dropout(dropout))
         self.final_norm = RMSNorm(d_model)
         self.last_token = LastToken()
         self.attn_pool = AttentionPool(d_model)
-        self.stats_proj = nn.Linear(2 * n_features, d_model)
-        self.readout_fc = nn.Linear(3 * d_model, d_model)
-        self.linear_path = nn.Linear(seq_len * n_features, d_model)
+        if self.use_stats:
+            self.stats_proj = nn.Linear(2 * n_features, d_model)
+        self.readout_fc = nn.Linear((3 if self.use_stats else 2) * d_model, d_model)
+        lin_width = n_features * (2 if level_passthrough else 1)
+        self.linear_path = nn.Linear(seq_len * lin_width, d_model)
         self.trunk_norm = RMSNorm(d_model)
         self.trunk_drop = nn.Dropout(dropout)
 
@@ -98,13 +133,34 @@ class NigTimeNetV2(nn.Module):
 
     def trunk(self, x: torch.Tensor) -> torch.Tensor:
         z, stats = self.instance_norm(x)
+        for name in ("feature_dropout", "input_noise"):
+            if hasattr(self, name):
+                z = getattr(self, name)(z)
         trend, seasonal = self.decomp(z)
-        h = self.patch_embed(torch.cat([trend, seasonal], dim=-1))
-        for i in range(self.num_layers):
-            h = getattr(self, f"block_{i + 1}")(h)
+        tok, lvl = torch.cat([trend, seasonal], dim=-1), None
+        if self.level_passthrough:
+            lvl = self.level_symlog(x)
+            for name in ("level_bn", "level_feature_dropout", "level_noise"):
+                if hasattr(self, name):
+                    lvl = getattr(self, name)(lvl)
+            tok = torch.cat([tok, lvl], dim=-1)
+        if stats is not None and hasattr(self, "stats_bn"):
+            stats = self.stats_bn(stats)
+        if self.encoder == "transformer":
+            h = self.patch_embed(tok)
+            for i in range(self.num_layers):
+                h = getattr(self, f"block_{i + 1}")(h)
+        else:
+            h = self.step_proj(tok)
+            for i in range(self.num_layers):
+                y = getattr(self, f"gru_{i + 1}")(getattr(self, f"gru_norm_{i + 1}")(h))
+                h = h + getattr(self, f"gru_drop_{i + 1}")(y)
         h = self.final_norm(h)
-        parts = [self.last_token(h), self.attn_pool(h), F.gelu(self.stats_proj(stats))]
-        h = F.gelu(self.readout_fc(torch.cat(parts, dim=-1))) + self.linear_path(z.flatten(1))
+        parts = [self.last_token(h), self.attn_pool(h)]
+        if stats is not None:
+            parts.append(F.gelu(self.stats_proj(stats)))
+        lin_in = z if lvl is None else torch.cat([z, lvl], dim=-1)
+        h = F.gelu(self.readout_fc(torch.cat(parts, dim=-1))) + self.linear_path(lin_in.flatten(1))
         return self.trunk_drop(self.trunk_norm(h))
 
     def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
@@ -136,26 +192,39 @@ class NigTimeNetV2(nn.Module):
             reg = reg + getattr(self, f"nig_{t}").regularization_loss()
         return reg
 
+    @staticmethod
+    def _oracle_targets(path: str, value: torch.Tensor, modules: dict) -> dict[str, torch.Tensor]:
+        """attr_path -> {torch parameter/buffer name: value}; a module with ``keras_weight_map`` (KerasGRU, whose
+        attr paths look like 'gru_1.cell.kernel') converts its own Keras weights."""
+        parts = path.split(".")
+        for i in range(len(parts) - 1, 0, -1):
+            mod = modules.get(".".join(parts[:i]))
+            if mod is not None and hasattr(mod, "keras_weight_map"):
+                prefix = ".".join(parts[:i])
+                return {f"{prefix}.{k}": v for k, v in mod.keras_weight_map(parts[-1], value).items()}
+        return {torch_param_name(path): keras_to_torch_value(path, value)}
+
     @torch.no_grad()
     def load_oracle_weights(self, weights: dict[str, torch.Tensor], attr_paths: dict[str, str] | None = None) -> None:
         """Assign every parameter from ``weights`` keyed by attr_path (or by weights.json name, translated through
         ``attr_paths`` name -> attr_path). 'trainer/...' entries are skipped. Raises on any unmatched parameter,
         unknown key, or shape mismatch — no silent partial load."""
         attr_paths = attr_paths or {}
-        params = dict(self.named_parameters())
+        params = {**dict(self.named_parameters()), **dict(self.named_buffers())}  # BN moving stats are buffers
+        modules = dict(self.named_modules())
         assigned = set()
         for key, value in weights.items():
             path = attr_paths.get(key, key)
             if path.startswith("trainer/"):
                 continue
-            name = torch_param_name(path)
-            if name not in params:
-                raise KeyError(f"weight {key!r} (attr_path {path!r}) has no torch parameter {name!r}")
-            v = keras_to_torch_value(path, value)
-            if v.shape != params[name].shape:
-                raise ValueError(f"{name}: shape {tuple(v.shape)} != {tuple(params[name].shape)}")
-            params[name].copy_(v)
-            assigned.add(name)
+            targets = self._oracle_targets(path, value, modules)
+            for name, v in targets.items():
+                if name not in params:
+                    raise KeyError(f"weight {key!r} (attr_path {path!r}) has no torch parameter {name!r}")
+                if v.shape != params[name].shape:
+                    raise ValueError(f"{name}: shape {tuple(v.shape)} != {tuple(params[name].shape)}")
+                params[name].copy_(v)
+                assigned.add(name)
         missing = sorted(set(params) - assigned)
         if missing:
             raise KeyError(f"parameters not assigned by the oracle weights: {missing}")
@@ -167,10 +236,18 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          head_types: dict[str, list[str]] | None = None, enforce_order=True, head_hidden=128,
                          nu_min=0.1, alpha_min=2.0, beta_min=0.01, unc_max=20.0, class_head_hidden=64,
                          encoder: str = "transformer", input_skip: str = "none", n_classes=3, norm_eps=1e-4,
-                         linear_path_l2=1e-4, **options) -> NigTimeNetV2:
+                         linear_path_l2=1e-4, input_clip=None, stats_mode="full", input_noise_std=0.0,
+                         feature_dropout=0.0, level_passthrough=False, level_norm=None, **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
-    multiclass head, P17)."""
-    options = {"encoder": encoder, "input_skip": input_skip, **options}
+    multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
+    feature_dropout, level_passthrough, level_norm; P33b) are opt-in: their defaults reproduce the P15 graph."""
+    if encoder not in ENCODERS:
+        if encoder == "tcn":
+            raise NotImplementedError("encoder='tcn' is not ported (not in BUILD_PLAN.md)")
+        raise ValueError(f"encoder must be one of {ENCODERS + ('tcn',)}, not {encoder!r}")
+    if level_norm not in LEVEL_NORMS:
+        raise ValueError(f"level_norm must be one of {LEVEL_NORMS}, not {level_norm!r}")
+    options = {"input_skip": input_skip, **options}
     for opt, value in options.items():
         if opt not in _NOT_YET:
             raise TypeError(f"build_nig_timenet_v2() got an unexpected keyword argument {opt!r}")
@@ -185,4 +262,6 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         max_rel_pos=max_rel_pos, dropout=dropout, attn_dropout=attn_dropout, causal=causal, window=window,
         price_targets=price_targets, head_types=head_types or DEFAULT_HEAD_TYPES, enforce_order=enforce_order,
         head_hidden=head_hidden, nu_min=nu_min, alpha_min=alpha_min, beta_min=beta_min, unc_max=unc_max,
-        class_head_hidden=class_head_hidden, norm_eps=norm_eps, linear_path_l2=linear_path_l2)
+        class_head_hidden=class_head_hidden, norm_eps=norm_eps, linear_path_l2=linear_path_l2, encoder=encoder,
+        input_clip=input_clip, stats_mode=stats_mode, input_noise_std=input_noise_std, feature_dropout=feature_dropout,
+        level_passthrough=level_passthrough, level_norm=level_norm)

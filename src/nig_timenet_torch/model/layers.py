@@ -9,7 +9,8 @@ from torch import nn
 __all__ = ["InstanceNorm", "SymLog", "CausalMultiScaleDecomp", "keras_dense_weight_to_torch",
            "keras_conv1d_weight_to_torch", "num_patches", "PatchEmbedding",
            "RMSNorm", "RelativeGQAttention", "SwiGLU", "TransformerBlock",
-           "LastToken", "AttentionPool", "FiLM", "GatedFusion"]
+           "LastToken", "AttentionPool", "FiLM", "GatedFusion",
+           "BatchNormChannelsLast", "SpatialDropout1D", "GaussianNoise", "KerasGRU"]
 
 
 class InstanceNorm(nn.Module):
@@ -18,7 +19,8 @@ class InstanceNorm(nn.Module):
 
     mean / population variance over the time axis (TF reduce_variance, i.e. mean((x - mean)^2)), std = sqrt(var + eps),
     z = (x - mean) / std, optional soft clip ``clip * tanh(z / clip)``, optional affine ``z * gamma + beta``.
-    Only stats_mode="full" is implemented (the oracle's); "symlog"/"none" come with P33b.
+    stats_mode: "full" = [mean, log std]; "symlog" = [sign(mean) log1p|mean|, clip(log std, +-stats_clip)];
+    "none" = stats returned as None (P33b).
     """
 
     STATS_MODES = ("full", "symlog", "none")
@@ -28,8 +30,6 @@ class InstanceNorm(nn.Module):
         super().__init__()
         if stats_mode not in self.STATS_MODES:
             raise ValueError(f"stats_mode must be one of {self.STATS_MODES}, not {stats_mode!r}")
-        if stats_mode != "full":
-            raise NotImplementedError(f"stats_mode={stats_mode!r} is not ported yet (BUILD_PLAN.md P08: P33b)")
         self.eps, self.affine, self.clip = eps, affine, clip
         self.stats_mode, self.stats_clip = stats_mode, stats_clip
         if affine:
@@ -45,8 +45,13 @@ class InstanceNorm(nn.Module):
             z = self.clip * torch.tanh(z / self.clip)
         if self.affine:
             z = z * self.gamma + self.beta
-        stats = torch.cat([mean.squeeze(1), torch.log(std.squeeze(1))], dim=-1)
-        return z, stats
+        if self.stats_mode == "none":
+            return z, None
+        m, log_s = mean.squeeze(1), torch.log(std.squeeze(1))
+        if self.stats_mode == "symlog":
+            m = torch.sign(m) * torch.log1p(torch.abs(m))
+            log_s = torch.clamp(log_s, -self.stats_clip, self.stats_clip)
+        return z, torch.cat([m, log_s], dim=-1)
 
 
 class SymLog(nn.Module):
@@ -292,3 +297,80 @@ class GatedFusion(nn.Module):
     def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         g = torch.sigmoid(self.gate(torch.cat([a, b], dim=-1)))
         return g * a + (1.0 - g) * b
+
+
+class BatchNormChannelsLast(nn.Module):
+    """Keras BatchNormalization(axis=-1) on (B, F) or (B, T, F): attribute names match Keras (gamma, beta, and the
+    moving_mean / moving_variance BUFFERS), epsilon 1e-3, momentum 0.99 (torch momentum 0.01). Training uses the
+    batch statistics over every axis but the last and updates the moving averages (population-unbiased variance,
+    as Keras); eval uses the moving averages."""
+
+    def __init__(self, n_features: int, epsilon: float = 1e-3, momentum: float = 0.99):
+        super().__init__()
+        self.epsilon, self.momentum = epsilon, momentum
+        self.gamma = nn.Parameter(torch.ones(n_features))
+        self.beta = nn.Parameter(torch.zeros(n_features))
+        self.register_buffer("moving_mean", torch.zeros(n_features))
+        self.register_buffer("moving_variance", torch.ones(n_features))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.training:
+            dims = tuple(range(x.ndim - 1))
+            mean, var = x.mean(dim=dims), x.var(dim=dims, unbiased=False)
+            with torch.no_grad():
+                self.moving_mean.mul_(self.momentum).add_((1 - self.momentum) * mean)
+                self.moving_variance.mul_(self.momentum).add_((1 - self.momentum) * var)
+        else:
+            mean, var = self.moving_mean, self.moving_variance
+        return (x - mean) * torch.rsqrt(var + self.epsilon) * self.gamma + self.beta
+
+
+class SpatialDropout1D(nn.Module):
+    """Keras SpatialDropout1D on (B, T, F): drops whole feature channels per sample in training; identity in eval."""
+
+    def __init__(self, rate: float):
+        super().__init__()
+        self.drop = nn.Dropout1d(rate)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.drop(x.transpose(1, 2)).transpose(1, 2)
+
+
+class GaussianNoise(nn.Module):
+    """Keras GaussianNoise: x + N(0, stddev^2) in training; identity in eval."""
+
+    def __init__(self, stddev: float):
+        super().__init__()
+        self.stddev = stddev
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + torch.randn_like(x) * self.stddev if self.training else x
+
+
+class KerasGRU(nn.Module):
+    """Keras GRU(units, return_sequences=True) (reset_after=True, sigmoid/tanh, zero initial state) on torch.nn.GRU.
+    Both use n = tanh(W_n x + b_in + r * (U_n h + b_hn)) and h' = z * h + (1 - z) * n; only the gate order differs
+    (Keras z|r|h, torch r|z|n) — ``keras_weight_map`` converts the Keras cell weights."""
+
+    def __init__(self, in_features: int, units: int):
+        super().__init__()
+        self.units = units
+        self.cell = nn.GRU(in_features, units, batch_first=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.cell(x)[0]
+
+    def _reorder(self, w: torch.Tensor) -> torch.Tensor:  # last axis Keras [z, r, h] -> torch [r, z, n]
+        z, r, h = w.split(self.units, dim=-1)
+        return torch.cat([r, z, h], dim=-1)
+
+    def keras_weight_map(self, leaf: str, value: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Keras cell weight (``kernel`` (in, 3u), ``recurrent_kernel`` (u, 3u), ``bias`` (2, 3u)) -> torch
+        parameter names relative to this module."""
+        if leaf == "kernel":
+            return {"cell.weight_ih_l0": self._reorder(value).t().contiguous()}
+        if leaf == "recurrent_kernel":
+            return {"cell.weight_hh_l0": self._reorder(value).t().contiguous()}
+        if leaf == "bias":
+            return {"cell.bias_ih_l0": self._reorder(value[0]), "cell.bias_hh_l0": self._reorder(value[1])}
+        raise KeyError(f"unknown Keras GRU weight {leaf!r}")
