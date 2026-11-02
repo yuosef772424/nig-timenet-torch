@@ -34,6 +34,8 @@ Build the checks `docs/RULES.md` marks "built in R0":
 - The CI duration budget.
 
 Add a `CLAUDE.md` line check that STATUS is < 60 lines.
+Also build the section G checks (G1-G8): ratchet file `tests/ratchets.json` with today's counts, one test per rule.
+Pin the counts at today's values even if they are not zero, and record each non-zero count in `docs/bottlenecks.csv`.
 
 ### T1 — Complete the trainer (`feat`, M)
 - Epoch loop.
