@@ -8,7 +8,8 @@ from torch import nn
 
 __all__ = ["InstanceNorm", "SymLog", "CausalMultiScaleDecomp", "keras_dense_weight_to_torch",
            "keras_conv1d_weight_to_torch", "num_patches", "PatchEmbedding",
-           "RMSNorm", "RelativeGQAttention", "SwiGLU", "TransformerBlock"]
+           "RMSNorm", "RelativeGQAttention", "SwiGLU", "TransformerBlock",
+           "LastToken", "AttentionPool", "FiLM", "GatedFusion"]
 
 
 class InstanceNorm(nn.Module):
@@ -242,3 +243,52 @@ class TransformerBlock(nn.Module):
         x = x + self.drop1(self.attn(self.norm1(x)))
         x = x + self.drop2(self.ffn(self.norm2(x)))
         return x
+
+
+class LastToken(nn.Module):
+    """x[:, -1, :] (source: model/readout.py)."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x[:, -1, :]
+
+
+class AttentionPool(nn.Module):
+    """Learned-query attention pooling over all tokens (source: model/readout.py):
+    w = softmax(einsum("btd,d->bt", x, query) / sqrt(d)); out = einsum("bt,btd->bd", w, x)."""
+
+    def __init__(self, d_model: int):
+        super().__init__()
+        self.query = nn.Parameter(torch.randn(d_model) * 0.02)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        d = torch.tensor(float(x.shape[-1]), dtype=x.dtype, device=x.device)
+        w = torch.softmax(torch.einsum("btd,d->bt", x, self.query) / torch.sqrt(d), dim=-1)
+        return torch.einsum("bt,btd->bd", w, x)
+
+
+class FiLM(nn.Module):
+    """x * (1 + gamma(e)) + beta(e) per token, gamma/beta kernels zero-initialised (identity at start)
+    (source: model/readout.py). Not wired into the builder until P34 (level_film is off in both oracles)."""
+
+    def __init__(self, d_model: int, e_dim: int | None = None):
+        super().__init__()
+        e_dim = e_dim or d_model
+        self.to_gamma, self.to_beta = nn.Linear(e_dim, d_model), nn.Linear(e_dim, d_model)
+        for lin in (self.to_gamma, self.to_beta):
+            nn.init.zeros_(lin.weight)
+            nn.init.zeros_(lin.bias)
+
+    def forward(self, x: torch.Tensor, e: torch.Tensor) -> torch.Tensor:
+        return x * (1.0 + self.to_gamma(e)[:, None, :]) + self.to_beta(e)[:, None, :]
+
+
+class GatedFusion(nn.Module):
+    """g = sigmoid(W [a; b]); g * a + (1 - g) * b (source: model/readout.py). Not wired until P34 (two_tower off)."""
+
+    def __init__(self, d_model: int, b_dim: int | None = None):
+        super().__init__()
+        self.gate = nn.Linear(d_model + (b_dim or d_model), d_model)
+
+    def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        g = torch.sigmoid(self.gate(torch.cat([a, b], dim=-1)))
+        return g * a + (1.0 - g) * b
