@@ -1,11 +1,13 @@
 """SplitPlan: ONE global train/val/test split with purge + embargo, as a property of the data (C6; BUILD_PLAN.md
 P25). Rolling splits are P37.
 
-Per-sample times (int64 ns, UTC, bar OPEN times as in the artifact). The pinned fixture does not carry them
-explicitly, so ``sample_times`` derives them from ``last_candles``' timestamp column (the window's last bar, as
-crypto-signal-prediction data/split.py sample_timestamps reads it), the base timeframe and ``forecast_horizon``:
-feature_end = ts; feature_start = ts - (window - 1) * bar (widest window over the dataset's timeframes);
-label_end = ts + forecast_horizon * bar (the last bar the label depends on).
+Per-sample times are int64 ns UTC instants. The pinned fixture does not carry them explicitly, so
+``sample_times`` derives them from ``last_candles``' timestamp column ts (the OPEN time of the window's last bar,
+as crypto-signal-prediction data/split.py sample_timestamps reads it), the base timeframe bar and
+``forecast_horizon`` h: feature_start = ts - (window - 1) * bar (open of the first input bar, widest window over the
+dataset's timeframes); feature_end = ts + bar (the last input bar has closed: the prediction can be made);
+label_end = ts + (h + 1) * bar (the last bar the label depends on has closed: the label is known). The prediction
+table's prediction_made_at / label_available_at (P27) are exactly feature_end / label_end.
 
 Membership (all cut times inclusive as upstream's ``ts <= train_end``):
 train = label_end <= train_end (purge built in: no train label reaches past the cut);
@@ -55,8 +57,8 @@ def sample_times(dataset: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     bar = int(pd.Timedelta(dataset["base_tf"]).value)
     span = max(int(dataset["window_sizes"][tf]) * int(pd.Timedelta(tf).value) for tf in dataset["timeframes"])
     feature_start = ts - (span - bar)
-    label_end = ts + int(dataset["forecast_horizon"]) * bar
-    return feature_start, ts.copy(), label_end
+    label_end = ts + (int(dataset["forecast_horizon"]) + 1) * bar
+    return feature_start, ts + bar, label_end
 
 
 def purge_embargo_split(label_end: np.ndarray, feature_start: np.ndarray, train_end, val_start, val_end,
