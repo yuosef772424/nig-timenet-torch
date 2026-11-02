@@ -64,7 +64,7 @@ class NigTimeNetV2(nn.Module):
             bad = [k for k in kinds if k not in HEAD_KINDS]
             if bad:
                 raise NotImplementedError(f"head types {bad} for {t!r} are not ported yet (P17 HEAD_REGISTRY)")
-        self.linear_path_l2 = linear_path_l2  # loss-side L2, consumed by the trainer (M3)
+        self.linear_path_l2 = linear_path_l2  # kernel L2 of linear_path, see regularization_loss()
         self.num_layers = num_layers
 
         self.instance_norm = InstanceNorm(n_features, eps=norm_eps)
@@ -127,6 +127,14 @@ class NigTimeNetV2(nn.Module):
                 h, getattr(self, f"class_fc_{t}"), getattr(self, f"y_{t}_class_logits"),
                 getattr(self, f"class_drop_{t}"))
         return out
+
+    def regularization_loss(self) -> torch.Tensor:
+        """Sum of the Keras kernel_regularizer terms (l2 * sum(w^2), no 0.5): every NIGHead.fc (l2=1e-5) and
+        linear_path (linear_path_l2). The trainer adds it to total and raw loss (TF: model.losses)."""
+        reg = self.linear_path_l2 * self.linear_path.weight.square().sum()
+        for t in self.nig_targets:
+            reg = reg + getattr(self, f"nig_{t}").regularization_loss()
+        return reg
 
     @torch.no_grad()
     def load_oracle_weights(self, weights: dict[str, torch.Tensor], attr_paths: dict[str, str] | None = None) -> None:

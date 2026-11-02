@@ -13,15 +13,19 @@ __all__ = ["NIGHead", "OrderedMeans", "NIGUncertainty", "ConfidenceHead"]
 class NIGHead(nn.Module):
     """fc (Dense hidden, swish) -> dropout -> out (Dense 4) = raw [mu, nu, alpha, beta].
     mu is linear (no floor); nu/alpha/beta = softplus(raw) + nu_min/alpha_min/beta_min.
-    (Upstream's l2=1e-5 kernel regulariser on fc is a loss term, ported with the losses, not here.)"""
+    ``l2`` (upstream default 1e-5) is fc's kernel regulariser: ``regularization_loss() = l2 * sum(fc.weight^2)``."""
 
     def __init__(self, in_features: int, hidden: int = 128, dropout: float = 0.1,
-                 nu_min: float = 0.1, alpha_min: float = 2.0, beta_min: float = 0.01):
+                 nu_min: float = 0.1, alpha_min: float = 2.0, beta_min: float = 0.01, l2: float = 1e-5):
         super().__init__()
+        self.l2 = l2
         self.nu_min, self.alpha_min, self.beta_min = nu_min, alpha_min, beta_min
         self.fc = nn.Linear(in_features, hidden)
         self.drop = nn.Dropout(dropout)
         self.out = nn.Linear(hidden, 4)
+
+    def regularization_loss(self) -> torch.Tensor:
+        return self.l2 * self.fc.weight.square().sum()
 
     def raw_params(self, h: torch.Tensor) -> torch.Tensor:
         return self.out(self.drop(F.silu(self.fc(h))))
