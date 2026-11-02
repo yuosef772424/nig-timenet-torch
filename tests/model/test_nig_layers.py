@@ -68,7 +68,7 @@ def test_raw_params_matches_oracle(w, sub, t):
     for i, name in enumerate(["mu", "nu", "alpha", "beta"]):
         ol.assert_close(p[:, i:i + 1], sub[f"nig_{t}/03_raw_{name}"], "forward", f"{t} raw {name}")
     mu = nig_head(w, t)(sub[f"nig_{t}/00_head_input"])[0]
-    torch.testing.assert_close(mu, p[:, 0:1], rtol=0, atol=0)  # column 0 is linear mu, no floor
+    ol.assert_close(mu, p[:, 0:1], "weights", "mu is raw column 0 (linear, no floor)")
 
 
 @pytest.mark.parametrize("t", TARGETS)

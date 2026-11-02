@@ -36,7 +36,7 @@ def test_load_oracle_weights_exact(model):
             expected = value.permute(2, 1, 0) if value.ndim == 3 else value.t()
         else:
             expected = value
-        torch.testing.assert_close(p, expected, rtol=0, atol=0, msg=path)
+        ol.assert_close(p, expected, "weights", path)
 
 
 def test_load_oracle_weights_rejects_partial():

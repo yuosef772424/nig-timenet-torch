@@ -21,7 +21,7 @@ def test_keras_conv1d_weight_layout():
 def test_patch_embed_matches_oracle():
     w, lo = ol.load_weights(), ol.load_layer_outputs()
     x = torch.cat([lo["002_decomp__0"], lo["002_decomp__1"]], dim=-1)
-    torch.testing.assert_close(x, lo["003_trend_seasonal"], rtol=0, atol=0)  # trend_seasonal is a plain concat
+    ol.assert_close(x, lo["003_trend_seasonal"], "weights", "trend_seasonal is a plain concat (exact)")
     layer = PatchEmbedding(in_features=12, d_model=16, patch_len=4, stride=2, seq_len=32)
     with torch.no_grad():
         layer.proj.weight.copy_(keras_conv1d_weight_to_torch(w["patch_embed.proj.kernel"]))
