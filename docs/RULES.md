@@ -51,10 +51,27 @@ artifacts from it through its own tools.
 | E3 | The fast test suite runs in < 5 minutes on CPU; slower tests are marked `slow` and run in CI only. Step sessions run the tests of what they touched. | TF: full suite > 50 min locally, died on session restart | CI `--durations` + a time budget check (built in R0) |
 | E4 | Normal Python imports only (no shared-namespace loaders, no notebook globals). Notebooks are thin runners. | TF W1: implicit namespace edges made changes slow | `tests/test_package_imports.py` |
 
+## G. Growth (problems that appear only as the project gets bigger)
+Principle: every bad pattern is COUNTED and the count is pinned; CI fails if it grows (a ratchet that only shrinks).
+The TF project added this late (`tools/check_patterns.py`, the implicit-deps allowlist) after the debt had piled up;
+here the counts start near zero.
+
+| # | Rule | Why (TF incident) | Enforced by |
+|---|---|---|---|
+| G1 | One source per concept: heads, targets and output names are defined once (`HeadSpec` / schema); every other list is derived from it. | TF C1: "a head" was defined in 4 vocabularies; each addition was an N-file edit | test: no output-name string literal outside the schema module (built in R0) |
+| G2 | No branching on a mode name (`if mode == "..."`): behaviour comes from a registered component. | TF C4: 20+ `entry_range` branches | ratchet count of `== "<registered name>"` comparisons (built in R0) |
+| G3 | Size budget: a module <= 400 lines, a function <= 80 lines; exceeding needs a one-line reason in the ratchet file. | TF: 700-line modules, a 180-line wiring function | ratchet in CI (built in R0) |
+| G4 | No dead setting: every settings field is read by code. | TF C2: 19 of 101 config keys read nowhere | test over `core/config.py` fields (built in R0) |
+| G5 | One system per job: one trainer, one evaluation path, one prediction table. New work extends them, never runs beside them. | TF: `cross_asset/` became a second trainer; evaluation had two producers | test: no `optimizer.step()` outside `trainer/` (built in R0) + review |
+| G6 | Notebooks and studies are runners: no `def` in notebooks; a study never imports another study; shared code is lifted into the package. | TF: logic piled up in notebooks; research scripts copied package code | tests (built in R0) |
+| G7 | Fixed layers: `core` imports nothing from the package; `stats` imports only `core`; `model` and `trainer` never import `workflow`. | TF tier rules (kept) | import-direction test (built in R0) |
+| G8 | Adding a component = one new file + one registration line; no orphan file in a registry folder. | TF audit "lens": explicit registration beats auto-discovery | test: every module in a registry folder is registered (built in R0) |
+
 ## F. Self-correction (why these rules do not decay)
 | # | Rule | Enforced by |
 |---|---|---|
 | F1 | Every session appends real obstacles to `docs/friction_log.csv` (what, where, minutes lost, root cause, fix idea). | manual |
 | F2 | `docs/bottlenecks.csv` is the one register of what limits the project (model-quality / runtime / development): code location, evidence, cause status (verified / suspected / unverified), difficulty and why, step that addresses it. Rows are never deleted; wrong rows are marked `rejected` with the reason. | manual |
-| F3 | R-REVIEW every 5 merged PRs (a short session): read friction + bottlenecks, rank open bottlenecks by gain / difficulty, reorder ROADMAP, add a rule for any repeated friction, retire rules that cost more than they save. Each review appends a dated section to `docs/reviews.md`. | STATUS row counts PRs since the last review |
+| F3 | R-REVIEW every 5 merged PRs (a short session): read friction + bottlenecks + suggestions, rank open bottlenecks by gain / difficulty, reorder ROADMAP, add a rule for any repeated friction, mark each new suggestions.csv row accepted (-> a ROADMAP step or a rule) or declined (with why), retire rules that cost more than they save. Each review appends a dated section to `docs/reviews.md`. | STATUS row counts PRs since the last review |
 | F4 | Every rule row above has a "why"; a new rule without an incident or a check is not added. | review |
+| F5 | Every step session, before finishing, appends to `docs/suggestions.csv` (and repeats in its final report): (a) at least one concrete suggestion to improve the system (code, rules, tools, workflow) learned while doing the step, and (b) every place where the work was hard because the logic was UNCLEAR (had to guess intent, undocumented behaviour, misleading name) or STALE (doc/comment/test that no longer matches the code, dead option). Each row: where (`path:line`), kind (`suggestion` / `unclear` / `stale`), what, cost (minutes lost), proposed fix. A `stale` finding that is a one-line fix is fixed in the same PR (rule B6). | review counts rows per PR; a PR with none must say "no suggestion" explicitly in its description |
