@@ -23,3 +23,11 @@ A model plugs into this repo by matching a boundary contract, not by sharing int
 
 You are done at that point: the same `Trainer`, `predict_table` and metrics run unchanged. See
 `tests/model/test_tiny_mlp_plugin.py` for the end-to-end proof.
+
+## How to add a probe point
+
+`model/probe.py:layer_probe_report(model, x, y, probe_points=[...])` probes any module by its name in
+`model.named_modules()`, such as `"patch_embed"`, `"block_1"` or `"trunk_norm"` (for a GRU encoder, `"step_proj"`,
+`"gru_1"`). To add a probe point, give the activation you want its own named submodule and put that name in
+`probe_points`; it appears as a row in the next report run. `"raw_input"` (the flattened raw window) is always the
+first row. The report gives numbers only: no conclusion is drawn from them in this repo.
