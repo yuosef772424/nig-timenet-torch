@@ -1,0 +1,7 @@
+{
+  "upstream_sha": "aeafc564f25c78f252936affbd374f68aa49b8d9",
+  "python": "3.12.15",
+  "numpy": "2.4.6",
+  "tensorflow": "2.21.0",
+  "keras": "3.15.1"
+}

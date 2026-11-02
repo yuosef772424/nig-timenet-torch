@@ -1,0 +1,168 @@
+{
+  "seed": 0,
+  "builder_call": "model.build_model_fn(seq_len, n_features, config=overrides)  == build_nig_timenet_v2(seq_len, n_features, **{**MODEL_CONFIG, **overrides})",
+  "seq_len": 32,
+  "n_features": 6,
+  "batch": 8,
+  "overrides": {
+    "d_model": 16,
+    "num_layers": 2
+  },
+  "constructor_kwargs": {
+    "seq_len": 32,
+    "n_features": 6,
+    "d_model": 16,
+    "num_layers": 2,
+    "num_heads": 4,
+    "num_kv_heads": 2,
+    "patch_len": 4,
+    "stride": 2,
+    "kernel_sizes": [
+      3,
+      5,
+      9,
+      17
+    ],
+    "max_rel_pos": 16,
+    "dropout": 0.1,
+    "attn_dropout": 0.0,
+    "causal": false,
+    "window": null,
+    "use_instance_norm": true,
+    "use_decomposition": true,
+    "use_linear_path": true,
+    "price_targets": [
+      "high",
+      "low",
+      "close"
+    ],
+    "head_types": {
+      "high": [
+        "nig_regression",
+        "binary_classification"
+      ],
+      "low": [
+        "nig_regression",
+        "binary_classification"
+      ],
+      "close": [
+        "nig_regression",
+        "binary_classification"
+      ]
+    },
+    "enforce_order": true,
+    "head_hidden": 128,
+    "nu_min": 0.1,
+    "alpha_min": 2.0,
+    "beta_min": 0.01,
+    "unc_max": 20.0,
+    "class_head_hidden": 64,
+    "n_classes": 3,
+    "norm_eps": 0.0001,
+    "input_clip": null,
+    "stats_mode": "full",
+    "input_noise_std": 0.0,
+    "feature_dropout": 0.0,
+    "linear_path_l2": 0.0001,
+    "level_passthrough": false,
+    "level_norm": null
+  },
+  "model_name": "nig_timenet_v2",
+  "input_names": [
+    "input_sequence"
+  ],
+  "trainer": {
+    "targets": {
+      "high_reg": {
+        "true_key": "y_high_reg",
+        "task_type": "evidential",
+        "output_keys": {
+          "mu": "y_high",
+          "nu": "y_high_nu",
+          "alpha": "y_high_alpha",
+          "beta": "y_high_beta",
+          "confidence": "y_high_confidence"
+        },
+        "use_calibration_loss": true,
+        "lambda_reg_var": "lambda_reg",
+        "lambda_calib_var": "lambda_calib"
+      },
+      "high_class": {
+        "true_key": "y_high_class",
+        "task_type": "classification",
+        "binary": true,
+        "output_keys": {
+          "logits": "y_high_class_logits"
+        },
+        "label_smoothing": 0.0
+      },
+      "low_reg": {
+        "true_key": "y_low_reg",
+        "task_type": "evidential",
+        "output_keys": {
+          "mu": "y_low",
+          "nu": "y_low_nu",
+          "alpha": "y_low_alpha",
+          "beta": "y_low_beta",
+          "confidence": "y_low_confidence"
+        },
+        "use_calibration_loss": true,
+        "lambda_reg_var": "lambda_reg",
+        "lambda_calib_var": "lambda_calib"
+      },
+      "low_class": {
+        "true_key": "y_low_class",
+        "task_type": "classification",
+        "binary": true,
+        "output_keys": {
+          "logits": "y_low_class_logits"
+        },
+        "label_smoothing": 0.0
+      },
+      "close_reg": {
+        "true_key": "y_close_reg",
+        "task_type": "evidential",
+        "output_keys": {
+          "mu": "y_close",
+          "nu": "y_close_nu",
+          "alpha": "y_close_alpha",
+          "beta": "y_close_beta",
+          "confidence": "y_close_confidence"
+        },
+        "use_calibration_loss": true,
+        "lambda_reg_var": "lambda_reg",
+        "lambda_calib_var": "lambda_calib"
+      },
+      "close_class": {
+        "true_key": "y_close_class",
+        "task_type": "classification",
+        "binary": true,
+        "output_keys": {
+          "logits": "y_close_class_logits"
+        },
+        "label_smoothing": 0.0
+      }
+    },
+    "loss": {
+      "use_uncertainty_weighting": true,
+      "uncertainty_weighting_exclude_task_types": [
+        "evidential"
+      ],
+      "schedules": {
+        "lambda_reg": {
+          "start": 0.0,
+          "end": 0.05,
+          "warmup_epochs": 5,
+          "schedule": "linear"
+        },
+        "lambda_calib": {
+          "start": 0.0,
+          "end": 0.1,
+          "warmup_epochs": 5,
+          "schedule": "cosine"
+        }
+      }
+    },
+    "constraints": []
+  }
+}
