@@ -10,7 +10,7 @@ session; no step below has a PR yet.
 | Step | Title | State | PR / job | Note |
 |---|---|---|---|---|
 | P00 | Repo skeleton | todo | | |
-| P01 | Data-artifact contract + second (real-default) oracle | todo | | needs a `crypto-signal-prediction` checkout at the pinned commit; closes BUILD_PLAN.md V1 |
+| P01 | Data-artifact contract + second (real-default) oracle | todo | | needs a `crypto-signal-prediction` checkout at the pinned commit; closes BUILD_PLAN.md V1; `close` target stays enabled (owner decision 2026-11-02), overriding main.ipynb's own suspension |
 | P02 | core/registry.py | todo | | port, not a redesign |
 | P03 | core/schema.py + constants.py | todo | | |
 | P04 | core/config.py | todo | | |

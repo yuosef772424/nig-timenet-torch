@@ -34,13 +34,24 @@ reachable configuration of the upstream code (nothing is wrong with the numbers 
 false for `main.ipynb`'s current defaults. `NOTES.md` #9 already discloses the anti-memorization exclusion "as
 requested" but never mentions the `close` suspension.
 
+**Decided (owner, chat 2026-11-02): `close` is enabled by default in this repo, always.** This plan does **not**
+mirror `main.ipynb`'s `close`-suspension in its own defaults, in either oracle path: `price_targets` defaults to
+`(high, low, close)` everywhere in this repo (`ARCHITECTURES`' `default_config`, P32; the second oracle, P01;
+the GRU/anti-memorization variant, P33b). This is a deliberate, recorded divergence from
+`crypto-signal-prediction`'s current default (which suspends `close` because, there, close's direction has no
+measured predictive signal at the TF project's own data/horizon — `workflow/run.py:243-245`'s comment) — not an
+oversight and not something a later step may "fix" back to match the TF default without a new owner decision.
+The row in the table above stays as the factual description of what `main.ipynb` itself does; it does not
+describe this repo's own default anymore.
+
 **Consequence for this plan, per the instruction that triggered this check:** step **P01** below regenerates a
-**second** TF oracle, under the real default config (`anti_memorization=True`, 2 targets, `label_smoothing=0.1`,
-GRU trunk), *before* any GRU/anti-memorization architecture work happens later in M6. It does not block M2-M5:
-those build and prove parity for the **Transformer** path against the oracle that already exists and is already
-audited (`reference/data/`, `ORACLE_REVIEW.md` verdict PASS). The GRU/anti-memorization path is a second,
-clearly-separated **registered encoder variant** (M6, P33b) validated against the *second* oracle P01 produces.
-Do not blend the two configs in one model or one test.
+**second** TF oracle, under the real default config (`anti_memorization=True`, GRU trunk, `label_smoothing=0.1`,
+**3 targets — `close` kept enabled per the decision above, not suspended**), *before* any GRU/anti-memorization
+architecture work happens later in M6. It does not block M2-M5: those build and prove parity for the
+**Transformer** path against the oracle that already exists and is already audited (`reference/data/`,
+`ORACLE_REVIEW.md` verdict PASS) — which already has `close` enabled, so no change was needed there. The
+GRU/anti-memorization path is a second, clearly-separated **registered encoder variant** (M6, P33b) validated
+against the *second* oracle P01 produces. Do not blend the two configs in one model or one test.
 
 ### V2 — Open `ORACLE_REVIEW.md` findings and how this plan handles them
 
@@ -226,14 +237,17 @@ as-is); `tests/fixtures/tiny_split.json` (a JSON dump of `train`/`val`/`test` di
 and **dtypes** only — not the data twice). In `crypto-signal-prediction`'s own checkout (NOT copied into this
 repo, just run there to produce the second oracle): a small script
 `reference/export_reference_default.py` analogous to this repo's existing `reference/export_reference.py`, writing
-to `reference/data_default/` in **this** repo (nig-timenet-torch) with its own `README_default.md` stating plainly
-"real `main.ipynb` default: anti_memorization=True, GRU trunk, price_targets=(high, low), label_smoothing=0.1" —
-copy `reference/export_reference.py` verbatim except: `MODEL_OVERRIDES = dict(mns["ANTI_MEMORIZATION_CONFIG"])`
+to `reference/data_default/` in **this** repo (nig-timenet-torch) with its own `README_default.md` stating
+plainly "real `main.ipynb` default architecture/training settings: anti_memorization=True, GRU trunk,
+label_smoothing=0.1 — EXCEPT price_targets, which this repo keeps at (high, low, close) by owner decision
+(2026-11-02), overriding main.ipynb's own close-suspension; see BUILD_PLAN.md V1" — copy
+`reference/export_reference.py` verbatim except: `MODEL_OVERRIDES = dict(mns["ANTI_MEMORIZATION_CONFIG"])`
 (merged over `MODEL_CONFIG` the same way `workflow/run.py:267-268` does it, i.e. `merged =
 dict(mns["MODEL_CONFIG"]); merged.update(mns["ANTI_MEMORIZATION_CONFIG"])`), `price_targets` taken from
-`merged["price_targets"]` with `"close"` removed (mirrors `workflow/run.py:247-249`), and
-`build_target_configs(price_targets, label_smoothing=0.1)` (mirrors `workflow/run.py:316`, `tr.
-anti_memorization_label_smoothing`). Do not change anything else (same seed, same batch, same determinism flags).
+`merged["price_targets"]` **unchanged, i.e. `(high, low, close)` — do NOT apply `workflow/run.py:247-249`'s
+`close` suspension here**, and `build_target_configs(price_targets, label_smoothing=0.1)` (mirrors
+`workflow/run.py:316`, `tr.anti_memorization_label_smoothing`). Do not change anything else (same seed, same
+batch, same determinism flags).
 **Interfaces.** None (data-gathering step), except the committed contract doc must contain, verbatim, a Python
 dict literal per key of `dataset`/`train`/`val`/`test` with `{key: {"dtype": ..., "shape_meaning": ...}}` — this
 literal is what P06 and P25-P27 implement against.
