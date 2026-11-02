@@ -30,3 +30,7 @@ extend-exclude = ["upstream", "reference"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# verbatim port of crypto-signal-prediction core/registry.py (BUILD_PLAN P02): keep its long docstring lines unchanged
+"src/nig_timenet_torch/core/registry.py" = ["E501"]
