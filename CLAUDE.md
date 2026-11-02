@@ -8,6 +8,7 @@ ROADMAP allows).
 - Reply to the owner in Arabic; code, docs and prompts in English.
 - No subagents unless the owner asks.
 - Tests: `pytest -q` (fast suite). Run the tests of what you touched; CI runs everything. Lint: `ruff check src tests`.
+- `docs/STATUS.md` stays under 60 lines (checked by `tests/test_docs_claims.py`).
 - Before finishing:
   - update your STATUS row;
   - append real obstacles to `docs/friction_log.csv`;
