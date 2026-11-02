@@ -1,0 +1,329 @@
+{
+  "training": false,
+  "note": "GenericTrainer._compute_losses(x, y, sample_weight=None, training=False)",
+  "scenarios": {
+    "schedules_end (PRIMARY; grads.npz uses this)": {
+      "scheduled_vars": {
+        "lambda_reg": 0.05000000074505806,
+        "lambda_calib": 0.10000000149011612
+      },
+      "total_loss": {
+        "value": 8.437118530273438,
+        "f32_hex": "4106fe70"
+      },
+      "raw_loss": {
+        "value": 9.555326461791992,
+        "f32_hex": "4118e29e"
+      },
+      "task_losses_weighted": {
+        "high_reg": {
+          "value": 1.86272132396698,
+          "f32_hex": "3fee6da7"
+        },
+        "high_class": {
+          "value": 0.7818748950958252,
+          "f32_hex": "3f4828f4"
+        },
+        "low_reg": {
+          "value": 3.1087188720703125,
+          "f32_hex": "4046f540"
+        },
+        "low_class": {
+          "value": 0.7903597354888916,
+          "f32_hex": "3f4a5504"
+        },
+        "close_reg": {
+          "value": 2.235319137573242,
+          "f32_hex": "400f0f78"
+        },
+        "close_class": {
+          "value": 0.6641823053359985,
+          "f32_hex": "3f2a07da"
+        }
+      },
+      "loss_weights": {
+        "high_reg": 1.0,
+        "high_class": 1.0,
+        "low_reg": 1.0,
+        "low_class": 1.0,
+        "close_reg": 1.0,
+        "close_class": 1.0
+      },
+      "model_regularization_losses": {
+        "value": 0.11214984208345413,
+        "f32_hex": "3de5aed1"
+      },
+      "stats": {
+        "high_reg_nig_base": {
+          "value": 1.6530615091323853,
+          "f32_hex": "3fd39785"
+        },
+        "high_reg_nig_pen": {
+          "value": 4.169253349304199,
+          "f32_hex": "40856a86"
+        },
+        "high_reg_mae": {
+          "value": 1.0073577165603638,
+          "f32_hex": "3f80f119"
+        },
+        "high_reg_aleatoric": {
+          "value": 0.5346074104309082,
+          "f32_hex": "3f08dc08"
+        },
+        "high_reg_epistemic": {
+          "value": 0.6024069786071777,
+          "f32_hex": "3f1a3758"
+        },
+        "high_reg_confidence": {
+          "value": 0.5090574026107788,
+          "f32_hex": "3f025196"
+        },
+        "high_reg_calib_loss": {
+          "value": 0.011972112581133842,
+          "f32_hex": "3c4426ae"
+        },
+        "high_class_accuracy": {
+          "value": 0.375,
+          "f32_hex": "3ec00000"
+        },
+        "low_reg_nig_base": {
+          "value": 2.7538516521453857,
+          "f32_hex": "40303f1b"
+        },
+        "low_reg_nig_pen": {
+          "value": 6.99570369720459,
+          "f32_hex": "40dfdcce"
+        },
+        "low_reg_mae": {
+          "value": 1.6585713624954224,
+          "f32_hex": "3fd44c11"
+        },
+        "low_reg_aleatoric": {
+          "value": 0.4985465407371521,
+          "f32_hex": "3eff417e"
+        },
+        "low_reg_epistemic": {
+          "value": 0.9158410429954529,
+          "f32_hex": "3f6a748f"
+        },
+        "low_reg_confidence": {
+          "value": 0.4394668936729431,
+          "f32_hex": "3ee101ce"
+        },
+        "low_reg_calib_loss": {
+          "value": 0.050821054726839066,
+          "f32_hex": "3d5029bd"
+        },
+        "low_class_accuracy": {
+          "value": 0.625,
+          "f32_hex": "3f200000"
+        },
+        "close_reg_nig_base": {
+          "value": 1.982675313949585,
+          "f32_hex": "3ffdc84e"
+        },
+        "close_reg_nig_pen": {
+          "value": 4.9141435623168945,
+          "f32_hex": "409d40aa"
+        },
+        "close_reg_mae": {
+          "value": 1.1359598636627197,
+          "f32_hex": "3f916722"
+        },
+        "close_reg_aleatoric": {
+          "value": 0.5182304382324219,
+          "f32_hex": "3f04aac0"
+        },
+        "close_reg_epistemic": {
+          "value": 0.6185780167579651,
+          "f32_hex": "3f1e5b21"
+        },
+        "close_reg_confidence": {
+          "value": 0.47943222522735596,
+          "f32_hex": "3ef57824"
+        },
+        "close_reg_calib_loss": {
+          "value": 0.06936478614807129,
+          "f32_hex": "3d8e0f20"
+        },
+        "close_class_accuracy": {
+          "value": 0.625,
+          "f32_hex": "3f200000"
+        }
+      },
+      "constraints": {},
+      "kendall_tasks": [
+        "high_class",
+        "low_class",
+        "close_class"
+      ],
+      "fixed_tasks": [
+        "high_reg",
+        "low_reg",
+        "close_reg"
+      ]
+    },
+    "schedules_start (epoch 0 values)": {
+      "scheduled_vars": {
+        "lambda_reg": 0.0,
+        "lambda_calib": 0.0
+      },
+      "total_loss": {
+        "value": 7.619946479797363,
+        "f32_hex": "40f3d69a"
+      },
+      "raw_loss": {
+        "value": 8.73815631866455,
+        "f32_hex": "410bcf7d"
+      },
+      "task_losses_weighted": {
+        "high_reg": {
+          "value": 1.6530615091323853,
+          "f32_hex": "3fd39785"
+        },
+        "high_class": {
+          "value": 0.7818748950958252,
+          "f32_hex": "3f4828f4"
+        },
+        "low_reg": {
+          "value": 2.7538516521453857,
+          "f32_hex": "40303f1b"
+        },
+        "low_class": {
+          "value": 0.7903597354888916,
+          "f32_hex": "3f4a5504"
+        },
+        "close_reg": {
+          "value": 1.982675313949585,
+          "f32_hex": "3ffdc84e"
+        },
+        "close_class": {
+          "value": 0.6641823053359985,
+          "f32_hex": "3f2a07da"
+        }
+      },
+      "loss_weights": {
+        "high_reg": 1.0,
+        "high_class": 1.0,
+        "low_reg": 1.0,
+        "low_class": 1.0,
+        "close_reg": 1.0,
+        "close_class": 1.0
+      },
+      "model_regularization_losses": {
+        "value": 0.11214984208345413,
+        "f32_hex": "3de5aed1"
+      },
+      "stats": {
+        "high_reg_nig_base": {
+          "value": 1.6530615091323853,
+          "f32_hex": "3fd39785"
+        },
+        "high_reg_nig_pen": {
+          "value": 4.169253349304199,
+          "f32_hex": "40856a86"
+        },
+        "high_reg_mae": {
+          "value": 1.0073577165603638,
+          "f32_hex": "3f80f119"
+        },
+        "high_reg_aleatoric": {
+          "value": 0.5346074104309082,
+          "f32_hex": "3f08dc08"
+        },
+        "high_reg_epistemic": {
+          "value": 0.6024069786071777,
+          "f32_hex": "3f1a3758"
+        },
+        "high_reg_confidence": {
+          "value": 0.5090574026107788,
+          "f32_hex": "3f025196"
+        },
+        "high_reg_calib_loss": {
+          "value": 0.011972112581133842,
+          "f32_hex": "3c4426ae"
+        },
+        "high_class_accuracy": {
+          "value": 0.375,
+          "f32_hex": "3ec00000"
+        },
+        "low_reg_nig_base": {
+          "value": 2.7538516521453857,
+          "f32_hex": "40303f1b"
+        },
+        "low_reg_nig_pen": {
+          "value": 6.99570369720459,
+          "f32_hex": "40dfdcce"
+        },
+        "low_reg_mae": {
+          "value": 1.6585713624954224,
+          "f32_hex": "3fd44c11"
+        },
+        "low_reg_aleatoric": {
+          "value": 0.4985465407371521,
+          "f32_hex": "3eff417e"
+        },
+        "low_reg_epistemic": {
+          "value": 0.9158410429954529,
+          "f32_hex": "3f6a748f"
+        },
+        "low_reg_confidence": {
+          "value": 0.4394668936729431,
+          "f32_hex": "3ee101ce"
+        },
+        "low_reg_calib_loss": {
+          "value": 0.050821054726839066,
+          "f32_hex": "3d5029bd"
+        },
+        "low_class_accuracy": {
+          "value": 0.625,
+          "f32_hex": "3f200000"
+        },
+        "close_reg_nig_base": {
+          "value": 1.982675313949585,
+          "f32_hex": "3ffdc84e"
+        },
+        "close_reg_nig_pen": {
+          "value": 4.9141435623168945,
+          "f32_hex": "409d40aa"
+        },
+        "close_reg_mae": {
+          "value": 1.1359598636627197,
+          "f32_hex": "3f916722"
+        },
+        "close_reg_aleatoric": {
+          "value": 0.5182304382324219,
+          "f32_hex": "3f04aac0"
+        },
+        "close_reg_epistemic": {
+          "value": 0.6185780167579651,
+          "f32_hex": "3f1e5b21"
+        },
+        "close_reg_confidence": {
+          "value": 0.47943222522735596,
+          "f32_hex": "3ef57824"
+        },
+        "close_reg_calib_loss": {
+          "value": 0.06936478614807129,
+          "f32_hex": "3d8e0f20"
+        },
+        "close_class_accuracy": {
+          "value": 0.625,
+          "f32_hex": "3f200000"
+        }
+      },
+      "constraints": {},
+      "kendall_tasks": [
+        "high_class",
+        "low_class",
+        "close_class"
+      ],
+      "fixed_tasks": [
+        "high_reg",
+        "low_reg",
+        "close_reg"
+      ]
+    }
+  },
+  "primary": "schedules_end (PRIMARY; grads.npz uses this)"
+}

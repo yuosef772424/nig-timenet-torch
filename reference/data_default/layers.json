@@ -1,0 +1,1012 @@
+[
+  {
+    "index": 0,
+    "name": "input_sequence",
+    "class": "InputLayer",
+    "inputs": [],
+    "output_keys": [
+      "000_input_sequence"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        6
+      ]
+    ]
+  },
+  {
+    "index": 1,
+    "name": "instance_norm",
+    "class": "InstanceNorm",
+    "inputs": [
+      "input_sequence"
+    ],
+    "output_keys": [
+      "001_instance_norm__0",
+      "001_instance_norm__1"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        6
+      ],
+      [
+        8,
+        12
+      ]
+    ]
+  },
+  {
+    "index": 2,
+    "name": "feature_dropout",
+    "class": "SpatialDropout1D",
+    "inputs": [
+      "instance_norm[0]"
+    ],
+    "output_keys": [
+      "002_feature_dropout"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        6
+      ]
+    ]
+  },
+  {
+    "index": 3,
+    "name": "level_symlog",
+    "class": "SymLog",
+    "inputs": [
+      "input_sequence"
+    ],
+    "output_keys": [
+      "003_level_symlog"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        6
+      ]
+    ]
+  },
+  {
+    "index": 4,
+    "name": "input_noise",
+    "class": "GaussianNoise",
+    "inputs": [
+      "feature_dropout"
+    ],
+    "output_keys": [
+      "004_input_noise"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        6
+      ]
+    ]
+  },
+  {
+    "index": 5,
+    "name": "level_bn",
+    "class": "BatchNormalization",
+    "inputs": [
+      "level_symlog"
+    ],
+    "output_keys": [
+      "005_level_bn"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        6
+      ]
+    ]
+  },
+  {
+    "index": 6,
+    "name": "decomp",
+    "class": "CausalMultiScaleDecomp",
+    "inputs": [
+      "input_noise"
+    ],
+    "output_keys": [
+      "006_decomp__0",
+      "006_decomp__1"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        6
+      ],
+      [
+        8,
+        32,
+        6
+      ]
+    ]
+  },
+  {
+    "index": 7,
+    "name": "level_feature_dropout",
+    "class": "SpatialDropout1D",
+    "inputs": [
+      "level_bn"
+    ],
+    "output_keys": [
+      "007_level_feature_dropout"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        6
+      ]
+    ]
+  },
+  {
+    "index": 8,
+    "name": "trend_seasonal",
+    "class": "Concatenate",
+    "inputs": [
+      "decomp[0]",
+      "decomp[1]"
+    ],
+    "output_keys": [
+      "008_trend_seasonal"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        12
+      ]
+    ]
+  },
+  {
+    "index": 9,
+    "name": "level_noise",
+    "class": "GaussianNoise",
+    "inputs": [
+      "level_feature_dropout"
+    ],
+    "output_keys": [
+      "009_level_noise"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        6
+      ]
+    ]
+  },
+  {
+    "index": 10,
+    "name": "shape_and_level",
+    "class": "Concatenate",
+    "inputs": [
+      "trend_seasonal",
+      "level_noise"
+    ],
+    "output_keys": [
+      "010_shape_and_level"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        18
+      ]
+    ]
+  },
+  {
+    "index": 11,
+    "name": "step_proj",
+    "class": "Dense",
+    "inputs": [
+      "shape_and_level"
+    ],
+    "output_keys": [
+      "011_step_proj"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 12,
+    "name": "gru_norm_1",
+    "class": "RMSNorm",
+    "inputs": [
+      "step_proj"
+    ],
+    "output_keys": [
+      "012_gru_norm_1"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 13,
+    "name": "gru_1",
+    "class": "GRU",
+    "inputs": [
+      "gru_norm_1"
+    ],
+    "output_keys": [
+      "013_gru_1"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 14,
+    "name": "gru_drop_1",
+    "class": "Dropout",
+    "inputs": [
+      "gru_1"
+    ],
+    "output_keys": [
+      "014_gru_drop_1"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 15,
+    "name": "gru_res_1",
+    "class": "Add",
+    "inputs": [
+      "step_proj",
+      "gru_drop_1"
+    ],
+    "output_keys": [
+      "015_gru_res_1"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 16,
+    "name": "gru_norm_2",
+    "class": "RMSNorm",
+    "inputs": [
+      "gru_res_1"
+    ],
+    "output_keys": [
+      "016_gru_norm_2"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 17,
+    "name": "gru_2",
+    "class": "GRU",
+    "inputs": [
+      "gru_norm_2"
+    ],
+    "output_keys": [
+      "017_gru_2"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 18,
+    "name": "gru_drop_2",
+    "class": "Dropout",
+    "inputs": [
+      "gru_2"
+    ],
+    "output_keys": [
+      "018_gru_drop_2"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 19,
+    "name": "gru_res_2",
+    "class": "Add",
+    "inputs": [
+      "gru_res_1",
+      "gru_drop_2"
+    ],
+    "output_keys": [
+      "019_gru_res_2"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 20,
+    "name": "final_norm",
+    "class": "RMSNorm",
+    "inputs": [
+      "gru_res_2"
+    ],
+    "output_keys": [
+      "020_final_norm"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 21,
+    "name": "stats_bn",
+    "class": "BatchNormalization",
+    "inputs": [
+      "instance_norm[1]"
+    ],
+    "output_keys": [
+      "021_stats_bn"
+    ],
+    "output_shapes": [
+      [
+        8,
+        12
+      ]
+    ]
+  },
+  {
+    "index": 22,
+    "name": "last_token",
+    "class": "LastToken",
+    "inputs": [
+      "final_norm"
+    ],
+    "output_keys": [
+      "022_last_token"
+    ],
+    "output_shapes": [
+      [
+        8,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 23,
+    "name": "attn_pool",
+    "class": "AttentionPool",
+    "inputs": [
+      "final_norm"
+    ],
+    "output_keys": [
+      "023_attn_pool"
+    ],
+    "output_shapes": [
+      [
+        8,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 24,
+    "name": "stats_proj",
+    "class": "Dense",
+    "inputs": [
+      "stats_bn"
+    ],
+    "output_keys": [
+      "024_stats_proj"
+    ],
+    "output_shapes": [
+      [
+        8,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 25,
+    "name": "linear_shape_and_level",
+    "class": "Concatenate",
+    "inputs": [
+      "input_noise",
+      "level_noise"
+    ],
+    "output_keys": [
+      "025_linear_shape_and_level"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32,
+        12
+      ]
+    ]
+  },
+  {
+    "index": 26,
+    "name": "readout_concat",
+    "class": "Concatenate",
+    "inputs": [
+      "last_token",
+      "attn_pool",
+      "stats_proj"
+    ],
+    "output_keys": [
+      "026_readout_concat"
+    ],
+    "output_shapes": [
+      [
+        8,
+        192
+      ]
+    ]
+  },
+  {
+    "index": 27,
+    "name": "flatten_window",
+    "class": "Flatten",
+    "inputs": [
+      "linear_shape_and_level"
+    ],
+    "output_keys": [
+      "027_flatten_window"
+    ],
+    "output_shapes": [
+      [
+        8,
+        384
+      ]
+    ]
+  },
+  {
+    "index": 28,
+    "name": "readout_fc",
+    "class": "Dense",
+    "inputs": [
+      "readout_concat"
+    ],
+    "output_keys": [
+      "028_readout_fc"
+    ],
+    "output_shapes": [
+      [
+        8,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 29,
+    "name": "linear_path",
+    "class": "Dense",
+    "inputs": [
+      "flatten_window"
+    ],
+    "output_keys": [
+      "029_linear_path"
+    ],
+    "output_shapes": [
+      [
+        8,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 30,
+    "name": "add_linear_path",
+    "class": "Add",
+    "inputs": [
+      "readout_fc",
+      "linear_path"
+    ],
+    "output_keys": [
+      "030_add_linear_path"
+    ],
+    "output_shapes": [
+      [
+        8,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 31,
+    "name": "trunk_norm",
+    "class": "RMSNorm",
+    "inputs": [
+      "add_linear_path"
+    ],
+    "output_keys": [
+      "031_trunk_norm"
+    ],
+    "output_shapes": [
+      [
+        8,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 32,
+    "name": "trunk_drop",
+    "class": "Dropout",
+    "inputs": [
+      "trunk_norm"
+    ],
+    "output_keys": [
+      "032_trunk_drop"
+    ],
+    "output_shapes": [
+      [
+        8,
+        64
+      ]
+    ]
+  },
+  {
+    "index": 33,
+    "name": "class_fc_close",
+    "class": "Dense",
+    "inputs": [
+      "trunk_drop"
+    ],
+    "output_keys": [
+      "033_class_fc_close"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32
+      ]
+    ]
+  },
+  {
+    "index": 34,
+    "name": "class_fc_high",
+    "class": "Dense",
+    "inputs": [
+      "trunk_drop"
+    ],
+    "output_keys": [
+      "034_class_fc_high"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32
+      ]
+    ]
+  },
+  {
+    "index": 35,
+    "name": "class_fc_low",
+    "class": "Dense",
+    "inputs": [
+      "trunk_drop"
+    ],
+    "output_keys": [
+      "035_class_fc_low"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32
+      ]
+    ]
+  },
+  {
+    "index": 36,
+    "name": "nig_close",
+    "class": "NIGHead",
+    "inputs": [
+      "trunk_drop"
+    ],
+    "output_keys": [
+      "036_nig_close__0",
+      "036_nig_close__1",
+      "036_nig_close__2",
+      "036_nig_close__3"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ]
+    ]
+  },
+  {
+    "index": 37,
+    "name": "nig_high",
+    "class": "NIGHead",
+    "inputs": [
+      "trunk_drop"
+    ],
+    "output_keys": [
+      "037_nig_high__0",
+      "037_nig_high__1",
+      "037_nig_high__2",
+      "037_nig_high__3"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ]
+    ]
+  },
+  {
+    "index": 38,
+    "name": "nig_low",
+    "class": "NIGHead",
+    "inputs": [
+      "trunk_drop"
+    ],
+    "output_keys": [
+      "038_nig_low__0",
+      "038_nig_low__1",
+      "038_nig_low__2",
+      "038_nig_low__3"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ]
+    ]
+  },
+  {
+    "index": 39,
+    "name": "class_drop_close",
+    "class": "Dropout",
+    "inputs": [
+      "class_fc_close"
+    ],
+    "output_keys": [
+      "039_class_drop_close"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32
+      ]
+    ]
+  },
+  {
+    "index": 40,
+    "name": "class_drop_high",
+    "class": "Dropout",
+    "inputs": [
+      "class_fc_high"
+    ],
+    "output_keys": [
+      "040_class_drop_high"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32
+      ]
+    ]
+  },
+  {
+    "index": 41,
+    "name": "class_drop_low",
+    "class": "Dropout",
+    "inputs": [
+      "class_fc_low"
+    ],
+    "output_keys": [
+      "041_class_drop_low"
+    ],
+    "output_shapes": [
+      [
+        8,
+        32
+      ]
+    ]
+  },
+  {
+    "index": 42,
+    "name": "ordered_means",
+    "class": "OrderedMeans",
+    "inputs": [
+      "nig_close[0]",
+      "nig_high[0]",
+      "nig_low[0]"
+    ],
+    "output_keys": [
+      "042_ordered_means__0",
+      "042_ordered_means__1",
+      "042_ordered_means__2"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ]
+    ]
+  },
+  {
+    "index": 43,
+    "name": "unc_close",
+    "class": "NIGUncertainty",
+    "inputs": [
+      "nig_close[1]",
+      "nig_close[2]",
+      "nig_close[3]"
+    ],
+    "output_keys": [
+      "043_unc_close__0",
+      "043_unc_close__1"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ]
+    ]
+  },
+  {
+    "index": 44,
+    "name": "y_close_class_logits",
+    "class": "Dense",
+    "inputs": [
+      "class_drop_close"
+    ],
+    "output_keys": [
+      "044_y_close_class_logits"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ]
+    ]
+  },
+  {
+    "index": 45,
+    "name": "conf_close",
+    "class": "ConfidenceHead",
+    "inputs": [
+      "trunk_drop",
+      "nig_close[1]",
+      "nig_close[2]",
+      "nig_close[3]"
+    ],
+    "output_keys": [
+      "045_conf_close"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ]
+    ]
+  },
+  {
+    "index": 46,
+    "name": "unc_high",
+    "class": "NIGUncertainty",
+    "inputs": [
+      "nig_high[1]",
+      "nig_high[2]",
+      "nig_high[3]"
+    ],
+    "output_keys": [
+      "046_unc_high__0",
+      "046_unc_high__1"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ]
+    ]
+  },
+  {
+    "index": 47,
+    "name": "y_high_class_logits",
+    "class": "Dense",
+    "inputs": [
+      "class_drop_high"
+    ],
+    "output_keys": [
+      "047_y_high_class_logits"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ]
+    ]
+  },
+  {
+    "index": 48,
+    "name": "conf_high",
+    "class": "ConfidenceHead",
+    "inputs": [
+      "trunk_drop",
+      "nig_high[1]",
+      "nig_high[2]",
+      "nig_high[3]"
+    ],
+    "output_keys": [
+      "048_conf_high"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ]
+    ]
+  },
+  {
+    "index": 49,
+    "name": "unc_low",
+    "class": "NIGUncertainty",
+    "inputs": [
+      "nig_low[1]",
+      "nig_low[2]",
+      "nig_low[3]"
+    ],
+    "output_keys": [
+      "049_unc_low__0",
+      "049_unc_low__1"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        1
+      ]
+    ]
+  },
+  {
+    "index": 50,
+    "name": "y_low_class_logits",
+    "class": "Dense",
+    "inputs": [
+      "class_drop_low"
+    ],
+    "output_keys": [
+      "050_y_low_class_logits"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ]
+    ]
+  },
+  {
+    "index": 51,
+    "name": "conf_low",
+    "class": "ConfidenceHead",
+    "inputs": [
+      "trunk_drop",
+      "nig_low[1]",
+      "nig_low[2]",
+      "nig_low[3]"
+    ],
+    "output_keys": [
+      "051_conf_low"
+    ],
+    "output_shapes": [
+      [
+        8,
+        1
+      ]
+    ]
+  }
+]

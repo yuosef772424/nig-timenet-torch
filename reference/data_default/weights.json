@@ -1,0 +1,795 @@
+[
+  {
+    "name": "instance_norm/gamma",
+    "shape": [
+      6
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "instance_norm.gamma",
+    "layer": "instance_norm",
+    "layer_class": "InstanceNorm"
+  },
+  {
+    "name": "instance_norm/beta",
+    "shape": [
+      6
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "instance_norm.beta",
+    "layer": "instance_norm",
+    "layer_class": "InstanceNorm"
+  },
+  {
+    "name": "level_bn/gamma",
+    "shape": [
+      6
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "level_bn.gamma",
+    "layer": "level_bn",
+    "layer_class": "BatchNormalization"
+  },
+  {
+    "name": "level_bn/beta",
+    "shape": [
+      6
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "level_bn.beta",
+    "layer": "level_bn",
+    "layer_class": "BatchNormalization"
+  },
+  {
+    "name": "level_bn/moving_mean",
+    "shape": [
+      6
+    ],
+    "dtype": "float32",
+    "trainable": false,
+    "attr_path": "level_bn.moving_mean",
+    "layer": "level_bn",
+    "layer_class": "BatchNormalization"
+  },
+  {
+    "name": "level_bn/moving_variance",
+    "shape": [
+      6
+    ],
+    "dtype": "float32",
+    "trainable": false,
+    "attr_path": "level_bn.moving_variance",
+    "layer": "level_bn",
+    "layer_class": "BatchNormalization"
+  },
+  {
+    "name": "decomp/scale_gate/kernel",
+    "shape": [
+      12,
+      4
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "decomp.gate.kernel",
+    "layer": "decomp",
+    "layer_class": "CausalMultiScaleDecomp"
+  },
+  {
+    "name": "decomp/scale_gate/bias",
+    "shape": [
+      4
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "decomp.gate.bias",
+    "layer": "decomp",
+    "layer_class": "CausalMultiScaleDecomp"
+  },
+  {
+    "name": "step_proj/kernel",
+    "shape": [
+      18,
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "step_proj.kernel",
+    "layer": "step_proj",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "step_proj/bias",
+    "shape": [
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "step_proj.bias",
+    "layer": "step_proj",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "gru_norm_1/scale",
+    "shape": [
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "gru_norm_1.scale",
+    "layer": "gru_norm_1",
+    "layer_class": "RMSNorm"
+  },
+  {
+    "name": "gru_1/gru_cell/kernel",
+    "shape": [
+      64,
+      192
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "gru_1.cell.kernel",
+    "layer": "gru_1",
+    "layer_class": "GRU"
+  },
+  {
+    "name": "gru_1/gru_cell/recurrent_kernel",
+    "shape": [
+      64,
+      192
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "gru_1.cell.recurrent_kernel",
+    "layer": "gru_1",
+    "layer_class": "GRU"
+  },
+  {
+    "name": "gru_1/gru_cell/bias",
+    "shape": [
+      2,
+      192
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "gru_1.cell.bias",
+    "layer": "gru_1",
+    "layer_class": "GRU"
+  },
+  {
+    "name": "gru_norm_2/scale",
+    "shape": [
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "gru_norm_2.scale",
+    "layer": "gru_norm_2",
+    "layer_class": "RMSNorm"
+  },
+  {
+    "name": "gru_2/gru_cell/kernel",
+    "shape": [
+      64,
+      192
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "gru_2.cell.kernel",
+    "layer": "gru_2",
+    "layer_class": "GRU"
+  },
+  {
+    "name": "gru_2/gru_cell/recurrent_kernel",
+    "shape": [
+      64,
+      192
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "gru_2.cell.recurrent_kernel",
+    "layer": "gru_2",
+    "layer_class": "GRU"
+  },
+  {
+    "name": "gru_2/gru_cell/bias",
+    "shape": [
+      2,
+      192
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "gru_2.cell.bias",
+    "layer": "gru_2",
+    "layer_class": "GRU"
+  },
+  {
+    "name": "final_norm/scale",
+    "shape": [
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "final_norm.scale",
+    "layer": "final_norm",
+    "layer_class": "RMSNorm"
+  },
+  {
+    "name": "stats_bn/gamma",
+    "shape": [
+      12
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "stats_bn.gamma",
+    "layer": "stats_bn",
+    "layer_class": "BatchNormalization"
+  },
+  {
+    "name": "stats_bn/beta",
+    "shape": [
+      12
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "stats_bn.beta",
+    "layer": "stats_bn",
+    "layer_class": "BatchNormalization"
+  },
+  {
+    "name": "stats_bn/moving_mean",
+    "shape": [
+      12
+    ],
+    "dtype": "float32",
+    "trainable": false,
+    "attr_path": "stats_bn.moving_mean",
+    "layer": "stats_bn",
+    "layer_class": "BatchNormalization"
+  },
+  {
+    "name": "stats_bn/moving_variance",
+    "shape": [
+      12
+    ],
+    "dtype": "float32",
+    "trainable": false,
+    "attr_path": "stats_bn.moving_variance",
+    "layer": "stats_bn",
+    "layer_class": "BatchNormalization"
+  },
+  {
+    "name": "attn_pool/query",
+    "shape": [
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "attn_pool.query",
+    "layer": "attn_pool",
+    "layer_class": "AttentionPool"
+  },
+  {
+    "name": "stats_proj/kernel",
+    "shape": [
+      12,
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "stats_proj.kernel",
+    "layer": "stats_proj",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "stats_proj/bias",
+    "shape": [
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "stats_proj.bias",
+    "layer": "stats_proj",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "readout_fc/kernel",
+    "shape": [
+      192,
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "readout_fc.kernel",
+    "layer": "readout_fc",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "readout_fc/bias",
+    "shape": [
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "readout_fc.bias",
+    "layer": "readout_fc",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "linear_path/kernel",
+    "shape": [
+      384,
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "linear_path.kernel",
+    "layer": "linear_path",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "linear_path/bias",
+    "shape": [
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "linear_path.bias",
+    "layer": "linear_path",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "trunk_norm/scale",
+    "shape": [
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "trunk_norm.scale",
+    "layer": "trunk_norm",
+    "layer_class": "RMSNorm"
+  },
+  {
+    "name": "class_fc_close/kernel",
+    "shape": [
+      64,
+      32
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "class_fc_close.kernel",
+    "layer": "class_fc_close",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "class_fc_close/bias",
+    "shape": [
+      32
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "class_fc_close.bias",
+    "layer": "class_fc_close",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "class_fc_high/kernel",
+    "shape": [
+      64,
+      32
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "class_fc_high.kernel",
+    "layer": "class_fc_high",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "class_fc_high/bias",
+    "shape": [
+      32
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "class_fc_high.bias",
+    "layer": "class_fc_high",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "class_fc_low/kernel",
+    "shape": [
+      64,
+      32
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "class_fc_low.kernel",
+    "layer": "class_fc_low",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "class_fc_low/bias",
+    "shape": [
+      32
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "class_fc_low.bias",
+    "layer": "class_fc_low",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "nig_close/dense_4/kernel",
+    "shape": [
+      64,
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "nig_close.fc.kernel",
+    "layer": "nig_close",
+    "layer_class": "NIGHead"
+  },
+  {
+    "name": "nig_close/dense_4/bias",
+    "shape": [
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "nig_close.fc.bias",
+    "layer": "nig_close",
+    "layer_class": "NIGHead"
+  },
+  {
+    "name": "nig_close/dense_5/kernel",
+    "shape": [
+      64,
+      4
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "nig_close.out.kernel",
+    "layer": "nig_close",
+    "layer_class": "NIGHead"
+  },
+  {
+    "name": "nig_close/dense_5/bias",
+    "shape": [
+      4
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "nig_close.out.bias",
+    "layer": "nig_close",
+    "layer_class": "NIGHead"
+  },
+  {
+    "name": "nig_high/dense/kernel",
+    "shape": [
+      64,
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "nig_high.fc.kernel",
+    "layer": "nig_high",
+    "layer_class": "NIGHead"
+  },
+  {
+    "name": "nig_high/dense/bias",
+    "shape": [
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "nig_high.fc.bias",
+    "layer": "nig_high",
+    "layer_class": "NIGHead"
+  },
+  {
+    "name": "nig_high/dense_1/kernel",
+    "shape": [
+      64,
+      4
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "nig_high.out.kernel",
+    "layer": "nig_high",
+    "layer_class": "NIGHead"
+  },
+  {
+    "name": "nig_high/dense_1/bias",
+    "shape": [
+      4
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "nig_high.out.bias",
+    "layer": "nig_high",
+    "layer_class": "NIGHead"
+  },
+  {
+    "name": "nig_low/dense_2/kernel",
+    "shape": [
+      64,
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "nig_low.fc.kernel",
+    "layer": "nig_low",
+    "layer_class": "NIGHead"
+  },
+  {
+    "name": "nig_low/dense_2/bias",
+    "shape": [
+      64
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "nig_low.fc.bias",
+    "layer": "nig_low",
+    "layer_class": "NIGHead"
+  },
+  {
+    "name": "nig_low/dense_3/kernel",
+    "shape": [
+      64,
+      4
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "nig_low.out.kernel",
+    "layer": "nig_low",
+    "layer_class": "NIGHead"
+  },
+  {
+    "name": "nig_low/dense_3/bias",
+    "shape": [
+      4
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "nig_low.out.bias",
+    "layer": "nig_low",
+    "layer_class": "NIGHead"
+  },
+  {
+    "name": "y_close_class_logits/kernel",
+    "shape": [
+      32,
+      1
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "y_close_class_logits.kernel",
+    "layer": "y_close_class_logits",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "y_close_class_logits/bias",
+    "shape": [
+      1
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "y_close_class_logits.bias",
+    "layer": "y_close_class_logits",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "conf_close/dense_10/kernel",
+    "shape": [
+      67,
+      32
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "conf_close.d1.kernel",
+    "layer": "conf_close",
+    "layer_class": "ConfidenceHead"
+  },
+  {
+    "name": "conf_close/dense_10/bias",
+    "shape": [
+      32
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "conf_close.d1.bias",
+    "layer": "conf_close",
+    "layer_class": "ConfidenceHead"
+  },
+  {
+    "name": "conf_close/dense_11/kernel",
+    "shape": [
+      32,
+      1
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "conf_close.d2.kernel",
+    "layer": "conf_close",
+    "layer_class": "ConfidenceHead"
+  },
+  {
+    "name": "conf_close/dense_11/bias",
+    "shape": [
+      1
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "conf_close.d2.bias",
+    "layer": "conf_close",
+    "layer_class": "ConfidenceHead"
+  },
+  {
+    "name": "y_high_class_logits/kernel",
+    "shape": [
+      32,
+      1
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "y_high_class_logits.kernel",
+    "layer": "y_high_class_logits",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "y_high_class_logits/bias",
+    "shape": [
+      1
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "y_high_class_logits.bias",
+    "layer": "y_high_class_logits",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "conf_high/dense_6/kernel",
+    "shape": [
+      67,
+      32
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "conf_high.d1.kernel",
+    "layer": "conf_high",
+    "layer_class": "ConfidenceHead"
+  },
+  {
+    "name": "conf_high/dense_6/bias",
+    "shape": [
+      32
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "conf_high.d1.bias",
+    "layer": "conf_high",
+    "layer_class": "ConfidenceHead"
+  },
+  {
+    "name": "conf_high/dense_7/kernel",
+    "shape": [
+      32,
+      1
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "conf_high.d2.kernel",
+    "layer": "conf_high",
+    "layer_class": "ConfidenceHead"
+  },
+  {
+    "name": "conf_high/dense_7/bias",
+    "shape": [
+      1
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "conf_high.d2.bias",
+    "layer": "conf_high",
+    "layer_class": "ConfidenceHead"
+  },
+  {
+    "name": "y_low_class_logits/kernel",
+    "shape": [
+      32,
+      1
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "y_low_class_logits.kernel",
+    "layer": "y_low_class_logits",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "y_low_class_logits/bias",
+    "shape": [
+      1
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "y_low_class_logits.bias",
+    "layer": "y_low_class_logits",
+    "layer_class": "Dense"
+  },
+  {
+    "name": "conf_low/dense_8/kernel",
+    "shape": [
+      67,
+      32
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "conf_low.d1.kernel",
+    "layer": "conf_low",
+    "layer_class": "ConfidenceHead"
+  },
+  {
+    "name": "conf_low/dense_8/bias",
+    "shape": [
+      32
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "conf_low.d1.bias",
+    "layer": "conf_low",
+    "layer_class": "ConfidenceHead"
+  },
+  {
+    "name": "conf_low/dense_9/kernel",
+    "shape": [
+      32,
+      1
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "conf_low.d2.kernel",
+    "layer": "conf_low",
+    "layer_class": "ConfidenceHead"
+  },
+  {
+    "name": "conf_low/dense_9/bias",
+    "shape": [
+      1
+    ],
+    "dtype": "float32",
+    "trainable": true,
+    "attr_path": "conf_low.d2.bias",
+    "layer": "conf_low",
+    "layer_class": "ConfidenceHead"
+  },
+  {
+    "name": "trainer/uncertainty_weighted_loss/log_var_high_class",
+    "shape": [],
+    "dtype": "float32",
+    "trainable": true,
+    "layer": "uncertainty_weighted_loss",
+    "layer_class": "UncertaintyWeightedLoss",
+    "note": "Kendall log-variance of the trainer (not part of the model)"
+  },
+  {
+    "name": "trainer/uncertainty_weighted_loss/log_var_low_class",
+    "shape": [],
+    "dtype": "float32",
+    "trainable": true,
+    "layer": "uncertainty_weighted_loss",
+    "layer_class": "UncertaintyWeightedLoss",
+    "note": "Kendall log-variance of the trainer (not part of the model)"
+  },
+  {
+    "name": "trainer/uncertainty_weighted_loss/log_var_close_class",
+    "shape": [],
+    "dtype": "float32",
+    "trainable": true,
+    "layer": "uncertainty_weighted_loss",
+    "layer_class": "UncertaintyWeightedLoss",
+    "note": "Kendall log-variance of the trainer (not part of the model)"
+  }
+]

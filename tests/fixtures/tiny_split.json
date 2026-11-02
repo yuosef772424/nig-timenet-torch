@@ -1,0 +1,500 @@
+{
+  "train": {
+    "base_params": {
+      "dtype": "float32",
+      "shape": [
+        962,
+        2
+      ]
+    },
+    "last_candles": {
+      "dtype": "float64",
+      "shape": [
+        962,
+        7
+      ]
+    },
+    "y": {
+      "y_high_class": {
+        "dtype": "float32",
+        "shape": [
+          962
+        ]
+      },
+      "y_high_reg": {
+        "dtype": "float32",
+        "shape": [
+          962
+        ]
+      },
+      "y_low_class": {
+        "dtype": "float32",
+        "shape": [
+          962
+        ]
+      },
+      "y_low_reg": {
+        "dtype": "float32",
+        "shape": [
+          962
+        ]
+      },
+      "y_close_class": {
+        "dtype": "float32",
+        "shape": [
+          962
+        ]
+      },
+      "y_close_reg": {
+        "dtype": "float32",
+        "shape": [
+          962
+        ]
+      }
+    },
+    "X_1h": {
+      "dtype": "float32",
+      "shape": [
+        962,
+        16,
+        18
+      ]
+    }
+  },
+  "val": {
+    "base_params": {
+      "dtype": "float32",
+      "shape": [
+        120,
+        2
+      ]
+    },
+    "last_candles": {
+      "dtype": "float64",
+      "shape": [
+        120,
+        7
+      ]
+    },
+    "y": {
+      "y_high_class": {
+        "dtype": "float32",
+        "shape": [
+          120
+        ]
+      },
+      "y_high_reg": {
+        "dtype": "float32",
+        "shape": [
+          120
+        ]
+      },
+      "y_low_class": {
+        "dtype": "float32",
+        "shape": [
+          120
+        ]
+      },
+      "y_low_reg": {
+        "dtype": "float32",
+        "shape": [
+          120
+        ]
+      },
+      "y_close_class": {
+        "dtype": "float32",
+        "shape": [
+          120
+        ]
+      },
+      "y_close_reg": {
+        "dtype": "float32",
+        "shape": [
+          120
+        ]
+      }
+    },
+    "X_1h": {
+      "dtype": "float32",
+      "shape": [
+        120,
+        16,
+        18
+      ]
+    }
+  },
+  "test": {
+    "C0USDT": {
+      "base_params": {
+        "dtype": "float32",
+        "shape": [
+          19,
+          2
+        ]
+      },
+      "last_candles": {
+        "dtype": "float64",
+        "shape": [
+          19,
+          7
+        ]
+      },
+      "y": {
+        "y_high_class": {
+          "dtype": "float32",
+          "shape": [
+            19
+          ]
+        },
+        "y_high_reg": {
+          "dtype": "float32",
+          "shape": [
+            19
+          ]
+        },
+        "y_low_class": {
+          "dtype": "float32",
+          "shape": [
+            19
+          ]
+        },
+        "y_low_reg": {
+          "dtype": "float32",
+          "shape": [
+            19
+          ]
+        },
+        "y_close_class": {
+          "dtype": "float32",
+          "shape": [
+            19
+          ]
+        },
+        "y_close_reg": {
+          "dtype": "float32",
+          "shape": [
+            19
+          ]
+        }
+      },
+      "X_1h": {
+        "dtype": "float32",
+        "shape": [
+          19,
+          16,
+          18
+        ]
+      }
+    },
+    "C1USDT": {
+      "base_params": {
+        "dtype": "float32",
+        "shape": [
+          20,
+          2
+        ]
+      },
+      "last_candles": {
+        "dtype": "float64",
+        "shape": [
+          20,
+          7
+        ]
+      },
+      "y": {
+        "y_high_class": {
+          "dtype": "float32",
+          "shape": [
+            20
+          ]
+        },
+        "y_high_reg": {
+          "dtype": "float32",
+          "shape": [
+            20
+          ]
+        },
+        "y_low_class": {
+          "dtype": "float32",
+          "shape": [
+            20
+          ]
+        },
+        "y_low_reg": {
+          "dtype": "float32",
+          "shape": [
+            20
+          ]
+        },
+        "y_close_class": {
+          "dtype": "float32",
+          "shape": [
+            20
+          ]
+        },
+        "y_close_reg": {
+          "dtype": "float32",
+          "shape": [
+            20
+          ]
+        }
+      },
+      "X_1h": {
+        "dtype": "float32",
+        "shape": [
+          20,
+          16,
+          18
+        ]
+      }
+    },
+    "C2USDT": {
+      "base_params": {
+        "dtype": "float32",
+        "shape": [
+          20,
+          2
+        ]
+      },
+      "last_candles": {
+        "dtype": "float64",
+        "shape": [
+          20,
+          7
+        ]
+      },
+      "y": {
+        "y_high_class": {
+          "dtype": "float32",
+          "shape": [
+            20
+          ]
+        },
+        "y_high_reg": {
+          "dtype": "float32",
+          "shape": [
+            20
+          ]
+        },
+        "y_low_class": {
+          "dtype": "float32",
+          "shape": [
+            20
+          ]
+        },
+        "y_low_reg": {
+          "dtype": "float32",
+          "shape": [
+            20
+          ]
+        },
+        "y_close_class": {
+          "dtype": "float32",
+          "shape": [
+            20
+          ]
+        },
+        "y_close_reg": {
+          "dtype": "float32",
+          "shape": [
+            20
+          ]
+        }
+      },
+      "X_1h": {
+        "dtype": "float32",
+        "shape": [
+          20,
+          16,
+          18
+        ]
+      }
+    },
+    "C3USDT": {
+      "base_params": {
+        "dtype": "float32",
+        "shape": [
+          21,
+          2
+        ]
+      },
+      "last_candles": {
+        "dtype": "float64",
+        "shape": [
+          21,
+          7
+        ]
+      },
+      "y": {
+        "y_high_class": {
+          "dtype": "float32",
+          "shape": [
+            21
+          ]
+        },
+        "y_high_reg": {
+          "dtype": "float32",
+          "shape": [
+            21
+          ]
+        },
+        "y_low_class": {
+          "dtype": "float32",
+          "shape": [
+            21
+          ]
+        },
+        "y_low_reg": {
+          "dtype": "float32",
+          "shape": [
+            21
+          ]
+        },
+        "y_close_class": {
+          "dtype": "float32",
+          "shape": [
+            21
+          ]
+        },
+        "y_close_reg": {
+          "dtype": "float32",
+          "shape": [
+            21
+          ]
+        }
+      },
+      "X_1h": {
+        "dtype": "float32",
+        "shape": [
+          21,
+          16,
+          18
+        ]
+      }
+    },
+    "C4USDT": {
+      "base_params": {
+        "dtype": "float32",
+        "shape": [
+          22,
+          2
+        ]
+      },
+      "last_candles": {
+        "dtype": "float64",
+        "shape": [
+          22,
+          7
+        ]
+      },
+      "y": {
+        "y_high_class": {
+          "dtype": "float32",
+          "shape": [
+            22
+          ]
+        },
+        "y_high_reg": {
+          "dtype": "float32",
+          "shape": [
+            22
+          ]
+        },
+        "y_low_class": {
+          "dtype": "float32",
+          "shape": [
+            22
+          ]
+        },
+        "y_low_reg": {
+          "dtype": "float32",
+          "shape": [
+            22
+          ]
+        },
+        "y_close_class": {
+          "dtype": "float32",
+          "shape": [
+            22
+          ]
+        },
+        "y_close_reg": {
+          "dtype": "float32",
+          "shape": [
+            22
+          ]
+        }
+      },
+      "X_1h": {
+        "dtype": "float32",
+        "shape": [
+          22,
+          16,
+          18
+        ]
+      }
+    },
+    "C5USDT": {
+      "base_params": {
+        "dtype": "float32",
+        "shape": [
+          19,
+          2
+        ]
+      },
+      "last_candles": {
+        "dtype": "float64",
+        "shape": [
+          19,
+          7
+        ]
+      },
+      "y": {
+        "y_high_class": {
+          "dtype": "float32",
+          "shape": [
+            19
+          ]
+        },
+        "y_high_reg": {
+          "dtype": "float32",
+          "shape": [
+            19
+          ]
+        },
+        "y_low_class": {
+          "dtype": "float32",
+          "shape": [
+            19
+          ]
+        },
+        "y_low_reg": {
+          "dtype": "float32",
+          "shape": [
+            19
+          ]
+        },
+        "y_close_class": {
+          "dtype": "float32",
+          "shape": [
+            19
+          ]
+        },
+        "y_close_reg": {
+          "dtype": "float32",
+          "shape": [
+            19
+          ]
+        }
+      },
+      "X_1h": {
+        "dtype": "float32",
+        "shape": [
+          19,
+          16,
+          18
+        ]
+      }
+    }
+  }
+}

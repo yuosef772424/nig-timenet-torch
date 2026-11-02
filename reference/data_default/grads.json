@@ -1,0 +1,487 @@
+[
+  {
+    "name": "instance_norm/gamma",
+    "shape": [
+      6
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "instance_norm/beta",
+    "shape": [
+      6
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "level_bn/gamma",
+    "shape": [
+      6
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "level_bn/beta",
+    "shape": [
+      6
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "decomp/scale_gate/kernel",
+    "shape": [
+      12,
+      4
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "decomp/scale_gate/bias",
+    "shape": [
+      4
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "step_proj/kernel",
+    "shape": [
+      18,
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "step_proj/bias",
+    "shape": [
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "gru_norm_1/scale",
+    "shape": [
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "gru_1/gru_cell/kernel",
+    "shape": [
+      64,
+      192
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "gru_1/gru_cell/recurrent_kernel",
+    "shape": [
+      64,
+      192
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "gru_1/gru_cell/bias",
+    "shape": [
+      2,
+      192
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "gru_norm_2/scale",
+    "shape": [
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "gru_2/gru_cell/kernel",
+    "shape": [
+      64,
+      192
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "gru_2/gru_cell/recurrent_kernel",
+    "shape": [
+      64,
+      192
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "gru_2/gru_cell/bias",
+    "shape": [
+      2,
+      192
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "final_norm/scale",
+    "shape": [
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "stats_bn/gamma",
+    "shape": [
+      12
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "stats_bn/beta",
+    "shape": [
+      12
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "attn_pool/query",
+    "shape": [
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "stats_proj/kernel",
+    "shape": [
+      12,
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "stats_proj/bias",
+    "shape": [
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "readout_fc/kernel",
+    "shape": [
+      192,
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "readout_fc/bias",
+    "shape": [
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "linear_path/kernel",
+    "shape": [
+      384,
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "linear_path/bias",
+    "shape": [
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "trunk_norm/scale",
+    "shape": [
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "class_fc_close/kernel",
+    "shape": [
+      64,
+      32
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "class_fc_close/bias",
+    "shape": [
+      32
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "class_fc_high/kernel",
+    "shape": [
+      64,
+      32
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "class_fc_high/bias",
+    "shape": [
+      32
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "class_fc_low/kernel",
+    "shape": [
+      64,
+      32
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "class_fc_low/bias",
+    "shape": [
+      32
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "nig_close/dense_4/kernel",
+    "shape": [
+      64,
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "nig_close/dense_4/bias",
+    "shape": [
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "nig_close/dense_5/kernel",
+    "shape": [
+      64,
+      4
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "nig_close/dense_5/bias",
+    "shape": [
+      4
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "nig_high/dense/kernel",
+    "shape": [
+      64,
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "nig_high/dense/bias",
+    "shape": [
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "nig_high/dense_1/kernel",
+    "shape": [
+      64,
+      4
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "nig_high/dense_1/bias",
+    "shape": [
+      4
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "nig_low/dense_2/kernel",
+    "shape": [
+      64,
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "nig_low/dense_2/bias",
+    "shape": [
+      64
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "nig_low/dense_3/kernel",
+    "shape": [
+      64,
+      4
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "nig_low/dense_3/bias",
+    "shape": [
+      4
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "y_close_class_logits/kernel",
+    "shape": [
+      32,
+      1
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "y_close_class_logits/bias",
+    "shape": [
+      1
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "conf_close/dense_10/kernel",
+    "shape": [
+      67,
+      32
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "conf_close/dense_10/bias",
+    "shape": [
+      32
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "conf_close/dense_11/kernel",
+    "shape": [
+      32,
+      1
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "conf_close/dense_11/bias",
+    "shape": [
+      1
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "y_high_class_logits/kernel",
+    "shape": [
+      32,
+      1
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "y_high_class_logits/bias",
+    "shape": [
+      1
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "conf_high/dense_6/kernel",
+    "shape": [
+      67,
+      32
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "conf_high/dense_6/bias",
+    "shape": [
+      32
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "conf_high/dense_7/kernel",
+    "shape": [
+      32,
+      1
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "conf_high/dense_7/bias",
+    "shape": [
+      1
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "y_low_class_logits/kernel",
+    "shape": [
+      32,
+      1
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "y_low_class_logits/bias",
+    "shape": [
+      1
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "conf_low/dense_8/kernel",
+    "shape": [
+      67,
+      32
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "conf_low/dense_8/bias",
+    "shape": [
+      32
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "conf_low/dense_9/kernel",
+    "shape": [
+      32,
+      1
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "conf_low/dense_9/bias",
+    "shape": [
+      1
+    ],
+    "grad_is_none": false
+  },
+  {
+    "name": "trainer/uncertainty_weighted_loss/log_var_high_class",
+    "shape": [],
+    "grad_is_none": false
+  },
+  {
+    "name": "trainer/uncertainty_weighted_loss/log_var_low_class",
+    "shape": [],
+    "grad_is_none": false
+  },
+  {
+    "name": "trainer/uncertainty_weighted_loss/log_var_close_class",
+    "shape": [],
+    "grad_is_none": false
+  }
+]
