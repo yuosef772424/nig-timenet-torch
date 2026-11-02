@@ -1,6 +1,6 @@
-# STATUS: PyTorch port build plan
+# STATUS
 
-> Read this first, then ONLY your own batch in `BUILD_PLAN.md` (section 0b) — within it, every step in order,
+> Read this first, then `docs/RULES.md` once, then ONLY your step in `docs/ROADMAP.md` (port batches below are done; `BUILD_PLAN.md` section 0b) — within it, every step in order,
 > each step's own tests green before the next step starts. Update your row in the same PR. Append real obstacles
 > to `friction_log.csv`. Keep this file under 60 lines.
 
@@ -23,3 +23,18 @@ in that batch starts.
 | B10 | P45 | Colab notebook (section 14) | merged | [#11](https://github.com/yuosef772424/nig-timenet-torch/pull/11) | needs B9 |
 
 States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`.
+
+## Roadmap 2026-11 (`docs/ROADMAP.md`, rules `docs/RULES.md`)
+Model work moved here from TF (owner, 2026-11-02). PRs since last R-REVIEW: 0.
+
+| Step | Title | State | PR / job | Note |
+|---|---|---|---|---|
+| R0 | Make the rules checkable | todo | | |
+| T1 | Complete the trainer | todo | | |
+| T2 | Real data in (TF export + manifest lock fields) | todo | | |
+| T3 | Colab runner (device assert, republish) | todo | | |
+| T4 | Diagnostics on the targets (`health_report`) | todo | | |
+| T5r | Baseline on GPU (`baseline-001`) | todo | | needs T1-T4 |
+| T6 | Switches (direct_wide, selection, confidence, NIG floor, interval scale) | todo | | |
+| T7r | Baseline vs all switches (`all-001`) | todo | | needs T5r, T6 |
+| T8 | Ablate or diagnose, fix, propose default | todo | | needs T7r |
