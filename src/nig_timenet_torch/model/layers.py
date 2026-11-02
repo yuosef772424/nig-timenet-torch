@@ -6,7 +6,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-__all__ = ["InstanceNorm", "SymLog", "CausalMultiScaleDecomp", "keras_dense_weight_to_torch"]
+__all__ = ["InstanceNorm", "SymLog", "CausalMultiScaleDecomp", "keras_dense_weight_to_torch",
+           "keras_conv1d_weight_to_torch", "num_patches", "PatchEmbedding"]
 
 
 class InstanceNorm(nn.Module):
@@ -89,3 +90,51 @@ class CausalMultiScaleDecomp(nn.Module):
         w = torch.softmax(self.gate(g), dim=-1)
         trend = torch.einsum("bktf,bk->btf", trends, w)
         return trend, x - trend
+
+
+def keras_conv1d_weight_to_torch(kernel: torch.Tensor) -> torch.Tensor:
+    """Keras Conv1D kernel (kernel_size, in, out) -> torch.nn.Conv1d weight (out, in, kernel_size)."""
+    return kernel.permute(2, 1, 0).contiguous()
+
+
+def num_patches(seq_len: int, patch_len: int, stride: int) -> tuple[int, int]:
+    """(n_tokens, left_pad) so that the last patch ends exactly at the last time step (source: model/patches.py)."""
+    pad = (stride - (seq_len - patch_len) % stride) % stride
+    return (seq_len + pad - patch_len) // stride + 1, pad
+
+
+class PatchEmbedding(nn.Module):
+    """Overlapping patches -> d_model tokens + learned absolute position embedding (source: model/patches.py).
+
+    Left-pads by repeating the first step (``num_patches`` pad), Conv1d(in, d_model, patch_len, stride, valid), then
+    ``+ pos`` of shape (1, n_tokens, d_model). ``pos`` depends on seq_len, which the BUILD_PLAN P10 interface does not
+    take: pass ``seq_len=`` to build eagerly (needed before creating an optimizer / loading weights), otherwise it is
+    built on the first forward like Keras' build() (see docs/friction_log.csv, P10).
+    """
+
+    def __init__(self, in_features: int, d_model: int, patch_len: int = 4, stride: int = 2,
+                 *, seq_len: int | None = None):
+        super().__init__()
+        self.d_model, self.patch_len, self.stride = d_model, patch_len, stride
+        self.proj = nn.Conv1d(in_features, d_model, kernel_size=patch_len, stride=stride, padding=0)
+        self.seq_len: int | None = None
+        self.pos: nn.Parameter | None = None
+        if seq_len is not None:
+            self.build(seq_len)
+
+    def build(self, seq_len: int) -> None:
+        if seq_len < self.patch_len:
+            raise ValueError("seq_len must be >= patch_len")
+        if self.pos is not None:
+            if seq_len != self.seq_len:
+                raise ValueError(f"PatchEmbedding was built for seq_len={self.seq_len}, got {seq_len}")
+            return
+        self.seq_len = seq_len
+        self.n_tokens, self.pad = num_patches(seq_len, self.patch_len, self.stride)
+        self.pos = nn.Parameter(torch.randn(1, self.n_tokens, self.d_model, device=self.proj.weight.device) * 0.02)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.build(x.shape[1])
+        if self.pad > 0:
+            x = torch.cat([x[:, :1, :].expand(-1, self.pad, -1), x], dim=1)
+        return self.proj(x.transpose(1, 2)).transpose(1, 2) + self.pos
