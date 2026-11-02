@@ -1,0 +1,464 @@
+[
+  {
+    "block": "nig_close",
+    "step": "00_head_input",
+    "key": "nig_close/00_head_input",
+    "shape": [
+      8,
+      64
+    ],
+    "dtype": "float32",
+    "how": "layer_outputs['032_trunk_drop'] (output of trunk_drop)"
+  },
+  {
+    "block": "nig_close",
+    "step": "01_fc_out",
+    "key": "nig_close/01_fc_out",
+    "shape": [
+      8,
+      64
+    ],
+    "dtype": "float32",
+    "how": "head.fc(h)  (Dense hidden, swish)"
+  },
+  {
+    "block": "nig_close",
+    "step": "02_raw_params",
+    "key": "nig_close/02_raw_params",
+    "shape": [
+      8,
+      4
+    ],
+    "dtype": "float32",
+    "how": "head.out(head.drop(fc_out, training=False)); columns = [mu, nu, alpha, beta] before softplus/floor"
+  },
+  {
+    "block": "nig_close",
+    "step": "03_raw_mu",
+    "key": "nig_close/03_raw_mu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 0:1]"
+  },
+  {
+    "block": "nig_close",
+    "step": "03_raw_nu",
+    "key": "nig_close/03_raw_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 1:2]"
+  },
+  {
+    "block": "nig_close",
+    "step": "03_raw_alpha",
+    "key": "nig_close/03_raw_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 2:3]"
+  },
+  {
+    "block": "nig_close",
+    "step": "03_raw_beta",
+    "key": "nig_close/03_raw_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 3:4]"
+  },
+  {
+    "block": "nig_close",
+    "step": "04_softplus_nu",
+    "key": "nig_close/04_softplus_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + nu_min"
+  },
+  {
+    "block": "nig_close",
+    "step": "04_softplus_alpha",
+    "key": "nig_close/04_softplus_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + alpha_min"
+  },
+  {
+    "block": "nig_close",
+    "step": "04_softplus_beta",
+    "key": "nig_close/04_softplus_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + beta_min"
+  },
+  {
+    "block": "nig_close",
+    "step": "05_final_mu",
+    "key": "nig_close/05_final_mu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[0]: no floor (mu is linear)"
+  },
+  {
+    "block": "nig_close",
+    "step": "05_final_nu",
+    "key": "nig_close/05_final_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[1]: softplus + nu_min=0.1"
+  },
+  {
+    "block": "nig_close",
+    "step": "05_final_alpha",
+    "key": "nig_close/05_final_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[2]: softplus + alpha_min=2.0"
+  },
+  {
+    "block": "nig_close",
+    "step": "05_final_beta",
+    "key": "nig_close/05_final_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[3]: softplus + beta_min=0.01"
+  },
+  {
+    "block": "nig_high",
+    "step": "00_head_input",
+    "key": "nig_high/00_head_input",
+    "shape": [
+      8,
+      64
+    ],
+    "dtype": "float32",
+    "how": "layer_outputs['032_trunk_drop'] (output of trunk_drop)"
+  },
+  {
+    "block": "nig_high",
+    "step": "01_fc_out",
+    "key": "nig_high/01_fc_out",
+    "shape": [
+      8,
+      64
+    ],
+    "dtype": "float32",
+    "how": "head.fc(h)  (Dense hidden, swish)"
+  },
+  {
+    "block": "nig_high",
+    "step": "02_raw_params",
+    "key": "nig_high/02_raw_params",
+    "shape": [
+      8,
+      4
+    ],
+    "dtype": "float32",
+    "how": "head.out(head.drop(fc_out, training=False)); columns = [mu, nu, alpha, beta] before softplus/floor"
+  },
+  {
+    "block": "nig_high",
+    "step": "03_raw_mu",
+    "key": "nig_high/03_raw_mu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 0:1]"
+  },
+  {
+    "block": "nig_high",
+    "step": "03_raw_nu",
+    "key": "nig_high/03_raw_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 1:2]"
+  },
+  {
+    "block": "nig_high",
+    "step": "03_raw_alpha",
+    "key": "nig_high/03_raw_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 2:3]"
+  },
+  {
+    "block": "nig_high",
+    "step": "03_raw_beta",
+    "key": "nig_high/03_raw_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 3:4]"
+  },
+  {
+    "block": "nig_high",
+    "step": "04_softplus_nu",
+    "key": "nig_high/04_softplus_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + nu_min"
+  },
+  {
+    "block": "nig_high",
+    "step": "04_softplus_alpha",
+    "key": "nig_high/04_softplus_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + alpha_min"
+  },
+  {
+    "block": "nig_high",
+    "step": "04_softplus_beta",
+    "key": "nig_high/04_softplus_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + beta_min"
+  },
+  {
+    "block": "nig_high",
+    "step": "05_final_mu",
+    "key": "nig_high/05_final_mu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[0]: no floor (mu is linear)"
+  },
+  {
+    "block": "nig_high",
+    "step": "05_final_nu",
+    "key": "nig_high/05_final_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[1]: softplus + nu_min=0.1"
+  },
+  {
+    "block": "nig_high",
+    "step": "05_final_alpha",
+    "key": "nig_high/05_final_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[2]: softplus + alpha_min=2.0"
+  },
+  {
+    "block": "nig_high",
+    "step": "05_final_beta",
+    "key": "nig_high/05_final_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[3]: softplus + beta_min=0.01"
+  },
+  {
+    "block": "nig_low",
+    "step": "00_head_input",
+    "key": "nig_low/00_head_input",
+    "shape": [
+      8,
+      64
+    ],
+    "dtype": "float32",
+    "how": "layer_outputs['032_trunk_drop'] (output of trunk_drop)"
+  },
+  {
+    "block": "nig_low",
+    "step": "01_fc_out",
+    "key": "nig_low/01_fc_out",
+    "shape": [
+      8,
+      64
+    ],
+    "dtype": "float32",
+    "how": "head.fc(h)  (Dense hidden, swish)"
+  },
+  {
+    "block": "nig_low",
+    "step": "02_raw_params",
+    "key": "nig_low/02_raw_params",
+    "shape": [
+      8,
+      4
+    ],
+    "dtype": "float32",
+    "how": "head.out(head.drop(fc_out, training=False)); columns = [mu, nu, alpha, beta] before softplus/floor"
+  },
+  {
+    "block": "nig_low",
+    "step": "03_raw_mu",
+    "key": "nig_low/03_raw_mu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 0:1]"
+  },
+  {
+    "block": "nig_low",
+    "step": "03_raw_nu",
+    "key": "nig_low/03_raw_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 1:2]"
+  },
+  {
+    "block": "nig_low",
+    "step": "03_raw_alpha",
+    "key": "nig_low/03_raw_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 2:3]"
+  },
+  {
+    "block": "nig_low",
+    "step": "03_raw_beta",
+    "key": "nig_low/03_raw_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "raw_params[:, 3:4]"
+  },
+  {
+    "block": "nig_low",
+    "step": "04_softplus_nu",
+    "key": "nig_low/04_softplus_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + nu_min"
+  },
+  {
+    "block": "nig_low",
+    "step": "04_softplus_alpha",
+    "key": "nig_low/04_softplus_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + alpha_min"
+  },
+  {
+    "block": "nig_low",
+    "step": "04_softplus_beta",
+    "key": "nig_low/04_softplus_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "output of tf.nn.softplus captured during head(h, training=False), before + beta_min"
+  },
+  {
+    "block": "nig_low",
+    "step": "05_final_mu",
+    "key": "nig_low/05_final_mu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[0]: no floor (mu is linear)"
+  },
+  {
+    "block": "nig_low",
+    "step": "05_final_nu",
+    "key": "nig_low/05_final_nu",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[1]: softplus + nu_min=0.1"
+  },
+  {
+    "block": "nig_low",
+    "step": "05_final_alpha",
+    "key": "nig_low/05_final_alpha",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[2]: softplus + alpha_min=2.0"
+  },
+  {
+    "block": "nig_low",
+    "step": "05_final_beta",
+    "key": "nig_low/05_final_beta",
+    "shape": [
+      8,
+      1
+    ],
+    "dtype": "float32",
+    "how": "head(h, training=False)[3]: softplus + beta_min=0.01"
+  }
+]
