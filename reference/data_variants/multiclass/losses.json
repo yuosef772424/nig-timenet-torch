@@ -1,0 +1,42 @@
+{
+  "ls=0.0,weighted=False": {
+    "loss": {
+      "value": 2.0988855361938477,
+      "f32_hex": "40065424"
+    },
+    "accuracy": {
+      "value": 0.125,
+      "f32_hex": "3e000000"
+    }
+  },
+  "ls=0.0,weighted=True": {
+    "loss": {
+      "value": 2.1346163749694824,
+      "f32_hex": "40089d8e"
+    },
+    "accuracy": {
+      "value": 0.07834170758724213,
+      "f32_hex": "3da0719e"
+    }
+  },
+  "ls=0.1,weighted=False": {
+    "loss": {
+      "value": 2.04939603805542,
+      "f32_hex": "4003294e"
+    },
+    "accuracy": {
+      "value": 0.125,
+      "f32_hex": "3e000000"
+    }
+  },
+  "ls=0.1,weighted=True": {
+    "loss": {
+      "value": 2.0828030109405518,
+      "f32_hex": "40054ca5"
+    },
+    "accuracy": {
+      "value": 0.07834170758724213,
+      "f32_hex": "3da0719e"
+    }
+  }
+}
