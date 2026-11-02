@@ -94,6 +94,9 @@ class Trainer:
                                    if use_kendall and c["task_type"] not in excluded]
         self.fixed_task_names = [t for t in self.target_names if t not in self.kendall_task_names]
         self.uncertainty_layer = UncertaintyWeightedLoss(self.kendall_task_names) if self.kendall_task_names else None
+        first = next(iter(model.parameters()), None)
+        if self.uncertainty_layer is not None and first is not None:  # Kendall log-vars live on the model's device
+            self.uncertainty_layer.to(first.device)
         constraints = list(loss_cfg.get("constraints", [])) + list(config.get("constraints", []))
         if constraints:
             raise NotImplementedError("output constraints are not ported yet")

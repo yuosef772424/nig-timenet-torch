@@ -41,14 +41,20 @@ def table_meta(dataset: dict, idx: np.ndarray, *, stage: str, fold: int, train_e
             "stage": stage, "fold": int(fold), "train_end": train_end}
 
 
-def predict_table(model: torch.nn.Module, x: torch.Tensor, meta: dict, identity: RunIdentity,
+def predict_table(model: torch.nn.Module, x, meta: dict, identity: RunIdentity,
                   batch_size: int = 512) -> pd.DataFrame:
-    n = x.shape[0]
+    """``x``: (N, T, F) tensor, or a dict {timeframe: (N, T_tf, F_tf)} for a multi-timeframe model (P45); the
+    model runs on whatever device ``x`` is on, outputs come back to CPU."""
+    first = next(iter(x.values())) if isinstance(x, dict) else x
+    n = first.shape[0]
+    if isinstance(x, dict) and any(v.shape[0] != n for v in x.values()):
+        raise ValueError(f"timeframe inputs have different row counts: { {k: v.shape[0] for k, v in x.items()} }")
     model.eval()
     chunks: dict[str, list[np.ndarray]] = {}
     with torch.no_grad():
         for start in range(0, n, batch_size):
-            out = model(x[start:start + batch_size])
+            sl = slice(start, start + batch_size)
+            out = model({k: v[sl] for k, v in x.items()} if isinstance(x, dict) else x[sl])
             for k, v in out.items():
                 chunks.setdefault(k, []).append(v.detach().cpu().numpy().reshape(v.shape[0], -1))
     full = lambda v: np.full(n, v) if np.ndim(v) == 0 else np.asarray(v)  # noqa: E731

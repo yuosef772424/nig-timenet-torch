@@ -4,7 +4,7 @@
 > each step's own tests green before the next step starts. Update your row in the same PR. Append real obstacles
 > to `friction_log.csv`. Keep this file under 60 lines.
 
-B1-B8 merged (P00-P39 incl. P33b, none skipped); follow-up B9-B10 (BUILD_PLAN.md section 14) added on owner request; M2 and M3 gates green, both oracle suites (`reference/data`, `reference/data_default`) green. Open judgment calls: `friction_log.csv` rows marked "owner to confirm". **One branch + one PR per batch** (owner decision, 2026-11-02 — see `BUILD_PLAN.md`
+B1-B8 merged (P00-P39 incl. P33b, none skipped); follow-up B9-B10 (BUILD_PLAN.md section 14, owner request) merged; M2 and M3 gates green, both oracle suites (`reference/data`, `reference/data_default`) green. Open judgment calls: `friction_log.csv` rows marked "owner to confirm". **One branch + one PR per batch** (owner decision, 2026-11-02 — see `BUILD_PLAN.md`
 top + section 0b): the step list (P00-P39) is unchanged, only the PR/CI granularity moved from per-step to
 per-batch to cut round-trips; every step inside a batch still gets its own acceptance test before the next step
 in that batch starts.
@@ -20,6 +20,6 @@ in that batch starts.
 | B7 | P31-P36 | Model contract + tiny_mlp + GRU second-oracle parity (P33b) + input_skip + probe report (M6) | merged | [#8](https://github.com/yuosef772424/nig-timenet-torch/pull/8) | needs B3, B4; P33b needs B1's second oracle; `input_skip` default stays "none" forever |
 | B8 | P37-P39 | Rolling/staleness seams + final review (M7) | merged | [#9](https://github.com/yuosef772424/nig-timenet-torch/pull/9) | needs B5, B6; seams only, no experiment run |
 | B9 | P40-P44 | tcn + multi-timeframe + multiclass + cross-asset PanelModel (section 14) | merged | [#10](https://github.com/yuosef772424/nig-timenet-torch/pull/10) | new oracle `reference/data_variants/` |
-| B10 | P45 | Colab notebook (section 14) | todo | | needs B9 |
+| B10 | P45 | Colab notebook (section 14) | merged | [#11](https://github.com/yuosef772424/nig-timenet-torch/pull/11) | needs B9 |
 
 States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`.
