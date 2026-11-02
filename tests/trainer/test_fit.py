@@ -9,7 +9,7 @@ import torch
 
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.trainer import checkpoint
-from nig_timenet_torch.trainer.identity import ResumeMismatchError, RunIdentity, settings_hash
+from nig_timenet_torch.trainer.identity import ResumeMismatchError, RunIdentity, SeedMismatchError, settings_hash
 from nig_timenet_torch.trainer.schedules import LrSettings, lr_at
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
@@ -90,8 +90,9 @@ def test_resume_refuses_a_changed_identity_and_an_overwrite(data, tmp_path):
     other = dataclasses.replace(settings, batch_size=16)
     with pytest.raises(ResumeMismatchError, match="settings_hash"):
         fit(make_trainer(), data, other, run_dir=tmp_path, identity=identity_for(other))
-    with pytest.raises(ResumeMismatchError, match="seed"):
-        fit(make_trainer(), data, settings, run_dir=tmp_path, identity=identity_for(settings, seed=9))
+    changed_data = dataclasses.replace(identity_for(settings), data_fingerprint="other")
+    with pytest.raises(ResumeMismatchError, match="data_fingerprint"):
+        fit(make_trainer(), data, settings, run_dir=tmp_path, identity=changed_data)
     with pytest.raises(FileExistsError):
         fit(make_trainer(), data, settings, run_dir=tmp_path, identity=identity_for(settings), resume=False)
     with pytest.raises(ValueError, match="identity"):
@@ -153,3 +154,16 @@ def test_fit_needs_an_optimizer_and_valid_settings(data):
         fit(t, data, FitSettings(epochs=1))
     with pytest.raises(ValueError):
         FitSettings(epochs=0)
+
+
+def test_fit_refuses_an_identity_with_another_seed(data, tmp_path):
+    """T2: identity.seed must equal settings.seed; checked before anything runs, with or without a run folder."""
+    settings = FitSettings(epochs=1, batch_size=32, seed=3)
+    wrong = identity_for(settings, seed=9)
+    with pytest.raises(SeedMismatchError, match=r"identity\.seed \(9\) != settings\.seed \(3\)"):
+        fit(make_trainer(), data, settings, identity=wrong)
+    with pytest.raises(SeedMismatchError):
+        fit(make_trainer(), data, settings, run_dir=tmp_path / "r", identity=wrong)
+    assert not (tmp_path / "r").exists()
+    assert fit(make_trainer(), data, settings, identity=identity_for(settings, seed=3)).epochs_done == 1
+    assert fit(make_trainer(), data, settings).epochs_done == 1  # no identity: nothing to compare
