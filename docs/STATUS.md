@@ -25,13 +25,13 @@ in that batch starts.
 States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`.
 
 ## Roadmap 2026-11 (`docs/ROADMAP.md`, rules `docs/RULES.md`)
-Model work moved here from TF (owner, 2026-11-02). PRs since last R-REVIEW: 1 (R0).
+Model work moved here from TF (owner, 2026-11-02). PRs since last R-REVIEW: 3 (R0, T1, T2).
 
 | Step | Title | State | PR / job | Note |
 |---|---|---|---|---|
 | R0 | Make the rules checkable | merged | [#14](https://github.com/yuosef772424/nig-timenet-torch/pull/14) | tests for B1, B6, C1, C2, E3, G1-G8 + `tests/ratchets.json`; 8 non-zero ratchets recorded as B-010..B-017 |
-| T1 | Complete the trainer | PR open | [#16](https://github.com/yuosef772424/nig-timenet-torch/pull/16) | `Trainer.fit` (schedules, early stop, best weights, checkpoint + resume); 19 new defaults in D-001; ratchets unchanged |
-| T2 | Real data in (TF export + manifest lock fields) | todo | | |
+| T1 | Complete the trainer | merged | [#16](https://github.com/yuosef772424/nig-timenet-torch/pull/16) | `Trainer.fit` (schedules, early stop, best weights, checkpoint + resume); 19 new defaults in D-001; ratchets unchanged |
+| T2 | Real data in (TF export + manifest lock fields) | PR open | [#17](https://github.com/yuosef772424/nig-timenet-torch/pull/17) + TF [#65](https://github.com/yuosef772424/crypto-signal-prediction/pull/65) | `data_io/artifact.py` loader (refuses missing D1 fields), `build_run_identity`, `Trainer.fit` raises `SeedMismatchError`; Colab run on Drive data NOT done (B-020), command in `DATA_ARTIFACT_CONTRACT.md` |
 | T3 | Colab runner (device assert, republish) | todo | | |
 | T4 | Diagnostics on the targets (`health_report`) | todo | | |
 | T5r | Baseline on GPU (`baseline-001`) | todo | | needs T1-T4 |

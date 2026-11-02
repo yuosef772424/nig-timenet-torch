@@ -16,7 +16,7 @@ import torch
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.trainer import checkpoint
-from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
+from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
 from nig_timenet_torch.trainer.schedules import LrSettings, ParamSchedule, apply_schedules, lr_at
 from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS, compute_selection_metric
 from nig_timenet_torch.trainer.task_weighting import UncertaintyWeightedLoss
@@ -246,13 +246,17 @@ class Trainer:
 
         With ``run_dir`` the state is saved after every epoch (checkpoint.py) and a run folder that already holds a
         checkpoint is RESUMED (``resume=False`` raises instead of overwriting); resume refuses a changed
-        ``identity`` (ResumeMismatchError). Calling fit again with more ``epochs`` continues the run; the result
-        equals an uninterrupted run (bitwise on CPU). At the end the model holds the best weights if
+        ``identity`` (ResumeMismatchError). An ``identity`` whose seed differs from ``settings.seed`` raises
+        SeedMismatchError before anything runs (ROADMAP T2). Calling fit again with more ``epochs`` continues the
+        run; the result equals an uninterrupted run (bitwise on CPU). At the end the model holds the best weights if
         ``early_stop.restore_best_weights``; the checkpoint keeps the LAST epoch's training state."""
         if self.optimizer is None:
             raise RuntimeError("Trainer has no optimizer")
         if run_dir is not None and identity is None:
             raise ValueError("run_dir needs an identity (RunIdentity) so that a resume can be checked")
+        if identity is not None and identity.seed != settings.seed:
+            raise SeedMismatchError(f"identity.seed ({identity.seed}) != settings.seed ({settings.seed}): the identity "
+                                    f"would describe a different run than the one that is trained")
         seed_everything(settings.seed)
         schedules = {n: from_dict(ParamSchedule, c) for n, c in self.config["loss"].get("schedules", {}).items()}
         higher = SELECTION_METRICS.entry(self.selection_metric).meta["higher_is_better"]
