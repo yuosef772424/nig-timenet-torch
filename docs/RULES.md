@@ -21,7 +21,7 @@ artifacts from it through its own tools.
 ## B. Changes and defaults
 | # | Rule | Why | Enforced by |
 |---|---|---|---|
-| B1 | A new option's default reproduces the old behaviour exactly; a default change needs an owner decision file `docs/decisions/D-nnn-*.md` in the SAME PR, and the PR title/description lists every behaviour change. | TF PR #62 changed 3 defaults under an "add profiler" title | `tests/test_decisions.py` + `tests/pins/defaults.json`: a changed or removed default without a `docs/decisions/D-nnn-*.md` line fails; a new default must be pinned |
+| B1 | A new option's default reproduces the old behaviour exactly; a default change (and, since T1, a NEW default) needs an owner decision file `docs/decisions/D-nnn-*.md` in the SAME PR, and the PR title/description lists every behaviour change. | TF PR #62 changed 3 defaults under an "add profiler" title | `tests/test_decisions.py` + `tests/pins/defaults.json`: a changed or removed default without a `docs/decisions/D-nnn-*.md` line fails; a new default must be pinned |
 | B2 | One change type per commit (`feat`/`fix`/`refactor`/`docs`/`test`/`exp`); a refactor proves equal outputs. | TF hardening discipline (kept, it worked) | manual + review |
 | B3 | A fix of a CLASS of problem lands with a guard test that scans for the class, not only the instance. | TF S02: first pass fixed 5 of 16 sites; the AST guard caught the rest | manual (review asks "where is the guard?") |
 | B4 | Every learned-state transform (normalizer, scaler, target codec, calibrator) is ONE registered component (`fit` on train only -> state, `transform`, `inverse`), stored with the model; consumers call it. Unknown names raise. | TF "one component, one interface" (kept) | `core/registry.py` + tests |

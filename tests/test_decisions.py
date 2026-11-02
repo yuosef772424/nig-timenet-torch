@@ -89,3 +89,12 @@ def test_a_real_default_change_is_detected(monkeypatch):
     tampered = {**pinned, key: "12345"}
     changed, _ = dp.compare(dp.collect_defaults(), dp.apply_decisions(tampered))
     assert key in changed
+
+
+def test_guard_accepts_a_documented_new_default_and_checks_it_against_the_pin(tmp_path):
+    _write(tmp_path, "D-001-x.md", "- `m.f(x)`: `<new>` -> `7`")
+    assert dp.apply_decisions({}, tmp_path) == {"m.f(x)": "7"}            # pin file not yet updated: fine
+    assert dp.apply_decisions({"m.f(x)": "7"}, tmp_path) == {"m.f(x)": "7"}  # pinned with the same value: fine
+    with pytest.raises(ValueError, match="pin file says"):
+        dp.apply_decisions({"m.f(x)": "8"}, tmp_path)
+

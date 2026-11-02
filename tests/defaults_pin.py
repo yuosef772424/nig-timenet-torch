@@ -27,6 +27,8 @@ PIN_FILE = ROOT / "tests" / "pins" / "defaults.json"
 DECISIONS_DIR = ROOT / "docs" / "decisions"
 DECISION_NAME = re.compile(r"^D-(\d{3})-[a-z0-9][a-z0-9-]*\.md$")
 #: ``- `key`: `old` -> `new` `` (backticks around key and both values; values may contain spaces)
+#: write `<new>` as the old value in a decision line to document a default that did not exist before
+ADDED = "<new>"
 DECISION_LINE = re.compile(r"^\s*[-*]\s+`([^`]+)`:\s+`([^`]*)`\s+->\s+`([^`]*)`\s*$")
 
 
@@ -120,6 +122,11 @@ def apply_decisions(pinned: dict[str, str], folder: Path = DECISIONS_DIR) -> dic
     effective = dict(pinned)
     for path in decision_files(folder):
         for key, old, new in parse_decision(path):
+            if old == ADDED:  # documents a NEW default; the pin file (python -m tests.defaults_pin --add) must agree
+                if effective.get(key, new) != new:
+                    raise ValueError(f"{path.name}: `{key}` is added as {new!r}, the pin file says {effective[key]!r}")
+                effective[key] = new
+                continue
             if effective.get(key) != old:
                 raise ValueError(f"{path.name}: `{key}` is {effective.get(key)!r} when this decision applies, "
                                  f"but the file says the old value is {old!r}")
