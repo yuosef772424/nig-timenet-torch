@@ -24,7 +24,9 @@ def head_gradient_share(trainer, x, y) -> dict[str, float]:
     model, was_training = trainer.model, trainer.model.training
     model.eval()
     try:
-        with torch.enable_grad():
+        # cuDNN refuses an RNN backward in eval() mode (first GPU run of baseline-001); the native kernels allow it,
+        # so cuDNN is switched off for this one diagnostic pass only (no effect on CPU or on training).
+        with torch.enable_grad(), torch.backends.cudnn.flags(enabled=False):
             _, _, per_target, _, _ = trainer.compute_losses(x, y)
             params = [p for p in model.parameters() if p.requires_grad]
             mult = {t: 1.0 for t in per_target}
