@@ -18,6 +18,6 @@
  "max_minutes": 170,
  "needs_drive": true,
  "note": "T5r baseline-001 seed 0. repo_ref is a placeholder: the planner fills the merge sha at queue time. Rerun with the same run_dir (and rerun true) to resume a cut run.",
- "repo_ref": "f421b48fe4fa129f29a502bcb8f951d052fac642",
- "rerun": false
+ "repo_ref": "0db300c8d1b34cf858b8d640be1fc44ccc4527e0",
+ "rerun": true
 }
