@@ -1,14 +1,14 @@
 {
- "job_id": "baseline-001-s0",
+ "job_id": "trial-002",
  "repo_ref": "7c453af8d8b0c1a84fa999141d9cff46443a100d",
  "entry": "baseline",
  "args": [],
  "config": {
   "device": "cuda",
   "seed": 0,
-  "epochs": 5,
+  "epochs": 2,
   "batch_size": 512,
-  "run_dir": "/content/drive/MyDrive/nig_timenet_runs/baseline-001-s0/train"
+  "run_dir": "/content/drive/MyDrive/nig_timenet_runs/trial-002/train"
  },
  "max_minutes": 170,
  "device": "cuda",
@@ -19,6 +19,6 @@
   "health_report.md",
   "test_report.json"
  ],
- "note": "T5r baseline-001 seed 0. repo_ref is a placeholder: the planner fills the merge sha at queue time. Rerun with the same run_dir (and rerun true) to resume a cut run.",
- "rerun": true
+ "note": "Owner trial: 2 epochs, not a real training run. New run_dir because resume across a code change is refused (code_sha in RunIdentity).",
+ "rerun": false
 }
