@@ -21,6 +21,7 @@ from nig_timenet_torch.trainer.schedules import LrSettings, ParamSchedule, apply
 from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS, compute_selection_metric
 from nig_timenet_torch.trainer.task_weighting import UncertaintyWeightedLoss
 from nig_timenet_torch.trainer.tasks import TASK_REGISTRY
+from nig_timenet_torch.trainer.trace import epoch_trace
 from nig_timenet_torch.trainer.tracker import BestTracker, EarlyStopSettings
 
 __all__ = ["Trainer", "compute_losses", "weight_for_target", "FitSettings", "FitResult"]
@@ -35,6 +36,7 @@ class FitSettings:
     seed: int = 0
     early_stop: EarlyStopSettings = field(default_factory=EarlyStopSettings)
     lr: LrSettings | None = None
+    trace: bool = False            # T4: add the trainer trace (trainer/trace.py) to every history row; log-only
 
     def __post_init__(self):
         if self.epochs < 1 or self.batch_size < 1:
@@ -277,6 +279,9 @@ class Trainer:
             row.update({f"train_{k}": v for k, v in self._train_epoch(x_train, y_train, settings.batch_size).items()})
             val = self.evaluate(x_val, y_val, settings.batch_size)
             row.update({f"val_{k}": v for k, v in val.items()})
+            if settings.trace:
+                row.update(epoch_trace(self, x_train[:settings.batch_size],
+                                       {k: v[:settings.batch_size] for k, v in y_train.items()}))
             history.append(row)
             if tracker.update(epoch + 1, val["selection_metric"]):
                 best_weights = {k: v.detach().clone() for k, v in self.model.state_dict().items()}

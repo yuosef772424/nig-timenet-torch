@@ -107,8 +107,9 @@ def build_run_identity(fit_settings, model_settings, trainer_config, optimizer, 
                        code_sha: str) -> RunIdentity:
     """The one place a RunIdentity is built for a real run (ROADMAP T2).
 
-    ``fit_settings``: a ``FitSettings``; its ``epochs`` is left out of the hash (a resumed run may get more epochs) and
-    its ``seed`` becomes ``identity.seed`` (``Trainer.fit`` raises ``SeedMismatchError`` if they ever differ).
+    ``fit_settings``: a ``FitSettings``; its ``epochs`` and ``trace`` are left out of the hash (a resumed run may get
+    more epochs; the trace is log-only) and its ``seed`` becomes ``identity.seed`` (``Trainer.fit`` raises
+    ``SeedMismatchError`` if they ever differ).
     ``model_settings``: the model's settings (``ModelSettings`` or a plain dict of the model config).
     ``trainer_config``: the WHOLE ``tasks_cfg`` the Trainer is built with (targets with their loss weights and task
     types, loss with its schedules and Kendall switch, constraints); it must be plain JSON data, so a value that would
@@ -119,6 +120,7 @@ def build_run_identity(fit_settings, model_settings, trainer_config, optimizer, 
     """
     fit = _as_dict(fit_settings, "fit_settings")
     fit.pop("epochs", None)
+    fit.pop("trace", None)  # log-only (T4): switching the trace on must not change a run's identity
     model = _as_dict(model_settings, "model_settings")
     trainer = _as_dict(trainer_config, "trainer_config")
     try:

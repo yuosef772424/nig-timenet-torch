@@ -77,7 +77,10 @@ def layer_probe_report(model: torch.nn.Module, x: torch.Tensor, y: np.ndarray, *
     """For each name in ``probe_points`` (module names inside ``model``, e.g. "instance_norm", "patch_embed",
     "block_1", "block_2", "trunk_norm"; plus "raw_input" = the flattened raw input window), fit a ridge probe from
     that activation to ``y`` with ``n_folds``-fold contiguous CV and report mean +/- std of AUC (binary y) or R^2.
-    "raw_input" is always added (first row) when missing."""
+    "raw_input" is always added (first row) when missing. T4: every row also carries the raw-input score on the SAME
+    folds next to it (``raw_mean``, ``raw_std``) and ``delta_vs_raw`` = mean - raw_mean, so "this layer is worse than
+    the raw window" is read off the row itself (0 on the raw row). Raw has T*F features and a layer fewer or more:
+    the delta is not width-matched."""
     y = np.asarray(y, dtype=np.float64).ravel()
     if y.shape[0] != x.shape[0]:
         raise ValueError(f"y has {y.shape[0]} rows, x has {x.shape[0]}")
@@ -97,4 +100,8 @@ def layer_probe_report(model: torch.nn.Module, x: torch.Tensor, y: np.ndarray, *
         rows.append({"probe_point": p, "metric": "auc" if binary else "r2", "mean": float(np.mean(scores)),
                      "std": float(np.std(scores)), "n_features": int(a.shape[1]), "n_folds": n_folds,
                      "n_samples": int(len(y))})
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    raw = df.loc[df["probe_point"] == RAW_INPUT].iloc[0]
+    df["raw_mean"], df["raw_std"] = raw["mean"], raw["std"]
+    df["delta_vs_raw"] = df["mean"] - df["raw_mean"]
+    return df
