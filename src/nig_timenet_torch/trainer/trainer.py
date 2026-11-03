@@ -253,7 +253,7 @@ class Trainer:
 
     def fit(self, x_train, y_train, x_val, y_val, settings: FitSettings, *, run_dir=None,
             identity: RunIdentity | None = None, resume: bool = True,
-            deadline: float | None = None) -> FitResult:
+            deadline: float | None = None, on_epoch=None) -> FitResult:
         """Epoch loop with lambda / LR schedules, early stopping and best weights chosen by ``selection_metric``.
 
         With ``run_dir`` the state is saved after every epoch (checkpoint.py) and a run folder that already holds a
@@ -303,6 +303,8 @@ class Trainer:
             if settings.trace:
                 row["trace_epoch_seconds"] = time.monotonic() - t0
             history.append(row)
+            if on_epoch is not None:  # progress display only (e.g. a print); it cannot change training
+                on_epoch(dict(row))
             if tracker.update(epoch + 1, val["selection_metric"]):
                 best_weights = {k: v.detach().clone() for k, v in self.model.state_dict().items()}
                 if run_dir is not None:
