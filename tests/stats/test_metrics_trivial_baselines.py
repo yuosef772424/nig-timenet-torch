@@ -104,3 +104,47 @@ def test_trivial_baseline_mae(rng):
 def test_trivial_baseline_average_ranks(rng):
     """Not a skill metric (a helper): a constant column has every rank equal to the mean rank (n + 1) / 2."""
     assert (metrics.average_ranks(np.zeros(7)) == 4.0).all()
+
+
+def _coin_errors(rng, n_coins=8, per=400):
+    """Coins with very different error scales; the true error shrinks with a hidden confidence."""
+    groups = np.repeat(np.arange(n_coins), per)
+    scale = np.repeat(10.0 ** np.arange(n_coins), per)
+    conf = rng.random(n_coins * per)
+    return groups, conf, scale * (1.5 - conf)
+
+
+def test_trivial_baseline_confidence_error_spearman(rng):
+    groups, conf, err = _coin_errors(rng)
+    assert metrics.confidence_error_spearman(err, np.zeros(len(err)), groups) == 0.0, "constant confidence: 0"
+    assert metrics.confidence_error_spearman(err, conf, groups) <= -0.8, "a real confidence passes T-conf"
+    assert metrics.confidence_error_spearman(err, -conf, groups) >= 0.8, "an inverted one is caught too"
+    # a shuffled confidence: rho over 10 bin means has sd ~0.33, so <= -0.8 happens by chance in well under 3 % of draws
+    # (hence T-conf also demands the gap CI above 0); a coin with a huge error scale must not move that rate
+    scale = np.where(groups == groups.max(), 1e6, 1.0) * rng.random(len(groups))
+    null = [metrics.confidence_error_spearman(scale, rng.random(len(scale)), groups) for _ in range(100)]
+    assert np.mean(np.asarray(null) <= -0.8) < 0.03 and abs(np.mean(null)) < 0.1
+
+
+def test_trivial_baseline_confidence_error_gap(rng):
+    groups, conf, err = _coin_errors(rng)
+    assert metrics.confidence_error_gap(err, np.zeros(len(err)), groups) == (0.0, 0.0, 0.0)
+    gap, lo, hi = metrics.confidence_error_gap(err, rng.random(len(err)), groups)
+    assert lo <= 0.0 <= hi, "a shuffled confidence has a gap CI that contains 0"
+    gap, lo, hi = metrics.confidence_error_gap(err, conf, groups)
+    assert gap > 0.5 and lo > 0.0, "a real confidence has a positive gap above its CI"
+
+
+def test_trivial_baseline_width_below_share(rng):
+    r = rng.random(N) + 0.1
+    assert metrics.width_below_share(np.zeros(N), r) == 1.0, "zero width scores perfectly: never read alone"
+    assert metrics.width_below_share(r * 2, r) == 0.0
+    assert np.isnan(metrics.width_below_share([], []))
+
+
+def test_trivial_baseline_interval_coverage(rng):
+    y = rng.normal(size=N)
+    assert metrics.interval_coverage(y, np.full(N, 0.0), np.full(N, 0.0)) == 0.0, "a zero-width interval covers ~0"
+    assert metrics.interval_coverage(y, np.full(N, -np.inf), np.full(N, np.inf)) == 1.0, "infinite covers all"
+    z = 1.2815515655446004  # exact 80 % two-sided normal quantile
+    assert metrics.interval_coverage(y, np.full(N, -z), np.full(N, z)) == pytest.approx(0.8, abs=0.02)
