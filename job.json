@@ -1,6 +1,6 @@
 {
  "job_id": "baseline-001-s0",
- "repo_ref": "55e2db4cccec4811edacdb0c510ac9f9243149e0",
+ "repo_ref": "7c453af8d8b0c1a84fa999141d9cff46443a100d",
  "entry": "baseline",
  "args": [],
  "config": {
@@ -16,7 +16,8 @@
  "expected_outputs": [
   "baseline_summary.json",
   "health_report.json",
-  "health_report.md"
+  "health_report.md",
+  "test_report.json"
  ],
  "note": "T5r baseline-001 seed 0. repo_ref is a placeholder: the planner fills the merge sha at queue time. Rerun with the same run_dir (and rerun true) to resume a cut run.",
  "rerun": true
