@@ -79,4 +79,5 @@ def test_split_bounds_without_split_dates_uses_tf_shares():
     tr, va = split_bounds({"split_dates": None, "last_candles": lc}, {})
     assert tr == pd.Timestamp(int(lc[80, TS_COL]), tz="UTC") and va == pd.Timestamp(int(lc[90, TS_COL]), tz="UTC")
     given = {"train_end": "2026-01-05", "val_end": "2026-01-10"}
-    assert split_bounds({"split_dates": None, "last_candles": lc}, {"split_dates": given}) == ("2026-01-05", "2026-01-10")
+    got = split_bounds({"split_dates": None, "last_candles": lc}, {"split_dates": given})
+    assert got == ("2026-01-05", "2026-01-10")
