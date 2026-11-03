@@ -194,8 +194,12 @@ ALLOWED_IMPORTS: dict[str, set[str] | None] = {
     "model": None,
     "trainer": None,
     "workflow": None,
+    "colab": None,
+    "jobs": None,
 }
-FORBIDDEN_IMPORTS = {"model": {"workflow"}, "trainer": {"workflow"}}
+#: T3: the Colab layers sit on top; nothing below them imports them (colab/ and jobs/ may import everything)
+_ON_TOP = {"workflow", "colab", "jobs"}
+FORBIDDEN_IMPORTS = {"model": _ON_TOP, "trainer": _ON_TOP, "data_io": {"colab", "jobs"}, "eval": {"colab", "jobs"}}
 
 
 def layer_import_violations() -> list[str]:

@@ -25,14 +25,14 @@ in that batch starts.
 States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`.
 
 ## Roadmap 2026-11 (`docs/ROADMAP.md`, rules `docs/RULES.md`)
-Model work moved here from TF (owner, 2026-11-02). PRs since last R-REVIEW: 3 (R0, T1, T2).
+Model work moved here from TF (owner, 2026-11-02). PRs since last R-REVIEW: 4 (R0, T1, T2, T3).
 
 | Step | Title | State | PR / job | Note |
 |---|---|---|---|---|
 | R0 | Make the rules checkable | merged | [#14](https://github.com/yuosef772424/nig-timenet-torch/pull/14) | tests for B1, B6, C1, C2, E3, G1-G8 + `tests/ratchets.json`; 8 non-zero ratchets recorded as B-010..B-017 |
 | T1 | Complete the trainer | merged | [#16](https://github.com/yuosef772424/nig-timenet-torch/pull/16) | `Trainer.fit` (schedules, early stop, best weights, checkpoint + resume); 19 new defaults in D-001; ratchets unchanged |
-| T2 | Real data in (TF export + manifest lock fields) | PR open | [#17](https://github.com/yuosef772424/nig-timenet-torch/pull/17) + TF [#65](https://github.com/yuosef772424/crypto-signal-prediction/pull/65) | `data_io/artifact.py` loader (refuses missing D1 fields), `build_run_identity`, `Trainer.fit` raises `SeedMismatchError`; Colab run on Drive data NOT done (B-020), command in `DATA_ARTIFACT_CONTRACT.md` |
-| T3 | Colab runner (device assert, republish) | todo | | |
+| T2 | Real data in (TF export + manifest lock fields) | merged | [#17](https://github.com/yuosef772424/nig-timenet-torch/pull/17) + TF [#65](https://github.com/yuosef772424/crypto-signal-prediction/pull/65) | `data_io/artifact.py` loader, `build_run_identity`, `SeedMismatchError`. Owner Colab run 2026-11-03 (TF `c0634ba`, torch `b34579c`): artifact `preprocessing_output_1` = 2,520,913 of 3,460,789 windows, 535 coins, max_bar_time 2026-09-26T20:00Z, sealed present 183/183 (all excluded), data_sha256 `c572b1b36960`, hash check passed. B-020 partly closed: that `last_candles` column 3 is the bar OPEN time is still unproven. The 183 sealed coins were all inside the TF main data, so TF results (profile-004 incl.) are not a clean holdout (B-022) |
+| T3 | Colab runner (device assert, republish) | PR open | [#18](https://github.com/yuosef772424/nig-timenet-torch/pull/18) + TF [#66](https://github.com/yuosef772424/crypto-signal-prediction/pull/66) | one thin notebook (setup / data / runner) over `src/nig_timenet_torch/colab/` + `jobs/`; device asserted AND validated (E1); bundle on Drive before push, `republish`, nothing in `/tmp` (E2); `identity_for_run` builds RunIdentity in one place; TF #66 = `--dataset *.pkl.gz`. NOT run on Colab yet (B-024); 64 new defaults in D-002 |
 | T4 | Diagnostics on the targets (`health_report`) | todo | | |
 | T5r | Baseline on GPU (`baseline-001`) | todo | | needs T1-T4 |
 | T6 | Switches (direct_wide, selection, confidence, NIG floor, interval scale) | todo | | |
