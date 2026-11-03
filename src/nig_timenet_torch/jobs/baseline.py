@@ -68,8 +68,16 @@ def _code_sha() -> str:
     return subprocess.check_output(["git", "-C", os.environ["NIG_REPO_DIR"], "rev-parse", "HEAD"], text=True).strip()
 
 
+def input_key(dataset: dict) -> str:
+    """``X_<tf>`` of a single-timeframe artifact (the TF main dataset is 4h; the test fixture is 1h)."""
+    tfs = list(dataset["timeframes"])
+    if len(tfs) != 1:
+        raise ValueError(f"baseline handles a single-timeframe artifact, got {tfs}")
+    return f"X_{tfs[0]}"
+
+
 def _tensors(dataset: dict, idx: np.ndarray) -> tuple[torch.Tensor, dict]:
-    x = torch.as_tensor(np.asarray(dataset["X_1h"])[idx], dtype=torch.float32)
+    x = torch.as_tensor(np.asarray(dataset[input_key(dataset)])[idx], dtype=torch.float32)
     keys = [head_spec(kind, t).label_key for t in TARGETS for kind in ("nig_regression", "binary_classification")]
     y = {k: torch.as_tensor(np.asarray(dataset[k])[idx], dtype=torch.float32) for k in keys}
     return x, y
@@ -102,8 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     seed, run_dir = int(config["seed"]), config["run_dir"]
     art = load_artifact(config.get("artifact", DEFAULT_ARTIFACT))
     ds = art.dataset
-    if list(ds["timeframes"]) != ["1h"]:
-        raise ValueError(f"baseline handles the single-timeframe '1h' artifact, got {ds['timeframes']}")
+    input_key(ds)  # refuses a multi-timeframe artifact before any work
 
     fs, fe, le = sample_times(ds)
     sd = ds["split_dates"]

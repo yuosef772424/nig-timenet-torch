@@ -56,3 +56,12 @@ def test_job_files_are_valid(seed):
     job = parse_job((ROOT / "docs" / "jobs" / f"baseline-001-s{seed}.json").read_text())
     assert job["entry"] == "baseline" and job["device"] == "cuda" and job["needs_drive"] and job["max_minutes"] == 170
     assert job["config"]["seed"] == seed and job["config"]["run_dir"].endswith(f"baseline-001-s{seed}/train")
+
+
+def test_input_key_follows_the_artifact_timeframe():
+    """The real TF artifact is 4h (owner's first Colab run failed on a hard-coded '1h')."""
+    from nig_timenet_torch.jobs.baseline import input_key
+    assert input_key({"timeframes": ["4h"]}) == "X_4h"
+    assert input_key({"timeframes": ["1h"]}) == "X_1h"
+    with pytest.raises(ValueError, match="single-timeframe"):
+        input_key({"timeframes": ["1h", "4h"]})
