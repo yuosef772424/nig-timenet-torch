@@ -1,12 +1,12 @@
 {
  "job_id": "baseline-001-s0",
- "repo_ref": "08d186051938edcf67d547d8ef8ed9ede8545076",
+ "repo_ref": "55e2db4cccec4811edacdb0c510ac9f9243149e0",
  "entry": "baseline",
  "args": [],
  "config": {
   "device": "cuda",
   "seed": 0,
-  "epochs": 60,
+  "epochs": 5,
   "batch_size": 512,
   "run_dir": "/content/drive/MyDrive/nig_timenet_runs/baseline-001-s0/train"
  },
