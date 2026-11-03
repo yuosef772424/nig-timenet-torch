@@ -8,6 +8,7 @@ total and raw loss, as the TF trainer adds ``model.losses``.
 """
 
 import json
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
@@ -201,18 +202,26 @@ class Trainer:
         """eval() pass over ALL rows in batches; losses and the selection metric are computed once on the
         concatenated outputs (an AUC must not be averaged over batches)."""
         self.model.eval()
-        parts = [self.model(xb) for xb in x.split(batch_size)]
+        dev = self._device()
+        parts = [self.model(xb.to(dev)) for xb in x.split(batch_size)]
         outputs = {k: torch.cat([p[k] for p in parts]) for k in parts[0]}
+        y = {k: v.to(dev) for k, v in y.items()}
         total, raw, per_target, stats, _ = self.compute_losses(None, y, outputs=outputs)
         logs = self._logs(total, raw, per_target, stats)
         logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, y, logs)
         return logs
 
+    def _device(self) -> torch.device:
+        """The model's device: data may stay on the CPU (a big dataset) and is moved batch by batch (B-019)."""
+        first = next(iter(self.model.parameters()), None)
+        return torch.device("cpu") if first is None else first.device
+
     def _train_epoch(self, x, y, batch_size: int) -> dict[str, float]:
         """One shuffled pass; the mean of every log, weighted by batch size."""
         sums: dict[str, float] = {}
+        dev = self._device()
         for ix in self.batch_indices(len(x), batch_size):
-            logs = self.train_step(x[ix], {k: v[ix] for k, v in y.items()})
+            logs = self.train_step(x[ix].to(dev), {k: v[ix].to(dev) for k, v in y.items()})
             for k, v in logs.items():
                 sums[k] = sums.get(k, 0.0) + v * len(ix)
         return {k: v / len(x) for k, v in sums.items()}
@@ -243,7 +252,8 @@ class Trainer:
         return list(ckpt["history"])
 
     def fit(self, x_train, y_train, x_val, y_val, settings: FitSettings, *, run_dir=None,
-            identity: RunIdentity | None = None, resume: bool = True) -> FitResult:
+            identity: RunIdentity | None = None, resume: bool = True,
+            deadline: float | None = None) -> FitResult:
         """Epoch loop with lambda / LR schedules, early stopping and best weights chosen by ``selection_metric``.
 
         With ``run_dir`` the state is saved after every epoch (checkpoint.py) and a run folder that already holds a
@@ -251,7 +261,10 @@ class Trainer:
         ``identity`` (ResumeMismatchError). An ``identity`` whose seed differs from ``settings.seed`` raises
         SeedMismatchError before anything runs (ROADMAP T2). Calling fit again with more ``epochs`` continues the
         run; the result equals an uninterrupted run (bitwise on CPU). At the end the model holds the best weights if
-        ``early_stop.restore_best_weights``; the checkpoint keeps the LAST epoch's training state."""
+        ``early_stop.restore_best_weights``; the checkpoint keeps the LAST epoch's training state. ``deadline`` (a
+        ``time.monotonic()`` value, default None = none) stops the loop before an epoch that would not finish by then
+        (judged by the longest epoch of this call; at least one epoch always runs): the per-epoch checkpoint is the
+        resume point of the next call."""
         if self.optimizer is None:
             raise RuntimeError("Trainer has no optimizer")
         if run_dir is not None and identity is None:
@@ -271,17 +284,24 @@ class Trainer:
                 raise FileExistsError(f"{run_dir} already holds a checkpoint; resume=False refuses to overwrite it")
             history = self._restore(ckpt, tracker, identity)
             best_weights = None if tracker.best is None else checkpoint.load_best(run_dir)
+        longest = 0.0
         for epoch in range(len(history), settings.epochs):
             if tracker.should_stop():
                 break
+            if deadline is not None and longest and time.monotonic() + longest > deadline:
+                break
+            t0 = time.monotonic()
             lr = self._begin_epoch(epoch, settings, schedules)
             row = {"epoch": epoch + 1, "lr": lr}
             row.update({f"train_{k}": v for k, v in self._train_epoch(x_train, y_train, settings.batch_size).items()})
             val = self.evaluate(x_val, y_val, settings.batch_size)
             row.update({f"val_{k}": v for k, v in val.items()})
             if settings.trace:
-                row.update(epoch_trace(self, x_train[:settings.batch_size],
-                                       {k: v[:settings.batch_size] for k, v in y_train.items()}))
+                row.update(epoch_trace(self, x_train[:settings.batch_size].to(self._device()),
+                                       {k: v[:settings.batch_size].to(self._device()) for k, v in y_train.items()}))
+            longest = max(longest, time.monotonic() - t0)
+            if settings.trace:
+                row["trace_epoch_seconds"] = time.monotonic() - t0
             history.append(row)
             if tracker.update(epoch + 1, val["selection_metric"]):
                 best_weights = {k: v.detach().clone() for k, v in self.model.state_dict().items()}

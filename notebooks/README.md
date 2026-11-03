@@ -39,3 +39,7 @@ Entries are modules of `nig_timenet_torch.jobs`. `device_smoke` proves the whole
 The notebook is committed without outputs. Not verified: the notebook has never run on Colab itself (no Colab or GPU in
 the build session); the first Run all is the real check (`docs/bottlenecks.csv` B-024). The previous demo notebook (parity
 table, all model variants, a small training run on the fixture) is in git history at commit `b34579c`.
+
+`baseline` (T5r) trains one seed of the default model; the job files `docs/jobs/baseline-001-s{0,1}.json` carry the
+placeholder `repo_ref` of 40 zeros: the planner replaces it with the merge commit at queue time. Running the same job
+again with the same `run_dir` and `"rerun": true` resumes from the Drive checkpoint.
