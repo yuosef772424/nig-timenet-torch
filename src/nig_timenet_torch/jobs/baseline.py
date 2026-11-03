@@ -32,6 +32,7 @@ from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.data_io.artifact import load_artifact
 from nig_timenet_torch.data_io.split_plan import purge_embargo_split, sample_times
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS
+from nig_timenet_torch.eval.target_report import target_report
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings, build_model
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
@@ -111,6 +112,45 @@ def _tensors(dataset: dict, idx: np.ndarray) -> tuple[torch.Tensor, dict]:
     return x, y
 
 
+TEST_REPORT = "test_report.json"
+
+
+def _flat(d, prefix=""):
+    for k, v in d.items():
+        key = f"{prefix}{k}"
+        if isinstance(v, dict):
+            yield from _flat(v, key + ".")
+        elif isinstance(v, (int, float)) and not isinstance(v, bool):
+            yield key, v
+
+
+def test_lines(report: dict) -> list[str]:
+    """Short printable summary of a test report: every scalar except the per-coin breakdowns."""
+    return [f"  {k}: {v:.4f}" if isinstance(v, float) else f"  {k}: {v}"
+            for k, v in _flat(report) if "per_coin" not in k and "deciles" not in k]
+
+
+@torch.no_grad()
+def evaluate_test(trainer, dataset, test_idx, ident, dev, train_end, out, chunk: int = 20_000) -> dict:
+    """target_report on ALL test rows (model holds the best weights after fit), in device-sized chunks.
+    Writes ``test_report.json`` to ``out``; the test split is never used for training or selection."""
+    if len(test_idx) == 0:
+        raise ValueError("the split has no test rows")
+    x_te, y_te = _tensors(dataset, test_idx)
+    parts = []
+    for s in range(0, len(test_idx), chunk):
+        idx = test_idx[s:s + chunk]
+        meta = table_meta(dataset, idx, stage="test", fold=0, train_end=train_end)
+        parts.append(predict_table(trainer.model, x_te[s:s + chunk].to(dev), meta, ident))
+    table = pd.concat(parts, ignore_index=True)
+    lc = np.asarray(dataset["last_candles"])
+    rep = target_report(table, {k: v.numpy() for k, v in y_te.items()},
+                        anchors={t: lc[test_idx, i] for i, t in enumerate(TARGETS)},
+                        codec_state=TARGET_CODECS["return"]().fit(dataset))
+    (out / TEST_REPORT).write_text(json.dumps(rep, indent=1, default=float), encoding="utf-8")
+    return rep
+
+
 def _health(trainer, dataset, val_idx, x_val, y_val, ident, run_dir, dev, max_rows, train_end) -> dict:
     """Health report on an evenly strided subsample of the validation rows (they must fit on the device)."""
     pick = np.unique(np.linspace(0, len(val_idx) - 1, min(len(val_idx), max_rows)).astype(np.int64))
@@ -168,6 +208,9 @@ def main(argv: list[str] | None = None) -> int:
                     int(config.get("health_max_rows", DEFAULT_HEALTH_MAX_ROWS)), train_end)
     for name in (REPORT_JSON, REPORT_MD):
         shutil.copyfile(os.path.join(run_dir, name), out / name)
+    test_rep = evaluate_test(trainer, ds, plan.test_idx, ident, dev, train_end, out)
+    print(f"test evaluation ({test_rep['n_rows']} rows, best-epoch weights):", flush=True)
+    print("\n".join(test_lines(test_rep)), flush=True)
 
     secs = [r["trace_epoch_seconds"] for r in res.history if "trace_epoch_seconds" in r]  # epochs of earlier jobs too
     summary = {"seed": seed, "epochs_requested": fit_settings.epochs, "epochs_done": res.epochs_done,
