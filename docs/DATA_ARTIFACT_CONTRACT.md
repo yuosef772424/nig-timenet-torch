@@ -210,7 +210,7 @@ with any of these inconsistent:
 | `max_bar_time` | latest LABEL bar open time (last window bar + `forecast_horizon` x base-tf bar) | `< time_seal`; the loader recomputes it from `last_candles` and refuses data that reaches later than the manifest says |
 | `data_sha256` | sha256 of the JSON of `files` (sorted keys); this is the `data_fingerprint` of `RunIdentity` | 64 lowercase hex |
 | `files` | sha256 of every file in the directory except `manifest.json` | format; re-hashed only by `verify_hashes` / `--verify-hashes` |
-| `sealed_found`, `max_window_time`, `rows`, `rows_source`, `dropped_*`, `source_*` | provenance for the reader | not checked |
+| `sealed_found`, `max_window_time`, `rows`, `rows_source`, `dropped_*`, `source_*` (incl. `source_format`: `"pkl.gz"` or `"npy_dir"`, TF PR 66) | provenance for the reader | not checked |
 
 `build_run_identity(fit_settings, model_settings, trainer.config, trainer.optimizer, artifact.manifest.data_fingerprint,
 code_sha=...)` (`trainer/identity.py`) is the one way a real run gets its `RunIdentity`. Its `settings_hash` covers the
@@ -219,26 +219,39 @@ schedules, constraints) and the optimizer (class, defaults, every param group); 
 changed loss weight or learning rate therefore makes `Trainer.fit` refuse to resume (`ResumeMismatchError`).
 `Trainer.fit` raises `SeedMismatchError` when `identity.seed != settings.seed`.
 
+A real run builds its identity in ONE place, after the `Trainer` exists (`colab/identity.py::identity_for_run`): the
+Trainer adds the Kendall log-variances to the optimizer as an extra param group, so an identity taken before it describes
+another optimizer. `src/` is scanned for any other caller of `build_run_identity`.
+A `torch` upgrade can change `optimizer.defaults` (new keys, new default values), which changes `settings_hash`: a checkpoint
+written under the old torch is then refused with `ResumeMismatchError` naming `settings_hash`. That is intended (the hash
+cannot tell a harmless default from a real change). Colab upgrades its torch from time to time, so a long run that must
+survive a runtime restart should be resumed on the same torch version (`env.json` of the bundle records it).
+
 The two lock pins (`EXPECTED_SEALED_COUNT`, `EXPECTED_LOCK_SHA256`) are values of the TF lock at crypto-signal-prediction
 `cea9cd5` (`holdout.json`: 183 sealed coins, sha256 `70322ba6...`). They bind the manifest to that lock; they do not
 prove the listed names are the lock's names (see `docs/suggestions.csv`, T2 review).
 
-### Run it once on Colab (Drive data)
+### Real data: what the first Colab run showed, and how to repeat it
 
-Run in a Colab cell after mounting Drive (adjust the project folder if `project_name` is not `crypto_model`). Until TF
-PR #65 is merged, check out its branch (`-b claude/t2-export-torch-artifact`); afterwards use `master`.
+Owner's run on Colab, 2026-11-03 (TF `c0634ba`, torch `b34579c`), from `preprocessing_output_latest.pkl.gz` (29 Oct 2026),
+converted by hand with `data.load_data_from_drive(fmt="pkl.gz")` + `data.save_dataset_dir`, then exported and checked with
+`python -m nig_timenet_torch.data_io.artifact <dir> --verify-hashes` (passed):
 
-```bash
-git clone -q -b claude/t2-export-torch-artifact https://github.com/yuosef772424/crypto-signal-prediction /content/tf
-git clone -q https://github.com/yuosef772424/nig-timenet-torch /content/torch
-python /content/tf/tools/export_torch_artifact.py \
-  --dataset /content/drive/MyDrive/crypto_model/preprocessed_data/preprocessing_output_latest.dataset \
-  --out /content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1
-PYTHONPATH=/content/torch/src python -m nig_timenet_torch.data_io.artifact \
-  /content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1 --verify-hashes
-```
+| What | Value |
+|---|---|
+| Artifact | `MyDrive/crypto_model/torch_artifacts/preprocessing_output_1` |
+| Windows kept | 2,520,913 of 3,460,789 |
+| Coins | 535 |
+| `max_bar_time` | 2026-09-26T20:00Z |
+| Sealed coins present in the TF data | 183 of 183 (all removed by the export) |
+| `data_sha256` | `c572b1b36960...` |
 
-Expected last line: `OK <path>: <N> windows, <coins> coins, source <10 hex>, max_bar_time 2026-09-30T..., sealed excluded <n>, ...
-(hashes verified)`. The loader needs only numpy and pandas (no torch install, so Colab's CUDA torch is left alone).
-Not yet run on the real Drive data (no Drive access in the build session): the first Colab run is the real check of
-memory use and of the assumption that `last_candles` column 3 is the bar OPEN time.
+Two consequences. (1) All 183 sealed coins were inside the TF main data, so earlier TF results (profile-004 included) are
+not a clean holdout test (`docs/bottlenecks.csv` B-022). (2) STILL UNVERIFIED: that `last_candles` column 3 is the bar OPEN
+time; `max_bar_time` and the time-seal check rest on that assumption (B-020).
+
+To repeat it, open `notebooks/colab_nig_timenet_torch.ipynb` and run section 2: it exports with
+`tools/export_torch_artifact.py --dataset ...pkl.gz` (TF PR 66; the tool reads the old format the way `data/storage.py`
+does, no manual conversion), verifies with the loader above, and skips the export when `<artifact>.source.json` says the
+artifact is sound and was made from the same source file, export tool and lock (`colab/prepare.py`). The loader needs only
+numpy and pandas (no torch install, so Colab's CUDA torch is left alone).
