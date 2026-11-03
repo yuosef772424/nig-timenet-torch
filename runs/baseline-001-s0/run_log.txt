@@ -1,37 +1,10 @@
-# run log of baseline-001-s0 started 2026-11-03T15:01:59.671933+00:00
-== checkout ok: 08d186051938edcf67d547d8ef8ed9ede8545076
+# run log of baseline-001-s0 started 2026-11-03T15:11:34.637769+00:00
+== checkout ok: 55e2db4cccec4811edacdb0c510ac9f9243149e0
 == run: /usr/bin/python3 -m nig_timenet_torch.jobs.baseline --config /content/nig_runner/tmp/baseline-001-s0.config.json --out /content/nig_runner/out/baseline-001-s0 --max-minutes 170
-Traceback (most recent call last):
-  File "<frozen runpy>", line 203, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "/content/nig_runner/repo/src/nig_timenet_torch/jobs/baseline.py", line 178, in <module>
-    sys.exit(main())
-             ~~~~^^
-  File "/content/nig_runner/repo/src/nig_timenet_torch/jobs/baseline.py", line 150, in main
-    res = trainer.fit(x_tr, y_tr, x_va, y_va, fit_settings, run_dir=run_dir, identity=ident, deadline=deadline)
-  File "/content/nig_runner/repo/src/nig_timenet_torch/trainer/trainer.py", line 300, in fit
-    row.update(epoch_trace(self, x_train[:settings.batch_size].to(self._device()),
-               ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                           {k: v[:settings.batch_size].to(self._device()) for k, v in y_train.items()}))
-                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/content/nig_runner/repo/src/nig_timenet_torch/trainer/trace.py", line 54, in epoch_trace
-    out.update({f"trace_gradshare_{t}": s for t, s in head_gradient_share(trainer, x, y).items()})
-                                                      ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-  File "/content/nig_runner/repo/src/nig_timenet_torch/trainer/trace.py", line 34, in head_gradient_share
-    grads = {t: torch.autograd.grad(loss * mult[t], params, retain_graph=True, allow_unused=True)
-                ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.13/dist-packages/torch/autograd/__init__.py", line 532, in grad
-    result = _engine_run_backward(
-        outputs,
-    ...<5 lines>...
-        accumulate_grad=False,
-    )
-  File "/usr/local/lib/python3.13/dist-packages/torch/autograd/graph.py", line 869, in _engine_run_backward
-    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        t_outputs, *args, **kwargs
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )  # Calls into the C++ engine to run the backward pass
-    ^
-RuntimeError: cudnn RNN backward can only be called in training mode
-== execute FAILED: exit code 1
+data: 2015804 train / 239297 val / 239772 test windows, split train_end 2026-02-24 04:00:00+00:00 val_end 2026-06-15 08:00:00+00:00; 3938 batches per epoch on cuda
+epoch 1/5  train_loss -5.7504  val_loss -6.1488  val_selection -5.0623  lr 1.00e-03  168s
+epoch 2/5  train_loss -5.9944  val_loss -6.1108  val_selection -5.0240  lr 1.00e-03  170s
+epoch 3/5  train_loss -6.0514  val_loss -6.0866  val_selection -4.9994  lr 1.00e-03  172s
+epoch 4/5  train_loss -6.0907  val_loss -6.0715  val_selection -4.9844  lr 1.00e-03  171s
+epoch 5/5  train_loss -6.1154  val_loss -6.0344  val_selection -4.9467  lr 1.00e-03  172s
+baseline OK: seed 0, epochs 5/5
