@@ -81,3 +81,11 @@ def test_split_bounds_without_split_dates_uses_tf_shares():
     given = {"train_end": "2026-01-05", "val_end": "2026-01-10"}
     got = split_bounds({"split_dates": None, "last_candles": lc}, {"split_dates": given})
     assert got == ("2026-01-05", "2026-01-10")
+
+
+def test_epoch_line_shows_progress():
+    from nig_timenet_torch.jobs.baseline import epoch_line
+    line = epoch_line({"epoch": 3, "lr": 1e-3, "train_total_loss": 0.5, "val_total_loss": 0.6,
+                       "val_selection_metric": 0.52, "trace_epoch_seconds": 41.2}, 60)
+    assert line.startswith("epoch 3/60") and "val_loss 0.6000" in line and "41s" in line
+    assert "train_loss -" in epoch_line({"epoch": 1, "lr": 1e-3}, 60)

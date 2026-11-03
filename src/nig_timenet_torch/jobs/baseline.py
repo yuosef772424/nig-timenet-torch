@@ -93,6 +93,17 @@ def split_bounds(dataset: dict, config: dict) -> tuple:
     return tuple(pd.Timestamp(int(v), tz="UTC") for v in q)
 
 
+def epoch_line(row: dict, epochs: int) -> str:
+    """One progress line per finished epoch for the Colab output."""
+    def f(key):
+        v = row.get(key)
+        return "-" if v is None else f"{v:.4f}"
+    secs = row.get("trace_epoch_seconds")
+    return (f"epoch {row['epoch']}/{epochs}  train_loss {f('train_total_loss')}  val_loss {f('val_total_loss')}  "
+            f"val_selection {f('val_selection_metric')}  lr {row.get('lr', 0):.2e}"
+            + ("" if secs is None else f"  {secs:.0f}s"))
+
+
 def _tensors(dataset: dict, idx: np.ndarray) -> tuple[torch.Tensor, dict]:
     x = torch.as_tensor(np.asarray(dataset[input_key(dataset)])[idx], dtype=torch.float32)
     keys = [head_spec(kind, t).label_key for t in TARGETS for kind in ("nig_regression", "binary_classification")]
@@ -147,7 +158,11 @@ def main(argv: list[str] | None = None) -> int:
 
     budget = max_minutes * 60
     deadline = t_mono + budget - min(600.0, 0.2 * budget)  # the rest is for the health report and the outputs
-    res = trainer.fit(x_tr, y_tr, x_va, y_va, fit_settings, run_dir=run_dir, identity=ident, deadline=deadline)
+    n_batches = -(-len(plan.train_idx) // fit_settings.batch_size)
+    print(f"data: {len(plan.train_idx)} train / {len(plan.val_idx)} val / {len(plan.test_idx)} test windows, "
+          f"split train_end {train_end} val_end {val_end}; {n_batches} batches per epoch on {dev}", flush=True)
+    res = trainer.fit(x_tr, y_tr, x_va, y_va, fit_settings, run_dir=run_dir, identity=ident, deadline=deadline,
+                      on_epoch=lambda row: print(epoch_line(row, fit_settings.epochs), flush=True))
 
     extra = _health(trainer, ds, plan.val_idx, x_va, y_va, ident, run_dir, dev,
                     int(config.get("health_max_rows", DEFAULT_HEALTH_MAX_ROWS)), train_end)
@@ -155,7 +170,6 @@ def main(argv: list[str] | None = None) -> int:
         shutil.copyfile(os.path.join(run_dir, name), out / name)
 
     secs = [r["trace_epoch_seconds"] for r in res.history if "trace_epoch_seconds" in r]  # epochs of earlier jobs too
-    n_batches = -(-len(plan.train_idx) // fit_settings.batch_size)
     summary = {"seed": seed, "epochs_requested": fit_settings.epochs, "epochs_done": res.epochs_done,
                "finished": res.epochs_done >= fit_settings.epochs or res.stopped_early,
                "stopped_early": res.stopped_early, "best_epoch": res.best_epoch, "best_value": res.best_value,
