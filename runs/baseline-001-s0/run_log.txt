@@ -1,0 +1,13 @@
+# run log of baseline-001-s0 started 2026-11-03T14:43:33.181614+00:00
+== checkout ok: f421b48fe4fa129f29a502bcb8f951d052fac642
+== run: /usr/bin/python3 -m nig_timenet_torch.jobs.baseline --config /content/nig_runner/tmp/baseline-001-s0.config.json --out /content/nig_runner/out/baseline-001-s0 --max-minutes 170
+Traceback (most recent call last):
+  File "<frozen runpy>", line 203, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/content/nig_runner/repo/src/nig_timenet_torch/jobs/baseline.py", line 153, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/content/nig_runner/repo/src/nig_timenet_torch/jobs/baseline.py", line 106, in main
+    raise ValueError(f"baseline handles the single-timeframe '1h' artifact, got {ds['timeframes']}")
+ValueError: baseline handles the single-timeframe '1h' artifact, got ['4h']
+== execute FAILED: exit code 1

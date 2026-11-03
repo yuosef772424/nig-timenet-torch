@@ -1,0 +1,23 @@
+{
+ "args": [],
+ "config": {
+  "batch_size": 512,
+  "device": "cuda",
+  "epochs": 60,
+  "run_dir": "/content/drive/MyDrive/nig_timenet_runs/baseline-001-s0/train",
+  "seed": 0
+ },
+ "device": "cuda",
+ "entry": "baseline",
+ "expected_outputs": [
+  "baseline_summary.json",
+  "health_report.json",
+  "health_report.md"
+ ],
+ "job_id": "baseline-001-s0",
+ "max_minutes": 170,
+ "needs_drive": true,
+ "note": "T5r baseline-001 seed 0. repo_ref is a placeholder: the planner fills the merge sha at queue time. Rerun with the same run_dir (and rerun true) to resume a cut run.",
+ "repo_ref": "f421b48fe4fa129f29a502bcb8f951d052fac642",
+ "rerun": false
+}
