@@ -65,3 +65,18 @@ def test_input_key_follows_the_artifact_timeframe():
     assert input_key({"timeframes": ["1h"]}) == "X_1h"
     with pytest.raises(ValueError, match="single-timeframe"):
         input_key({"timeframes": ["1h", "4h"]})
+
+
+def test_split_bounds_without_split_dates_uses_tf_shares():
+    """The real TF artifact has split_dates None (the owner's second Colab run failed on it)."""
+    import numpy as np
+    import pandas as pd
+
+    from nig_timenet_torch.core.schema import TS_COL
+    from nig_timenet_torch.jobs.baseline import split_bounds
+    lc = np.zeros((100, 7))
+    lc[:, TS_COL] = pd.date_range("2026-01-01", periods=100, freq="4h", tz="UTC").as_unit("ns").asi8
+    tr, va = split_bounds({"split_dates": None, "last_candles": lc}, {})
+    assert tr == pd.Timestamp(int(lc[80, TS_COL]), tz="UTC") and va == pd.Timestamp(int(lc[90, TS_COL]), tz="UTC")
+    given = {"train_end": "2026-01-05", "val_end": "2026-01-10"}
+    assert split_bounds({"split_dates": None, "last_candles": lc}, {"split_dates": given}) == ("2026-01-05", "2026-01-10")

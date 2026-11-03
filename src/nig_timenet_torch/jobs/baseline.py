@@ -27,6 +27,7 @@ import torch
 
 from nig_timenet_torch.colab import contract
 from nig_timenet_torch.colab.identity import identity_for_run
+from nig_timenet_torch.core.schema import TS_COL
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.data_io.artifact import load_artifact
 from nig_timenet_torch.data_io.split_plan import purge_embargo_split, sample_times
@@ -76,6 +77,22 @@ def input_key(dataset: dict) -> str:
     return f"X_{tfs[0]}"
 
 
+#: TF data/defaults.py train_pct / val_pct: used when neither the job config nor the artifact gives split dates
+TRAIN_SHARE, VAL_SHARE = 0.80, 0.10
+
+
+def split_bounds(dataset: dict, config: dict) -> tuple:
+    """(train_end, val_end): config["split_dates"], else the artifact's ``split_dates``, else the 80 % / 90 % quantiles
+    of the window times (the TF main dataset leaves ``split_dates`` None and splits by sample shares at train time;
+    this is TF's ``raw_quantile`` method, not its default ``kept_share``, so the boundary can differ slightly)."""
+    sd = config.get("split_dates") or dataset.get("split_dates")
+    if sd:
+        return sd["train_end"], sd["val_end"]
+    ts = np.sort(np.asarray(dataset["last_candles"])[:, TS_COL].astype(np.int64))
+    q = [ts[min(len(ts) - 1, int(len(ts) * f))] for f in (TRAIN_SHARE, TRAIN_SHARE + VAL_SHARE)]
+    return tuple(pd.Timestamp(int(v), tz="UTC") for v in q)
+
+
 def _tensors(dataset: dict, idx: np.ndarray) -> tuple[torch.Tensor, dict]:
     x = torch.as_tensor(np.asarray(dataset[input_key(dataset)])[idx], dtype=torch.float32)
     keys = [head_spec(kind, t).label_key for t in TARGETS for kind in ("nig_regression", "binary_classification")]
@@ -83,12 +100,12 @@ def _tensors(dataset: dict, idx: np.ndarray) -> tuple[torch.Tensor, dict]:
     return x, y
 
 
-def _health(trainer, dataset, val_idx, x_val, y_val, ident, run_dir, dev, max_rows) -> dict:
+def _health(trainer, dataset, val_idx, x_val, y_val, ident, run_dir, dev, max_rows, train_end) -> dict:
     """Health report on an evenly strided subsample of the validation rows (they must fit on the device)."""
     pick = np.unique(np.linspace(0, len(val_idx) - 1, min(len(val_idx), max_rows)).astype(np.int64))
     idx = val_idx[pick]
     xs = x_val[torch.as_tensor(pick)].to(dev)
-    meta = table_meta(dataset, idx, stage="val", fold=0, train_end=dataset["split_dates"]["train_end"])
+    meta = table_meta(dataset, idx, stage="val", fold=0, train_end=train_end)
     table = predict_table(trainer.model, xs, meta, ident)
     lc = np.asarray(dataset["last_candles"])
     anchors = {t: lc[idx, i] for i, t in enumerate(TARGETS)}
@@ -113,8 +130,8 @@ def main(argv: list[str] | None = None) -> int:
     input_key(ds)  # refuses a multi-timeframe artifact before any work
 
     fs, fe, le = sample_times(ds)
-    sd = ds["split_dates"]
-    plan = purge_embargo_split(le, fs, sd["train_end"], sd["train_end"], sd["val_end"], sd["val_end"],
+    train_end, val_end = split_bounds(ds, config)
+    plan = purge_embargo_split(le, fs, train_end, train_end, val_end, val_end,
                                pd.Timedelta(hours=float(config.get("embargo_hours", 0))), feature_end=fe)
     x_tr, y_tr = _tensors(ds, plan.train_idx)
     x_va, y_va = _tensors(ds, plan.val_idx)
@@ -133,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     res = trainer.fit(x_tr, y_tr, x_va, y_va, fit_settings, run_dir=run_dir, identity=ident, deadline=deadline)
 
     extra = _health(trainer, ds, plan.val_idx, x_va, y_va, ident, run_dir, dev,
-                    int(config.get("health_max_rows", DEFAULT_HEALTH_MAX_ROWS)))
+                    int(config.get("health_max_rows", DEFAULT_HEALTH_MAX_ROWS)), train_end)
     for name in (REPORT_JSON, REPORT_MD):
         shutil.copyfile(os.path.join(run_dir, name), out / name)
 
@@ -147,6 +164,7 @@ def main(argv: list[str] | None = None) -> int:
                "gpu_name": dev_rep.get("gpu_name"), "device": config["device"],
                "n_windows": {"train": int(len(plan.train_idx)), "val": int(len(plan.val_idx)),
                              "test": int(len(plan.test_idx))},
+               "split": {"train_end": str(train_end), "val_end": str(val_end)},
                "targets": list(TARGETS), "label_smoothing": LABEL_SMOOTHING, "model_overrides": ms.overrides,
                "data_fingerprint": art.manifest.data_fingerprint, "identity_fingerprint": ident.fingerprint(),
                "run_dir": str(run_dir), "history": res.history, **extra}
