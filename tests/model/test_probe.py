@@ -59,3 +59,12 @@ def test_ridge_closed_form_primal_equals_dual_and_recovers_a_linear_target():
     z = (wide - mu) / sd
     primal = z @ solve(z.T @ z + 10.0 * np.eye(50), z.T @ (yw - yw.mean())) + yw.mean()
     np.testing.assert_allclose(ridge_fit_predict(wide, yw, wide, 10.0), primal, rtol=1e-5, atol=1e-6)
+
+
+def test_probe_report_has_raw_next_to_every_layer():
+    model, x, d = fixture_model_and_data()
+    df = layer_probe_report(model, x[:300], d["y_close_reg"][:300], probe_points=["patch_embed", "trunk_norm"])
+    raw = df.loc[df["probe_point"] == "raw_input"].iloc[0]
+    assert (df["raw_mean"] == raw["mean"]).all() and (df["raw_std"] == raw["std"]).all()
+    assert df["delta_vs_raw"].to_numpy() == pytest.approx((df["mean"] - raw["mean"]).to_numpy())
+    assert df.loc[df["probe_point"] == "raw_input", "delta_vs_raw"].iloc[0] == 0.0
