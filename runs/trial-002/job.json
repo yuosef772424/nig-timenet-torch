@@ -1,0 +1,24 @@
+{
+ "args": [],
+ "config": {
+  "batch_size": 512,
+  "device": "cuda",
+  "epochs": 2,
+  "run_dir": "/content/drive/MyDrive/nig_timenet_runs/trial-002/train",
+  "seed": 0
+ },
+ "device": "cuda",
+ "entry": "baseline",
+ "expected_outputs": [
+  "baseline_summary.json",
+  "health_report.json",
+  "health_report.md",
+  "test_report.json"
+ ],
+ "job_id": "trial-002",
+ "max_minutes": 170,
+ "needs_drive": true,
+ "note": "Owner trial: 2 epochs, not a real training run. New run_dir because resume across a code change is refused (code_sha in RunIdentity).",
+ "repo_ref": "7c453af8d8b0c1a84fa999141d9cff46443a100d",
+ "rerun": false
+}
