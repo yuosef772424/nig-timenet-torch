@@ -29,8 +29,10 @@ def test_baseline_runs_and_resumes(tmp_path, art, monkeypatch):  # noqa: F811
     s1 = json.loads((out1 / "baseline_summary.json").read_text())
     assert s1["epochs_done"] == 1 and s1["seed"] == 0 and s1["n_windows"]["train"] > 0
     assert s1["step_seconds_per_batch"] > 0 and len(s1["data_fingerprint"]) > 8 and s1["identity_fingerprint"]
-    for name in ("health_report.json", "health_report.md", "device.json", "manifest.json"):
+    for name in ("health_report.json", "health_report.md", "test_report.json", "device.json", "manifest.json"):
         assert (out1 / name).is_file()
+    test_rep = json.loads((out1 / "test_report.json").read_text())
+    assert test_rep["n_rows"] == s1["n_windows"]["test"] > 0 and test_rep["targets"]
     job = {"device": "cpu", "expected_outputs": ["baseline_summary.json", "health_report.json", "health_report.md"]}
     man = json.loads((out1 / "manifest.json").read_text())
     assert contract.validate_outputs(out1, job, man["git_sha"]) == []

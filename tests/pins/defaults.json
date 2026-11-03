@@ -1,5 +1,5 @@
 {
- "fingerprint": "cbd9f16066f89ff2",
+ "fingerprint": "6f3b497cc55bb96b",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -93,6 +93,7 @@
   "nig_timenet_torch.jobs.baseline.ANTI_MEMORIZATION_CONFIG.stats_mode": "'symlog'",
   "nig_timenet_torch.jobs.baseline.DEFAULT_ARTIFACT": "'/content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1'",
   "nig_timenet_torch.jobs.baseline.DEFAULT_HEALTH_MAX_ROWS": "100000",
+  "nig_timenet_torch.jobs.baseline.evaluate_test(chunk)": "20000",
   "nig_timenet_torch.jobs.baseline.main(argv)": "None",
   "nig_timenet_torch.jobs.baseline.trainer_config(label_smoothing)": "0.1",
   "nig_timenet_torch.jobs.device_smoke.main(argv)": "None",
