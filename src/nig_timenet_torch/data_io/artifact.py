@@ -144,10 +144,11 @@ def _bar_ns(tf: str) -> int:
     return int(d.value)
 
 
-def load_artifact(path: str | Path) -> Artifact:
-    """Read an artifact and refuse it unless every D1 field is present and consistent with the data itself."""
+def load_artifact(path: str | Path, *, mmap: bool = False) -> Artifact:
+    """Read an artifact and refuse it unless every D1 field is present and consistent with the data itself.
+    ``mmap=True`` keeps the big arrays on disk (only the pages that are read enter memory)."""
     manifest = read_manifest(path)
-    dataset = npy_dir.load(path)
+    dataset = npy_dir.load(path, mmap=mmap)
     names = [b["name"] for b in dataset["asset_bounds"]]
     if list(manifest.coins) != names:
         raise ArtifactError(f"{path}: export.coins {list(manifest.coins)[:5]}... differ from the dataset's "

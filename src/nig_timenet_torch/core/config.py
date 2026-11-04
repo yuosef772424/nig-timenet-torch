@@ -97,10 +97,15 @@ def updated(obj: Any, patch: Mapping[str, Any] | None = None, /, **changes: Any)
         else:
             direct[head] = value
     out = {}
+    hints = typing.get_type_hints(type(obj))
     for head in {*direct, *grouped}:
         current = getattr(obj, head)
         value = direct.get(head, current)
-        if head in grouped:
+        sub = _dataclass_type(hints.get(head))
+        if current is None and sub is not None and (head in grouped or isinstance(value, Mapping)):
+            # an optional section that is off (None): a mapping switches it on, built strictly from its defaults
+            value = from_dict(sub, {**(value if isinstance(value, Mapping) else {}), **grouped.get(head, {})})
+        elif head in grouped:
             if not dataclasses.is_dataclass(value):
                 raise ValueError(f"{type(obj).__name__}.{head} is not a settings section; dotted keys need one")
             value = updated(value, grouped[head])
