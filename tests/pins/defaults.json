@@ -1,5 +1,5 @@
 {
- "fingerprint": "c6d516e17540cb9c",
+ "fingerprint": "5057843c3817a6bc",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -138,7 +138,7 @@
   "nig_timenet_torch.data.settings.CustomFeatureSettings(vol_windows)": "()",
   "nig_timenet_torch.data.settings.CustomFeatureSettings(volume_window)": "20",
   "nig_timenet_torch.data.settings.DataSettings(features)": "FeatureSettings(indicator_settings={'adx': [14], 'rsi': [14], 'natr': [14], 'bbands': [20], 'mfi': [14]}, static_indicators=(), static_indicator_params={}, exclude_from_features=('open', 'high', 'low', 'ADX_14', 'BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0', 'BBP_20_2.0', 'SUPERT_DIR_10', 'MKT_ret_1'), custom=CustomFeatureSettings(enabled=True, returns=(), range_windows=(50,), vol_windows=(), volume_window=20, candle_structure=False, time_features=False, fractal_windows=(), rvi_windows=(), fisher_windows=(), vol_estimator_windows=(), mean_reversion_windows=(), jump_windows=(), supertrend_windows=(10,), rsi_divergence_windows=(), psar_enabled=False, trend_age_windows=(), direction_consistency_windows=(), vol_asymmetry_windows=(), crash_rebound_regime=None, risk_adj_momentum_windows=(), ath_distance_enabled=False, vol_term_structure_pairs=((3, 30),)), market=MarketSettings(enabled=True, reference_symbol='BTCUSDT', return_periods=(1,), corr_windows=(20, 60), beta_windows=(20,), lag_windows=(), crash_rebound_regime=None), breadth=BreadthSettings(enabled=True, horizons=(24,)), momentum_rank=RankSettings(enabled=False, horizons=(6, 24)), orth_natr=OrthSettings(enabled=True, horizons=(1, 3, 6, 12, 24), natr_length=14, min_assets=5))",
-  "nig_timenet_torch.data.settings.DataSettings(output)": "OutputSettings(path='', overwrite=False, split_dates=None, holdout_start=None, source_commit='', producer='nig_timenet_torch.data')",
+  "nig_timenet_torch.data.settings.DataSettings(output)": "OutputSettings(path='', overwrite=False, split_dates=None, holdout_start=None, source_commit='', producer='nig_timenet_torch.data', directory='', name='preprocessing_output', stamp='', latest=True)",
   "nig_timenet_torch.data.settings.DataSettings(runtime)": "RuntimeSettings(workers=0, spill_dir='', x_storage_dtype='', verbose=True)",
   "nig_timenet_torch.data.settings.DataSettings(scaling)": "ScalingSettings(scaler_type='robust', clip_abs=5.0, eps=1e-08, price_norm_mode='window_scale', price_pct_clip=100.0)",
   "nig_timenet_torch.data.settings.DataSettings(source)": "SourceSettings(kind='files', root='', raw_dir='history_1h', pattern='{name}.csv', registry_path='crypto_data/asset_registry.csv', coins=(), categories=(), exclude=(), tail=0, start='', end='', interval='1h', fetch='', fetch_workers=4, synthetic_days=70, synthetic_seed=40)",
