@@ -122,3 +122,11 @@ def test_retrain_with_a_new_target_normalization_changes_the_targets(loaded):
     assert again.settings.targets.mode == "scaled" and first.target_report == {}
     assert again.report["n_rows"] == first.report["n_rows"]
     assert not np.allclose(first.table.filter(like="y_close").to_numpy(), again.table.filter(like="y_close").to_numpy())
+
+
+def test_retrain_writes_to_its_own_folder_instead_of_resuming_the_first_run(loaded, tmp_path):
+    first = run(_settings("flat", run_dir=str(tmp_path)), loaded)
+    again = retrain(first, {"train.seed": 3})
+    assert again.settings.run_dir.startswith(str(tmp_path)) and again.settings.run_dir != str(tmp_path)
+    assert (tmp_path / SUMMARY).exists() and (again.settings.run_dir and json.loads(
+        (__import__("pathlib").Path(again.settings.run_dir) / SUMMARY).read_text())["settings"]["train"]["seed"] == 3)

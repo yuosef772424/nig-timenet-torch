@@ -43,3 +43,22 @@ table, all model variants, a small training run on the fixture) is in git histor
 `baseline` (T5r) trains one seed of the default model; the job files `docs/jobs/baseline-001-s{0,1}.json` carry the
 placeholder `repo_ref` of 40 zeros: the planner replaces it with the merge commit at queue time. Running the same job
 again with the same `run_dir` and `"rerun": true` resumes from the Drive checkpoint.
+
+## Data, training and cross-asset notebooks
+
+Three more notebooks, all thin callers of the package with one settings cell each (dotted keys, a misspelt key fails with a
+suggestion). `tests/notebooks/test_pipeline_notebooks.py` checks them statically AND runs their non-Colab cells on a tiny
+synthetic dataset, so a renamed option or function breaks the test, not a Colab run. `TORCH_REF` points at the branch
+`feat/native-data-notebooks-uncertainty`; change it to `main` after the branch is merged.
+
+| Notebook | What it does | Settings cell |
+|---|---|---|
+| [`data_pipeline.ipynb`](data_pipeline.ipynb) | builds the training data from the raw files (the same sources and file names as `crypto-signal-prediction`), optionally downloads the newest candles first, writes `<NAME>_<stamp>.dataset` and `<NAME>_latest.dataset`, reads it back and re-hashes | `PRESETS`, `CHANGES`, `FETCH`, `RAW_ROOT`, `OUT_DIR`, `NAME` |
+| [`main.ipynb`](main.ipynb) | loads the data by name, trains and tests the per-coin model (single split or rolling), shows the results, re-trains with a change (for example `{"targets.mode": "scaled"}`) | `DATA_NAME`, `CHANGES`, `ROLLING`, `RETRAIN` |
+| [`cross_asset_pipeline.ipynb`](cross_asset_pipeline.ipynb) | the cross-asset model: optional data build, the day grids, training and testing on 2-D targets (days x coins x targets), single split or rolling, re-train | `BUILD`, `DATA_CHANGES`, `CHANGES`, `ROLLING`, `RETRAIN` |
+
+File names: `DATA_NAME = "preprocessing_output"` reads `preprocessing_output_latest.dataset` (or `.pkl.gz`, whichever is newer);
+`"preprocessing_output_20261027"` reads `preprocessing_output_20261027_latest.*`; a full name such as
+`"preprocessing_output_20261027_153000.pkl.gz"` is read as written. Rolling: `ROLLING = {"train_span": "365D", "val_span": "30D",
+"test_span": "30D", "step": "30D", "embargo": "4h", "init": "warm"}` trains, selects on the validation tail and scores every fold in
+time order for every model (`kind` flat or panel).

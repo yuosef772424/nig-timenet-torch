@@ -8,6 +8,7 @@ fitted per fold on that fold's train rows only. ``retrain`` is the retarget-and-
 """
 
 import dataclasses
+import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -44,6 +45,11 @@ class RunResult:
     folds: list[dict] = field(default_factory=list)      # rolling: one entry per (fold, seed)
     tables: list[pd.DataFrame] = field(default_factory=list)   # rolling: one table per (fold, seed)
     target_report: dict = field(default_factory=dict)
+
+
+def _json_value(o):
+    """JSON for what json cannot write itself: spans become text (pd.Timedelta reads it back), the rest floats."""
+    return str(o) if isinstance(o, pd.Timedelta) else float(o)
 
 
 def scalars(report: dict, prefix: str = "") -> dict[str, float]:
@@ -142,8 +148,9 @@ def run_single(settings: RunSettings, loaded: LoadedData, on_epoch=None) -> RunR
         summary = {"kind": settings.kind, "epochs_done": res.epochs_done, "best_epoch": res.best_epoch,
                    "best_value": res.best_value, "stopped_early": res.stopped_early,
                    "n_windows": {"train": len(plan.train_idx), "val": len(plan.val_idx), "test": len(plan.test_idx)},
-                   "identity": ident.fingerprint(), "target": target_report, "test": report}
-        (out / SUMMARY).write_text(json.dumps(summary, indent=1, default=float), encoding="utf-8")
+                   "identity": ident.fingerprint(), "target": target_report, "test": report,
+                   "settings": to_dict(settings)}
+        (out / SUMMARY).write_text(json.dumps(summary, indent=1, default=_json_value), encoding="utf-8")
     return result
 
 
@@ -213,7 +220,8 @@ def run_rolling(settings: RunSettings, loaded: LoadedData, on_epoch=None) -> Run
     result = RunResult(settings, loaded, last, None, folds=folds_info, tables=tables)
     if settings.run_dir:
         (Path(settings.run_dir) / SUMMARY).write_text(
-            json.dumps({"kind": settings.kind, "folds": folds_info, "n_folds": len(fold_of)}, indent=1, default=float),
+            json.dumps({"kind": settings.kind, "folds": folds_info, "n_folds": len(fold_of),
+                        "settings": to_dict(settings)}, indent=1, default=_json_value),
             encoding="utf-8")
     return result
 
@@ -235,4 +243,9 @@ def retrain(previous: RunResult, changes: dict | None = None, **overrides) -> Ru
     """Run again on the same loaded data with changed settings, e.g. ``retrain(r, {"targets.mode": "scaled"})``
     (a new target normalization), a different ``train.seed``, or another model section."""
     settings = updated(previous.settings, changes or {}, **overrides)
-    return run(dataclasses.replace(settings), previous.loaded)
+    if settings.run_dir == previous.settings.run_dir and settings.run_dir:
+        # the re-train must not resume from (or overwrite) the run it changes: its own folder, named by the change
+        change = json.dumps([changes or {}, overrides], sort_keys=True, default=str)
+        tag = hashlib.sha256(change.encode()).hexdigest()[:8]
+        settings = dataclasses.replace(settings, run_dir=str(Path(settings.run_dir) / f"retrain_{tag}"))
+    return run(settings, previous.loaded)
