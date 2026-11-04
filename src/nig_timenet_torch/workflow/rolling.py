@@ -1,10 +1,12 @@
-"""P37: rolling-retrain loop — SEAM ONLY (the shape of the loop; no experiment is run through it in this repo).
+"""P37: rolling-retrain loop: the folds and the loop; the models are trained by workflow/flat_run.py and
+workflow/panel_run.py through trainer/rolling_fit.py.
 
 Fold i (origin = earliest feature_start; cut_i = origin + train_span + i * step):
   train = samples with label_end <= cut_i   (expanding: feature_start >= origin; sliding: >= cut_i - train_span)
   test  = samples with feature_start > cut_i + embargo and label_end <= cut_i + embargo + test_span
-Each fold is built through P25's purge_embargo_split (empty val) and re-checked with check_split_purity after the
-window bounds are applied. Folds stop when a test window would pass the last label, or at max_folds.
+Each fold is built through P25's purge_embargo_split (validation: empty, or the purged ``val_span`` before the
+cut) and re-checked with check_split_purity after the window bounds are applied.
+Folds stop when a test window would pass the last label, or at max_folds.
 """
 
 import dataclasses
@@ -33,10 +35,11 @@ class RollingFold:
     test_end: pd.Timestamp
 
 
-def _restrict(plan: SplitPlan, train: np.ndarray, test: np.ndarray) -> SplitPlan:
+def _restrict(plan: SplitPlan, train: np.ndarray, test: np.ndarray, val: np.ndarray | None = None) -> SplitPlan:
     empty = np.array([], dtype=np.int64)
-    out = dataclasses.replace(plan, train_idx=train, val_idx=empty, test_idx=test, calibration_idx=empty,
-                              role_of={Role.FIT: train, Role.CALIBRATION: empty, Role.SELECTION: empty,
+    val = empty if val is None else val
+    out = dataclasses.replace(plan, train_idx=train, val_idx=val, test_idx=test, calibration_idx=val.copy(),
+                              role_of={Role.FIT: train, Role.CALIBRATION: val.copy(), Role.SELECTION: val,
                                        Role.REPORT: test, Role.SEALED: empty})
     check_split_purity(out)
     return out
@@ -53,11 +56,14 @@ def rolling_folds_from_times(feature_start: np.ndarray, feature_end: np.ndarray,
         test_start, test_end = cut + settings.embargo, cut + settings.embargo + settings.test_span
         if test_end > last:
             break
-        base = purge_embargo_split(le, fs, cut, cut, cut, cut, settings.embargo, feature_end=feature_end)
+        # val_span > 0 carves a purged validation tail out of the fold's window (early stopping / best epoch need one)
+        tr_cut = cut - settings.val_span
+        base = purge_embargo_split(le, fs, tr_cut, tr_cut, cut, cut, settings.embargo, feature_end=feature_end)
         train_start = origin if settings.mode == "expanding" else cut - settings.train_span
         train = base.train_idx[fs[base.train_idx] >= train_start.value]
+        val = base.val_idx[fs[base.val_idx] >= train_start.value]
         test = base.test_idx[le[base.test_idx] <= test_end.value]
-        folds.append(RollingFold(i, _restrict(base, train, test), train_start, cut, test_start, test_end))
+        folds.append(RollingFold(i, _restrict(base, train, test, val), train_start, cut, test_start, test_end))
         i += 1
     return folds
 

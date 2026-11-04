@@ -17,7 +17,7 @@ from nig_timenet_torch.core.prediction_schema import SCHEMA_VERSION, validate_ta
 from nig_timenet_torch.data_io.split_plan import sample_times
 from nig_timenet_torch.trainer.identity import RunIdentity
 
-__all__ = ["predict_table", "write_table", "read_table", "table_meta"]
+__all__ = ["predict_table", "build_table", "write_table", "read_table", "table_meta"]
 
 
 def _utc(a) -> pd.DatetimeIndex:
@@ -57,6 +57,13 @@ def predict_table(model: torch.nn.Module, x, meta: dict, identity: RunIdentity,
             out = model({k: v[sl] for k, v in x.items()} if isinstance(x, dict) else x[sl])
             for k, v in out.items():
                 chunks.setdefault(k, []).append(v.detach().cpu().numpy().reshape(v.shape[0], -1))
+    return build_table({k: np.concatenate(v, axis=0).reshape(n, -1) for k, v in chunks.items()}, meta, identity)
+
+
+def build_table(outputs: dict[str, np.ndarray], meta: dict, identity: RunIdentity) -> pd.DataFrame:
+    """The canonical PredictionTable from one array per output (``(n,)`` or ``(n, 1)``) and the per-row ``meta``;
+    ``predict_table`` and the panel path (workflow/panel_run.py) both end here, so the schema has one writer."""
+    n = len(next(iter(outputs.values()))) if outputs else len(meta["timestamp"])
     full = lambda v: np.full(n, v) if np.ndim(v) == 0 else np.asarray(v)  # noqa: E731
     train_end = pd.Timestamp(meta["train_end"])
     train_end = train_end.tz_localize("UTC") if train_end.tzinfo is None else train_end.tz_convert("UTC")
@@ -72,8 +79,8 @@ def predict_table(model: torch.nn.Module, x, meta: dict, identity: RunIdentity,
         "train_end": pd.DatetimeIndex(np.full(n, train_end.value)).tz_localize("UTC").as_unit("ns"),
         "schema_version": np.full(n, SCHEMA_VERSION, dtype=np.int64),
     })
-    for k in sorted(chunks):
-        arr = np.concatenate(chunks[k], axis=0)
+    for k in sorted(outputs):
+        arr = np.asarray(outputs[k]).reshape(n, -1)
         if arr.shape[1] != 1:
             raise ValueError(f"output {k!r} has {arr.shape[1]} columns per row; only scalar outputs are tabulated")
         df[k] = arr[:, 0].astype(np.float64)
