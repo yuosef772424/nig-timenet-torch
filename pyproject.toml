@@ -9,12 +9,20 @@ description = "PyTorch re-implementation of NIG-TimeNet v2 (parity-tested agains
 requires-python = ">=3.11"
 dependencies = ["numpy==2.4.6", "pandas==3.0.6", "pyarrow~=25.0.1", "torch>=2.15,<2.16"]
 
+[project.scripts]
+nig-data = "nig_timenet_torch.data.cli:main"
+
 [project.optional-dependencies]
 # torch: install the CPU wheel first (CI: --index-url https://download.pytorch.org/whl/cpu), then `pip install -e ".[dev]"`.
+# data: the indicator library the native data pipeline (nig_timenet_torch.data) computes features with.
+data = ["pandas-ta-classic==0.8.32", "requests>=2.31"]
 dev = ["pytest~=9.1.1", "ruff==0.17.3", "scikit-learn~=1.9"]
 
 [tool.setuptools.dynamic]
 version = {attr = "nig_timenet_torch.__version__"}
+
+[tool.setuptools.package-data]
+"nig_timenet_torch.data" = ["resources/*.json"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -5,7 +5,7 @@
     "G2_registered_name_comparisons": 11,
     "G3_modules_over_400_lines": 1,
     "G3_functions_over_80_lines": 0,
-    "G4_dead_settings_fields": 1,
+    "G4_dead_settings_fields": 0,
     "G5_optimizer_calls_outside_trainer": 0,
     "G6_notebook_defs": 0,
     "G7_layer_import_violations": 1,
