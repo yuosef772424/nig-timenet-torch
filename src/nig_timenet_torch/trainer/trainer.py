@@ -16,7 +16,8 @@ import torch
 
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.core.seeds import seed_everything
-from nig_timenet_torch.trainer import checkpoint
+from nig_timenet_torch.trainer import checkpoint, panel_tasks  # noqa: F401  (panel_tasks registers its task types)
+from nig_timenet_torch.trainer.batching import n_rows, take, to_device
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
 from nig_timenet_torch.trainer.schedules import LrSettings, ParamSchedule, apply_schedules, lr_at
 from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS, compute_selection_metric
@@ -203,7 +204,7 @@ class Trainer:
         concatenated outputs (an AUC must not be averaged over batches)."""
         self.model.eval()
         dev = self._device()
-        parts = [self.model(xb.to(dev)) for xb in x.split(batch_size)]
+        parts = [self.model(to_device(take(x, slice(s, s + batch_size)), dev)) for s in range(0, n_rows(x), batch_size)]
         outputs = {k: torch.cat([p[k] for p in parts]) for k in parts[0]}
         y = {k: v.to(dev) for k, v in y.items()}
         total, raw, per_target, stats, _ = self.compute_losses(None, y, outputs=outputs)
@@ -220,11 +221,12 @@ class Trainer:
         """One shuffled pass; the mean of every log, weighted by batch size."""
         sums: dict[str, float] = {}
         dev = self._device()
-        for ix in self.batch_indices(len(x), batch_size):
-            logs = self.train_step(x[ix].to(dev), {k: v[ix].to(dev) for k, v in y.items()})
+        n = n_rows(x)
+        for ix in self.batch_indices(n, batch_size):
+            logs = self.train_step(to_device(take(x, ix), dev), {k: v[ix].to(dev) for k, v in y.items()})
             for k, v in logs.items():
                 sums[k] = sums.get(k, 0.0) + v * len(ix)
-        return {k: v / len(x) for k, v in sums.items()}
+        return {k: v / n for k, v in sums.items()}
 
     def _begin_epoch(self, epoch: int, settings: FitSettings, schedules: dict[str, ParamSchedule]) -> float:
         """Everything that must be a pure function of (settings, epoch) so that resume equals an uninterrupted
@@ -297,7 +299,7 @@ class Trainer:
             val = self.evaluate(x_val, y_val, settings.batch_size)
             row.update({f"val_{k}": v for k, v in val.items()})
             if settings.trace:
-                row.update(epoch_trace(self, x_train[:settings.batch_size].to(self._device()),
+                row.update(epoch_trace(self, to_device(take(x_train, slice(0, settings.batch_size)), self._device()),
                                        {k: v[:settings.batch_size].to(self._device()) for k, v in y_train.items()}))
             longest = max(longest, time.monotonic() - t0)
             if settings.trace:

@@ -120,14 +120,22 @@ class PanelModel(nn.Module):
             grid = h.new_zeros((n_days, n_pos, self.d_model)).index_put((day, pos), h, accumulate=True)
             key_mask = h.new_zeros((n_days, n_pos)).index_put((day, pos), torch.ones_like(h[:, 0]),
                                                               accumulate=True) > 0
-            for i in range(self.n_cross_layers):
-                grid = getattr(self, f"cross_block_{i + 1}")(grid, key_mask)
-            h = grid[day, pos]
+            h = self.mix(grid, key_mask)[day, pos]
+        return self.heads(h)
+
+    def mix(self, grid: torch.Tensor, key_mask: torch.Tensor) -> torch.Tensor:
+        """The cross-asset blocks over a (days, coins, d) grid; ``key_mask`` (days, coins) is True for real coins."""
+        for i in range(self.n_cross_layers):
+            grid = getattr(self, f"cross_block_{i + 1}")(grid, key_mask)
+        return grid
+
+    def heads(self, h: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Per-coin heads over ``h`` (..., d): {"logit": (..., K), "mu": (..., K)} in ``targets`` order."""
         h = self.panel_out_norm(h)
         logit = torch.cat([getattr(self, f"cls_logit_{t}")(self.head_drop(F.relu(getattr(self, f"cls_fc_{t}")(h))))
-                           for t in self.targets], dim=1)
+                           for t in self.targets], dim=-1)
         mu = torch.cat([getattr(self, f"reg_mu_{t}")(self.head_drop(F.silu(getattr(self, f"reg_fc_{t}")(h))))
-                        for t in self.targets], dim=1)
+                        for t in self.targets], dim=-1)
         return {"logit": logit, "mu": mu}
 
     @torch.no_grad()

@@ -13,3 +13,8 @@ def tiny_settings(two_tf: bool = False, **extra) -> DataSettings:
              "windows.higher_tf_mode": "closed" if two_tf else "legacy",
              "features.market.reference_symbol": "C0USDT", **extra}
     return DataSettings().updated(patch)
+
+
+def longer_settings(days: int = 100, **extra) -> DataSettings:
+    """Same synthetic coins over more days, for rolling studies (several folds)."""
+    return tiny_settings(**{"source.synthetic_days": days, **extra})
