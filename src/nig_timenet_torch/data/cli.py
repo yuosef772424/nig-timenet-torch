@@ -65,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     _, manifest = build_artifact(s)
     if manifest:
-        print(f"written to {s.output.path} ({manifest['export']['rows']} rows)")
+        print(f"written to {s.output.directory or s.output.path} ({manifest['export']['rows']} rows)")
     return 0
 
 

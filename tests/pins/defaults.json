@@ -1,5 +1,5 @@
 {
- "fingerprint": "c4c492680ee02b96",
+ "fingerprint": "c6d516e17540cb9c",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -164,12 +164,16 @@
   "nig_timenet_torch.data.settings.OrthSettings(horizons)": "(1, 3, 6, 12, 24)",
   "nig_timenet_torch.data.settings.OrthSettings(min_assets)": "5",
   "nig_timenet_torch.data.settings.OrthSettings(natr_length)": "14",
+  "nig_timenet_torch.data.settings.OutputSettings(directory)": "''",
   "nig_timenet_torch.data.settings.OutputSettings(holdout_start)": "None",
+  "nig_timenet_torch.data.settings.OutputSettings(latest)": "True",
+  "nig_timenet_torch.data.settings.OutputSettings(name)": "'preprocessing_output'",
   "nig_timenet_torch.data.settings.OutputSettings(overwrite)": "False",
   "nig_timenet_torch.data.settings.OutputSettings(path)": "''",
   "nig_timenet_torch.data.settings.OutputSettings(producer)": "'nig_timenet_torch.data'",
   "nig_timenet_torch.data.settings.OutputSettings(source_commit)": "''",
   "nig_timenet_torch.data.settings.OutputSettings(split_dates)": "None",
+  "nig_timenet_torch.data.settings.OutputSettings(stamp)": "''",
   "nig_timenet_torch.data.settings.RankSettings(enabled)": "False",
   "nig_timenet_torch.data.settings.RankSettings(horizons)": "(6, 24)",
   "nig_timenet_torch.data.settings.RuntimeSettings(spill_dir)": "''",

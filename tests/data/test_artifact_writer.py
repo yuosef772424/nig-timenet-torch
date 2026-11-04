@@ -80,3 +80,23 @@ def test_build_artifact_writes_when_a_path_is_set(tmp_path):
     assert manifest["export"]["producer"] == "unit-test" and len(ds["last_candles"]) == manifest["export"]["rows"]
     assert json.loads((tmp_path / "out" / "manifest.json").read_text())["export"]["source_commit"] == SHA
     assert build_artifact(tiny_settings())[1] is None
+
+
+def test_named_output_writes_a_dated_folder_and_latest_that_the_loader_finds(dataset, tmp_path):
+    from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
+    out = {"output.directory": str(tmp_path), "output.source_commit": SHA, "output.stamp": "20261027_153000"}
+    _, manifest = build_artifact(tiny_settings(**out))
+    assert (tmp_path / "preprocessing_output_20261027_153000.dataset" / "manifest.json").exists()
+    assert (tmp_path / "preprocessing_output_latest.dataset" / "manifest.json").exists()
+    by_base = load_dataset(LoaderSettings(directory=str(tmp_path), local_dir=""))
+    by_full = load_dataset(LoaderSettings(directory=str(tmp_path), name="preprocessing_output_20261027_153000.dataset",
+                                          local_dir=""))
+    assert by_base.path.name == "preprocessing_output_latest.dataset" and by_full.path.name.endswith("153000.dataset")
+    assert len(by_base.dataset["last_candles"]) == manifest["export"]["rows"]
+    # a second build with another stamp moves _latest, keeps the first dated copy; latest=False leaves _latest alone
+    build_artifact(tiny_settings(**{**out, "output.stamp": "20261028_000000"}))
+    build_artifact(tiny_settings(**{**out, "output.stamp": "20261029_000000", "output.latest": False}))
+    assert len(list(tmp_path.glob("preprocessing_output_2026*.dataset"))) == 3
+    latest = json.loads((tmp_path / "preprocessing_output_latest.dataset" / "manifest.json").read_text())
+    second = json.loads((tmp_path / "preprocessing_output_20261028_000000.dataset" / "manifest.json").read_text())
+    assert latest["id"] == second["id"]
