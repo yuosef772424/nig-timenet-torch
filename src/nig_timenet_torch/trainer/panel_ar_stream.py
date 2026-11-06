@@ -1,11 +1,12 @@
 """Training the PANEL autoregressive candle transformer (``model/panel_ar_candle.py``).
 
 Same recipe as the single-coin ``trainer/ar_stream.py`` - candle-by-candle prediction over the horizon,
-scheduled sampling on DETACHED own predictions, Huber-capped magnitude loss with the adaptive
-outlier weight (a sudden market move is down-weighted, never allowed to explode the gradient) and a
-full-weight direction term - applied to a (windows, coins) grid: every step predicts ALL coins' next
-candle and appends each coin's own prediction as its next input. Selection is the validation direction
-accuracy of the panel-wide rollout.
+scheduled sampling on DETACHED own predictions, and the CZAR magnitude loss on each (window, coin)'s
+LOCAL volatility (a sudden market move is bounded by the Cauchy kernel, a shrunk prediction stays
+expensive, near-zero truths stop teaching noise) with a full-weight, flat-excluded, move-weighted
+direction term - applied to a (windows, coins) grid: every step predicts ALL coins' next candle and
+appends each coin's own prediction as its next input. Selection is the validation direction accuracy
+of the panel-wide rollout.
 """
 
 import math
@@ -75,15 +76,16 @@ def _panel_rollout_step(model, xb, yb, p_own):
     return (torch.stack(mus, dim=2), torch.stack(log_sigmas, dim=2), torch.stack(dir_logits, dim=2))
 
 
-def _flatten(mu, ls, dl, yb, db, wb):
+def _flatten(mu, ls, dl, yb, db, vol, w):
     """(B, N, ...) -> (B*N, ...) so the single-coin loss scores every coin's steps alike; 4-D (B, N, H, F)
-    becomes (B*N, H, F) and 3-D (B, N, H) becomes (B*N, H), over the SAME (window, coin) order."""
+    becomes (B*N, H, F), 3-D (B, N, H) becomes (B*N, H) and 2-D (B, N) becomes (B*N,), over the SAME
+    (window, coin) order."""
     flat = lambda a: (a.reshape(-1, a.shape[-2], a.shape[-1]) if a.ndim == 4  # noqa: E731
-                     else a.reshape(-1, a.shape[-1]))
-    return flat(mu), flat(ls), flat(dl), flat(yb), flat(db), flat(wb)
+                      else a.reshape(-1, a.shape[-1]))
+    return flat(mu), flat(ls), flat(dl), flat(yb), flat(db), flat(vol), flat(w)
 
 
-def _train_epoch(model, opt, X, Y, dirs, w, s, p_own, device, epoch) -> dict:
+def _train_epoch(model, opt, X, Y, dirs, vol, w, s, p_own, device, epoch) -> dict:
     model.train()
     n = len(X)
     sums = {"loss": 0.0, "magnitude": 0.0, "direction": 0.0, "sigma": 0.0}
@@ -91,8 +93,8 @@ def _train_epoch(model, opt, X, Y, dirs, w, s, p_own, device, epoch) -> dict:
     for i in range(0, n, s.batch_size):
         rows = idx[i:i + s.batch_size].to(device)
         mu, ls, dl = _panel_rollout_step(model, X[rows], Y[rows], p_own)
-        fmu, fls, fdl, fy, fd, fw = _flatten(mu, ls, dl, Y[rows], dirs[rows], w[rows])
-        loss, stats = robust_candle_loss(fmu, fls, fy, fdl, fd, fw, s)
+        fmu, fls, fdl, fy, fd, fv, fw = _flatten(mu, ls, dl, Y[rows], dirs[rows], vol[rows], w[rows])
+        loss, stats = robust_candle_loss(fmu, fls, fy, fdl, fd, fv, fw, s)
         opt.zero_grad()
         loss.backward()
         if s.grad_clip:
@@ -119,7 +121,9 @@ def fit_panel_ar_stream(model: PanelArCandleTransformer, X: np.ndarray, Y: np.nd
     t = lambda a: torch.as_tensor(a, dtype=torch.float32, device=device)  # noqa: E731
     X, Y, dirs, vX, vY, vdirs = t(X), t(Y), t(dirs), t(vX), t(vY), t(vdirs)
     ret_scale = float(torch.median(Y[:, :, :, 0].abs()))
-    w = step_weights(Y[:, :, :, 0], ret_scale, settings.outlier_softness)
+    vol = X[:, :, :, 0].std(dim=2).clamp_min(settings.vol_floor * max(ret_scale, 1e-8))  # (B, N)
+    vol = vol[:, :, None].expand(-1, -1, Y.shape[2])  # (B, N, H): a coin's steps share its local vol
+    w = step_weights(Y[:, :, :, 0], ret_scale, settings.outlier_softness)                # (B, N, H)
     opt = torch.optim.AdamW(model.parameters(), lr=settings.lr, weight_decay=settings.weight_decay)
     model.to(device)
     ramp = max(settings.epochs - 1, 1)
@@ -127,7 +131,7 @@ def fit_panel_ar_stream(model: PanelArCandleTransformer, X: np.ndarray, Y: np.nd
     best, best_state, bad = -1.0, None, 0
     for epoch in range(settings.epochs):
         p_own = settings.ss_start + (settings.ss_end - settings.ss_start) * epoch / ramp
-        row = _train_epoch(model, opt, X, Y, dirs, w, settings, p_own, device, epoch)
+        row = _train_epoch(model, opt, X, Y, dirs, vol, w, settings, p_own, device, epoch)
         acc = panel_rollout_direction_accuracy(model, vX, vdirs, device)
         for k, v in (("train_loss", row["loss"]), ("magnitude", row["magnitude"]),
                      ("direction", row["direction"]), ("sigma", row["sigma"]),

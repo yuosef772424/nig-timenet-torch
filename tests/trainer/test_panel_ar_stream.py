@@ -3,6 +3,7 @@ predictable stream across coins, handles a data horizon longer than the training
 even when every appended candle is the model's own prediction."""
 
 import numpy as np
+import torch
 
 from nig_timenet_torch.data.ar_windows import build_windows
 from nig_timenet_torch.eval.ar_stream import panel_rollout_metrics
@@ -47,8 +48,11 @@ def _panel(n: int = 900, seed: int = 0):
 
 def test_panel_learns_direction():
     X, Y, dirs, vX, vY, vdirs = _panel()
+    torch.manual_seed(0)  # fit re-seeds internally, but the model INIT reads the global RNG
     model = build_panel_ar_stream_model(_settings(), n_features=F, n_coins=N)
-    hist = fit_panel_ar_stream(model, X, Y, dirs, vX, vY, vdirs, _settings(ss_start=0.0, ss_end=0.5))
+    # the panel grid learns SLOWER than a single coin (cross-coin attention warms up): 8 epochs, not 4
+    hist = fit_panel_ar_stream(model, X, Y, dirs, vX, vY, vdirs,
+                               _settings(ss_start=0.0, ss_end=0.5, epochs=8, patience=8))
     rep = panel_rollout_metrics(model, vX, vY, vdirs, vX[:, :, -1, 0])
     assert rep["direction_accuracy"] > rep["persistence_accuracy"] + 0.05
     assert hist["best_val_dir_acc"] > 0.55

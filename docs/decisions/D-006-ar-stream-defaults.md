@@ -8,10 +8,18 @@ panel variant in its own notebook; a pluggable trunk (transformer | gru). The T1
 below changes an existing default; every key is NEW (the `<new>` format of docs/decisions/README.md), pinned
 via `python -m tests.defaults_pin --add`.
 
-Design notes: the robust loss keeps the direction term at full weight and shrinks the magnitude term on
-sudden moves (outlier_softness in units of the train-head return scale); scheduled sampling feeds the
-model's own DETACHED predictions so it does not learn from noise; the shuffled-labels control's expected
-value is the honest null (the majority agreement of a biased model, not a flat 50%).
+Design notes: the loss is SELECTABLE (`loss`): the default "czar" scores each return in units of its
+window's LOCAL volatility (vol_floor in fractions of the train-head median |return|) but PAYS in return
+units (the magnitude term is multiplied by that local vol, w_mag=0.15): regime-fair in value while the
+gradient stays ~O(1) — a calm window is never dwarfed by a wild one and the magnitude lesson never drowns
+the direction lesson. CZAR (Pfeffer et al. 2026, arXiv:2609.36061): a zero prediction on a real move stays
+expensive (anti-cowardice), a shock is bounded by the Cauchy kernel, near-zero truths are softened by a
+zero-agnostic floor (czar_epsilon, czar_tau). The direction BCE excludes flat truths and ramps its weight
+with the move in local-vol units (w_move). loss="huber" keeps the v1 robust loss: full-weight direction,
+Huber-capped magnitude with the adaptive outlier weight (outlier_softness in units of the train-head return
+scale). Scheduled sampling feeds the model's own DETACHED predictions so it does not learn from noise; the
+shuffled-labels control's expected value is the honest null (the majority agreement of a biased model,
+not a flat 50%).
 
 New defaults:
 
@@ -68,6 +76,9 @@ New defaults:
 - `nig_timenet_torch.model.panel_ar_candle.rollout(mask)`: `<new>` -> `None`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(batch_size)`: `<new>` -> `256`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(context_len)`: `<new>` -> `32`
+- `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(czar_alpha)`: `<new>` -> `1.0`
+- `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(czar_epsilon)`: `<new>` -> `1.0`
+- `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(czar_tau)`: `<new>` -> `0.05`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(d_model)`: `<new>` -> `64`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(device)`: `<new>` -> `'cpu'`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(dropout)`: `<new>` -> `0.1`
@@ -76,6 +87,7 @@ New defaults:
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(grad_clip)`: `<new>` -> `1.0`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(horizon_len)`: `<new>` -> `16`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(huber_delta)`: `<new>` -> `1.0`
+- `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(loss)`: `<new>` -> `'czar'`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(lr)`: `<new>` -> `0.001`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(num_heads)`: `<new>` -> `4`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(num_kv_heads)`: `<new>` -> `2`
@@ -86,14 +98,23 @@ New defaults:
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(ss_end)`: `<new>` -> `0.5`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(ss_start)`: `<new>` -> `0.0`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(verbose)`: `<new>` -> `True`
+- `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(vol_floor)`: `<new>` -> `0.25`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(w_dir)`: `<new>` -> `1.0`
+- `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(w_mag)`: `<new>` -> `0.15`
+- `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(w_move)`: `<new>` -> `0.5`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(w_sigma)`: `<new>` -> `0.1`
 - `nig_timenet_torch.trainer.ar_stream.ArStreamSettings(weight_decay)`: `<new>` -> `0.0001`
+- `nig_timenet_torch.trainer.ar_stream.czar_loss(alpha)`: `<new>` -> `1.0`
+- `nig_timenet_torch.trainer.ar_stream.czar_loss(epsilon)`: `<new>` -> `1.0`
+- `nig_timenet_torch.trainer.ar_stream.czar_loss(tau)`: `<new>` -> `0.05`
 - `nig_timenet_torch.trainer.ar_stream.rollout_direction_accuracy(batch_size)`: `<new>` -> `1024`
 - `nig_timenet_torch.trainer.ar_stream.rollout_direction_accuracy(device)`: `<new>` -> `'cpu'`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(batch_size)`: `<new>` -> `256`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(context_len)`: `<new>` -> `32`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(cross_layers)`: `<new>` -> `1`
+- `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(czar_alpha)`: `<new>` -> `1.0`
+- `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(czar_epsilon)`: `<new>` -> `1.0`
+- `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(czar_tau)`: `<new>` -> `0.05`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(d_model)`: `<new>` -> `64`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(device)`: `<new>` -> `'cpu'`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(dropout)`: `<new>` -> `0.1`
@@ -102,6 +123,7 @@ New defaults:
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(grad_clip)`: `<new>` -> `1.0`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(horizon_len)`: `<new>` -> `16`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(huber_delta)`: `<new>` -> `1.0`
+- `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(loss)`: `<new>` -> `'czar'`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(lr)`: `<new>` -> `0.001`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(num_heads)`: `<new>` -> `4`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(num_kv_heads)`: `<new>` -> `2`
@@ -112,7 +134,10 @@ New defaults:
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(ss_end)`: `<new>` -> `0.5`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(ss_start)`: `<new>` -> `0.0`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(verbose)`: `<new>` -> `True`
+- `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(vol_floor)`: `<new>` -> `0.25`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(w_dir)`: `<new>` -> `1.0`
+- `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(w_mag)`: `<new>` -> `0.15`
+- `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(w_move)`: `<new>` -> `0.5`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(w_sigma)`: `<new>` -> `0.1`
 - `nig_timenet_torch.trainer.panel_ar_stream.PanelArStreamSettings(weight_decay)`: `<new>` -> `0.0001`
 - `nig_timenet_torch.trainer.panel_ar_stream.panel_rollout_direction_accuracy(batch_size)`: `<new>` -> `256`
