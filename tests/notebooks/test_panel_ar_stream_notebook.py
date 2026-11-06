@@ -15,8 +15,8 @@ def test_every_call_matches_a_real_signature_and_every_name_is_defined_earlier()
     check_static("panel_ar_stream")
 
 
-def test_the_panel_notebook_runs_from_the_first_attempt():
-    ns = run_notebook("panel_ar_stream", {"SOURCE": "synthetic", "DAYS": 30, "EXPECT_DEVICE": "cpu",
+def test_the_panel_notebook_runs_from_the_first_attempt(tmp_path):
+    ns = run_notebook("panel_ar_stream", {"DRIVE_RUNS": str(tmp_path / "runs"), "SOURCE": "synthetic", "DAYS": 30, "EXPECT_DEVICE": "cpu",
                                           "COINS": ("AAA", "BBB"), "HORIZON_LEN": 4, "EVAL_HORIZON": 2,
                                           "CHANGES": TINY})
     assert ns["data"]["train_X"].ndim == 4  # (windows, coins, candles, features)

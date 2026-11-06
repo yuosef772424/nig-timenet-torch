@@ -5,14 +5,20 @@ persistence sign of the last context return, and "always up"), plus a shuffled-l
 must sit at ~50 %: if it does not, the metric is broken, not the model good.
 """
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import torch
+
+if TYPE_CHECKING:  # pandas is a heavy optional: the battery imports it lazily
+    import pandas as pd
 
 from nig_timenet_torch.model.ar_candle_transformer import rollout
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["rollout_metrics", "panel_rollout_metrics", "persistence_accuracy", "always_up_accuracy",
-           "direction_control", "panel_direction_control"]
+           "direction_control", "panel_direction_control", "rollout_predictions",
+           "panel_rollout_predictions", "dump_run"]
 
 
 def _batched(model, X, dirs, device, batch_size, horizon_len=None):
@@ -170,3 +176,102 @@ def panel_direction_control(model, X: np.ndarray, dirs: np.ndarray, device: str 
             "shuffled_scores": [float(s) for s in scores],
             "expected": _null_score(pred_dirs, dirs),
             "always_up_accuracy": always_up_accuracy(dirs)}
+
+
+def rollout_predictions(model, X: np.ndarray, Y: np.ndarray, dirs: np.ndarray, last_ret: np.ndarray,
+                        device: str = "cpu", batch_size: int = 1024, horizon_len: int | None = None,
+                        coins: np.ndarray | None = None, end_times: np.ndarray | None = None) -> "pd.DataFrame":
+    """The tidy per-(window, step) prediction table the evaluation battery eats: one row per horizon step
+    of the honest full rollout (the model eats only its own predictions), carrying the predicted return,
+    sigma and direction probability, the TRUE return and sign, the window's last context return, coin
+    name and end timestamp. ``coins``/``end_times`` are per-window arrays (from ``split_windows``);
+    flat truths are kept but flagged with ``dir_true = 0`` so the battery can exclude them from
+    direction scoring."""
+    import pandas as pd
+    h = dirs.shape[1] if horizon_len is None else int(horizon_len)
+    if h < 1 or h > dirs.shape[1]:
+        raise ValueError(f"horizon_len {h} outside the data's horizon 1..{dirs.shape[1]}")
+    Y, dirs = Y[:, :h], dirs[:, :h]
+    model.eval()
+    mus, sigmas, logits = [], [], []
+    with torch.no_grad():
+        for i in range(0, len(X), batch_size):
+            xb = torch.as_tensor(X[i:i + batch_size], dtype=torch.float32, device=device)
+            out = rollout(model, xb, h)
+            mus.append(out["mu"][:, :, 0].detach().cpu().numpy())
+            sigmas.append(out["log_sigma"][:, :, 0].detach().cpu().numpy())
+            logits.append(out["dir_logit"].detach().cpu().numpy())
+    mu = np.concatenate(mus)
+    frame = pd.DataFrame({
+        "step": np.tile(np.arange(1, h + 1), len(mu)),
+        "mu": mu.reshape(-1), "sigma": np.concatenate(sigmas).reshape(-1),
+        "p_dir": 1.0 / (1.0 + np.exp(-np.concatenate(logits).reshape(-1))),
+        "y_ret": Y[:, :, 0].reshape(-1), "dir_true": dirs.reshape(-1).astype("int8"),
+        "last_ret": np.repeat(last_ret, h) if last_ret is not None else np.nan,
+    })
+    for col, values in (("coin", coins), ("end_time", end_times)):
+        if values is not None:
+            frame[col] = np.repeat(values, h)
+    return frame
+
+
+def panel_rollout_predictions(model, X: np.ndarray, Y: np.ndarray, dirs: np.ndarray, last_ret: np.ndarray,
+                              device: str = "cpu", batch_size: int = 256, horizon_len: int | None = None,
+                              coin_names: np.ndarray | None = None, end_times: np.ndarray | None = None
+                              ) -> "pd.DataFrame":
+    """The panel twin of ``rollout_predictions``: the panel-wide rollout (every coin generating in
+    lockstep) flattened into the same tidy table - one row per (window, coin, step), window-major,
+    coin index cycling inside each window. The panel model keeps its (windows, coins, ...) grid; only
+    the OUTPUTS are flattened here."""
+    import pandas as pd
+
+    from nig_timenet_torch.model.panel_ar_candle import rollout as panel_rollout
+    h = dirs.shape[2] if horizon_len is None else int(horizon_len)
+    if h < 1 or h > dirs.shape[2]:
+        raise ValueError(f"horizon_len {h} outside the data's horizon 1..{dirs.shape[2]}")
+    Y, dirs = Y[:, :, :h], dirs[:, :, :h]
+    model.eval()
+    mus, sigmas, logits = [], [], []
+    with torch.no_grad():
+        for i in range(0, len(X), batch_size):
+            xb = torch.as_tensor(X[i:i + batch_size], dtype=torch.float32, device=device)
+            out = panel_rollout(model, xb, h)
+            mus.append(out["mu"][:, :, :, 0].detach().cpu().numpy())
+            sigmas.append(out["log_sigma"][:, :, :, 0].detach().cpu().numpy())
+            logits.append(out["dir_logit"].detach().cpu().numpy())
+    n_coins = X.shape[1]
+    mu = np.concatenate(mus)          # (B, N, H)
+    frame = pd.DataFrame({
+        "step": np.tile(np.arange(1, h + 1), len(mu) * n_coins),
+        "mu": mu.reshape(-1), "sigma": np.concatenate(sigmas).reshape(-1),
+        "p_dir": 1.0 / (1.0 + np.exp(-np.concatenate(logits).reshape(-1))),
+        "y_ret": Y[:, :, :, 0].reshape(-1), "dir_true": dirs.reshape(-1).astype("int8"),
+        "last_ret": np.repeat(last_ret.reshape(-1), h)})
+    if coin_names is not None:
+        frame["coin"] = np.repeat(np.tile(coin_names, len(X)), h)
+    if end_times is not None:
+        frame["end_time"] = np.repeat(end_times, n_coins * h)
+    return frame
+
+
+def dump_run(root: str, name: str, splits: dict, history: dict, report: dict, settings) -> str:
+    """Write the run folder the battery notebook auto-detects: ``<root>/<name>/predictions/`` with one
+    ``<split>_predictions.parquet`` per split (tidy ``rollout_predictions`` tables), beside ``history.json``,
+    ``report.json`` and ``settings.json`` - everything the battery needs to judge the run offline."""
+    import json
+    from pathlib import Path
+    run = Path(root) / name
+    (run / "predictions").mkdir(parents=True, exist_ok=True)
+    for split, frame in splits.items():
+        frame.to_parquet(run / "predictions" / f"{split}_predictions.parquet")
+    def _plain(obj):
+        if hasattr(obj, "tolist"):
+            return obj.tolist()
+        if isinstance(obj, dict):
+            return {k: _plain(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [_plain(v) for v in obj]
+        return obj
+    for fname, obj in (("history", history), ("report", report), ("settings", settings)):
+        (run / f"{fname}.json").write_text(json.dumps(_plain(obj), default=str, indent=1))
+    return str(run)

@@ -113,9 +113,10 @@ def test_every_call_matches_a_real_signature_and_every_name_is_defined_earlier()
     check_static("ar_stream")
 
 
-def test_the_notebook_runs_from_the_first_attempt():
+def test_the_notebook_runs_from_the_first_attempt(tmp_path):
     ns = run_notebook("ar_stream", {"SOURCE": "synthetic", "DAYS": 40, "EXPECT_DEVICE": "cpu",
-                                    "COINS": ("AAA",), "HORIZON_LEN": 8, "EVAL_HORIZON": 4, "CHANGES": TINY})
+                                    "COINS": ("AAA",), "HORIZON_LEN": 8, "EVAL_HORIZON": 4, "CHANGES": TINY,
+                                    "DRIVE_RUNS": str(tmp_path / "runs")})
     assert ns["data"]["train_X"].shape[1] == ns["CONTEXT_LEN"] == 32
     assert ns["data"]["train_Y"].shape[1] == ns["FUTURE_LEN"] == 8   # data carries the LONGER future
     assert ns["history"]["best_val_dir_acc"] > 0.0 and len(ns["history"]["train_loss"]) == 2

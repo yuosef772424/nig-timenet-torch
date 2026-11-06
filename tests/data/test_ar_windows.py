@@ -83,10 +83,13 @@ def test_split_windows_time_ordered_and_keys():
                                 [slice(0, 120)], 32, 16)}
     d = split_windows(coins, 0.15, 0.15)
     assert set(d) == {f"{s}_{k}" for s in ("train", "val", "test")
-                      for k in ("X", "Y", "dirs", "trend_dir", "last_ret")}
+                      for k in ("X", "Y", "dirs", "trend_dir", "last_ret", "coins")}
     assert d["train_X"].shape[0] + d["val_X"].shape[0] + d["test_X"].shape[0] == coins["A"].n
     # train rows are the coin's first windows in time: their first context row matches
     assert np.allclose(d["train_X"][0], coins["A"].X[0])
+    # the coin labels ride along (one name per window) and end times only when an index was given
+    assert list(d["train_coins"]) == ["A"] * d["train_X"].shape[0]
+    assert "train_end_times" not in d  # built without an index: no timestamps to carry
 
 
 def test_raw_candles_synthetic_and_unknown():

@@ -23,6 +23,31 @@ not a flat 50%).
 
 New defaults:
 
+- `nig_timenet_torch.eval.ar_stream.panel_rollout_predictions(batch_size)`: `<new>` -> `256`
+- `nig_timenet_torch.eval.ar_stream.panel_rollout_predictions(coin_names)`: `<new>` -> `None`
+- `nig_timenet_torch.eval.ar_stream.panel_rollout_predictions(device)`: `<new>` -> `'cpu'`
+- `nig_timenet_torch.eval.ar_stream.panel_rollout_predictions(end_times)`: `<new>` -> `None`
+- `nig_timenet_torch.eval.ar_stream.panel_rollout_predictions(horizon_len)`: `<new>` -> `None`
+- `nig_timenet_torch.eval.ar_stream.rollout_predictions(batch_size)`: `<new>` -> `1024`
+- `nig_timenet_torch.eval.ar_stream.rollout_predictions(coins)`: `<new>` -> `None`
+- `nig_timenet_torch.eval.ar_stream.rollout_predictions(device)`: `<new>` -> `'cpu'`
+- `nig_timenet_torch.eval.ar_stream.rollout_predictions(end_times)`: `<new>` -> `None`
+- `nig_timenet_torch.eval.ar_stream.rollout_predictions(horizon_len)`: `<new>` -> `None`
+- `nig_timenet_torch.eval.battery.battery(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.eval.battery.confidence_buckets(n_buckets)`: `<new>` -> `5`
+- `nig_timenet_torch.eval.battery.flip_test(pct)`: `<new>` -> `0.1`
+- `nig_timenet_torch.eval.battery.full_battery(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.eval.battery.limit_execution(pcts)`: `<new>` -> `(0.05, 0.1, 0.2)`
+- `nig_timenet_torch.eval.battery.per_coin(min_n)`: `<new>` -> `30`
+- `nig_timenet_torch.eval.battery.per_coin(pct)`: `<new>` -> `0.1`
+- `nig_timenet_torch.eval.battery.shock_split(n_groups)`: `<new>` -> `5`
+- `nig_timenet_torch.eval.battery.shock_split(pct)`: `<new>` -> `0.1`
+- `nig_timenet_torch.eval.battery.trade_grid(pcts)`: `<new>` -> `(0.05, 0.1, 0.2)`
+- `nig_timenet_torch.eval.battery.uncertainty_filter(pct)`: `<new>` -> `0.1`
+- `nig_timenet_torch.eval.battery.uncertainty_filter(quantiles)`: `<new>` -> `(0.3, 0.5, 0.7)`
+- `nig_timenet_torch.eval.battery.weekly_stability(min_n)`: `<new>` -> `50`
+- `nig_timenet_torch.eval.battery.weekly_stability(pct)`: `<new>` -> `0.1`
+- `nig_timenet_torch.workflow.ar_stream.run_battery(cost)`: `<new>` -> `0.0008`
 - `nig_timenet_torch.data.ar_windows.CoinWindows(end_times)`: `<new>` -> `None`
 - `nig_timenet_torch.data.ar_windows.build_windows(index)`: `<new>` -> `None`
 - `nig_timenet_torch.data.ar_windows.build_windows(stride)`: `<new>` -> `1`

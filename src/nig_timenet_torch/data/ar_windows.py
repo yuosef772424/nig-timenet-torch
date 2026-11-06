@@ -116,7 +116,8 @@ def build_windows(features: np.ndarray, runs: list[slice], context_len: int, hor
 
 
 def _coin_splits(w: CoinWindows, val_share: float, test_share: float) -> dict:
-    """One coin's windows cut in time order into the three splits (train head, val middle, test tail)."""
+    """One coin's windows cut in time order into the three splits (train head, val middle, test tail);
+    ``end_times`` rides along when the coin was built with an index (else None: the caller drops it)."""
     n = w.n
     cuts = (int(n * (1.0 - val_share - test_share)), int(n * (1.0 - test_share)))
     spans = {"train": slice(0, cuts[0]), "val": slice(cuts[0], cuts[1]), "test": slice(cuts[1], n)}
@@ -124,27 +125,39 @@ def _coin_splits(w: CoinWindows, val_share: float, test_share: float) -> dict:
     for name, sl in spans.items():
         out[name] = {k: arr[sl] for k, arr in (("X", w.X), ("Y", w.Y), ("dirs", w.dirs),
                                                ("trend_dir", w.trend_dir), ("last_ret", w.last_ret))}
+        if w.end_times is not None:
+            out[name]["end_times"] = w.end_times[sl]
     return out
 
 
 def split_windows(coins: dict[str, CoinWindows], val_share: float = 0.15, test_share: float = 0.15) -> dict:
     """Time-ordered train/val/test split of every coin's windows (per coin: the first rows train, the
-    middle val, the tail test), concatenated over coins; returns ``{split}_{X,Y,dirs,trend_dir,last_ret}``."""
+    middle val, the tail test), concatenated over coins; returns ``{split}_{X,Y,dirs,trend_dir,last_ret}``
+    plus ``{split}_coins`` (the coin name of every row) and ``{split}_end_times`` (the window end
+    timestamps, ONLY when every coin was built with an index - else the keys are absent)."""
     if val_share < 0 or test_share < 0 or val_share + test_share >= 1.0:
         raise ValueError(f"val_share + test_share must be in [0, 1), got {val_share}/{test_share}")
-    merged = {name: {k: [] for k in ("X", "Y", "dirs", "trend_dir", "last_ret")}
+    merged = {name: {k: [] for k in ("X", "Y", "dirs", "trend_dir", "last_ret", "coins", "end_times")}
               for name in ("train", "val", "test")}
-    for w in coins.values():
+    for coin, w in coins.items():
         for name, part in _coin_splits(w, val_share, test_share).items():
             for k, arr in part.items():
+                if k == "end_times" and arr is None:
+                    continue
                 if arr.shape[0]:
                     merged[name][k].append(arr)
+            if part["X"].shape[0]:
+                merged[name]["coins"].append(np.full(part["X"].shape[0], coin))
     out = {}
     for name, part in merged.items():
         if not part["X"]:
             raise ValueError(f"split {name!r} is empty: more data or smaller val/test shares needed")
         for k, arrs in part.items():
-            out[f"{name}_{k}"] = np.concatenate(arrs, axis=0).astype("float32")
+            if not arrs:
+                continue
+            out[f"{name}_{k}"] = (np.concatenate(arrs, axis=0).astype("float32")
+                                  if k in ("X", "Y", "dirs", "trend_dir", "last_ret")
+                                  else np.concatenate(arrs, axis=0))
     return out
 
 

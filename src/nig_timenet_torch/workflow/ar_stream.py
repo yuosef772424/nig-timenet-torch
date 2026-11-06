@@ -78,3 +78,11 @@ def run_panel_ar_stream(frames: dict, interval: str, context_len: int, horizon_l
                                        horizon_len=eval_horizon)
     return {"data": data, "settings": settings, "model": model, "history": history,
             "report": report, "control": control}
+
+
+def run_battery(val_predictions, test_predictions, cost: float = 0.0008) -> dict:
+    """The evaluation battery over two already-built prediction tables (VAL + TEST): the ten
+    judgment sections and the verdict, in one call. Also the import seam that keeps
+    ``eval/battery.py`` reachable from the package (rule G8)."""
+    from nig_timenet_torch.eval.battery import full_battery
+    return full_battery(val_predictions, test_predictions, cost)
