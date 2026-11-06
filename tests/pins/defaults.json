@@ -1,5 +1,5 @@
 {
- "fingerprint": "d51f94483f67c14e",
+ "fingerprint": "bfc1d0a69c539163",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -227,6 +227,7 @@
   "nig_timenet_torch.data.settings.WindowSettings(stride)": "8",
   "nig_timenet_torch.data.settings.WindowSettings(tf_order)": "('1h')",
   "nig_timenet_torch.data.settings.WindowSettings(window_sizes)": "{'1h': 32}",
+  "nig_timenet_torch.data.sources.resample_ohlcv(base)": "'1h'",
   "nig_timenet_torch.data.sources.synthetic_market(freq)": "'1h'",
   "nig_timenet_torch.data.targets.TargetInfo(clip)": "1.0",
   "nig_timenet_torch.data.targets.TargetInfo(close_reg)": "'abs_return'",

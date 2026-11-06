@@ -5,6 +5,7 @@ in ``.parquet`` reads the public Speirsy11 dataset files ``ohlc_<SYMBOL>_<interv
 that layout from the same two Binance sources. ``synthetic`` is a seeded market for tests and demos.
 Adding a source is one function and one ``SOURCES`` registration."""
 
+import re
 from pathlib import Path
 from typing import Callable
 
@@ -16,11 +17,45 @@ from nig_timenet_torch.data.coins import coins_of
 from nig_timenet_torch.data.fetch import raw_path, read_registry
 from nig_timenet_torch.data.settings import SourceSettings
 
-__all__ = ["SOURCES", "make_loader", "resolve_coins", "read_candles", "synthetic_market"]
+__all__ = ["SOURCES", "make_loader", "resolve_coins", "read_candles", "synthetic_market",
+           "normalize_tf", "resample_ohlcv"]
 
 SOURCES = Registry("source", Contract("source", required_meta=("needs_path",)))
 _COLUMNS = ["open", "high", "low", "close", "volume"]
 _TIME_COLUMNS = ("datetime_utc", "timestamp", "open_time", "time", "date")
+#: how base bars combine into a higher-timeframe bar (the old project's OHLCV_AGG, verbatim)
+OHLCV_AGG = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+_TF_UNIT_FIX = {"d": "D", "w": "W"}
+
+
+def normalize_tf(tf: str) -> str:
+    """The ONE timeframe-string normaliser (the old project's core/timeframe.py): ``'1d'`` -> ``'1D'``,
+    ``'2w'`` -> ``'2W'`` (pandas 3 deprecates the lowercase day/week spellings); anything else -
+    ``'4h'``, ``'1D'``, ``'15min'`` - is returned unchanged. A non-string raises TypeError."""
+    if not isinstance(tf, str):
+        raise TypeError(f"timeframe must be a string, got {type(tf).__name__}: {tf!r}")
+    m = re.match(r"^(\d+)([A-Za-z]+)$", tf)
+    if m is None:
+        return tf
+    return m.group(1) + _TF_UNIT_FIX.get(m.group(2), m.group(2))
+
+
+def resample_ohlcv(df: pd.DataFrame, tf: str, base: str = "1h") -> pd.DataFrame:
+    """Re-aggregate `base`-timeframe OHLCV bars up to `tf` - what the old project's pipeline did when
+    the owner picked 4h/1d: open first, high max, low min, close last, volume sum, and only bars built
+    from the FULL count of base bars survive (the old project's 'closed' mode), so a partial trailing
+    bar or a gap-filled bar never enters a window. A no-op when `tf` is the base itself; a target
+    finer than the base raises - bars can be combined, never split."""
+    step, base_step = pd.Timedelta(normalize_tf(tf)), pd.Timedelta(normalize_tf(base))
+    if step == base_step:
+        return df
+    if step < base_step:
+        raise ValueError(f"target timeframe {tf!r} is finer than the base {base!r}: bars cannot be split")
+    want = int(step / base_step)
+    grouped = df.resample(normalize_tf(tf))
+    out = grouped.agg(OHLCV_AGG)
+    full = grouped.size() >= want
+    return out[full].dropna(how="all")
 
 
 def resolve_coins(s: SourceSettings) -> list[str]:

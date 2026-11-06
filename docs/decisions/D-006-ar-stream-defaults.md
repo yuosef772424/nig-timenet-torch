@@ -183,3 +183,4 @@ New defaults:
 - `nig_timenet_torch.eval.battery.market_neutral(quantiles)`: `(0.2, 0.3, 0.4)` -> `<removed>`
 - `nig_timenet_torch.eval.battery.persistence_baseline(pct)`: `0.1` -> `<removed>`
 - `nig_timenet_torch.eval.battery.selective_evaluation(quantiles)`: `(0.25, 0.5, 0.75)` -> `<removed>`
+- `nig_timenet_torch.data.sources.resample_ohlcv(base)`: `<new>` -> `'1h'`

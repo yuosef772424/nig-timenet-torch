@@ -181,3 +181,24 @@ def test_resolve_coin_list_all_explicit_and_refused():
         resolve_coin_list("everything")
     with pytest.raises(ValueError, match="empty"):
         resolve_coin_list([])
+
+
+def test_raw_candles_drive_reaggregates_the_1h_files_up_to_interval(tmp_path):
+    """INTERVAL='4h' must combine the Drive 1h bars into 4h bars (the old project's behaviour the
+    owner asked for): only full 4h groups survive, so the partial trailing group never enters a window."""
+    root = tmp_path / "drive"
+    (root / "history_1h").mkdir(parents=True)
+    n = 24 * 8 + 3  # 8 full days + a 3-bar partial group
+    idx = pd.date_range("2026-01-01", periods=n, freq="1h", tz="UTC")
+    rng = np.random.default_rng(0)
+    close = 100.0 * np.exp(np.cumsum(rng.normal(0, 0.01, n)))
+    pd.DataFrame({"datetime_utc": idx.strftime("%Y-%m-%d %H:%M:%S"), "open": close, "high": close * 1.01,
+                  "low": close * 0.99, "close": close, "volume": 50.0}).to_csv(
+        root / "history_1h" / "BTCUSDT.csv", index=False)
+    frames = raw_candles("drive", ["BTCUSDT"], 0, "4h", root=str(root))
+    out = frames["BTCUSDT"]
+    assert len(out) == 24 * 8 // 4  # 48 full 4h bars; the 3-bar partial group is dropped
+    assert (out.index.to_series().diff().dropna() == pd.Timedelta("4h")).all()
+    first = out.iloc[0]
+    assert first["open"] == close[0] and first["close"] == close[3]
+    assert first["high"] == (close[:4] * 1.01).max() and first["volume"] == 200.0

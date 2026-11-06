@@ -274,7 +274,7 @@ def _drive_frames(names, days, seed, interval, root="."):
     because the owner asked for THAT data. The newest ``days`` days of every coin are kept (``days``
     <= 0 keeps everything)."""
     from nig_timenet_torch.data.settings import SourceSettings
-    from nig_timenet_torch.data.sources import make_loader
+    from nig_timenet_torch.data.sources import make_loader, resample_ohlcv
     s = SourceSettings(kind="files", root=root, coins=tuple(names), interval=interval)
     loader = make_loader(s)
     frames = {}
@@ -282,6 +282,9 @@ def _drive_frames(names, days, seed, interval, root="."):
         frame = loader(name)
         if not len(frame):
             raise RuntimeError(f"[{name}] the candle file on Drive is empty: {root}")
+        frame = resample_ohlcv(frame, interval)  # the Drive files are 1h bars: combine them up to INTERVAL
+        if not len(frame):
+            raise RuntimeError(f"[{name}] no full {interval} bars after re-aggregating the 1h file: {root}")
         if days > 0:
             frame = frame[frame.index >= frame.index.max() - pd.Timedelta(days=days)]
         frames[name] = frame
