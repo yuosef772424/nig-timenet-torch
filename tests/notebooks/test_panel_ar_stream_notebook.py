@@ -27,3 +27,4 @@ def test_the_panel_notebook_runs_from_the_first_attempt(tmp_path):
         assert key in ns["report"]
     assert len(ns["report"]["direction_accuracy_per_step"]) == ns["EVAL_HORIZON"] == 2
     assert ns["control"]["shuffled_direction_accuracy"] == pytest.approx(ns["control"]["expected"], abs=0.1)
+    assert "integrity" in ns["out"] and ns["out"]["verdict"]["rows"]  # the in-place battery ran
