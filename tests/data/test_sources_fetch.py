@@ -164,3 +164,31 @@ def test_kline_row_and_synthetic_source_are_deterministic():
     pd.testing.assert_frame_equal(a["Y"], b["Y"])
     assert not np.allclose(a["X"]["close"].to_numpy(), a["Y"]["close"].to_numpy())
     assert len(a["X"]) == 72
+
+
+def test_normalize_tf_is_the_one_timeframe_normaliser():
+    """'1d' -> '1D' (pandas 3 deprecates the lowercase day/week spellings); anything else unchanged."""
+    from nig_timenet_torch.data.sources import normalize_tf
+    assert normalize_tf("1d") == "1D" and normalize_tf("2w") == "2W"
+    assert normalize_tf("4h") == "4h" and normalize_tf("1D") == "1D" and normalize_tf("15min") == "15min"
+    with pytest.raises(TypeError, match="timeframe must be a string"):
+        normalize_tf(4)
+
+
+def test_resample_ohlcv_combines_bars_and_keeps_only_full_ones():
+    """1h -> 4h the old project's way: open first / high max / low min / close last / volume sum, and
+    only groups with the FULL count of base bars survive (a partial trailing group or a gap is dropped)."""
+    from nig_timenet_torch.data.sources import resample_ohlcv
+    hours = pd.date_range("2026-01-01", periods=10, freq="1h", tz="UTC")  # two full groups + a 2-bar partial
+    df = pd.DataFrame(
+        {"open": [1, 2, 2, 2, 4, 5, 5, 5, 7, 8], "high": [3, 5, 4, 4, 6, 8, 7, 7, 9, 9],
+         "low": [0.5, 1, 1, 1, 3, 4, 4, 4, 6, 6], "close": [2, 2, 2, 4, 5, 5, 5, 7, 8, 8],
+         "volume": [2, 3, 2, 3, 4, 5, 4, 5, 6, 6]}, index=hours)
+    out = resample_ohlcv(df, "4h")
+    assert len(out) == 2 and list(out.index) == [hours[0], hours[4]]  # the 2-bar partial group is gone
+    first = out.iloc[0]
+    assert first["open"] == 1 and first["high"] == 5 and first["low"] == 0.5
+    assert first["close"] == 4 and first["volume"] == 10
+    assert resample_ohlcv(df, "1h") is df  # the base timeframe is a no-op, same object
+    with pytest.raises(ValueError, match="cannot be split"):
+        resample_ohlcv(df, "30min")  # a target finer than the base can never be built
