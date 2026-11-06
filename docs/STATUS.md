@@ -25,7 +25,7 @@ in that batch starts.
 States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`.
 
 ## Roadmap 2026-11 (`docs/ROADMAP.md`, rules `docs/RULES.md`)
-Model work moved here from TF (owner, 2026-11-02). PRs since last R-REVIEW: 10 (R0, T1, T2, T3, T4, T5r job #20, fixes #21-#23, this one): R-REVIEW is due.
+Model work moved here from TF (owner, 2026-11-02). PRs since last R-REVIEW: 11 (R0, T1, T2, T3, T4, T5r job #20, fixes #21-#23, the ar-stream branch, this one): R-REVIEW is due.
 
 | Step | Title | State | PR / job | Note |
 |---|---|---|---|---|
@@ -38,3 +38,4 @@ Model work moved here from TF (owner, 2026-11-02). PRs since last R-REVIEW: 10 (
 | T6 | Switches (direct_wide, selection, confidence, NIG floor, interval scale) | todo | | |
 | T7r | Baseline vs all switches (`all-001`) | todo | | needs T5r, T6 |
 | T8 | Ablate or diagnose, fix, propose default | todo | | needs T7r |
+| AR1 | Autoregressive candle stream: free window/horizon/coins, own-prediction feedback training, robust trainer, single-coin + panel Colab notebooks, pluggable transformer|gru trunk | PR open | this PR | owner session 2026-11-05/06; 110 new defaults in D-006; headless first-run tests green (both notebooks run on the synthetic market); real-data run still open (B-028) |
