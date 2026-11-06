@@ -195,16 +195,17 @@ def split_panel(panel: dict, val_share: float = 0.15, test_share: float = 0.15) 
     return out
 
 
-def resolve_coin_list(coins) -> list[str]:
+def resolve_coin_list(coins, root: str = ".") -> list[str]:
     """The coins to prepare data with: ``"all"`` (the registry's default category), ``"all_global"``
     (every coin in the registry) or an explicit list/tuple of names — minus duplicates; the same
-    resolution the main pipeline's ``SourceSettings`` applies."""
+    resolution the main pipeline's ``SourceSettings`` applies. ``root`` is where the registry
+    (``<root>/crypto_data/asset_registry.csv``) is read from - the Drive root for the ``drive`` source."""
     from nig_timenet_torch.data.settings import SourceSettings
     from nig_timenet_torch.data.sources import resolve_coins
     if isinstance(coins, str):
         if coins not in ("all", "all_global"):
             raise ValueError(f"unknown coin selection {coins!r}; use 'all', 'all_global' or a list of names")
-        return resolve_coins(SourceSettings(categories=(coins,)))
+        return resolve_coins(SourceSettings(categories=(coins,), root=root))
     names = [str(c) for c in coins]
     if not names:
         raise ValueError("the coin list is empty; pass 'all', 'all_global' or at least one name")
@@ -213,11 +214,13 @@ def resolve_coin_list(coins) -> list[str]:
 
 def raw_candles(source: str, coins, days: int, interval: str = "1h",
                 root: str = ".", seed: int = 0) -> dict[str, pd.DataFrame]:
-    """Raw OHLCV frames for the notebook: ``synthetic`` (seeded, offline) or ``binance`` (download the
-    newest candles via ``data.fetch`` then read them back; synthetic fallback when the network refuses),
-    so the notebook runs from the first attempt either way. ``coins`` is free: 'all', 'all_global' or an
-    explicit list — see ``resolve_coin_list``."""
-    names = resolve_coin_list(coins)
+    """Raw OHLCV frames for the notebook: ``synthetic`` (seeded, offline), ``binance`` (download the
+    newest candles via ``data.fetch`` then read them back; synthetic fallback when the network refuses)
+    or ``drive`` (read the candle files the Drive root already holds - the crypto-signal-prediction
+    layout - with NO fallback: a missing file is a clear error), so the notebook runs from the first
+    attempt either way. ``coins`` is free: 'all', 'all_global' or an explicit list — see
+    ``resolve_coin_list``; the newest ``days`` days are kept (``days`` <= 0 keeps everything)."""
+    names = resolve_coin_list(coins, root=root)
     try:
         make = _RAW_SOURCES[source]
     except KeyError:
@@ -250,4 +253,26 @@ def _binance_frames(names, days, seed, interval, root="."):
         return synthetic_market(names, days, seed, interval)
 
 
-_RAW_SOURCES = {"synthetic": _synthetic_frames, "binance": _binance_frames}
+def _drive_frames(names, days, seed, interval, root="."):
+    """Read the candle files the owner's Drive already holds - the SAME layout crypto-signal-prediction
+    and the data-pipeline notebook use (``<root>/history_1h/<SYMBOL>.csv`` or ``.csv.gz``; a parquet
+    pattern reads the public Speirsy11 files) via the SAME files loader the data pipeline uses. No
+    download and NO synthetic fallback: a missing file is a clear error naming the searched path,
+    because the owner asked for THAT data. The newest ``days`` days of every coin are kept (``days``
+    <= 0 keeps everything)."""
+    from nig_timenet_torch.data.settings import SourceSettings
+    from nig_timenet_torch.data.sources import make_loader
+    s = SourceSettings(kind="files", root=root, coins=tuple(names), interval=interval)
+    loader = make_loader(s)
+    frames = {}
+    for name in names:
+        frame = loader(name)
+        if not len(frame):
+            raise RuntimeError(f"[{name}] the candle file on Drive is empty: {root}")
+        if days > 0:
+            frame = frame[frame.index >= frame.index.max() - pd.Timedelta(days=days)]
+        frames[name] = frame
+    return frames
+
+
+_RAW_SOURCES = {"synthetic": _synthetic_frames, "binance": _binance_frames, "drive": _drive_frames}

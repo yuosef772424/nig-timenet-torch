@@ -30,6 +30,7 @@ New defaults:
 - `nig_timenet_torch.data.ar_windows.raw_candles(interval)`: `<new>` -> `'1h'`
 - `nig_timenet_torch.data.ar_windows.raw_candles(root)`: `<new>` -> `'.'`
 - `nig_timenet_torch.data.ar_windows.raw_candles(seed)`: `<new>` -> `0`
+- `nig_timenet_torch.data.ar_windows.resolve_coin_list(root)`: `<new>` -> `'.'`
 - `nig_timenet_torch.data.ar_windows.split_panel(test_share)`: `<new>` -> `0.15`
 - `nig_timenet_torch.data.ar_windows.split_panel(val_share)`: `<new>` -> `0.15`
 - `nig_timenet_torch.data.ar_windows.split_windows(test_share)`: `<new>` -> `0.15`

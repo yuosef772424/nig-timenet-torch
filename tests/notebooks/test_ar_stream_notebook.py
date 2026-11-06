@@ -15,7 +15,7 @@ from tests.scan import ROOT
 
 MAX_CELL_LINES = 22
 SETTINGS_VARS = {"TORCH_REPO", "TORCH_REF", "EXPECT_DEVICE", "TOKEN_PATH", "WORKDIR", "TORCH_DIR", "DRIVE_RUNS",
-                 "EXTRA_MODULES", "SOURCE", "COINS", "DAYS", "INTERVAL", "CONTEXT_LEN", "HORIZON_LEN",
+                 "EXTRA_MODULES", "SOURCE", "COINS", "DAYS", "INTERVAL", "RAW_ROOT", "CONTEXT_LEN", "HORIZON_LEN",
                  "EVAL_HORIZON", "LOSS", "CHANGES", "VAL_SHARE", "TEST_SHARE"}
 TINY = {"epochs": 2, "d_model": 32, "num_layers": 1, "batch_size": 128, "patience": 2, "verbose": False}
 

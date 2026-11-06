@@ -96,6 +96,28 @@ def test_raw_candles_synthetic_and_unknown():
         raw_candles("nope", ["AAA"], 10)
 
 
+def test_raw_candles_drive_reads_the_crypto_signal_layout(tmp_path):
+    """SOURCE="drive" reads `<root>/history_1h/<SYMBOL>.csv` (the crypto-signal-prediction Drive layout)
+    via the SAME files loader the data pipeline uses, keeps the newest `days` days, and refuses with a
+    clear error when a file is missing (no silent synthetic fallback: the owner asked for THAT data)."""
+    root = tmp_path / "drive"
+    (root / "history_1h").mkdir(parents=True)
+    idx = pd.date_range("2026-01-01", periods=24 * 30, freq="1h", tz="UTC")  # 30 days of hourly bars
+    close = 100.0 * np.exp(np.cumsum(np.random.default_rng(0).normal(0, 0.01, len(idx))))
+    pd.DataFrame({"datetime_utc": idx.strftime("%Y-%m-%d %H:%M:%S"), "open": close, "high": close * 1.01,
+                  "low": close * 0.99, "close": close, "volume": 50.0}).to_csv(
+        root / "history_1h" / "BTCUSDT.csv", index=False)
+    frames = raw_candles("drive", ["BTCUSDT"], 10, root=str(root))  # the newest 10 days
+    assert list(frames) == ["BTCUSDT"]
+    assert len(frames["BTCUSDT"]) == 241  # 10 days x 24 bars + the boundary bar (trim is inclusive)
+    assert list(frames["BTCUSDT"].columns) == ["open", "high", "low", "close", "volume"]
+    # everything is kept when days <= 0
+    assert len(raw_candles("drive", ["BTCUSDT"], 0, root=str(root))["BTCUSDT"]) == 24 * 30
+    # a missing coin is a CLEAR error naming the searched path, never a silent fallback
+    with pytest.raises(FileNotFoundError, match="ETHUSDT"):
+        raw_candles("drive", ["ETHUSDT"], 10, root=str(root))
+
+
 def test_end_times_are_recorded_only_with_an_index():
     feats = np.random.default_rng(4).normal(size=(60, 5)).astype("float32")
     idx = pd.date_range("2026-01-01", periods=60, freq="1h", tz="UTC")
