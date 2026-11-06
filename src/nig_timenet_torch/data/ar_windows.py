@@ -115,32 +115,80 @@ def build_windows(features: np.ndarray, runs: list[slice], context_len: int, hor
     return CoinWindows(X.astype("float32"), Y.astype("float32"), dirs, trend, last, times)
 
 
-def _coin_splits(w: CoinWindows, val_share: float, test_share: float) -> dict:
+def _utc(ts) -> np.datetime64:
+    """A calendar boundary as a naive-UTC datetime64 - the end_times are stored that way."""
+    t = pd.Timestamp(ts)
+    if t.tz is None:
+        t = t.tz_localize("UTC")
+    return t.tz_convert("UTC").tz_localize(None).to_datetime64()
+
+
+def _date_idx(end_times, split_at, test_at, test_share: float) -> dict:
+    """Row indices of the three splits at CALENDAR boundaries shared by every coin: a window trains
+    when it ends before ``split_at``; with ``test_at`` too, the windows between the two dates validate
+    and the ones at/after ``test_at`` test; with ``split_at`` alone the tail is cut into val/test by
+    ``test_share``. Raises before any slicing when a period would be empty (clear, early)."""
+    end = np.asarray(end_times)
+    if end.dtype.kind == "i":  # the end_times are stored as ns epochs (int64): see them as datetimes
+        end = end.astype("datetime64[ns]")
+    train = np.where(end < _utc(split_at))[0]
+    if test_at is not None:
+        mid = (end >= _utc(split_at)) & (end < _utc(test_at))
+        val, test = np.where(mid)[0], np.where(end >= _utc(test_at))[0]
+    else:
+        tail = np.where(end >= _utc(split_at))[0]
+        cut = int(len(tail) * (1.0 - test_share))
+        val, test = tail[:cut], tail[cut:]
+    for name, idx in (("train", train), ("val", val), ("test", test)):
+        if not len(idx):
+            raise ValueError(f"split {name!r} is empty at these dates: more data or other boundaries needed")
+    return {"train": train, "val": val, "test": test}
+
+
+def _coin_splits(w: CoinWindows, val_share: float, test_share: float,
+                 split_at=None, test_at=None, who: str = "") -> dict:
     """One coin's windows cut in time order into the three splits (train head, val middle, test tail);
-    ``end_times`` rides along when the coin was built with an index (else None: the caller drops it)."""
-    n = w.n
-    cuts = (int(n * (1.0 - val_share - test_share)), int(n * (1.0 - test_share)))
-    spans = {"train": slice(0, cuts[0]), "val": slice(cuts[0], cuts[1]), "test": slice(cuts[1], n)}
+    ``end_times`` rides along when the coin was built with an index (else None: the caller drops it).
+    With ``split_at`` the cut is at CALENDAR boundaries shared by every coin instead of shares - and a
+    coin whose history does not reach a boundary is a CLEAR error naming it: it would be validated or
+    tested without ever being trained (exclude it or move the date)."""
+    if split_at is not None:
+        if w.end_times is None:
+            raise ValueError("date-driven splits need windows built with an index (end_times)")
+        try:
+            idx = _date_idx(w.end_times, split_at, test_at, test_share)
+        except ValueError as exc:
+            raise ValueError(f"[{who or 'coin'}] {exc}") from None
+    else:
+        n = w.n
+        cuts = (int(n * (1.0 - val_share - test_share)), int(n * (1.0 - test_share)))
+        idx = {"train": np.arange(cuts[0]), "val": np.arange(cuts[0], cuts[1]),
+               "test": np.arange(cuts[1], n)}
     out = {}
-    for name, sl in spans.items():
-        out[name] = {k: arr[sl] for k, arr in (("X", w.X), ("Y", w.Y), ("dirs", w.dirs),
-                                               ("trend_dir", w.trend_dir), ("last_ret", w.last_ret))}
+    for name, rows in idx.items():
+        out[name] = {k: arr[rows] for k, arr in (("X", w.X), ("Y", w.Y), ("dirs", w.dirs),
+                                                 ("trend_dir", w.trend_dir), ("last_ret", w.last_ret))}
         if w.end_times is not None:
-            out[name]["end_times"] = w.end_times[sl]
+            out[name]["end_times"] = w.end_times[rows]
     return out
 
 
-def split_windows(coins: dict[str, CoinWindows], val_share: float = 0.15, test_share: float = 0.15) -> dict:
+def split_windows(coins: dict[str, CoinWindows], val_share: float = 0.15, test_share: float = 0.15,
+                 split_at=None, test_at=None) -> dict:
     """Time-ordered train/val/test split of every coin's windows (per coin: the first rows train, the
     middle val, the tail test), concatenated over coins; returns ``{split}_{X,Y,dirs,trend_dir,last_ret}``
     plus ``{split}_coins`` (the coin name of every row) and ``{split}_end_times`` (the window end
-    timestamps, ONLY when every coin was built with an index - else the keys are absent)."""
+    timestamps, ONLY when every coin was built with an index - else the keys are absent). Pass
+    ``split_at`` (e.g. ``"2026-06-01"``) to cut at ONE calendar boundary shared by every coin instead of
+    shares - and ``test_at`` with it to pin the val/test boundary to a date too."""
     if val_share < 0 or test_share < 0 or val_share + test_share >= 1.0:
         raise ValueError(f"val_share + test_share must be in [0, 1), got {val_share}/{test_share}")
+    if test_at is not None and split_at is None:
+        raise ValueError("test_at needs split_at: give both calendar boundaries or neither")
     merged = {name: {k: [] for k in ("X", "Y", "dirs", "trend_dir", "last_ret", "coins", "end_times")}
               for name in ("train", "val", "test")}
     for coin, w in coins.items():
-        for name, part in _coin_splits(w, val_share, test_share).items():
+        for name, part in _coin_splits(w, val_share, test_share, split_at, test_at, who=coin).items():
             for k, arr in part.items():
                 if k == "end_times" and arr is None:
                     continue
@@ -189,22 +237,30 @@ def panel_windows(coins: dict[str, CoinWindows]) -> dict:
             "n": len(common)}
 
 
-def split_panel(panel: dict, val_share: float = 0.15, test_share: float = 0.15) -> dict:
+def split_panel(panel: dict, val_share: float = 0.15, test_share: float = 0.15,
+                split_at=None, test_at=None) -> dict:
     """Time-ordered train/val/test split of a panel grid along the window axis (train head, val middle,
-    test tail); returns the same fields per split plus the shared ``coin_names``."""
+    test tail); returns the same fields per split plus the shared ``coin_names``. Pass ``split_at``
+    (e.g. ``"2026-06-01"``) to cut at ONE calendar boundary shared by every coin instead of shares -
+    and ``test_at`` with it to pin the val/test boundary to a date too."""
     if val_share < 0 or test_share < 0 or val_share + test_share >= 1.0:
         raise ValueError(f"val_share + test_share must be in [0, 1), got {val_share}/{test_share}")
-    n = int(panel["n"])
-    cuts = (int(n * (1.0 - val_share - test_share)), int(n * (1.0 - test_share)))
-    spans = {"train": slice(0, cuts[0]), "val": slice(cuts[0], cuts[1]), "test": slice(cuts[1], n)}
+    if test_at is not None and split_at is None:
+        raise ValueError("test_at needs split_at: give both calendar boundaries or neither")
+    if split_at is not None:
+        if panel["end_times"] is None:
+            raise ValueError("date-driven splits need windows built with an index (end_times)")
+        idx = _date_idx(panel["end_times"], split_at, test_at, test_share)
+    else:
+        n = int(panel["n"])
+        cuts = (int(n * (1.0 - val_share - test_share)), int(n * (1.0 - test_share)))
+        idx = {"train": np.arange(cuts[0]), "val": np.arange(cuts[0], cuts[1]), "test": np.arange(cuts[1], n)}
     out = {"coin_names": panel["coin_names"]}
-    for name, sl in spans.items():
-        rows = sl.start
-        stop = sl.stop
-        if stop - rows == 0:
+    for name, rows in idx.items():
+        if not len(rows):
             raise ValueError(f"split {name!r} is empty: more data or smaller val/test shares needed")
         for k in ("X", "Y", "dirs", "last_ret", "end_times"):
-            out[f"{name}_{k}"] = panel[k][rows:stop]
+            out[f"{name}_{k}"] = panel[k][rows]
     return out
 
 

@@ -16,7 +16,7 @@ from tests.scan import ROOT
 MAX_CELL_LINES = 22
 SETTINGS_VARS = {"TORCH_REPO", "TORCH_REF", "EXPECT_DEVICE", "TOKEN_PATH", "WORKDIR", "TORCH_DIR", "DRIVE_RUNS",
                  "EXTRA_MODULES", "SOURCE", "COINS", "DAYS", "INTERVAL", "RAW_ROOT", "CONTEXT_LEN", "HORIZON_LEN",
-                 "EVAL_HORIZON", "LOSS", "CHANGES", "VAL_SHARE", "TEST_SHARE"}
+                 "EVAL_HORIZON", "LOSS", "CHANGES", "VAL_SHARE", "TEST_SHARE", "SPLIT_AT", "TEST_AT"}
 TINY = {"epochs": 2, "d_model": 32, "num_layers": 1, "batch_size": 128, "patience": 2, "verbose": False}
 
 
@@ -116,7 +116,8 @@ def test_every_call_matches_a_real_signature_and_every_name_is_defined_earlier()
 def test_the_notebook_runs_from_the_first_attempt(tmp_path):
     ns = run_notebook("ar_stream", {"SOURCE": "synthetic", "DAYS": 40, "EXPECT_DEVICE": "cpu",
                                     "COINS": ("AAA",), "HORIZON_LEN": 8, "EVAL_HORIZON": 4, "CHANGES": TINY,
-                                    "DRIVE_RUNS": str(tmp_path / "runs")})
+                                    "SPLIT_AT": "2025-02-01", "TEST_AT": "2025-02-06",
+                                    "DRIVE_RUNS": str(tmp_path / "runs")})  # calendar-boundary split
     assert ns["data"]["train_X"].shape[1] == ns["CONTEXT_LEN"] == 32
     assert ns["data"]["train_Y"].shape[1] == ns["FUTURE_LEN"] == 8   # data carries the LONGER future
     assert ns["history"]["best_val_dir_acc"] > 0.0 and len(ns["history"]["train_loss"]) == 2
@@ -125,3 +126,5 @@ def test_the_notebook_runs_from_the_first_attempt(tmp_path):
     assert len(ns["report"]["direction_accuracy_per_step"]) == ns["EVAL_HORIZON"] == 4  # free eval horizon
     assert ns["control"]["shuffled_direction_accuracy"] == pytest.approx(ns["control"]["expected"], abs=0.1)
     assert "integrity" in ns["out"] and ns["out"]["verdict"]["rows"]  # the in-place battery ran
+    import pandas as pd  # the calendar boundaries were honoured end to end
+    assert pd.Timestamp(ns["data"]["test_end_times"].min(), unit="ns") >= pd.Timestamp("2025-02-06")

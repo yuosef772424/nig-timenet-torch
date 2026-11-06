@@ -202,3 +202,48 @@ def test_raw_candles_drive_reaggregates_the_1h_files_up_to_interval(tmp_path):
     first = out.iloc[0]
     assert first["open"] == close[0] and first["close"] == close[3]
     assert first["high"] == (close[:4] * 1.01).max() and first["volume"] == 200.0
+
+
+def test_split_windows_at_one_shared_calendar_date():
+    """SPLIT_AT cuts at ONE calendar boundary shared by every coin: a window trains when it ends
+    before it; with TEST_AT the between dates validate and the at/after date tests. A coin whose
+    history does not reach a boundary is a CLEAR error naming it (it would be tested untrained)."""
+    rng = np.random.default_rng(7)
+    idx = pd.date_range("2026-01-01", periods=200, freq="1h", tz="UTC")
+    feats = rng.normal(size=(200, 5))
+    coins = {"AAA": build_windows(feats, contiguous_runs(idx, "1h"), 16, 8, index=idx),
+             "BBB": build_windows(feats, contiguous_runs(idx, "1h"), 16, 8, index=idx)}
+    out = split_windows(coins, split_at="2026-01-05", test_at="2026-01-07")
+    # every window sits on its side of the shared boundaries, for BOTH coins
+    for split, lo, hi in (("train", None, "2026-01-05"), ("val", "2026-01-05", "2026-01-07"),
+                         ("test", "2026-01-07", None)):
+        for ts, _coin in zip(out[f"{split}_end_times"], out[f"{split}_coins"], strict=True):
+            if lo:
+                assert pd.Timestamp(ts, unit="ns", tz="UTC") >= pd.Timestamp(lo, tz="UTC")
+            if hi:
+                assert pd.Timestamp(ts, unit="ns", tz="UTC") < pd.Timestamp(hi, tz="UTC")
+        assert (out[f"{split}_coins"] == "AAA").any() and (out[f"{split}_coins"] == "BBB").any()
+    with pytest.raises(ValueError, match=r"\[BBB\].*empty"):
+        short = build_windows(feats[:40], contiguous_runs(idx[:40], "1h"), 16, 8, index=idx[:40])
+        split_windows({"BBB": short}, split_at="2026-01-05", test_at="2026-01-07")
+    with pytest.raises(ValueError, match="test_at needs split_at"):
+        split_windows(coins, test_at="2026-01-07")
+    no_index = build_windows(feats, contiguous_runs(idx, "1h"), 16, 8)
+    with pytest.raises(ValueError, match="end_times"):
+        split_windows({"AAA": no_index}, split_at="2026-01-05")
+
+
+def test_split_panel_at_calendar_dates():
+    """The panel twin: the same shared boundaries cut the window axis (train before, val between,
+    test at/after)."""
+    rng = np.random.default_rng(8)
+    idx = pd.date_range("2026-01-01", periods=150, freq="1h", tz="UTC")
+    coins = {"AAA": build_windows(rng.normal(size=(150, 5)), contiguous_runs(idx, "1h"), 16, 8, index=idx),
+             "BBB": build_windows(rng.normal(size=(150, 5)), contiguous_runs(idx, "1h"), 16, 8, index=idx)}
+    out = split_panel(panel_windows(coins), split_at="2026-01-04", test_at="2026-01-06")
+    end = {k: out[f"{k}_end_times"].astype("datetime64[ns]") for k in ("train", "val", "test")}
+    assert end["train"].max() < np.datetime64("2026-01-04")
+    assert end["val"].min() >= np.datetime64("2026-01-04") and end["val"].max() < np.datetime64("2026-01-06")
+    assert end["test"].min() >= np.datetime64("2026-01-06")
+    with pytest.raises(ValueError, match="test_at needs split_at"):
+        split_panel(panel_windows(coins), test_at="2026-01-06")

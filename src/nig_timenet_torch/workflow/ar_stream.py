@@ -39,12 +39,14 @@ def _windows(frames: dict, interval: str, context_len: int, future_len: int) -> 
 
 def run_ar_stream(frames: dict, interval: str, context_len: int, horizon_len: int, eval_horizon: int,
                   val_share: float = 0.15, test_share: float = 0.15, changes: dict | None = None,
-                  device: str = "cpu") -> dict:
+                  device: str = "cpu", split_at=None, test_at=None) -> dict:
     """The single-coin stream end to end: windows -> split -> fit -> free-horizon rollout metrics and
     the shuffled-labels control. ``eval_horizon`` may differ from ``horizon_len`` (the windows carry the
-    longer future); ``changes`` override any ``ArStreamSettings`` field (e.g. a tiny smoke run)."""
+    longer future); ``changes`` override any ``ArStreamSettings`` field (e.g. a tiny smoke run);
+    ``split_at``/``test_at`` cut the split at calendar boundaries shared by every coin."""
     future_len = max(horizon_len, eval_horizon)
-    data = split_windows(_windows(frames, interval, context_len, future_len), val_share, test_share)
+    data = split_windows(_windows(frames, interval, context_len, future_len), val_share, test_share,
+                         split_at=split_at, test_at=test_at)
     settings = ArStreamSettings(context_len=context_len, horizon_len=horizon_len, device=device,
                                 **(changes or {}))
     model = build_ar_stream_model(settings, n_features=data["train_X"].shape[2])
@@ -60,12 +62,14 @@ def run_ar_stream(frames: dict, interval: str, context_len: int, horizon_len: in
 
 def run_panel_ar_stream(frames: dict, interval: str, context_len: int, horizon_len: int,
                         eval_horizon: int, val_share: float = 0.15, test_share: float = 0.15,
-                        changes: dict | None = None, device: str = "cpu") -> dict:
+                        changes: dict | None = None, device: str = "cpu",
+                        split_at=None, test_at=None) -> dict:
     """The panel twin: the timestamp-aligned grid (all coins in lockstep) -> split -> fit -> pooled
-    rollout metrics and control; the same knobs, plus ``cross_layers``, through ``PanelArStreamSettings``."""
+    rollout metrics and control; the same knobs, plus ``cross_layers``, through ``PanelArStreamSettings``;
+    ``split_at``/``test_at`` cut the split at calendar boundaries shared by every coin."""
     future_len = max(horizon_len, eval_horizon)
     panel = panel_windows(_windows(frames, interval, context_len, future_len))
-    data = split_panel(panel, val_share, test_share)
+    data = split_panel(panel, val_share, test_share, split_at=split_at, test_at=test_at)
     settings = PanelArStreamSettings(context_len=context_len, horizon_len=horizon_len, device=device,
                                      **(changes or {}))
     model = build_panel_ar_stream_model(settings, n_features=data["train_X"].shape[3],
