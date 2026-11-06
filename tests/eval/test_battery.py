@@ -14,9 +14,13 @@ from nig_timenet_torch.eval.battery import (
     cowardice,
     flip_test,
     full_battery,
+    market_neutral,
     per_coin,
+    persistence_baseline,
     sanity,
+    selective_evaluation,
     shock_split,
+    table_integrity,
     trade_grid,
     uncertainty_filter,
     verdict,
@@ -170,7 +174,69 @@ def test_verdict_separates_an_edge_from_noise():
 
 def test_battery_sections_all_present():
     out = battery(_frame(good=True), _frame(good=True))
-    assert set(out) == {"sanity", "confidence", "cowardice", "trades", "limit", "uncertainty",
-                        "shocks", "weekly", "per_coin", "flip"}
+    assert set(out) == {"integrity", "sanity", "confidence", "cowardice", "trades", "limit",
+                        "uncertainty", "shocks", "weekly", "per_coin", "flip", "baseline",
+                        "selective", "neutral"}
     for section in out.values():
         assert section["rows"], section["title"]
+
+
+def test_table_integrity_passes_an_honest_table_and_flags_a_broken_one():
+    good = table_integrity(_frame(good=True), _frame(good=True, seed=3))
+    assert "mismatches=0" in good["rows"][0] and "NaN rows=0" in good["rows"][0]
+    broken = _frame(good=True, seed=4)
+    broken.loc[0, "mu"] = np.nan
+    broken.loc[1, "dir_true"] = -broken.loc[1, "dir_true"]
+    flagged = table_integrity(broken, _frame(good=True, seed=5))
+    assert "NaN rows=1" in flagged["rows"][0] and "mismatches=1" in flagged["rows"][0]
+
+
+def test_persistence_baseline_the_model_must_beat_the_last_candle():
+    df = _frame(good=True)
+    section = persistence_baseline(df, cost=0.0008)
+    assert len(section["rows"]) == 7 and "momentum" in section["rows"][2]
+    keep = df["dir_true"] != 0
+    y, mu, last = df["y_ret"].values, df["mu"].values, df["last_ret"].values
+    def acc(pred):
+        return float(((pred[keep] > 0) == (y[keep] > 0)).mean())
+    assert acc(mu) > acc(last)  # the model must add something over the raw momentum line
+    noise = persistence_baseline(_frame(good=False), cost=0.0008)
+    assert "momentum" in noise["rows"][2] and noise["rows"]
+
+
+def test_selective_evaluation_confident_slice_beats_overall_on_test():
+    val, test = _frame(good=True, seed=1), _frame(good=True, seed=2)
+    section = selective_evaluation(val, test, cost=0.0008)
+    assert len(section["rows"]) == 6  # 3 quantiles x (VAL, TEST)
+    thr = float(np.quantile((val["p_dir"] - 0.5).abs(), 0.75))
+    m = ((test["p_dir"] - 0.5).abs() >= thr) & (test["dir_true"] != 0)
+    acc_slice = float(((test["p_dir"].values[m] > 0.5) == (test["y_ret"].values[m] > 0)).mean())
+    acc_all = float(((test["p_dir"].values > 0.5) == (test["y_ret"].values > 0)).mean())
+    assert acc_slice > acc_all  # confidence picked on VAL must still rank on TEST
+
+
+def _panel_frame(seed: int = 0, n_periods: int = 400) -> pd.DataFrame:
+    """4 coins x n_periods: mu ranks y across coins within each period (a model with real
+    relative-ranking skill), so the market-neutral spread must be positive before cost."""
+    rng = np.random.default_rng(seed)
+    coins = ["AAA", "BBB", "CCC", "DDD"]
+    y = rng.normal(0, 0.01, (n_periods, 4))
+    mu = y + rng.normal(0, 0.001, (n_periods, 4))
+    return pd.DataFrame({"step": 1, "mu": mu.ravel(), "sigma": 0.004,
+                         "p_dir": 0.6, "y_ret": y.ravel(),
+                         "dir_true": np.where(y.ravel() > 0, 1, -1), "last_ret": 0.0,
+                         "coin": np.repeat(coins, n_periods),
+                         "end_time": np.tile(pd.date_range("2026-01-05", periods=n_periods,
+                                                           freq="1h").values, 4)})
+
+
+def test_market_neutral_needs_a_cross_section_and_pays_for_ranking():
+    two = market_neutral(_frame(good=True), _frame(good=True, seed=6), cost=0.0008)
+    assert "SKIPPED" in two["title"]  # 2 coins cannot make a neutral book
+    no_coin = _frame(good=True).drop(columns=["coin"])
+    assert "SKIPPED" in market_neutral(no_coin, no_coin, cost=0.0008)["title"]
+    val, test = _panel_frame(1), _panel_frame(2)
+    section = market_neutral(val, test, cost=0.0)
+    assert section["title"] == "MARKET-NEUTRAL PORTFOLIO (TEST)"
+    chosen = next(r for r in section["rows"][1:] if "VAL choice" in r)
+    assert float(chosen.split()[-1]) > 1.0  # profit factor > 1: the ranking pays without cost

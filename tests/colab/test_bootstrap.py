@@ -130,7 +130,8 @@ def test_install_package_is_no_deps_and_refuses_a_changed_torch(tmp_path):
     seen = []
     ok = bs.install_package(str(tmp_path), python="py", run=lambda cmd, **k: seen.append(cmd) or Done(),
                             version_of=lambda d: "2.11.0+cu126", modules=())
-    assert ok == {"torch_before": "2.11.0+cu126", "torch_after": "2.11.0+cu126"}
+    assert ok == {"torch_before": "2.11.0+cu126", "torch_after": "2.11.0+cu126",
+                  "purged_modules": [], "purged_paths": []}
     assert seen == [["py", "-m", "pip", "install", "-q", "--no-deps", "-e", str(tmp_path)]]
     versions = iter(["2.11.0+cu126", "2.15.0+cpu"])
     with pytest.raises(bs.BootstrapError, match="changed the installed torch from 2.11.0\\+cu126 to 2.15.0\\+cpu"):
@@ -146,3 +147,22 @@ def test_install_package_installs_only_missing_modules(tmp_path):
     bs.install_package(str(tmp_path), python="py", run=lambda cmd, **k: seen.append(cmd) or Done(),
                        version_of=lambda d: "1", modules=(("json", "json-pip"), ("no_such_module_xyz", "pkg-xyz")))
     assert seen[1:] == [["py", "-m", "pip", "install", "-q", "pkg-xyz"]]
+
+
+def test_purge_package_drops_stale_modules_and_paths(tmp_path):
+    """The reused-Colab-runtime bug: an older checkout's code stays alive in sys.modules (and its src
+    in sys.path), so a fresh clone's new names fail to import. purge_package must drop exactly that."""
+    import types
+
+    new = tmp_path / "nig-timenet-torch"
+    (new / "src" / "pkg1").mkdir(parents=True)
+    old = tmp_path / "nig-timenet-torch2"
+    old_src = old / "src"
+    old_src.mkdir(parents=True)
+    sys.modules["pkg1"] = types.ModuleType("pkg1")
+    sys.modules["pkg1.mod"] = types.ModuleType("pkg1.mod")
+    sys.path.insert(0, str(old_src))
+    out = bs.purge_package(str(new))
+    assert "pkg1" not in sys.modules and "pkg1.mod" not in sys.modules
+    assert str(old_src) not in sys.path
+    assert out == {"purged_modules": ["pkg1", "pkg1.mod"], "purged_paths": [str(old_src)]}

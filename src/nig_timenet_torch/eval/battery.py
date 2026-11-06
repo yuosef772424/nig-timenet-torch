@@ -4,62 +4,37 @@ would interrogate it before trusting money to it. Every section is a pure functi
 probability and the truth), so the battery notebook stays a thin runner (rule E4/G6). Sections:
 sanity (IC + bias), confidence calibration, anti-cowardice (does the model predict real magnitudes?),
 trading grids (market exit and realistic limit-at-mu execution), an uncertainty filter, shock-regime
-splits (calm vs the wildest decile), weekly stability, per-coin, the flip test, and a ranked verdict.
+splits (calm vs the wildest decile), weekly stability, per-coin, the flip test, then the classics
+ported from the old project (battery_classics: integrity, persistence baseline, selective
+evaluation, market-neutral) and a ranked verdict.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
+from nig_timenet_torch.eval.battery_classics import (
+    market_neutral,
+    persistence_baseline,
+    selective_evaluation,
+    table_integrity,
+)
+from nig_timenet_torch.eval.battery_lib import _HEADER, _dir_pnl, _fmt, _scored, _section, _stats, _top_abs
 from nig_timenet_torch.stats.metrics import spearman
 
-__all__ = ["battery", "full_battery"]
+__all__ = ["battery", "full_battery", "show", "table_integrity", "persistence_baseline",
+           "selective_evaluation", "market_neutral"]
 
 
-def _stats(pnl: np.ndarray, min_n: int = 50) -> dict | None:
-    """n, win rate, average, Sharpe (per-trade, unannualized) and profit factor - None below min_n."""
-    pnl = np.asarray(pnl, dtype=float)
-    if len(pnl) < min_n:
-        return None
-    s = pnl.std(ddof=1)
-    gross_win = pnl[pnl > 0].sum()
-    gross_loss = -pnl[pnl < 0].sum()
-    return {"n": int(len(pnl)), "win": float((pnl > 0).mean()), "avg": float(pnl.mean()),
-            "sharpe": float(pnl.mean() / s) if s > 0 else 0.0,
-            "pf": float(gross_win / gross_loss) if gross_loss > 1e-12 else float("inf")}
-
-
-def _scored(df) -> "np.ndarray":
-    """The non-flat rows: a flat truth teaches nothing about direction."""
-    return (df["dir_true"] != 0).values
-
-
-def _top_abs(df, field: str, pct: float, mask: np.ndarray | None = None) -> np.ndarray:
-    """Indices of the strongest `pct` fraction by |field| (optionally inside a mask)."""
-    base = np.where(mask if mask is not None else np.ones(len(df), dtype=bool))[0]
-    strength = np.abs(df[field].values[base])
-    k = max(1, int(len(base) * pct))
-    return base[np.argsort(-strength)[:k]]
-
-
-def _dir_pnl(df, idx: np.ndarray, cost: float) -> np.ndarray:
-    """Trade the model's direction (p_dir) on the true return, minus cost."""
-    sign = np.where(df["p_dir"].values[idx] > 0.5, 1.0, -1.0)
-    return sign * df["y_ret"].values[idx] - cost
-
-
-def _section(title: str, rows: list[str], note: str = "") -> dict:
-    return {"title": title, "rows": rows, "note": note}
-
-
-def _fmt(label: str, s: dict | None) -> str:
-    if s is None:
-        return f"{label:<44}(n<50)"
-    return (f"{label:<44}{s['n']:>8,}{s['win'] * 100:>7.2f}%{s['avg'] * 100:>+9.4f}%"
-            f"{s['sharpe']:>+9.3f}{s['pf']:>7.2f}")
-
-
-_HEADER = f"{'strategy':<44}{'n':>8}{'win%':>8}{'avg%':>10}{'Sharpe':>9}{'PF':>7}"
+def show(section: dict, echo=print) -> None:
+    """Print one battery section the way the notebook does: the title, its rows, then the reading line.
+    Lets the battery notebook run every test as its own re-runnable cell with the same output shape."""
+    echo("=" * 100)
+    echo(section["title"])
+    for row in section["rows"]:
+        echo(row)
+    if section.get("note"):
+        echo("-> " + section["note"])
 
 
 def sanity(val, test) -> dict:
@@ -253,8 +228,9 @@ def flip_test(test, cost: float, pct: float = 0.10) -> dict:
 
 
 def battery(val, test, cost: float = 0.0008) -> dict:
-    """All ten sections over the VAL/TEST prediction tables (same order as the notebook prints them)."""
+    """All fourteen sections over the VAL/TEST prediction tables (same order as the notebook prints them)."""
     return {
+        "integrity": table_integrity(val, test),
         "sanity": sanity(val, test),
         "confidence": confidence_buckets(test),
         "cowardice": cowardice(test),
@@ -265,6 +241,9 @@ def battery(val, test, cost: float = 0.0008) -> dict:
         "weekly": weekly_stability(test, cost),
         "per_coin": per_coin(test, cost),
         "flip": flip_test(test, cost),
+        "baseline": persistence_baseline(test, cost),
+        "selective": selective_evaluation(val, test, cost),
+        "neutral": market_neutral(val, test, cost),
     }
 
 

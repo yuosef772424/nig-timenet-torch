@@ -8,7 +8,9 @@ import pandas as pd
 from tests.notebooks.test_ar_stream_notebook import check_static, run_notebook
 
 BATTERY_SETTINGS = {"TORCH_REPO", "TORCH_REF", "EXPECT_DEVICE", "TOKEN_PATH", "WORKDIR", "TORCH_DIR",
-                    "DRIVE_RUNS", "EXTRA_MODULES", "COST"}
+                    "DRIVE_RUNS", "EXTRA_MODULES", "RUN_NAME", "COST", "PCT", "TOP_PCTS",
+                    "CONFIDENCE_BUCKETS", "UNCERTAINTY_QUANTILES", "SHOCK_GROUPS", "MIN_WEEK_TRADES",
+                    "MIN_COIN_TRADES", "SELECTIVE_QUANTILES", "NEUTRAL_QUANTILES"}
 
 
 def _run_folder(root, n: int = 600, seed: int = 0) -> None:
@@ -38,7 +40,8 @@ def test_the_battery_notebook_runs_from_the_first_attempt(tmp_path):
     ns = run_notebook("ar_stream_battery", {"EXPECT_DEVICE": "cpu", "DRIVE_RUNS": str(tmp_path)})
     assert len(ns["V"]) == len(ns["T"]) == 600
     assert ns["RUN"].name == "trial-000"
-    for key in ("sanity", "confidence", "cowardice", "trades", "limit", "uncertainty", "shocks",
-                "weekly", "per_coin", "flip", "verdict"):
+    for key in ("integrity", "sanity", "confidence", "cowardice", "trades", "limit", "uncertainty",
+                "shocks", "weekly", "per_coin", "flip", "baseline", "selective", "neutral",
+                "verdict"):
         assert key in ns["out"] and ns["out"][key]["rows"]
     assert ns["out"]["verdict"]["tradeable"]  # the honest table must be called tradeable

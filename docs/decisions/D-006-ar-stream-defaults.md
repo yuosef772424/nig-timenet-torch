@@ -176,3 +176,10 @@ New defaults:
 - `nig_timenet_torch.workflow.ar_stream.run_panel_ar_stream(device)`: `<new>` -> `'cpu'`
 - `nig_timenet_torch.workflow.ar_stream.run_panel_ar_stream(test_share)`: `<new>` -> `0.15`
 - `nig_timenet_torch.workflow.ar_stream.run_panel_ar_stream(val_share)`: `<new>` -> `0.15`
+- `nig_timenet_torch.eval.battery.show(echo)`: `<new>` -> `<callable builtins.print>`
+- `nig_timenet_torch.eval.battery_classics.market_neutral(quantiles)`: `<new>` -> `(0.2, 0.3, 0.4)`
+- `nig_timenet_torch.eval.battery_classics.persistence_baseline(pct)`: `<new>` -> `0.1`
+- `nig_timenet_torch.eval.battery_classics.selective_evaluation(quantiles)`: `<new>` -> `(0.25, 0.5, 0.75)`
+- `nig_timenet_torch.eval.battery.market_neutral(quantiles)`: `(0.2, 0.3, 0.4)` -> `<removed>`
+- `nig_timenet_torch.eval.battery.persistence_baseline(pct)`: `0.1` -> `<removed>`
+- `nig_timenet_torch.eval.battery.selective_evaluation(quantiles)`: `(0.25, 0.5, 0.75)` -> `<removed>`
