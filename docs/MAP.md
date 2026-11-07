@@ -48,6 +48,9 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
+| `eval/battery.py` | Ten many-angle sections plus classics and a ranked verdict over a tidy table (step, mu, sigma, p_dir, y_ret, dir_true, last_ret, coin, end_time); pure functions, no model. | battery, evaluation, trade grid, verdict, uncertainty filter, weekly stability, flip test |
+| `eval/battery_classics.py` | Four classic checks of the old TF project over the tidy table: integrity, persistence baseline, selective evaluation (VAL thresholds, TEST judgment), market-neutral portfolio. | battery classics, integrity, persistence baseline, selective evaluation, market neutral |
+| `eval/battery_lib.py` | Shared private helpers of the battery: trade stats, row masks, top-\|x\| selection, section shaping. | battery helpers, trade stats, sharpe, profit factor, section |
 | `eval/calibrator.py` | P29: role-checked learned-state calibrator (C6). Isotonic regression only, mirroring the TF side's |  |
 | `eval/nig_floor.py` | T4 NIG floor-hit shares: how often each NIG parameter of each head sits on its floor (B-001 evidence). |  |
 | `eval/target_report.py` | T4/T4b target report for one stage of one run: T-skill, T-conf, T-sharp (per head, std vs the head's own predicted move from the last close) and 80 % coverage. | target report, t-sharp, coverage, uncertainty, evaluation, nig head |
