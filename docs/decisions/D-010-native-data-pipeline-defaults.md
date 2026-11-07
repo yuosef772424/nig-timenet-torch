@@ -1,0 +1,167 @@
+# D-010: native data pipeline defaults (package I2)
+
+Date: 2026-11-07
+Owner decision: package I2 of `docs/hardening/PLAN.md` (rule B1 / T1: a new default needs a decision file and a pin); the
+pipeline is ported from the owner's `feat/ar-stream` branch (commits 994618c, 13125d9, 58652c3) and its defaults
+reproduce the production preset of `crypto-signal-prediction` (1h candles, 32-bar windows, stride 8, the 18-column
+feature set), proved bit-exact by `tests/data/test_parity_tf.py` on two TF-built fixtures. Only the keys of the ported
+`data/` modules are listed here; the keys of the branch's D-006 for `ar_windows`, `panel`, `eval.ar_stream` and the
+ar-stream models stay reserved for I4 / I7 and are not pinned. `core.schema.OHLCV_COLUMNS` is a constant, not a default.
+Why: the data modules are new in this repository, so every default is new; none changes an existing behaviour.
+The owner may change any of them (a new decision file then lists old -> new).
+
+- `nig_timenet_torch.data.align.resample_frames(agg)`: `<new>` -> `None`
+- `nig_timenet_torch.data.artifact_writer.git_head(repo)`: `<new>` -> `None`
+- `nig_timenet_torch.data.artifact_writer.write_artifact(lock)`: `<new>` -> `None`
+- `nig_timenet_torch.data.artifact_writer.write_artifact(overwrite)`: `<new>` -> `False`
+- `nig_timenet_torch.data.artifact_writer.write_artifact(producer)`: `<new>` -> `''`
+- `nig_timenet_torch.data.artifact_writer.write_artifact(source_commit)`: `<new>` -> `''`
+- `nig_timenet_torch.data.build.BuildContext(breadth)`: `<new>` -> `None`
+- `nig_timenet_torch.data.build.BuildContext(market)`: `<new>` -> `None`
+- `nig_timenet_torch.data.build.BuildContext(orth)`: `<new>` -> `None`
+- `nig_timenet_torch.data.build.BuildContext(rank)`: `<new>` -> `None`
+- `nig_timenet_torch.data.build.BuildContext(reference)`: `<new>` -> `''`
+- `nig_timenet_torch.data.build.build_dataset(loader)`: `<new>` -> `None`
+- `nig_timenet_torch.data.build.build_dataset(lock)`: `<new>` -> `None`
+- `nig_timenet_torch.data.cli.main(argv)`: `<new>` -> `None`
+- `nig_timenet_torch.data.cli.settings_from_args(config)`: `<new>` -> `''`
+- `nig_timenet_torch.data.cli.settings_from_args(sets)`: `<new>` -> `()`
+- `nig_timenet_torch.data.coins.DEFAULT_CATEGORIES`: `<new>` -> `('Large_Caps')`
+- `nig_timenet_torch.data.coins.coins_of(categories)`: `<new>` -> `()`
+- `nig_timenet_torch.data.fetch.fetch_all(http)`: `<new>` -> `None`
+- `nig_timenet_torch.data.fetch.fetch_symbol(http)`: `<new>` -> `None`
+- `nig_timenet_torch.data.indicators.synthetic_ohlcv(freq)`: `<new>` -> `'1h'`
+- `nig_timenet_torch.data.indicators.synthetic_ohlcv(n)`: `<new>` -> `1500`
+- `nig_timenet_torch.data.indicators.synthetic_ohlcv(seed)`: `<new>` -> `0`
+- `nig_timenet_torch.data.indicators.synthetic_ohlcv(start)`: `<new>` -> `'2023-01-01'`
+- `nig_timenet_torch.data.pipeline.build_artifact(loader)`: `<new>` -> `None`
+- `nig_timenet_torch.data.presets.preset(base)`: `<new>` -> `None`
+- `nig_timenet_torch.data.scaling.DEFAULT_KIND`: `<new>` -> `'cumulative'`
+- `nig_timenet_torch.data.scaling.calc_scale_params(method)`: `<new>` -> `'robust'`
+- `nig_timenet_torch.data.scaling.pct_change_encode(axis)`: `<new>` -> `0`
+- `nig_timenet_torch.data.scaling.window_scale_params(method)`: `<new>` -> `'robust'`
+- `nig_timenet_torch.data.settings.BreadthSettings(enabled)`: `<new>` -> `True`
+- `nig_timenet_torch.data.settings.BreadthSettings(horizons)`: `<new>` -> `(24)`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(ath_distance_enabled)`: `<new>` -> `False`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(candle_structure)`: `<new>` -> `False`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(crash_rebound_regime)`: `<new>` -> `None`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(direction_consistency_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(enabled)`: `<new>` -> `True`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(fisher_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(fractal_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(jump_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(mean_reversion_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(psar_enabled)`: `<new>` -> `False`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(range_windows)`: `<new>` -> `(50)`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(returns)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(risk_adj_momentum_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(rsi_divergence_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(rvi_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(supertrend_windows)`: `<new>` -> `(10)`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(time_features)`: `<new>` -> `False`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(trend_age_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(vol_asymmetry_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(vol_estimator_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(vol_term_structure_pairs)`: `<new>` -> `((3, 30))`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(vol_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.CustomFeatureSettings(volume_window)`: `<new>` -> `20`
+- `nig_timenet_torch.data.settings.DataSettings(features)`: `<new>` -> `FeatureSettings(indicator_settings={'adx': [14], 'rsi': [14], 'natr': [14], 'bbands': [20], 'mfi': [14]}, static_indicators=(), static_indicator_params={}, exclude_from_features=('open', 'high', 'low', 'ADX_14', 'BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0', 'BBP_20_2.0', 'SUPERT_DIR_10', 'MKT_ret_1'), custom=CustomFeatureSettings(enabled=True, returns=(), range_windows=(50,), vol_windows=(), volume_window=20, candle_structure=False, time_features=False, fractal_windows=(), rvi_windows=(), fisher_windows=(), vol_estimator_windows=(), mean_reversion_windows=(), jump_windows=(), supertrend_windows=(10,), rsi_divergence_windows=(), psar_enabled=False, trend_age_windows=(), direction_consistency_windows=(), vol_asymmetry_windows=(), crash_rebound_regime=None, risk_adj_momentum_windows=(), ath_distance_enabled=False, vol_term_structure_pairs=((3, 30),)), market=MarketSettings(enabled=True, reference_symbol='BTCUSDT', return_periods=(1,), corr_windows=(20, 60), beta_windows=(20,), lag_windows=(), crash_rebound_regime=None), breadth=BreadthSettings(enabled=True, horizons=(24,)), momentum_rank=RankSettings(enabled=False, horizons=(6, 24)), orth_natr=OrthSettings(enabled=True, horizons=(1, 3, 6, 12, 24), natr_length=14, min_assets=5))`
+- `nig_timenet_torch.data.settings.DataSettings(output)`: `<new>` -> `OutputSettings(path='', overwrite=False, split_dates=None, holdout_start=None, source_commit='', producer='nig_timenet_torch.data', directory='', name='preprocessing_output', stamp='', latest=True)`
+- `nig_timenet_torch.data.settings.DataSettings(runtime)`: `<new>` -> `RuntimeSettings(workers=0, spill_dir='', x_storage_dtype='', verbose=True)`
+- `nig_timenet_torch.data.settings.DataSettings(scaling)`: `<new>` -> `ScalingSettings(scaler_type='robust', clip_abs=5.0, eps=1e-08, price_norm_mode='window_scale', price_pct_clip=100.0)`
+- `nig_timenet_torch.data.settings.DataSettings(source)`: `<new>` -> `SourceSettings(kind='files', root='', raw_dir='history_1h', pattern='{name}.csv', registry_path='crypto_data/asset_registry.csv', coins=(), categories=(), exclude=(), tail=0, start='', end='', interval='1h', fetch='', fetch_workers=4, synthetic_days=70, synthetic_seed=40)`
+- `nig_timenet_torch.data.settings.DataSettings(targets)`: `<new>` -> `TargetSettings(targets=('high', 'low', 'close'), horizon=1, reg_target_mode='return', reg_target_scale=100.0, reg_target_clip=None, entry_close_reg='abs_return')`
+- `nig_timenet_torch.data.settings.DataSettings(windows)`: `<new>` -> `WindowSettings(tf_order=('1h',), window_sizes={'1h': 32}, stride=8, align_to_grid=True, grid_anchor='1970-01-01', higher_tf_mode='legacy', higher_tf_offset=2, sample_filters=())`
+- `nig_timenet_torch.data.settings.FeatureSettings(breadth)`: `<new>` -> `BreadthSettings(enabled=True, horizons=(24,))`
+- `nig_timenet_torch.data.settings.FeatureSettings(custom)`: `<new>` -> `CustomFeatureSettings(enabled=True, returns=(), range_windows=(50,), vol_windows=(), volume_window=20, candle_structure=False, time_features=False, fractal_windows=(), rvi_windows=(), fisher_windows=(), vol_estimator_windows=(), mean_reversion_windows=(), jump_windows=(), supertrend_windows=(10,), rsi_divergence_windows=(), psar_enabled=False, trend_age_windows=(), direction_consistency_windows=(), vol_asymmetry_windows=(), crash_rebound_regime=None, risk_adj_momentum_windows=(), ath_distance_enabled=False, vol_term_structure_pairs=((3, 30),))`
+- `nig_timenet_torch.data.settings.FeatureSettings(exclude_from_features)`: `<new>` -> `('open', 'high', 'low', 'ADX_14', 'BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0', 'BBP_20_2.0', 'SUPERT_DIR_10', 'MKT_ret_1')`
+- `nig_timenet_torch.data.settings.FeatureSettings(indicator_settings)`: `<new>` -> `{'adx': [14], 'bbands': [20], 'mfi': [14], 'natr': [14], 'rsi': [14]}`
+- `nig_timenet_torch.data.settings.FeatureSettings(market)`: `<new>` -> `MarketSettings(enabled=True, reference_symbol='BTCUSDT', return_periods=(1,), corr_windows=(20, 60), beta_windows=(20,), lag_windows=(), crash_rebound_regime=None)`
+- `nig_timenet_torch.data.settings.FeatureSettings(momentum_rank)`: `<new>` -> `RankSettings(enabled=False, horizons=(6, 24))`
+- `nig_timenet_torch.data.settings.FeatureSettings(orth_natr)`: `<new>` -> `OrthSettings(enabled=True, horizons=(1, 3, 6, 12, 24), natr_length=14, min_assets=5)`
+- `nig_timenet_torch.data.settings.FeatureSettings(static_indicator_params)`: `<new>` -> `{}`
+- `nig_timenet_torch.data.settings.FeatureSettings(static_indicators)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.MarketSettings(beta_windows)`: `<new>` -> `(20)`
+- `nig_timenet_torch.data.settings.MarketSettings(corr_windows)`: `<new>` -> `(20, 60)`
+- `nig_timenet_torch.data.settings.MarketSettings(crash_rebound_regime)`: `<new>` -> `None`
+- `nig_timenet_torch.data.settings.MarketSettings(enabled)`: `<new>` -> `True`
+- `nig_timenet_torch.data.settings.MarketSettings(lag_windows)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.MarketSettings(reference_symbol)`: `<new>` -> `'BTCUSDT'`
+- `nig_timenet_torch.data.settings.MarketSettings(return_periods)`: `<new>` -> `(1)`
+- `nig_timenet_torch.data.settings.OrthSettings(enabled)`: `<new>` -> `True`
+- `nig_timenet_torch.data.settings.OrthSettings(horizons)`: `<new>` -> `(1, 3, 6, 12, 24)`
+- `nig_timenet_torch.data.settings.OrthSettings(min_assets)`: `<new>` -> `5`
+- `nig_timenet_torch.data.settings.OrthSettings(natr_length)`: `<new>` -> `14`
+- `nig_timenet_torch.data.settings.OutputSettings(directory)`: `<new>` -> `''`
+- `nig_timenet_torch.data.settings.OutputSettings(holdout_start)`: `<new>` -> `None`
+- `nig_timenet_torch.data.settings.OutputSettings(latest)`: `<new>` -> `True`
+- `nig_timenet_torch.data.settings.OutputSettings(name)`: `<new>` -> `'preprocessing_output'`
+- `nig_timenet_torch.data.settings.OutputSettings(overwrite)`: `<new>` -> `False`
+- `nig_timenet_torch.data.settings.OutputSettings(path)`: `<new>` -> `''`
+- `nig_timenet_torch.data.settings.OutputSettings(producer)`: `<new>` -> `'nig_timenet_torch.data'`
+- `nig_timenet_torch.data.settings.OutputSettings(source_commit)`: `<new>` -> `''`
+- `nig_timenet_torch.data.settings.OutputSettings(split_dates)`: `<new>` -> `None`
+- `nig_timenet_torch.data.settings.OutputSettings(stamp)`: `<new>` -> `''`
+- `nig_timenet_torch.data.settings.RankSettings(enabled)`: `<new>` -> `False`
+- `nig_timenet_torch.data.settings.RankSettings(horizons)`: `<new>` -> `(6, 24)`
+- `nig_timenet_torch.data.settings.RuntimeSettings(spill_dir)`: `<new>` -> `''`
+- `nig_timenet_torch.data.settings.RuntimeSettings(verbose)`: `<new>` -> `True`
+- `nig_timenet_torch.data.settings.RuntimeSettings(workers)`: `<new>` -> `0`
+- `nig_timenet_torch.data.settings.RuntimeSettings(x_storage_dtype)`: `<new>` -> `''`
+- `nig_timenet_torch.data.settings.ScalingSettings(clip_abs)`: `<new>` -> `5.0`
+- `nig_timenet_torch.data.settings.ScalingSettings(eps)`: `<new>` -> `1e-08`
+- `nig_timenet_torch.data.settings.ScalingSettings(price_norm_mode)`: `<new>` -> `'window_scale'`
+- `nig_timenet_torch.data.settings.ScalingSettings(price_pct_clip)`: `<new>` -> `100.0`
+- `nig_timenet_torch.data.settings.ScalingSettings(scaler_type)`: `<new>` -> `'robust'`
+- `nig_timenet_torch.data.settings.SourceSettings(categories)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.SourceSettings(coins)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.SourceSettings(end)`: `<new>` -> `''`
+- `nig_timenet_torch.data.settings.SourceSettings(exclude)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.SourceSettings(fetch)`: `<new>` -> `''`
+- `nig_timenet_torch.data.settings.SourceSettings(fetch_workers)`: `<new>` -> `4`
+- `nig_timenet_torch.data.settings.SourceSettings(interval)`: `<new>` -> `'1h'`
+- `nig_timenet_torch.data.settings.SourceSettings(kind)`: `<new>` -> `'files'`
+- `nig_timenet_torch.data.settings.SourceSettings(pattern)`: `<new>` -> `'{name}.csv'`
+- `nig_timenet_torch.data.settings.SourceSettings(raw_dir)`: `<new>` -> `'history_1h'`
+- `nig_timenet_torch.data.settings.SourceSettings(registry_path)`: `<new>` -> `'crypto_data/asset_registry.csv'`
+- `nig_timenet_torch.data.settings.SourceSettings(root)`: `<new>` -> `''`
+- `nig_timenet_torch.data.settings.SourceSettings(start)`: `<new>` -> `''`
+- `nig_timenet_torch.data.settings.SourceSettings(synthetic_days)`: `<new>` -> `70`
+- `nig_timenet_torch.data.settings.SourceSettings(synthetic_seed)`: `<new>` -> `40`
+- `nig_timenet_torch.data.settings.SourceSettings(tail)`: `<new>` -> `0`
+- `nig_timenet_torch.data.settings.TargetSettings(entry_close_reg)`: `<new>` -> `'abs_return'`
+- `nig_timenet_torch.data.settings.TargetSettings(horizon)`: `<new>` -> `1`
+- `nig_timenet_torch.data.settings.TargetSettings(reg_target_clip)`: `<new>` -> `None`
+- `nig_timenet_torch.data.settings.TargetSettings(reg_target_mode)`: `<new>` -> `'return'`
+- `nig_timenet_torch.data.settings.TargetSettings(reg_target_scale)`: `<new>` -> `100.0`
+- `nig_timenet_torch.data.settings.TargetSettings(targets)`: `<new>` -> `('high', 'low', 'close')`
+- `nig_timenet_torch.data.settings.WindowSettings(align_to_grid)`: `<new>` -> `True`
+- `nig_timenet_torch.data.settings.WindowSettings(grid_anchor)`: `<new>` -> `'1970-01-01'`
+- `nig_timenet_torch.data.settings.WindowSettings(higher_tf_mode)`: `<new>` -> `'legacy'`
+- `nig_timenet_torch.data.settings.WindowSettings(higher_tf_offset)`: `<new>` -> `2`
+- `nig_timenet_torch.data.settings.WindowSettings(sample_filters)`: `<new>` -> `()`
+- `nig_timenet_torch.data.settings.WindowSettings(stride)`: `<new>` -> `8`
+- `nig_timenet_torch.data.settings.WindowSettings(tf_order)`: `<new>` -> `('1h')`
+- `nig_timenet_torch.data.settings.WindowSettings(window_sizes)`: `<new>` -> `{'1h': 32}`
+- `nig_timenet_torch.data.sources.resample_ohlcv(base)`: `<new>` -> `'1h'`
+- `nig_timenet_torch.data.sources.synthetic_market(freq)`: `<new>` -> `'1h'`
+- `nig_timenet_torch.data.targets.TargetInfo(clip)`: `<new>` -> `1.0`
+- `nig_timenet_torch.data.targets.TargetInfo(close_reg)`: `<new>` -> `'abs_return'`
+- `nig_timenet_torch.data.targets.TargetInfo(group_size)`: `<new>` -> `None`
+- `nig_timenet_torch.data.targets.TargetInfo(scales)`: `<new>` -> `{}`
+- `nig_timenet_torch.data.targets.TargetInfo(thresholds)`: `<new>` -> `{}`
+- `nig_timenet_torch.data.targets.decode_reg(scale)`: `<new>` -> `1.0`
+- `nig_timenet_torch.data.targets.retarget(center)`: `<new>` -> `'median'`
+- `nig_timenet_torch.data.targets.retarget(clip)`: `<new>` -> `None`
+- `nig_timenet_torch.data.targets.retarget(close_reg)`: `<new>` -> `'abs_return'`
+- `nig_timenet_torch.data.targets.retarget(group_freq)`: `<new>` -> `''`
+- `nig_timenet_torch.data.targets.retarget(min_group)`: `<new>` -> `5`
+- `nig_timenet_torch.data.targets.retarget(reg_target_scale)`: `<new>` -> `None`
+- `nig_timenet_torch.data.targets.retarget(targets)`: `<new>` -> `None`
+- `nig_timenet_torch.data.targets.retarget(train_idx)`: `<new>` -> `None`
+- `nig_timenet_torch.data.targets.target_arrays(center)`: `<new>` -> `'median'`
+- `nig_timenet_torch.data.targets.target_arrays(clip)`: `<new>` -> `None`
+- `nig_timenet_torch.data.targets.target_arrays(close_reg)`: `<new>` -> `'abs_return'`
+- `nig_timenet_torch.data.targets.target_arrays(group_freq)`: `<new>` -> `''`
+- `nig_timenet_torch.data.targets.target_arrays(scale)`: `<new>` -> `1.0`
+- `nig_timenet_torch.data.targets.target_arrays(thresholds)`: `<new>` -> `None`
