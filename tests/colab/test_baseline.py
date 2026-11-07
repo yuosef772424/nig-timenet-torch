@@ -58,6 +58,21 @@ def test_job_files_are_valid(seed):
     job = parse_job((ROOT / "docs" / "jobs" / f"baseline-001-s{seed}.json").read_text())
     assert job["entry"] == "baseline" and job["device"] == "cuda" and job["needs_drive"] and job["max_minutes"] == 170
     assert job["config"]["seed"] == seed and job["config"]["run_dir"].endswith(f"baseline-001-s{seed}/train")
+    assert "test_report.json" in job["expected_outputs"]
+
+
+def test_every_long_job_has_a_smoke_job():
+    """Rule E5: a job file with max_minutes > 30 needs a smoke job file of the same entry (max_rows, <= 30 min)."""
+    jobs = [parse_job(p.read_text()) for p in sorted((ROOT / "docs" / "jobs").glob("*.json"))]
+    smokes = {j["entry"] for j in jobs if j["max_minutes"] <= 30 and j["config"].get("max_rows")}
+    long_without = [j["job_id"] for j in jobs if j["max_minutes"] > 30 and j["entry"] not in smokes]
+    assert not long_without, f"rule E5: no smoke job for the entry of {long_without}"
+
+
+def test_smoke_job_file_is_valid():
+    job = parse_job((ROOT / "docs" / "jobs" / "baseline-smoke-001.json").read_text())
+    assert job["entry"] == "baseline" and job["device"] == "cuda" and job["config"]["max_rows"] == 20000
+    assert job["config"]["epochs"] == 1 and job["max_minutes"] == 15 and "test_report.json" in job["expected_outputs"]
 
 
 def test_input_key_follows_the_artifact_timeframe():
