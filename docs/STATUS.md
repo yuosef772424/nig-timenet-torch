@@ -19,7 +19,7 @@ One builder session per package, in this order, each merged before the next. T5r
 | I1 | Loading and config foundations | merged | [#30](https://github.com/yuosef772424/nig-timenet-torch/pull/30) | D1 mandatory in `load_dataset` (`allow_unchecked`); D-007; before H2 |
 | H2 | Job runs read the artifact; GPU smoke path | merged | [#31](https://github.com/yuosef772424/nig-timenet-torch/pull/31) | closes #21-#23 classes; rule E5; queue `baseline-smoke-001` before any long job |
 | H1 | Card convention + navigation map | merged | [#32](https://github.com/yuosef772424/nig-timenet-torch/pull/32) | rule B7; `docs/MAP.md` (`python -m tests.build_map`); allowlist 37; second R-REVIEW |
-| I5 | Evaluation battery + adapter | todo | | |
+| I5 | Evaluation battery + adapter | merged | [#33](https://github.com/yuosef772424/nig-timenet-torch/pull/33) | battery ported (`7c9736b`, `f052cf6`); `eval/battery_adapter.py`, `battery_profit.py`, `workflow/battery_run.py`; T-profit target; D-009; O-1 closed |
 | I2 | Native data pipeline | todo | | closes HF-15 |
 | H3 / H4 | Model via registries / strict trainer config | todo | | G1, G2, G3, G7, C2 down; unknown keys raise |
 | I3 | Run steps (flat single split) | todo | | baseline job -> ~30 lines |
