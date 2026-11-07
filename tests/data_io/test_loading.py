@@ -16,7 +16,7 @@ from nig_timenet_torch.data_io import npy_dir
 from nig_timenet_torch.data_io.artifact import ArtifactError
 from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset, resolve_dataset_path
 from tests.contract_doc import DATASET_DIR
-from tests.data_io.test_artifact import COMMIT, write_manifest
+from tests.data_io.helpers import COMMIT, write_manifest
 
 
 def _pkl(path, data):

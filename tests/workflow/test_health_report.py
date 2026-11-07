@@ -15,7 +15,7 @@ from nig_timenet_torch.trainer.trainer import FitSettings
 from nig_timenet_torch.workflow.health_report import REPORT_JSON, REPORT_MD, HealthRun, health_report
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
 from tests.contract_doc import DATASET_DIR
-from tests.trainer.test_fit import identity_for, make_trainer
+from tests.trainer.helpers import identity_for, make_trainer
 
 N_TRAIN, N_VAL = 96, 60
 

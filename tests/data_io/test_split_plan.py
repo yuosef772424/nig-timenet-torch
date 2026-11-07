@@ -3,23 +3,11 @@
 import dataclasses
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from nig_timenet_torch.core.roles import Role
-from nig_timenet_torch.data_io import npy_dir
-from nig_timenet_torch.data_io.split_plan import LeakageError, check_split_purity, purge_embargo_split, sample_times
-from tests.contract_doc import DATASET_DIR
-
-
-def fixture_plan():
-    d = npy_dir.load(DATASET_DIR)
-    fs, fe, le = sample_times(d)
-    sd = d["split_dates"]
-    bar = pd.Timedelta(d["base_tf"])
-    embargo = (d["window_sizes"][d["base_tf"]] + d["forecast_horizon"]) * bar
-    return purge_embargo_split(le, fs, sd["train_end"], sd["train_end"], sd["val_end"], sd["val_end"], embargo,
-                               feature_end=fe)
+from nig_timenet_torch.data_io.split_plan import LeakageError, check_split_purity
+from tests.data_io.helpers import fixture_plan
 
 
 def test_purity_train_before_val_before_test():

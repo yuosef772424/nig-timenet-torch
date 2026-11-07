@@ -50,13 +50,16 @@ def test_status_is_short():
     n = len(_read("docs/STATUS.md").splitlines())
     assert n < limit, f"docs/STATUS.md has {n} lines, the limit is < {limit}: move detail to docs/ or a PR description"
 
+#: B1.., R0r/T5r/T4b, H5 / H6, I3 (one id or two joined by ' / ')
+STEP_ID = re.compile(r"^(B\d+|([RTHI]\d+[a-z]?r?)( / [RTHI]\d+[a-z]?r?)?)$")
+
 
 def test_status_states_are_the_documented_ones():
     text = _read("docs/STATUS.md")
     assert "States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`." in text
     for line in text.splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if line.startswith("|") and len(cells) >= 5 and re.match(r"^(B\d+|([RTHI]\d+[a-z]?r?)( / [RTHI]\d+[a-z]?r?)?)$", cells[0]):
+        if line.startswith("|") and len(cells) >= 5 and STEP_ID.match(cells[0]):
             state = cells[3] if cells[0].startswith("B") else cells[2]
             assert state in STATE_WORDS or state.startswith("skipped ("), f"{cells[0]}: unknown state {state!r}"
 

@@ -17,10 +17,10 @@ from importlib import import_module
 import pytest
 
 from nig_timenet_torch.colab import bootstrap
+from tests.notebooks.helpers import MAX_CELL_LINES, code_cells
 from tests.scan import ROOT
 
 NB = ROOT / "notebooks" / "colab_nig_timenet_torch.ipynb"
-MAX_CELL_LINES = 22
 SECTIONS = ("## 1. Setup", "## 2. Data", "## 3. Runner")
 
 
@@ -29,8 +29,6 @@ def nb():
     return json.loads(NB.read_text(encoding="utf-8"))
 
 
-def code_cells(nb):
-    return [(i, c, "".join(c["source"])) for i, c in enumerate(nb["cells"]) if c["cell_type"] == "code"]
 
 
 def test_notebook_is_clean_and_thin(nb):

@@ -17,8 +17,7 @@ from importlib import import_module
 import pytest
 
 from nig_timenet_torch.colab import bootstrap
-from tests.data_io.test_artifact import art  # noqa: F401  (fixture)
-from tests.notebooks.test_colab_notebook import MAX_CELL_LINES, code_cells
+from tests.notebooks.helpers import MAX_CELL_LINES, code_cells
 from tests.scan import ROOT
 
 NAMES = ("data_pipeline", "main")

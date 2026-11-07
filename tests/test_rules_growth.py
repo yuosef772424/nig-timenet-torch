@@ -9,19 +9,10 @@ import ast
 import json
 
 from tests import scan
+from tests.ratchet import COUNTS, RATCHETS
+from tests.ratchet import ratchet as _ratchet
 
-RATCHETS = json.loads((scan.ROOT / "tests" / "ratchets.json").read_text(encoding="utf-8"))
-COUNTS = RATCHETS["counts"]
 MODULE_LINES, FUNCTION_LINES = 400, 80
-
-
-def _ratchet(name: str, found: list[str]) -> None:
-    pinned = COUNTS[name]
-    listing = "\n  ".join(found) or "(none)"
-    assert len(found) <= pinned, f"{name} grew: {len(found)} > pinned {pinned} (ratchet only shrinks):\n  {listing}"
-    assert len(found) >= pinned, (f"{name} shrank to {len(found)} (pinned {pinned}): good - lower it in "
-                                  f"tests/ratchets.json (and docs/bottlenecks.csv) so it cannot grow back:\n"
-                                  f"  {listing}")
 
 
 def test_every_pinned_count_has_a_test():
@@ -176,3 +167,16 @@ def test_scan_finds_declared_vocabularies_and_ignores_method_calls(monkeypatch):
     assert scan.declared_vocabularies() == {"fast", "slow"}
     assert [c.split(": ")[0] for c in scan.mode_name_comparisons()] == ["m/a.py:4"]
     assert scan.dead_settings() == ["w/s.py: RunSettings.rolling"]  # a method call of that name is not a read
+
+
+def test_no_test_module_imports_another_test_module():
+    """HF-32: shared fixtures and helpers live in conftest.py / helpers.py, never in a
+    ``test_*.py`` another test imports (it re-registers that module's tests and couples two test files)."""
+    offenders = []
+    for path in sorted((scan.ROOT / "tests").rglob("*.py")):
+        for n in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            mods = ([n.module] if isinstance(n, ast.ImportFrom) and n.module else
+                    [a.name for a in n.names] if isinstance(n, ast.Import) else [])
+            offenders += [f"{path.relative_to(scan.ROOT)}:{n.lineno}: {m}" for m in mods
+                          if m.startswith("tests.") and m.rsplit(".", 1)[-1].startswith("test_")]
+    assert not offenders, "import from a helpers.py / conftest.py, not from a test module:\n  " + "\n  ".join(offenders)

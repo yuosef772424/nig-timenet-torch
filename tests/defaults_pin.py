@@ -65,7 +65,8 @@ def _defined_constants(mod) -> set[str]:
         return set()
     names = set()
     for node in tree.body:
-        targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        targets = (node.targets if isinstance(node, ast.Assign)
+                   else [node.target] if isinstance(node, ast.AnnAssign) else [])
         names |= {t.id for t in targets if isinstance(t, ast.Name)}
     return names
 

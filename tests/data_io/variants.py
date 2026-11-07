@@ -17,7 +17,7 @@ import pandas as pd
 
 from nig_timenet_torch.core.schema import TS_COL
 from tests.contract_doc import DATASET_DIR
-from tests.data_io.test_artifact import write_manifest
+from tests.data_io.helpers import write_manifest
 
 TF_META = {"timeframes": ["4h"], "base_tf": "4h", "window_sizes": {"4h": 16, "1D": 32}, "split_dates": None}
 

@@ -23,7 +23,7 @@ from nig_timenet_torch.workflow.health_report import REPORT_JSON, HealthRun, hea
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
 from tests.contract_doc import DATASET_DIR
 from tests.trainer.fixture_setup import trainer_config
-from tests.trainer.test_fit import identity_for
+from tests.trainer.helpers import identity_for
 
 N_TRAIN, N_VAL = 64, 40
 SMALL = {"d_model": 8, "num_layers": 1, "num_heads": 2, "num_kv_heads": 1, "head_hidden": 8, "class_head_hidden": 6}

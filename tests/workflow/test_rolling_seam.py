@@ -12,7 +12,7 @@ from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.workflow.rolling import rolling_folds, run_rolling_study
 from nig_timenet_torch.workflow.settings import RollingSettings, RunSettings
 from tests.contract_doc import DATASET_DIR
-from tests.data_io.test_split_plan import fixture_plan
+from tests.data_io.helpers import fixture_plan
 
 PARENT = RunIdentity(schema_version=1, settings_hash="a" * 64, seed=0, data_fingerprint="fixture", code_sha="0" * 40)
 
