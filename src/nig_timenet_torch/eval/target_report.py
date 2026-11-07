@@ -1,6 +1,11 @@
-"""PURPOSE: T4/T4b target report for one stage of one run: T-skill, T-conf, T-sharp (per head, std vs the head's own predicted move from the last close) and 80 % coverage.
-TAGS: target report, t-sharp, coverage, uncertainty, evaluation, nig head
-PITFALLS: close-head T-sharp fails even for the true distribution (owner decision O-1): recorded, non-blocking. High/low class AUC is information only (direction suspended, rule D). A zero std scores 1.0 on the share: always read it with coverage.
+"""Target report: T-skill, T-conf, T-sharp and coverage of one stage of one run
+
+PURPOSE:  T4/T4b target report for one stage of one run: T-skill, T-conf, T-sharp (per head, std vs the head's own
+          predicted move from the last close) and 80 % coverage.
+TAGS:     target report, t-sharp, coverage, uncertainty, evaluation, nig head
+PITFALLS: close-head T-sharp fails even for the true distribution (owner decision O-1): recorded, non-blocking.
+          High/low class AUC is information only (direction suspended, rule D). A zero std scores 1.0 on the share:
+          always read it with coverage.
 
 The numbers of the ROADMAP "Targets" block for one stage
 (val or test) of one run, from a validated PredictionTable and its labels. Pure numpy; every metric lives in

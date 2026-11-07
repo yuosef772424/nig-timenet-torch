@@ -1,12 +1,23 @@
-"""
+"""The generic Registry primitive: named components with a declared contract (tier 0, stdlib only)
+
 SOURCE:   Ported close to verbatim from yuosef772424/crypto-signal-prediction core/registry.py at
-          aeafc564f25c78f252936affbd374f68aa49b8d9 (BUILD_PLAN.md P02). Only changes: this provenance line, and
-          `from __future__ import annotations` dropped (stdlib-only import rule of P02; Python >= 3.11 needs it not).
-          TF-side PITFALLS that name TF-repo users (TASK_REGISTRY in trainer/config.py, NORMALIZERS, ...) describe that
-          repo, not this one.
-PURPOSE:  The ONE generic registry primitive (tier 0, stdlib only): `Registry(kind, contract)` registers objects by name with a declared contract (name, version, kind-specific required metadata, optional validator run AT REGISTRATION), raises on a duplicate name, and raises on an unknown name with the list of known names and a did-you-mean hint.
-TAGS:     registry, Registry, Contract, register, contract check at registration, fail early, duplicate name, unknown name, did you mean, one component one interface, plugin, tier 0
-PITFALLS: Used by TASK_REGISTRY (trainer/config.py), HEAD_REGISTRY (model/heads.py), NORMALIZERS and SAMPLE_FILTER_REGISTRY (data/); signal_eval hypotheses are not migrated yet. Dict-style READ API (`reg[name]`, `reg.get(name, default)`, `in`, `len`, iteration = names, `keys/values/items`) returns the entry's mapping VALUE = `view(entry)` (default: the registered object; a registry whose callers read a record passes `view`, e.g. `{"fn": obj, **meta}`); `get(name)` without a default still raises on an unknown name, `get(name, default)` is the dict-compatible form; `items()` is (name, value) pairs and `entries()` the Entry list; there is no item assignment or pop (register / unregister are the only writers). There is NO overwrite flag: registering a name twice raises, so a module that registers at import time must not be re-executed in the same process (use `unregister` in tests, or build a fresh Registry). The validator runs once, at `register`; it must be cheap and must not import TensorFlow at module level (core stays stdlib-only), so a heavy probe (e.g. calling a loss on tiny tensors) is injected by the caller as the validator. A validator reports problems by RETURNING a list of strings (or raising); `check_all()` re-runs it over every entry for a "whole registry still honours its contract" test. `UnknownNameError` subclasses both KeyError and ValueError so a later migration keeps `except KeyError` / `except ValueError` callers working; its str() is the plain message (no KeyError quoting). Metadata is stored by reference, not copied deeply.
+          aeafc564f25c78f252936affbd374f68aa49b8d9 (BUILD_PLAN.md P02). Only changes: this provenance line,
+          `from __future__ import annotations` dropped (Python >= 3.11), the card re-wrapped and its TF-repo user
+          list replaced by a pointer to the registries table of docs/MAP.md (H1, HF-02).
+PURPOSE:  The ONE generic registry: `Registry(kind, contract)` registers objects by name with a declared contract
+          (checked AT REGISTRATION); raises on a duplicate name and on an unknown name (known names + did-you-mean).
+TAGS:     registry, Registry, Contract, register, unknown name, duplicate name, did you mean, one component one
+          interface, plugin, tier 0
+PITFALLS: The 7 registries of this repo (kind, variable, module, names) are listed in the Registries table of
+          docs/MAP.md. Dict-style READ API (`reg[name]`, `reg.get(name, default)`, `in`, `len`, iteration = names,
+          `keys/values/items`) returns the entry's VALUE = `view(entry)` (default: the registered object);
+          `get(name)` without a default raises on an unknown name; `entries()` is the Entry list; there is no item
+          assignment or pop (register / unregister are the only writers). NO overwrite flag: registering a name
+          twice raises, so a module that registers at import time must not be re-executed in one process (use
+          `unregister` in tests or a fresh Registry). The validator runs once, at `register`; it must be cheap and
+          return a list of problem strings (or raise); `check_all()` re-runs it over every entry.
+          `UnknownNameError` subclasses KeyError and ValueError; its str() is the plain message. Metadata is stored
+          by reference, not copied.
 
 Usage:
     TASKS = Registry("task", Contract("task", required_meta=("stat_keys",), validator=check_task))

@@ -67,3 +67,24 @@ numbers of the CSV (line 1 = header).
 ### Actions
 - Next review: after 5 more merged PRs (counter reset in `docs/STATUS.md`).
 - H0b decides PR #25 before any H package starts; H0c writes the post-hardening ROADMAP.
+
+## 2026-11-07 — second review (run inside step H1; covers #27-#31: H0b, H0c, T4b, I1, H2)
+
+New rows since #26: friction 67-78 (12), suggestions 64-93 (30), bottlenecks B-037..B-041 (+ B-033/B-034 updates).
+Every open suggestion row now carries `2026-11-07 review (second): accepted -> <step>`, `done by <step>` or
+`declined (<why>)` in its status column. Totals: accepted 19 (H5 7, I3 3, H3/H4 3, G1/G2 2, I5 1, H6 1, T5r reading 2),
+done by a merged step 5, declined 2 (rows of the unmerged `feat/ar-stream`), owner decision 2.
+
+### Repeated frictions -> rule proposals
+| friction | count | proposal |
+|---|---|---|
+| test-support helpers hard-code a fixture fact (1h bar in `export_block`; `signal_sd=0` NaN; tests importing a helper from another test module) (rows 73, 74, 77) | 3 | not a rule: `tests/artifact_helpers.py` and base-aware helpers (H5 test tooling, suggestions 83, 91) |
+| a count or plan fact was stale when the step started (RULES wording in T4b, allowlist 50 vs 37, B-041 id twice, E501 vs card lines) (rows 71, 72 and H1) | 4 | none new: B6 already covers it; H5 adds a register check (unique bottleneck ids) and H6 refreshes the audit/plan counts |
+| the lint/length conflict of card fields (rows 72, I1 suggestion 85) | 2 | solved by B7 (wrapped fields, no E501 ignore) |
+No new rule beyond B7 and E5 (both landed with H1 / H2). No rule retired.
+
+### Rules whose enforcement is weaker than the table claims
+Unchanged from the first review (G2, G3, B5, F3 counter): F3 ran on time this round (5 PRs, counter reset).
+
+### Actions
+- Next review: after 5 more merged PRs (counter reset in `docs/STATUS.md`).
