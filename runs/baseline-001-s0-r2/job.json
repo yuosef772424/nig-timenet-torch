@@ -1,0 +1,24 @@
+{
+ "args": [],
+ "config": {
+  "batch_size": 512,
+  "device": "cuda",
+  "epochs": 5,
+  "run_dir": "/content/drive/MyDrive/nig_timenet_runs/baseline-001-s0-r2/train",
+  "seed": 0
+ },
+ "device": "cuda",
+ "entry": "baseline",
+ "expected_outputs": [
+  "baseline_summary.json",
+  "health_report.json",
+  "health_report.md",
+  "test_report.json"
+ ],
+ "job_id": "baseline-001-s0-r2",
+ "max_minutes": 170,
+ "needs_drive": true,
+ "note": "T5r baseline-001 seed 0, second run on current main (T4b T-sharp per head, H2 artifact-driven job), 5 epochs (owner), new run_dir because resume across a code change is refused. Smoke baseline-smoke-001 passed on the same commit (rule E5).",
+ "repo_ref": "44f6e7157f29ff5a60b50e91d35118d75a6b49c4",
+ "rerun": false
+}

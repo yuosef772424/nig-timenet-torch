@@ -1,0 +1,26 @@
+{
+ "config": {
+  "batch_size": 512,
+  "device": "cuda",
+  "epochs": 5,
+  "run_dir": "/content/drive/MyDrive/nig_timenet_runs/baseline-001-s0-r2/train",
+  "seed": 0
+ },
+ "device": {
+  "expected": "cuda",
+  "gpu_name": "Tesla T4",
+  "torch_cuda_build": "13.0",
+  "torch_version": "2.14.1+cu130",
+  "used": "cuda"
+ },
+ "git_sha": "44f6e7157f29ff5a60b50e91d35118d75a6b49c4",
+ "input_fingerprint": "c572b1b36960f7b026d969af18f83f8d502b2fcef3c66eeeec146fdaf590eea2",
+ "outputs": {
+  "baseline_summary.json": "f0a328c172272e849fcbb071263f50ecbbbf99ca0e00ac57c4a314a27eaa4aa7",
+  "device.json": "a5c4d8feb4b8b8c47e29f47ae11970f5fe4653f1debea3bd4dbe6dfdae8630c8",
+  "health_report.json": "5879e0c21e57d4a6a6851a75fcba0fbdbb97620812b9a7cbd613d9438bff4c7d",
+  "health_report.md": "fa09d2c99b88c7e23b21a74cd18430f90d440c093418fb8dab92c9049b87811e",
+  "test_report.json": "45160d81a13ced5c099d79566377e07385e1193f79af2dab33c1f818ba8774b3"
+ },
+ "runtime_seconds": 972.4
+}
