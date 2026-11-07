@@ -1,4 +1,8 @@
-"""SELECTION_METRICS: named, FIXED validation metrics for checkpoint / early-stopping selection (C7 second half;
+"""PURPOSE: SELECTION_METRICS registry: named, fixed validation metrics for checkpoint / early-stopping selection (val_raw_loss, per-head AUC and pinball).
+TAGS: selection metric, early stopping, checkpoint selection, validation, auc, pinball
+PITFALLS: val_high_class / val_low_class AUC (val_auc_high_class, val_auc_low_class) are direction metrics, suspended by the owner (rule D): information only, never use them to select; the default is val_raw_loss.
+
+SELECTION_METRICS: named, FIXED validation metrics for checkpoint / early-stopping selection (C7 second half;
 BUILD_PLAN.md P22). A metric's definition never depends on loss weights or lambda schedules, EXCEPT the default
 ``val_raw_loss`` (the TF side's own default, workflow/settings.py: early_stopping_monitor), which is the
 loss-weighted raw loss by construction.

@@ -1,4 +1,8 @@
-"""Entry ``baseline``: one seed of the default model on the contract artifact (ROADMAP T5r, job ``baseline-001``).
+"""PURPOSE: Entry ``baseline``: trains one seed of the default NIG-TimeNet model on the contract artifact, then writes the summary, health report and test report (ROADMAP T5r).
+TAGS: baseline job, colab entry, training run, test report, health report, resume
+PITFALLS: decodes prices with the "return" codec whatever the artifact's reg_target_mode (B-034); T-sharp needs last_close by NAME (LAST_COLUMN_INDEX), not by position; H2 rewrites this job.
+
+Entry ``baseline``: one seed of the default model on the contract artifact (ROADMAP T5r, job ``baseline-001``).
 
 The default model is what TF ``main.ipynb`` builds (BUILD_PLAN.md V1): ``nig_timenet_v2`` with the whole
 ``ANTI_MEMORIZATION_CONFIG`` (GRU encoder + level passthrough), classification label smoothing 0.1. All three price
@@ -29,7 +33,7 @@ import torch
 
 from nig_timenet_torch.colab import contract
 from nig_timenet_torch.colab.identity import identity_for_run
-from nig_timenet_torch.core.schema import TS_COL
+from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TS_COL
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.data_io.artifact import load_artifact
 from nig_timenet_torch.data_io.split_plan import purge_embargo_split, sample_times
@@ -148,6 +152,7 @@ def evaluate_test(trainer, dataset, test_idx, ident, dev, train_end, out, chunk:
     lc = np.asarray(dataset["last_candles"])
     rep = target_report(table, {k: v.numpy() for k, v in y_te.items()},
                         anchors={t: lc[test_idx, i] for i, t in enumerate(TARGETS)},
+                        last_close=lc[test_idx, LAST_COLUMN_INDEX["last_close"]],
                         codec_state=TARGET_CODECS["return"]().fit(dataset))
     (out / TEST_REPORT).write_text(json.dumps(rep, indent=1, default=float), encoding="utf-8")
     return rep
@@ -164,6 +169,7 @@ def _health(trainer, dataset, val_idx, x_val, y_val, ident, run_dir, dev, max_ro
     anchors = {t: lc[idx, i] for i, t in enumerate(TARGETS)}
     labels = {k: v[torch.as_tensor(pick)].numpy() for k, v in y_val.items()}
     run = HealthRun(run_dir=run_dir, model=trainer.model, x=xs, predictions=table, labels=labels, anchors=anchors,
+                    last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]],
                     codec_state=TARGET_CODECS["return"]().fit(dataset), probe_points=("trunk_norm",),
                     probe_labels=tuple(head_spec(k, "close").label_key
                                        for k in ("nig_regression", "binary_classification")))

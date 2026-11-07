@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import torch
 
+from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
 from nig_timenet_torch.data_io import npy_dir
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS
 from nig_timenet_torch.trainer.trainer import FitSettings
@@ -40,7 +41,8 @@ def run(tmp_path_factory):
                ("high", "low", "close")}
     labels = {k: v[va].numpy() for k, v in y.items()}
     return HealthRun(run_dir=run_dir, model=trainer.model, x=x[va], predictions=table, labels=labels,
-                     anchors=anchors, codec_state=state, probe_points=("trunk_norm",),
+                     anchors=anchors, last_close=np.asarray(d["last_candles"])[idx, LAST_COLUMN_INDEX["last_close"]],
+                     codec_state=state, probe_points=("trunk_norm",),
                      probe_labels=("y_close_reg", "y_close_class")), run_dir
 
 
@@ -61,6 +63,12 @@ def test_health_report_writes_json_and_markdown(run):
     md = (run_dir / REPORT_MD).read_text(encoding="utf-8")
     assert md.startswith("# Health report") and "## Targets" in md and "## NIG floor-hit shares" in md
     assert "## Trainer trace" in md and len(md.splitlines()) < 80
+    assert "std<move share" in md and "range-share" not in md
+    assert md.count("info only (direction suspended)") == 2          # high and low AUC cells, not close
+    assert "(informational, O-1)" in md                                # close-head T-sharp verdict
+    sh = data["targets"]["targets"]["close"]["sharp"]
+    assert "share_std_below_move" in sh and sh["blocking"] is False
+    assert all("share_std_below_move" in data["targets"]["targets"][t]["sharp"] for t in ("high", "low"))
 
 
 def test_missing_checkpoint_and_misaligned_rows_raise(run, tmp_path):
