@@ -33,7 +33,7 @@ def _same(a, b, path=""):
             _same(a[k], b[k], f"{path}.{k}")
     elif isinstance(a, list):
         assert isinstance(b, list) and len(a) == len(b), path
-        for i, (x, y) in enumerate(zip(a, b)):
+        for i, (x, y) in enumerate(zip(a, b, strict=True)):
             _same(x, y, f"{path}[{i}]")
     elif isinstance(a, float) or isinstance(b, float):
         if a is None or b is None or (isinstance(a, float) and np.isnan(a)):
