@@ -1,9 +1,18 @@
-"""Raw candle sources. A source is a callable ``load(name) -> DataFrame`` indexed by UTC time with
+"""Raw candle sources
+
+PURPOSE: Candle sources (files in the old layout, Speirsy11 parquet, synthetic) and OHLCV re-aggregation of finer
+    bars up to the requested interval.
+TAGS: candle source, files, parquet, synthetic, resample ohlcv, interval, full bars
+PITFALLS: re-aggregation keeps full bars only and first/max/min/last/sum rules of the old project; adding a source
+    is one function plus one SOURCES line.
+
+Raw candle sources. A source is a callable ``load(name) -> DataFrame`` indexed by UTC time with
 open/high/low/close/volume. The ``files`` source reads the layout crypto-signal-prediction reads
 (``<root>/<raw_dir>/<SYMBOL>.csv`` or ``.csv.gz``, columns ``datetime_utc`` or ``timestamp`` + OHLCV; a pattern ending
 in ``.parquet`` reads the public Speirsy11 dataset files ``ohlc_<SYMBOL>_<interval>.parquet``); data.fetch downloads
 that layout from the same two Binance sources. ``synthetic`` is a seeded market for tests and demos.
-Adding a source is one function and one ``SOURCES`` registration."""
+Adding a source is one function and one ``SOURCES`` registration.
+"""
 
 import re
 from pathlib import Path
@@ -13,6 +22,7 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.registry import Contract, Registry
+from nig_timenet_torch.core.schema import OHLCV_COLUMNS
 from nig_timenet_torch.data.coins import coins_of
 from nig_timenet_torch.data.fetch import raw_path, read_registry
 from nig_timenet_torch.data.settings import SourceSettings
@@ -21,7 +31,7 @@ __all__ = ["SOURCES", "make_loader", "resolve_coins", "read_candles", "synthetic
            "normalize_tf", "resample_ohlcv"]
 
 SOURCES = Registry("source", Contract("source", required_meta=("needs_path",)))
-_COLUMNS = ["open", "high", "low", "close", "volume"]
+_COLUMNS = list(OHLCV_COLUMNS)
 _TIME_COLUMNS = ("datetime_utc", "timestamp", "open_time", "time", "date")
 #: how base bars combine into a higher-timeframe bar (the old project's OHLCV_AGG, verbatim)
 OHLCV_AGG = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}

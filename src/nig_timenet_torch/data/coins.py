@@ -1,6 +1,16 @@
-"""The coin universe the data pipeline can pick from, by category (same lists as crypto-signal-prediction's
+"""Coin universe by category
+
+PURPOSE: The coin lists of the old project by category; SourceSettings.coins always wins when non-empty.
+TAGS: coin universe, categories, symbols, source settings
+PITFALLS: a verbatim copy of the old lists at porting time; a new listing on the exchange does not appear here by
+    itself.
+
+The coin universe the data pipeline can pick from, by category (same lists as crypto-signal-prediction's
 data/defaults.py COINS_BY_CATEGORY at the time of porting). A category is only a convenient way to name coins:
-``SourceSettings.coins`` always wins when it is non-empty."""
+``SourceSettings.coins`` always wins when it is non-empty.
+"""
+
+__all__ = ["coins_of"]
 
 COINS_BY_CATEGORY: dict[str, tuple[str, ...]] = {
     "Large_Caps": (

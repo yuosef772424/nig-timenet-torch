@@ -1,4 +1,12 @@
-"""Download raw candles into the layout crypto-signal-prediction reads, with the same file and column names:
+"""Binance candle download
+
+PURPOSE: Download raw candles (Binance USDT-perpetual API and the public data.binance.vision archive) into the
+    layout the old project reads.
+TAGS: fetch, binance, klines, csv layout, asset registry, resume
+PITFALLS: network code, not exercised by CI (tests use a fake Http); files resume from the last row, so a corrupt
+    last row must be removed by hand.
+
+Download raw candles into the layout crypto-signal-prediction reads, with the same file and column names:
 
     <root>/<raw_dir>/<SYMBOL>.csv[.gz]       timestamp (ms), datetime_utc, open, high, low, close, volume,
                                              quote_volume, trades, taker_buy_volume, taker_buy_quote_volume
@@ -19,13 +27,14 @@ from pathlib import Path
 
 import pandas as pd
 
+from nig_timenet_torch.core.schema import OHLCV_COLUMNS
 from nig_timenet_torch.data.settings import SourceSettings
 from nig_timenet_torch.data.timeframe import tf_timedelta
 
 __all__ = ["CSV_HEADER", "Http", "kline_row", "fmt_dt", "raw_path", "fetch_symbol", "fetch_all", "update_registry",
            "file_stats", "read_registry"]
 
-CSV_HEADER = ["timestamp", "datetime_utc", "open", "high", "low", "close", "volume", "quote_volume", "trades",
+CSV_HEADER = ["timestamp", "datetime_utc", *OHLCV_COLUMNS, "quote_volume", "trades",
               "taker_buy_volume", "taker_buy_quote_volume"]
 FAPI = "https://fapi.binance.com"
 VISION = "https://data.binance.vision"
@@ -164,7 +173,7 @@ def file_stats(path: Path, interval_ms: int) -> dict:
         for row in reader:
             try:
                 ts = int(row[0])
-                o, h, lo, c, v = (float(row[idx[k]]) for k in ("open", "high", "low", "close", "volume"))
+                o, h, lo, c, v = (float(row[idx[k]]) for k in OHLCV_COLUMNS)
             except (ValueError, IndexError, KeyError):
                 bad += 1
                 continue

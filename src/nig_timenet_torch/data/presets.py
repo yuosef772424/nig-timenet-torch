@@ -1,5 +1,13 @@
-"""Named patches for `DataSettings.updated(...)`, each a dict of dotted keys. A preset is one entry here; the
-defaults of DataSettings already are the production hourly preset, the others are small changes on top."""
+"""Data presets
+
+PURPOSE: Named patches (dotted keys) for DataSettings.updated; the defaults already are the production hourly
+    preset.
+TAGS: presets, data settings, dotted keys, tiny, 4h
+PITFALLS: a preset is a patch, not a full config: unknown keys raise when applied.
+
+Named patches for `DataSettings.updated(...)`, each a dict of dotted keys. A preset is one entry here; the
+defaults of DataSettings already are the production hourly preset, the others are small changes on top.
+"""
 
 from nig_timenet_torch.data.settings import DataSettings
 

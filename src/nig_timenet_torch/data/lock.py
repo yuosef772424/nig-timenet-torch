@@ -1,6 +1,15 @@
-"""The sealed-coin list of the holdout lock (a copy of crypto-signal-prediction docs/research/plan/lock/holdout.json
+"""Holdout lock
+
+PURPOSE: The sealed-coin list of the holdout lock, shipped as a hash-pinned package resource; sealed coins are never
+    built.
+TAGS: holdout lock, sealed coins, time seal, sha256, package resource
+PITFALLS: the packaged holdout.json must hash to the value pinned in data_io; changing it needs an owner decision,
+    not an edit.
+
+The sealed-coin list of the holdout lock (a copy of crypto-signal-prediction docs/research/plan/lock/holdout.json
 shipped as a package resource). The pipeline never builds a window of a sealed coin: the contract artifact
-(data_io.artifact) refuses any that is listed. The file's hash is checked against the value pinned in data_io."""
+(data_io.artifact) refuses any that is listed. The file's hash is checked against the value pinned in data_io.
+"""
 
 import hashlib
 import json

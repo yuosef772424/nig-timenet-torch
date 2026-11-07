@@ -1,4 +1,11 @@
-"""The data pipeline as one call: settings -> dataset dict -> (optionally) a contract artifact on disk."""
+"""Data pipeline entry
+
+PURPOSE: The data pipeline as one call: settings to dataset dict to an optional contract artifact on disk.
+TAGS: pipeline, build artifact, settings, summary
+PITFALLS: writes only when output.path is set; the artifact writer applies the time seal, this module does not.
+
+The data pipeline as one call: settings -> dataset dict -> (optionally) a contract artifact on disk.
+"""
 
 import logging
 

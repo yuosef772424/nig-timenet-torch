@@ -1,4 +1,11 @@
-"""The registry of custom feature families and the `Bars` view they all read.
+"""Custom feature registry
+
+PURPOSE: The registry of custom feature families and the Bars view they read; adding a family is one function plus
+    one decorator line.
+TAGS: custom features, registry, bars, family order
+PITFALLS: unknown family names raise; the registration order is the column order, so insert new families at the end.
+
+The registry of custom feature families and the `Bars` view they all read.
 
 A family is one function ``fn(bars, settings)`` that adds its columns to ``bars.df``; adding a family is one new
 function plus one ``@CUSTOM_FEATURES.decorator(...)`` line, nothing else changes. Families run in ascending `order`
@@ -12,6 +19,8 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.registry import Contract, Registry
+
+__all__ = ["Bars", "hour_features_meaningful"]
 
 EPS = 1e-12
 

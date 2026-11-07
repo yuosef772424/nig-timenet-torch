@@ -1,4 +1,12 @@
-"""Settings of the native data pipeline (raw candles -> windows -> contract artifact).
+"""Data settings tree
+
+PURPOSE: Strict frozen settings of the native data pipeline: one dataclass per section, unknown keys raise, whole
+    tree round-trips through JSON.
+TAGS: data settings, frozen dataclass, dotted keys, defaults, round trip, strict
+PITFALLS: defaults reproduce the TF production preset; changing one is a decision (docs/decisions), pinned by
+    tests/pins/defaults.json.
+
+Settings of the native data pipeline (raw candles -> windows -> contract artifact).
 
 One strict, frozen settings tree replaces the global CONFIG dict of crypto-signal-prediction's data/ package: every
 section is a frozen dataclass, unknown keys raise (rule B5), ``DataSettings.updated({...})`` is the way a notebook
@@ -10,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from nig_timenet_torch.core import config as cfg
+from nig_timenet_torch.core.schema import OHLCV_COLUMNS, TARGET_COLUMNS
 from nig_timenet_torch.data.targets import ENTRY_CLOSE_REGS, TARGET_RAW, parse_mode
 
 __all__ = ["SourceSettings", "CustomFeatureSettings", "MarketSettings", "BreadthSettings", "RankSettings",
@@ -22,7 +31,7 @@ FETCH_SOURCES = ("", "futures", "vision")
 HIGHER_TF_MODES = ("legacy", "closed")
 PRICE_NORM_MODES = ("window_scale", "pct_change")
 SCALER_TYPES = ("robust", "minmax")
-PRICE_TARGETS = ("high", "low", "close")
+PRICE_TARGETS = TARGET_COLUMNS
 
 
 def _tuple(value: Any) -> Any:
@@ -158,7 +167,7 @@ class FeatureSettings:
     indicator_settings: dict = field(default_factory=_default_indicators)
     static_indicators: tuple[str, ...] = ()
     static_indicator_params: dict = field(default_factory=dict)
-    exclude_from_features: tuple[str, ...] = ("open", "high", "low", "ADX_14", "BBL_20_2.0", "BBM_20_2.0",
+    exclude_from_features: tuple[str, ...] = (*OHLCV_COLUMNS[:3], "ADX_14", "BBL_20_2.0", "BBM_20_2.0",
                                               "BBU_20_2.0", "BBP_20_2.0", "SUPERT_DIR_10", "MKT_ret_1")
     custom: CustomFeatureSettings = field(default_factory=CustomFeatureSettings)
     market: MarketSettings = field(default_factory=MarketSettings)

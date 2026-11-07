@@ -1,4 +1,11 @@
-"""Time-frame names: pandas offset aliases are case sensitive and deprecated for hours, so names are normalised once."""
+"""Time-frame names
+
+PURPOSE: Normalise time-frame names once (pandas offset aliases are case sensitive and deprecated for hours).
+TAGS: time frame, normalise, offset alias, timedelta
+PITFALLS: '1H' is deprecated in pandas; always pass names through normalize_tf before resampling.
+
+Time-frame names: pandas offset aliases are case sensitive and deprecated for hours, so names are normalised once.
+"""
 
 import re
 

@@ -1,4 +1,12 @@
-"""``python -m nig_timenet_torch.data.cli``: build or download data from the command line.
+"""nig-data command line
+
+PURPOSE: Build, fetch or show the resolved settings of the native data pipeline from the command line (python -m
+    nig_timenet_torch.data.cli).
+TAGS: cli, nig-data, console script, build, fetch, settings override
+PITFALLS: an entry point declared in pyproject.toml: nothing imports it, so the G8 orphan scan reads the script
+    table; unknown dotted keys raise.
+
+``python -m nig_timenet_torch.data.cli``: build or download data from the command line.
 
     build  [--preset NAME ...] [--config FILE.json] [--set dotted.key=VALUE ...]
            builds the dataset and writes it when output.path is set

@@ -1,4 +1,12 @@
-"""Regression/class targets from the last-candle record, and switching them after the data is built.
+"""Targets from the last candle
+
+PURPOSE: Regression and class targets from the last-candle record, and retarget() to switch the target mode after
+    the data is built.
+TAGS: targets, target modes, retarget, last candle, regression, class, clip
+PITFALLS: a target mode is one function in TARGET_RAW (unknown names raise); scale and clip are part of the target,
+    so decode with decode_reg.
+
+Regression/class targets from the last-candle record, and switching them after the data is built.
 
 A target mode is a function ``raw(P, price, close_reg) -> r`` registered in ``TARGET_RAW`` (G8: one function, one
 registration line). ``target_arrays`` turns ``r`` into ``{price}_class`` (1.0 when the head's direction is up) and
@@ -20,7 +28,7 @@ import pandas as pd
 
 from nig_timenet_torch.core.prediction_schema import OUTPUT_PREFIX
 from nig_timenet_torch.core.registry import Contract, Registry
-from nig_timenet_torch.core.schema import LAST_COLUMNS, LAST_DTYPE
+from nig_timenet_torch.core.schema import LAST_COLUMNS, LAST_DTYPE, TARGET_COLUMNS
 
 __all__ = ["TARGET_RAW", "ENTRY_CLOSE_REGS", "TargetInfo", "parse_mode", "target_arrays", "retarget", "decode_reg",
            "mode_names", "price_columns"]
@@ -139,7 +147,7 @@ def _entry_range(P, price, close_reg):
     """Non-negative distances from the entry (last close); direction lives only in the class heads. Gaps (the
     horizon high below the entry, or its low above it) are zero, not negative."""
     entry = P["last_close"]
-    if price in ("high", "low"):
+    if price in TARGET_COLUMNS[:2]:
         sign = 1.0 if price == "high" else -1.0
         ratio = P[_FUTURE[price]] / entry - 1.0
         return np.maximum(sign * ratio, 0.0)

@@ -1,4 +1,12 @@
-"""Run the registered custom feature families over a frame (see custom_registry)."""
+"""Run custom feature families
+
+PURPOSE: Run the registered custom feature families over a frame in registry order.
+TAGS: custom features, families, registry order, feature matrix
+PITFALLS: families run in ascending order, which is also the column order of the feature matrix; reordering changes
+    the artifact.
+
+Run the registered custom feature families over a frame (see custom_registry).
+"""
 
 import pandas as pd
 

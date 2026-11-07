@@ -1,4 +1,12 @@
-"""Technical indicators (pandas_ta_classic by name) + the custom families, and the feature list derived from them.
+"""Indicators and feature list
+
+PURPOSE: Compute pandas_ta_classic indicators by name plus the custom families, and derive the feature list from
+    what really ran.
+TAGS: indicators, pandas_ta_classic, feature list, synthetic frame, exclude from features
+PITFALLS: needs the [data] extra; the feature list is never hand-written, it is what add_indicators yields on a
+    synthetic frame.
+
+Technical indicators (pandas_ta_classic by name) + the custom families, and the feature list derived from them.
 
 The feature list is never written by hand: it is whatever `add_indicators` produces on a synthetic frame with the
 current settings, minus ``exclude_from_features`` (so it always matches the indicators that really ran).
@@ -7,13 +15,14 @@ current settings, minus ``exclude_from_features`` (so it always matches the indi
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.core.schema import OHLCV_COLUMNS
 from nig_timenet_torch.data.custom_features import add_custom_features
 from nig_timenet_torch.data.settings import FeatureSettings
 from nig_timenet_torch.data.ta_backend import ta_module
 
 __all__ = ["add_indicators", "synthetic_ohlcv", "base_feature_columns", "OHLCV"]
 
-OHLCV = ("open", "high", "low", "close", "volume")
+OHLCV = OHLCV_COLUMNS
 
 #: indicators whose parameters are tuples (one call per tuple) -> the keyword names of the call
 _TUPLE_PARAMS = {"stoch": ("fast_k", "slow_k"), "stochrsi": ("rsi_length", "stoch_length"),

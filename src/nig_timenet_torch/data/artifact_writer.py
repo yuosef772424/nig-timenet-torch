@@ -1,4 +1,12 @@
-"""Write a built dataset as a contract artifact (npy_dir + manifest ``export`` block) that
+"""Contract artifact writer
+
+PURPOSE: Write a built dataset as a contract artifact (npy_dir plus manifest export block) that
+    data_io.load_artifact accepts, dropping sealed coins and windows after the time seal.
+TAGS: artifact writer, contract artifact, manifest, time seal, sealed coins, sha256
+PITFALLS: windows at or after the time seal are dropped, never clipped (rule D1); the folder is renamed into place,
+    manifest last, so a half-written artifact never loads.
+
+Write a built dataset as a contract artifact (npy_dir + manifest ``export`` block) that
 ``data_io.artifact.load_artifact`` accepts.
 
 Windows whose label bar is at or after the time seal are dropped (never clipped) and so is every sealed coin; the

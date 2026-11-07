@@ -1,4 +1,12 @@
-"""One coin's frames -> windows, targets and the last-candle record (the unit the pipeline builds datasets from).
+"""Windows of one coin
+
+PURPOSE: One coin's frames to windows, targets and the last-candle record, the unit the pipeline builds datasets
+    from.
+TAGS: windows, last candle, targets, horizon, stride, sample filter
+PITFALLS: a window ends at base bar t and its future bars are strictly after t; the time seal is applied later by
+    the artifact writer.
+
+One coin's frames -> windows, targets and the last-candle record (the unit the pipeline builds datasets from).
 
 For a window that ends at base bar ``t`` and a horizon of ``h`` base bars:
 * ``{p}_class`` is 1 when the future price of ``p`` (high: the highest high of the next h bars, low: the lowest
@@ -16,7 +24,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import LAST_COLUMNS, LAST_DTYPE
+from nig_timenet_torch.core.schema import LAST_COLUMNS, LAST_DTYPE, TARGET_COLUMNS
 from nig_timenet_torch.data.align import align_windows, is_closed_mode
 from nig_timenet_torch.data.scaling import process_windows, window_scale_params
 from nig_timenet_torch.data.settings import DataSettings
@@ -105,7 +113,7 @@ def prepare_asset(dfs: dict[str, pd.DataFrame], features: list[str], settings: D
     w, tg, sc = settings.windows, settings.targets, settings.scaling
     base_tf = w.tf_order[0]
     price_df = dfs[base_tf].sort_index()
-    for col in ("high", "low", "close"):
+    for col in TARGET_COLUMNS:
         if col not in price_df.columns:
             raise ValueError(f"column {col!r} is missing from the base frame {base_tf!r}; targets need it even "
                              "when it is excluded from the features")
@@ -127,7 +135,7 @@ def prepare_asset(dfs: dict[str, pd.DataFrame], features: list[str], settings: D
 def _assemble(settings, price_df, features, windows, end_idx, end_times, sc) -> AssetWindows:
     w, tg = settings.windows, settings.targets
     base_tf = w.tf_order[0]
-    high, low, close = (price_df[c].to_numpy(dtype="float64") for c in ("high", "low", "close"))
+    high, low, close = (price_df[c].to_numpy(dtype="float64") for c in TARGET_COLUMNS)
     last = np.zeros((len(end_idx), len(LAST_COLUMNS)), dtype=LAST_DTYPE)
     last[:, 0], last[:, 1], last[:, 2] = high[end_idx], low[end_idx], close[end_idx]
     last[:, 3] = price_df.index.as_unit("ns").asi8[end_idx]

@@ -1,4 +1,12 @@
-"""Raw candles of many coins -> the dataset dict every other module reads (the same keys as the npy_dir format).
+"""Dataset build
+
+PURPOSE: Turn the raw candles of many coins into the dataset dict every other module reads, with two passes so
+    cross-asset columns see the whole universe.
+TAGS: dataset build, two pass, cross asset, windows, skipped assets, feature order
+PITFALLS: sealed coins are never loaded; a too-short coin is recorded in skipped_assets with its reason, not
+    silently dropped.
+
+Raw candles of many coins -> the dataset dict every other module reads (the same keys as the npy_dir format).
 
 Two passes, like the reference pipeline: a light first pass resamples high/low/close of every coin so the
 cross-asset columns (breadth, momentum rank, orthogonal momentum) can see the whole universe; the second pass builds
@@ -16,6 +24,7 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.prediction_schema import OUTPUT_PREFIX
+from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.data.align import HLC_AGG, is_closed_mode, keep_full_bars, resample_frames
 from nig_timenet_torch.data.context import (
     add_breadth,
@@ -100,7 +109,7 @@ def _first_pass(names: list[str], loader, settings: DataSettings) -> dict:
             continue
         if len(raw) < min_len * 2:
             continue
-        frames = resample_frames(raw[["high", "low", "close"]], w, HLC_AGG)
+        frames = resample_frames(raw[list(TARGET_COLUMNS)], w, HLC_AGG)
         out[name] = {tf: df.dropna(how="all") for tf, df in frames.items()}
         if closed:
             base = out[name][w.tf_order[0]]

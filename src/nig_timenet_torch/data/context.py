@@ -1,4 +1,12 @@
-"""Cross-asset feature columns: how a coin relates to the reference coin (market context), how much of the universe
+"""Cross-asset feature columns
+
+PURPOSE: Market context, breadth, momentum rank and orthogonal momentum columns: how a coin relates to the reference
+    coin and to the universe.
+TAGS: cross asset, market context, breadth, momentum rank, orthogonal momentum
+PITFALLS: shared frames are computed once from every coin's high/low/close; missing information gives neutral
+    values, not NaN.
+
+Cross-asset feature columns: how a coin relates to the reference coin (market context), how much of the universe
 is advancing (breadth), where its momentum ranks (momentum rank) and its momentum with volatility taken out
 (orthogonal momentum). The `*_columns` functions name the columns, `build_*` compute the shared frames once from
 every coin's high/low/close, and `add_*` attach them to one coin's frames (missing information -> neutral values).
@@ -7,6 +15,7 @@ every coin's high/low/close, and `add_*` attach them to one coin's frames (missi
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.data.settings import FeatureSettings, ScalingSettings, WindowSettings
 
 __all__ = ["market_columns", "rank_columns", "breadth_columns", "orth_columns", "cross_columns",
@@ -188,7 +197,7 @@ def add_rank(dfs: dict, rank_dfs: dict | None, f: FeatureSettings) -> dict:
 def _natr(df: pd.DataFrame, length: int) -> pd.Series:
     from nig_timenet_torch.data.ta_backend import ta_module
     ta_module()
-    out = df[["high", "low", "close"]].astype("float64").ta.natr(length=int(length))
+    out = df[list(TARGET_COLUMNS)].astype("float64").ta.natr(length=int(length))
     return pd.Series(np.asarray(out, dtype="float64"), index=df.index)
 
 
@@ -222,7 +231,7 @@ def build_orth(data: dict, f: FeatureSettings, w: WindowSettings, s: ScalingSett
         natr = {}
         for asset, tf_dict in data.items():
             df = tf_dict.get(tf)
-            if df is None or not {"high", "low", "close"} <= set(df.columns):
+            if df is None or not set(TARGET_COLUMNS) <= set(df.columns):
                 continue
             log_close = np.log(df["close"].astype("float64").clip(lower=LOG_FLOOR))
             for h in horizons:

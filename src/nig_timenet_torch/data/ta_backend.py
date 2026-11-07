@@ -1,5 +1,13 @@
-"""The technical-analysis backend (pandas_ta_classic), imported on first use so the rest of the package works
-without it. Importing the module registers the ``DataFrame.ta`` accessor the indicators are called through."""
+"""Indicator library import
+
+PURPOSE: Import pandas_ta_classic on first use so the rest of the package works without the [data] extra.
+TAGS: ta backend, pandas_ta_classic, lazy import, data extra
+PITFALLS: importing registers the DataFrame.ta accessor as a side effect; a missing extra raises at first use, not
+    at import.
+
+The technical-analysis backend (pandas_ta_classic), imported on first use so the rest of the package works
+without it. Importing the module registers the ``DataFrame.ta`` accessor the indicators are called through.
+"""
 
 from types import ModuleType
 

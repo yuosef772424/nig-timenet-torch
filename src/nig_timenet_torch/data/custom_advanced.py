@@ -1,7 +1,16 @@
-"""Custom feature families that are off by default: fractals, RVI / Fisher, range-based volatility estimators and
+"""Advanced custom features
+
+PURPOSE: Custom feature families that are off by default: fractals, RVI, Fisher, range volatility, mean reversion,
+    jumps, SAR, regime and risk-adjusted momentum.
+TAGS: custom features, advanced, volatility estimators, mean reversion, hurst, jumps
+PITFALLS: all causal (current and earlier bars only); a new family needs a causality test, never center=True rolling
+    windows.
+
+Custom feature families that are off by default: fractals, RVI / Fisher, range-based volatility estimators and
 illiquidity, mean reversion (variance ratio, Hurst), jumps, RSI divergence, trend age, direction consistency,
 volatility asymmetry, parabolic SAR, crash/rebound regime, risk-adjusted momentum and distance from the high.
-All are causal (see custom_basic)."""
+All are causal (see custom_basic).
+"""
 
 from functools import partial
 
@@ -10,6 +19,11 @@ import pandas as pd
 
 from nig_timenet_torch.data.custom_registry import CUSTOM_FEATURES, EPS, Bars
 from nig_timenet_torch.data.settings import CustomFeatureSettings
+
+__all__ = ["fractal_columns", "bars_since_last_true", "variance_ratio_stat", "hurst_variance_scaling",
+           "bipower_variation", "fractal", "rvi", "fisher", "vol_estimators", "mean_reversion", "jump",
+           "rsi_divergence", "trend_age", "direction_consistency", "vol_asymmetry", "psar", "crash_rebound",
+           "risk_adj_momentum", "ath_distance"]
 
 REG = CUSTOM_FEATURES.decorator
 

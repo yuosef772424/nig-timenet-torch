@@ -1,4 +1,12 @@
-"""Per-window normalisation of the inputs (price_norm_mode "window_scale" and "pct_change").
+"""Per-window input scaling
+
+PURPOSE: Per-window normalisation of the input features (window_scale and pct_change) with a kind chosen by the
+    column-name prefix.
+TAGS: scaling, normalisation, window scale, pct change, feature kinds, prefix
+PITFALLS: a column takes the kind of its longest matching prefix and unmatched columns are standardised per window;
+    the prefix table is generated from the TF pipeline.
+
+Per-window normalisation of the inputs (price_norm_mode "window_scale" and "pct_change").
 
 Every feature column has a kind chosen by its name prefix (RSI is an oscillator in [0, 100], RET_ a heavy-tailed
 return, volume is log-scaled, ...); the kind decides how a window of that column is mapped to roughly [-1, 1].
@@ -7,6 +15,7 @@ Prices are centred and scaled with the window's own robust statistics so a windo
 
 import numpy as np
 
+from nig_timenet_torch.core.schema import OHLCV_COLUMNS
 from nig_timenet_torch.data.settings import ScalingSettings
 
 __all__ = ["classify_feature", "calc_scale_params", "window_scale_params", "process_windows", "KIND_PREFIXES",
@@ -22,7 +31,7 @@ FLAG_SUFFIX = "_available"
 # matching prefix, anything unmatched is "cumulative" (standardised per window).
 KIND_PREFIXES: dict[str, tuple[str, ...]] = {
     "price_level": (
-        "open", "high", "low", "close", "hl2", "HLC3", "OHLC4", "WCP", "SMA", "EMA", "WMA", "DEMA", "TEMA",
+        *OHLCV_COLUMNS[:4], "hl2", "HLC3", "OHLC4", "WCP", "SMA", "EMA", "WMA", "DEMA", "TEMA",
         "TRIMA", "HMA", "RMA", "VWMA", "VWAP", "ALMA", "T3_", "ZL_EMA", "ZLMA", "KAMA", "FWMA", "SINWMA",
         "SSF", "SWMA", "PWMA", "LINREG", "MIDPOINT", "MIDPRICE", "BBL", "BBM", "BBU", "DCL", "DCM", "DCU",
         "KCL", "KCB", "KCU", "SUPERT", "PSAR", "ICHIMOKU", "ISA_", "ISB_", "ITS_", "IKS_",

@@ -1,4 +1,12 @@
-"""Resampling to the requested time frames and cutting aligned windows out of the per-frame feature matrices.
+"""Resampling and aligned windows
+
+PURPOSE: Resample candles to each time frame and cut windows that end on the base frame, without look-ahead across
+    frames.
+TAGS: resample, time frame, aligned windows, closed bars, legacy mode, no look-ahead
+PITFALLS: closed mode keeps complete higher bars only (an unfinished bar would leak the future); legacy mode is the
+    TF fixed-count behaviour.
+
+Resampling to the requested time frames and cutting aligned windows out of the per-frame feature matrices.
 
 Windows end on the base frame; with several frames every higher-frame window is chosen so that it only contains
 information that was already known at the base bar the window ends on ("closed": complete higher bars only;
@@ -8,6 +16,7 @@ information that was already known at the base bar the window ends on ("closed":
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.data.settings import WindowSettings
 from nig_timenet_torch.data.timeframe import normalize_tf
 
@@ -15,7 +24,7 @@ __all__ = ["OHLCV_AGG", "HLC_AGG", "is_closed_mode", "keep_full_bars", "resample
            "align_windows"]
 
 OHLCV_AGG = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
-HLC_AGG = {k: OHLCV_AGG[k] for k in ("high", "low", "close")}
+HLC_AGG = {k: OHLCV_AGG[k] for k in TARGET_COLUMNS}
 
 
 def is_closed_mode(w: WindowSettings) -> bool:

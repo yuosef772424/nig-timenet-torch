@@ -1,12 +1,24 @@
-"""Custom feature families built from the bars alone: returns, relative range, candle shape, position in range,
+"""Basic custom features
+
+PURPOSE: Custom feature families built from the bars alone: returns, relative range, candle shape, position in
+    range, volume z-score, calendar.
+TAGS: custom features, basic, returns, candle shape, calendar, volume z-score
+PITFALLS: all causal (positive shifts, rolling without center); calendar features are meaningful only for intraday
+    frames.
+
+Custom feature families built from the bars alone: returns, relative range, candle shape, position in range,
 volatility ratios, volume z-score, calendar, supertrend stretch and the short/long volatility term structure.
-All are causal: they use the current and earlier bars only (positive shifts, rolling windows without `center`)."""
+All are causal: they use the current and earlier bars only (positive shifts, rolling windows without `center`).
+"""
 
 import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.data.custom_registry import CUSTOM_FEATURES, EPS, Bars, hour_features_meaningful
 from nig_timenet_torch.data.settings import CustomFeatureSettings
+
+__all__ = ["returns", "range_rel", "position_in_range", "vol_ratio", "volume_z", "calendar", "supertrend",
+           "vol_term_structure"]
 
 REG = CUSTOM_FEATURES.decorator
 
