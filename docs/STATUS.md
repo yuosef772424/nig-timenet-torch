@@ -16,7 +16,7 @@ One builder session per package, in this order, each merged before the next. T5r
 | H0b | Read PR #25 (`feat/ar-stream`), decide what to adopt | merged | [#27](https://github.com/yuosef772424/nig-timenet-torch/pull/27) | `docs/hardening/BRANCH_AR_STREAM.md`, packages I1..I7 |
 | H0c | Post-hardening ROADMAP + model development protocol | merged | [#28](https://github.com/yuosef772424/nig-timenet-torch/pull/28) | `docs/MODEL_DEV_PROTOCOL.md` (rule C6); I4 split (rolling -> F2, panel parked), I7 not opened |
 | T4b | T-sharp per head vs predicted move (ROADMAP fix, first) | merged | [#29](https://github.com/yuosef772424/nig-timenet-torch/pull/29) | key `share_std_below_move`; close verdict informational (O-1); before any T5r number is read |
-| I1 | Loading and config foundations | todo | | before H2 |
+| I1 | Loading and config foundations | merged | [#30](https://github.com/yuosef772424/nig-timenet-torch/pull/30) | D1 mandatory in `load_dataset` (`allow_unchecked`); D-007; before H2 |
 | H2 | Job runs read the artifact; GPU smoke path | todo | | closes #21-#23 classes; rule E5 |
 | H1 | Card convention + navigation map | todo | | rule B7 |
 | I5 | Evaluation battery + adapter | todo | | |
