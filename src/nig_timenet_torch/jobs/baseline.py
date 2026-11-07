@@ -1,15 +1,17 @@
 """Entry ``baseline``: one seed of the default model on the contract artifact (ROADMAP T5r, job ``baseline-001``).
 
-The default model is what TF ``main.ipynb`` builds (ORACLE_REVIEW V1): ``nig_timenet_v2`` with the whole
+The default model is what TF ``main.ipynb`` builds (BUILD_PLAN.md V1): ``nig_timenet_v2`` with the whole
 ``ANTI_MEMORIZATION_CONFIG`` (GRU encoder + level passthrough), classification label smoothing 0.1. All three price
 targets (high, low, close) are trained, as the torch trainer config of the oracle does (the TF D-013 file itself was
 not read by the builder of this entry).
 
 Config keys: ``device`` (required, the job's device), ``seed``, ``epochs``, ``batch_size``, ``run_dir`` (a Drive folder:
 the checkpoint lives there, so a cut session resumes by running the same job again), optional ``artifact`` (default
-``DEFAULT_ARTIFACT``), ``embargo_hours`` (default 0: the split already purges by label end), ``health_max_rows``.
+``DEFAULT_ARTIFACT``), ``embargo_hours`` (default 0: the split already purges by label end), ``health_max_rows``,
+``split_dates`` (``{"train_end", "val_end"}``; default: the artifact's, else the 80/10/10 time quantiles).
 Stops cleanly before ``--max-minutes`` (``Trainer.fit(deadline=...)``): the per-epoch checkpoint is the resume point.
-Outputs: ``baseline_summary.json``, ``health_report.json``, ``health_report.md`` (+ ``device.json``, ``manifest.json``).
+Outputs: ``baseline_summary.json``, ``health_report.json``, ``health_report.md``, ``test_report.json``
+(+ ``device.json``, ``manifest.json``).
 The training data stay on the CPU and move to the model's device batch by batch (B-019).
 """
 

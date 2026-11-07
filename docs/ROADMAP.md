@@ -71,7 +71,7 @@ Colab ships CUDA torch, so no reinstall should be needed. Verify that and record
 
 ### T5r — Baseline on GPU
 Job `baseline-001`: the current default model (GRU encoder + level passthrough, anti-memorization on, as TF
-`main.ipynb`; check `ORACLE_REVIEW.md` V1 for the exact default and the D-013 close-target decision in the TF repo),
+`main.ipynb`; check `docs/BUILD_PLAN.md` V1 (= `ORACLE_REVIEW.md` MAJOR-1) for the exact default and the D-013 close-target decision in the TF repo),
 2 seeds, full training, `health_report`. Record step time, GPU name and the targets.
 
 Next session: write `docs/results/baseline-001.md`, add bottleneck rows, and if the init difference (B-007) matters,
