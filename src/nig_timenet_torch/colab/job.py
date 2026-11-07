@@ -2,7 +2,7 @@
     the entry's own strict config.
 TAGS: colab job, job validation, queue branch, job config, expected outputs
 PITFALLS: validating the config imports the entry module (jobs.<entry>, torch included) and builds its ``CONFIG``
-    dataclass strictly; an entry without ``CONFIG`` is not config-checked; ``check-job`` runs all of this.
+    dataclass strictly; an entry without ``CONFIG`` is refused; ``check-job`` runs all of this.
 
 The job a Colab run executes: ``job.json`` on the ``colab-queue`` branch (ROADMAP T3).
 
@@ -99,14 +99,15 @@ def validate_job(obj) -> dict:
     bad = [a for a in job["args"] if a.split("=")[0] in RESERVED_FLAGS]
     if bad:
         raise JobError(f"args may not set {bad}: the runner passes {RESERVED_FLAGS}")
-    check_entry_config(job["entry"], job["config"])
+    check_entry_config(job["entry"], job["config"], job["device"])
     return job
 
 
-def check_entry_config(entry: str, config: dict) -> None:
-    """If the entry module declares ``CONFIG`` (a frozen settings dataclass), build it strictly from ``config``:
-    an unknown or missing key, or a bad value, is a JobError now instead of a failure on the GPU (rule B5). An entry
-    module that does not exist, or that declares no CONFIG, is not checked here."""
+def check_entry_config(entry: str, config: dict, device: str | None = None) -> None:
+    """Build the entry module's ``CONFIG`` (a frozen settings dataclass) strictly from ``config``: an unknown or missing
+    key, or a bad value, is a JobError now instead of a failure on the GPU (rule B5). An existing entry module without
+    ``CONFIG`` is refused (HF-17: every entry exposes one); a module that does not exist is reported by the runner. If
+    both the job and the config name a device they must agree (``device`` is the one the run asserts, rule E1)."""
     name = f"nig_timenet_torch.jobs.{entry}"
     try:
         module = importlib.import_module(name)
@@ -116,8 +117,10 @@ def check_entry_config(entry: str, config: dict) -> None:
         raise
     cls = getattr(module, "CONFIG", None)
     if cls is None:
-        return
+        raise JobError(f"entry {entry!r} declares no CONFIG (every jobs/ entry exposes its strict config class)")
     try:
-        from_dict(cls, config)
+        cfg = from_dict(cls, config)
     except (ValueError, TypeError) as e:
         raise JobError(f"config of entry {entry!r}: {e}") from None
+    if device is not None and getattr(cfg, "device", device) != device:
+        raise JobError(f"job.device {device!r} differs from config.device {cfg.device!r} (same device)")
