@@ -1,4 +1,10 @@
-"""ONE batched predict -> canonical PredictionTable, one writer, one validating reader (C5; BUILD_PLAN.md P27).
+"""PURPOSE: The one batched predict that turns a model and its inputs into the canonical PredictionTable, with one
+    writer and one validating reader.
+TAGS: prediction table, batched predict, table meta, table writer, table reader
+PITFALLS: meta arrays must align with x row by row; the timestamp column is taken by name (core.schema.TS_COL), never
+    by an integer subscript.
+
+ONE batched predict -> canonical PredictionTable, one writer, one validating reader (C5; BUILD_PLAN.md P27).
 
 predict_table runs the model over ALL rows in fixed-size batches (call count ceil(N / batch_size), independent of
 the number of assets); per-asset evaluation is a groupby on the table. ``meta`` holds per-row arrays aligned to x:
@@ -14,6 +20,7 @@ import pandas as pd
 import torch
 
 from nig_timenet_torch.core.prediction_schema import SCHEMA_VERSION, validate_table
+from nig_timenet_torch.core.schema import TS_COL
 from nig_timenet_torch.data_io.split_plan import sample_times
 from nig_timenet_torch.trainer.identity import RunIdentity
 
@@ -31,7 +38,7 @@ def table_meta(dataset: dict, idx: np.ndarray, *, stage: str, fold: int, train_e
     """meta for rows ``idx`` of a dataset: asset from asset_bounds, times from split_plan.sample_times."""
     idx = np.asarray(idx)
     _, feature_end, label_end = sample_times(dataset)
-    ts = np.asarray(dataset["last_candles"])[:, 3].astype(np.int64)
+    ts = np.asarray(dataset["last_candles"])[:, TS_COL].astype(np.int64)
     asset = np.empty(ts.shape[0], dtype=object)
     for b in dataset["asset_bounds"]:
         asset[b["start"]:b["end"]] = b["name"]

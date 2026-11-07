@@ -1,4 +1,10 @@
-"""TARGET_CODECS: the one place a regression target is encoded / decoded (C4; BUILD_PLAN.md P26). Only "return"
+"""PURPOSE: TARGET_CODECS, the one place a regression target is encoded from last_candles and decoded back to a price
+    (only "return" is registered).
+TAGS: target codec, return target, reg target scale, decode to price, own anchor
+PITFALLS: decode needs the head's OWN anchor (last_high / last_low / last_close) by column NAME; fit refuses a dataset
+    without reg_target_scale; LAST_COLUMNS lives in core.schema and is only re-exported here.
+
+TARGET_CODECS: the one place a regression target is encoded / decoded (C4; BUILD_PLAN.md P26). Only "return"
 is registered (the oracle's and fixture's reg_target_mode).
 
 "return" (crypto-signal-prediction data/windows.py + data/defaults.py reg_target_*): every head is compared with
@@ -13,11 +19,10 @@ reads nothing that fit did not put there.
 import numpy as np
 
 from nig_timenet_torch.core.registry import Contract, Registry
+from nig_timenet_torch.core.schema import LAST_COLUMNS
 
 __all__ = ["TARGET_CODECS", "ReturnCodec", "own_anchor_and_future", "LAST_COLUMNS"]
 
-LAST_COLUMNS = ("last_high", "last_low", "last_close", "timestamp", "future_close", "future_low_min",
-                "future_high_max")
 _OWN = {"high": ("last_high", "future_high_max"), "low": ("last_low", "future_low_min"),
         "close": ("last_close", "future_close")}
 

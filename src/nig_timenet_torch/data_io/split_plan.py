@@ -1,4 +1,10 @@
-"""SplitPlan: ONE global train/val/test split with purge + embargo, as a property of the data (C6; BUILD_PLAN.md
+"""PURPOSE: One global train/val/test split with purge by label end and embargo, plus the per-row times it needs
+    (feature start, feature end, label end) derived from last_candles.
+TAGS: split plan, purge embargo, label end, sample times, leakage check
+PITFALLS: times come from the timestamp column of last_candles (core.schema.TS_COL, the OPEN time of the last input
+    bar) and the dataset's base_tf / window_sizes / forecast_horizon; every cut time is inclusive.
+
+SplitPlan: ONE global train/val/test split with purge + embargo, as a property of the data (C6; BUILD_PLAN.md
 P25). Rolling splits are P37.
 
 Per-sample times are int64 ns UTC instants. The pinned fixture does not carry them explicitly, so
@@ -22,10 +28,9 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.roles import Role
+from nig_timenet_torch.core.schema import TS_COL
 
 __all__ = ["SplitPlan", "LeakageError", "purge_embargo_split", "check_split_purity", "sample_times", "TS_COL"]
-
-TS_COL = 3  # last_candles column holding the timestamp (DATA_ARTIFACT_CONTRACT.md)
 
 
 class LeakageError(ValueError):
