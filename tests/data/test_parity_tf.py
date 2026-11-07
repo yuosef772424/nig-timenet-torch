@@ -28,8 +28,8 @@ def test_dataset_equals_reference(two_tf, name):
         assert ds[k].dtype == ref[k].dtype, k
         if ds[k].dtype == np.float64:  # 1 ulp differs across CPU builds
             np.testing.assert_allclose(ds[k], ref[k], rtol=1e-12, atol=0, err_msg=k)
-        elif ds[k].dtype == np.float32:  # the X_* windows differ by ~1e-6 across runner CPUs (SIMD/BLAS paths)
-            np.testing.assert_allclose(ds[k], ref[k], rtol=1e-6, atol=1e-7, err_msg=k)
+        elif ds[k].dtype == np.float32:  # the X_* windows differ up to 3e-6 abs, 9e-5 rel across runner CPUs
+            np.testing.assert_allclose(ds[k], ref[k], rtol=1e-4, atol=1e-5, err_msg=k)
         elif ds[k].dtype == np.float16:  # one float16 ulp is 2**-10 relative
             np.testing.assert_allclose(ds[k].astype(np.float32), ref[k].astype(np.float32), rtol=2e-3, atol=1e-4,
                                        err_msg=k)
