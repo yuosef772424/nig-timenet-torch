@@ -1,5 +1,7 @@
 # Planner handoff (rewritten 2026-11-07 by H6, after the hardening campaign; for a fresh planner)
 
+> Manager sessions (owner clears conversations): read `docs/hardening/MANAGER_HANDOFF.md` first.
+
 The planner conversation plans, reviews and merges; step sessions or ONE background agent at a time do the work. Reply to
 the owner in Arabic. Merge with `merge_method=merge` only, CI green on the head. Owner standing permissions: small run
 fixes the planner opens for the baseline job are merged when CI is green; builders may self-merge a green docs PR when the
