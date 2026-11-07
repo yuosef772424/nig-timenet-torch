@@ -5,13 +5,15 @@ A "default" is any value the code uses when the caller says nothing:
     and dataclass fields alike)            -> key ``module.name(param)``
   * a ``default_*`` metadata value of a registry entry (``default_config`` is expanded per key)
                                              -> key ``registry:<kind>:<entry>.<meta>[.<key>]``
-  * a module constant whose name contains DEFAULT or CONFIG (dict constants are expanded per key)
-                                             -> key ``module.CONSTANT[.<key>]``
+  * a module constant whose name contains DEFAULT or CONFIG, assigned in that module's own file (a re-export is
+    pinned once, where it is defined; dict constants are expanded per key)  -> key ``module.CONSTANT[.<key>]``
+  * NOT a default: a parameter named in ``INJECTION_POINTS`` (a collaborator a test replaces: ``run``, ``env``, ...)
 
 ``python -m tests.defaults_pin`` prints the current map as JSON; ``--add`` writes keys missing from
 ``tests/pins/defaults.json`` into it (it never changes or removes an existing key: that needs a decision file).
 """
 
+import ast
 import dataclasses
 import enum
 import hashlib
@@ -46,11 +48,35 @@ def _norm(v) -> str:
     return f"<{type(v).__module__}.{type(v).__qualname__}>" if " at 0x" in r else r
 
 
+#: parameters that inject a collaborator (a clock, a shell, a stub) so a test can replace it: the default is the real
+#: collaborator or None, not a behaviour setting, so it is not pinned (HF-30). Add a name here only for that kind.
+INJECTION_POINTS = frozenset({
+    "echo", "run", "env", "secrets", "argv", "torch_mod", "urlopen", "version_of", "accepted", "ask", "device_check",
+    "now", "clock", "sleep", "out", "stream", "file", "log", "print_fn", "popen", "which", "environ", "getenv",
+    "importer", "opener", "runner", "git", "shell",
+})
+
+
+def _defined_constants(mod) -> set[str]:
+    """Names assigned at module level in the module's own source file (an imported name is not defined here)."""
+    try:
+        tree = ast.parse(Path(inspect.getsourcefile(mod)).read_text(encoding="utf-8"))
+    except (TypeError, OSError):
+        return set()
+    names = set()
+    for node in tree.body:
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        names |= {t.id for t in targets if isinstance(t, ast.Name)}
+    return names
+
+
 def _signature_defaults(prefix: str, obj) -> dict[str, str]:
     out = {}
     if inspect.isclass(obj) and dataclasses.is_dataclass(obj):
         for f in dataclasses.fields(obj):
             if not f.init:
+                continue
+            if f.name in INJECTION_POINTS:
                 continue
             if f.default is not dataclasses.MISSING:
                 out[f"{prefix}({f.name})"] = _norm(f.default)
@@ -62,7 +88,8 @@ def _signature_defaults(prefix: str, obj) -> dict[str, str]:
     except (TypeError, ValueError):
         return out
     for p in sig.parameters.values():
-        if p.default is not inspect.Parameter.empty and p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD):
+        if (p.default is not inspect.Parameter.empty and p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+                and p.name not in INJECTION_POINTS):
             out[f"{prefix}({p.name})"] = _norm(p.default)
     return out
 
@@ -81,6 +108,7 @@ def collect_defaults() -> dict[str, str]:
     for mod_name, mod in sorted(sys.modules.items()):
         if not (mod_name == PKG or mod_name.startswith(f"{PKG}.")):
             continue
+        own = _defined_constants(mod)
         for name, obj in sorted(vars(mod).items()):
             if isinstance(obj, Registry):
                 for entry in obj.entries():
@@ -91,6 +119,8 @@ def collect_defaults() -> dict[str, str]:
             if name.startswith("_"):
                 continue
             if re.search("DEFAULT|CONFIG", name) and name.isupper():
+                if name not in own:
+                    continue  # a re-export: pinned once, where it is defined
                 out |= _expand(f"{mod_name}.{name}", obj)
             elif inspect.isclass(obj) and issubclass(obj, enum.Enum):
                 continue  # an Enum's signature is the functional API (names, module, ...), not a default of ours

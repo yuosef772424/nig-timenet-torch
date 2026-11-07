@@ -104,3 +104,18 @@ def test_guard_accepts_a_documented_new_default_and_checks_it_against_the_pin(tm
     with pytest.raises(ValueError, match="pin file says"):
         dp.apply_decisions({"m.f(x)": "8"}, tmp_path)
 
+
+
+def test_pin_diff_flags_pin_edits_without_a_decision():
+    from tests import pin_diff
+
+    base = {"a": "1", "b": "2", "c": "3"}
+    assert pin_diff.undocumented(base, base, set()) == []
+    assert pin_diff.undocumented(base, {"a": "1", "b": "9", "d": "4"}, {"b"}) == ["c", "d"]  # changed b documented
+
+
+def test_pin_collects_only_own_constants_and_no_injection_points():
+    keys = dp.collect_defaults()
+    assert not any(k.startswith("nig_timenet_torch.workflow.settings.ANTI_MEMORIZATION_CONFIG") for k in keys)
+    assert any(k.startswith("nig_timenet_torch.model.architectures.ANTI_MEMORIZATION_CONFIG.") for k in keys)
+    assert not [k for k in keys if k.endswith(("(echo)", "(secrets)", "(run)", "(torch_mod)"))]
