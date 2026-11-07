@@ -78,10 +78,10 @@ def test_split_bounds_without_split_dates_uses_tf_shares():
     from nig_timenet_torch.jobs.baseline import split_bounds
     lc = np.zeros((100, 7))
     lc[:, TS_COL] = pd.date_range("2026-01-01", periods=100, freq="4h", tz="UTC").as_unit("ns").asi8
-    tr, va = split_bounds({"split_dates": None, "last_candles": lc}, {})
+    tr, va = split_bounds({"split_dates": None, "last_candles": lc}, None)
     assert tr == pd.Timestamp(int(lc[80, TS_COL]), tz="UTC") and va == pd.Timestamp(int(lc[90, TS_COL]), tz="UTC")
     given = {"train_end": "2026-01-05", "val_end": "2026-01-10"}
-    got = split_bounds({"split_dates": None, "last_candles": lc}, {"split_dates": given})
+    got = split_bounds({"split_dates": None, "last_candles": lc}, given)
     assert got == ("2026-01-05", "2026-01-10")
 
 
