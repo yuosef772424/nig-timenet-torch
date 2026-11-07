@@ -14,6 +14,7 @@ import pytest
 
 from nig_timenet_torch.core.registry import UnknownNameError
 from nig_timenet_torch.jobs import baseline
+from nig_timenet_torch.trainer.selection_metric import NOT_SELECTABLE, SELECTION_METRICS
 from nig_timenet_torch.trainer.targets import resolve_loss, resolve_targets, targets_config, validate_trainer_config
 from nig_timenet_torch.trainer.trainer import Trainer
 from tests.trainer.fixture_setup import build_model
@@ -98,3 +99,13 @@ def test_schedules_are_parsed_once_in_init():
     bad["loss"]["schedules"]["lambda_reg"]["schedule"] = "cosin"
     with pytest.raises(ValueError, match="cosin"):
         Trainer(build_model(16, 18), bad)  # at construction, not at fit
+
+
+@pytest.mark.parametrize("name", NOT_SELECTABLE)
+def test_direction_metrics_cannot_select_but_stay_registered(name):
+    assert name in SELECTION_METRICS
+    with pytest.raises(ValueError, match="reporting only"):
+        Trainer(build_model(16, 18), _cfg(), selection_metric=name)
+    assert Trainer(build_model(16, 18), _cfg(), selection_metric="val_raw_loss").selection_metric == "val_raw_loss"
+    Trainer(build_model(16, 18), _cfg(), selection_metric="val_auc_close_class")
+
