@@ -2,7 +2,8 @@
 
 PURPOSE: Shared private helpers of the battery: trade stats, row masks, top-|x| selection, section shaping.
 TAGS: battery helpers, trade stats, sharpe, profit factor, section
-PITFALLS: _stats returns None below 50 trades; Sharpe is per trade; _top_abs ranks by |field|, so the side comes
+PITFALLS: cost is PER SIDE (round_trip = 2x); the direction of a trade is p_dir, never sign(mu); _stats returns None
+    below 50 trades; Sharpe is per trade; _top_abs ranks by |field|, so the side comes
     from the mask.
 SOURCE: ported from feat/ar-stream 7c9736b, f052cf6 (owner's work)
 
@@ -13,7 +14,16 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["_stats", "_scored", "_top_abs", "_dir_pnl", "_section", "_fmt", "_HEADER"]
+__all__ = ["SIDES", "round_trip", "_stats", "_scored", "_top_abs", "_dir_pnl", "_section", "_fmt", "_HEADER"]
+
+
+#: a round trip pays the cost on entry AND exit: ``cost`` everywhere in the battery is the cost PER SIDE
+SIDES = 2
+
+
+def round_trip(cost: float) -> float:
+    """What one trade (entry + exit) pays when each side costs ``cost``."""
+    return SIDES * cost
 
 
 def _stats(pnl: np.ndarray, min_n: int = 50) -> dict | None:
@@ -43,9 +53,9 @@ def _top_abs(df, field: str, pct: float, mask: np.ndarray | None = None) -> np.n
 
 
 def _dir_pnl(df, idx: np.ndarray, cost: float) -> np.ndarray:
-    """Trade the model's direction (p_dir) on the true return, minus cost."""
+    """Trade the model's direction (p_dir) on the true return, minus the round-trip cost (``cost`` per side)."""
     sign = np.where(df["p_dir"].values[idx] > 0.5, 1.0, -1.0)
-    return sign * df["y_ret"].values[idx] - cost
+    return sign * df["y_ret"].values[idx] - round_trip(cost)
 
 
 def _section(title: str, rows: list[str], note: str = "") -> dict:

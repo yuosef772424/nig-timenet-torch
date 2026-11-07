@@ -3,8 +3,8 @@
 PURPOSE: The T-profit sections of the battery: per-side-cost profit with trivial baselines and a block-bootstrap CI
     that is widened for the number of variants tried; limit orders at the predicted high / low; sigma as position size.
 TAGS: t-profit, profit after cost, limit order, position size, block bootstrap, trivial baselines, battery
-PITFALLS: cost is charged PER SIDE (2x per round trip), unlike the older battery sections that charge it once per
-    trade. Direction comes from the close head only; high / low are price levels (fills), never a direction. A CI
+PITFALLS: cost is charged PER SIDE (2x per round trip), the same as every older battery section (battery_lib
+    round_trip). Direction comes from the close head only; high / low are price levels (fills), never a direction. A CI
     that excludes 0 is exploratory evidence until the owner asks for strict confirmation (rule C5).
 
 Every section is a pure function over the battery table of ``eval.battery_adapter`` (limit sections also need its
@@ -17,12 +17,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from nig_timenet_torch.eval.battery_lib import _scored, _section, _stats
+from nig_timenet_torch.eval.battery_lib import SIDES, _scored, _section, _stats
 from nig_timenet_torch.stats.metrics import block_bootstrap_ci
 
 __all__ = ["profit_sections", "profit_close", "limit_highlow", "sigma_sizing", "DEFAULT_SIDES", "DEFAULT_SEED"]
 
-DEFAULT_SIDES = 2          # a round trip pays the cost on entry AND exit
+DEFAULT_SIDES = SIDES      # a round trip pays the cost on entry AND exit (one definition: battery_lib)
 DEFAULT_SEED = 0
 
 

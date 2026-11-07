@@ -29,8 +29,11 @@ def test_baseline_runs_and_resumes(tmp_path, art, monkeypatch):  # noqa: F811
     s1 = json.loads((out1 / "baseline_summary.json").read_text())
     assert s1["epochs_done"] == 1 and s1["seed"] == 0 and s1["n_windows"]["train"] > 0
     assert s1["step_seconds_per_batch"] > 0 and len(s1["data_fingerprint"]) > 8 and s1["identity_fingerprint"]
-    for name in ("health_report.json", "health_report.md", "test_report.json", "device.json", "manifest.json"):
+    for name in ("health_report.json", "health_report.md", "test_report.json", "device.json", "manifest.json",
+                 "battery_report.txt", "battery_profit.json"):
         assert (out1 / name).is_file()
+    profit = json.loads((out1 / "battery_profit.json").read_text())
+    assert profit["cost_per_side"] == 0.0008 and {"profit_close", "verdict"} <= set(profit)
     test_rep = json.loads((out1 / "test_report.json").read_text())
     assert test_rep["n_rows"] == s1["n_windows"]["test"] > 0 and test_rep["targets"]
     job = {"device": "cpu", "expected_outputs": ["baseline_summary.json", "health_report.json", "health_report.md"]}
@@ -58,7 +61,7 @@ def test_job_files_are_valid(seed):
     job = parse_job((ROOT / "docs" / "jobs" / f"baseline-001-s{seed}.json").read_text())
     assert job["entry"] == "baseline" and job["device"] == "cuda" and job["needs_drive"] and job["max_minutes"] == 170
     assert job["config"]["seed"] == seed and job["config"]["run_dir"].endswith(f"baseline-001-s{seed}/train")
-    assert "test_report.json" in job["expected_outputs"]
+    assert {"test_report.json", "battery_report.txt", "battery_profit.json"} <= set(job["expected_outputs"])
 
 
 def test_every_long_job_has_a_smoke_job():
@@ -72,12 +75,13 @@ def test_every_long_job_has_a_smoke_job():
 def test_smoke_job_file_is_valid():
     job = parse_job((ROOT / "docs" / "jobs" / "baseline-smoke-001.json").read_text())
     assert job["entry"] == "baseline" and job["device"] == "cuda" and job["config"]["max_rows"] == 20000
-    assert job["config"]["epochs"] == 1 and job["max_minutes"] == 15 and "test_report.json" in job["expected_outputs"]
+    assert job["config"]["epochs"] == 1 and job["max_minutes"] == 15
+    assert {"test_report.json", "battery_report.txt", "battery_profit.json"} <= set(job["expected_outputs"])
 
 
 def test_input_key_follows_the_artifact_timeframe():
     """The real TF artifact is 4h (owner's first Colab run failed on a hard-coded '1h')."""
-    from nig_timenet_torch.jobs.baseline import input_key
+    from nig_timenet_torch.workflow.run_common import input_key
     assert input_key({"timeframes": ["4h"]}) == "X_4h"
     assert input_key({"timeframes": ["1h"]}) == "X_1h"
     with pytest.raises(ValueError, match="single-timeframe"):
@@ -90,18 +94,19 @@ def test_split_bounds_without_split_dates_uses_tf_shares():
     import pandas as pd
 
     from nig_timenet_torch.core.schema import TS_COL
-    from nig_timenet_torch.jobs.baseline import split_bounds
+    from nig_timenet_torch.workflow.run_common import split_bounds
+    from nig_timenet_torch.workflow.settings import SplitSettings
     lc = np.zeros((100, 7))
     lc[:, TS_COL] = pd.date_range("2026-01-01", periods=100, freq="4h", tz="UTC").as_unit("ns").asi8
-    tr, va = split_bounds({"split_dates": None, "last_candles": lc}, None)
+    tr, va = split_bounds({"split_dates": None, "last_candles": lc}, SplitSettings())
     assert tr == pd.Timestamp(int(lc[80, TS_COL]), tz="UTC") and va == pd.Timestamp(int(lc[90, TS_COL]), tz="UTC")
-    given = {"train_end": "2026-01-05", "val_end": "2026-01-10"}
+    given = SplitSettings(train_end="2026-01-05", val_end="2026-01-10")
     got = split_bounds({"split_dates": None, "last_candles": lc}, given)
     assert got == ("2026-01-05", "2026-01-10")
 
 
 def test_epoch_line_shows_progress():
-    from nig_timenet_torch.jobs.baseline import epoch_line
+    from nig_timenet_torch.workflow.flat_run import epoch_line
     line = epoch_line({"epoch": 3, "lr": 1e-3, "train_total_loss": 0.5, "val_total_loss": 0.6,
                        "val_selection_metric": 0.52, "trace_epoch_seconds": 41.2}, 60)
     assert line.startswith("epoch 3/60") and "val_loss 0.6000" in line and "41s" in line
@@ -158,11 +163,13 @@ def test_stride_rows_and_anchors_by_name():
     import numpy as np
 
     from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
+    from nig_timenet_torch.workflow.flat_run import anchors_by_name
+    from nig_timenet_torch.workflow.run_common import stride_rows
     idx = np.arange(1000)
-    assert baseline.stride_rows(idx, None) is idx and len(baseline.stride_rows(idx, 50)) == 50
-    assert baseline.stride_rows(idx, 50)[0] == 0 and baseline.stride_rows(idx, 50)[-1] == 999
+    assert stride_rows(idx, None) is idx and len(stride_rows(idx, 50)) == 50
+    assert stride_rows(idx, 50)[0] == 0 and stride_rows(idx, 50)[-1] == 999
     lc = np.arange(70, dtype=float).reshape(10, 7)
-    a = baseline.anchors_by_name(lc, np.array([2, 3]), ("close", "high"))
+    a = anchors_by_name(lc, np.array([2, 3]), ("close", "high"))
     assert (a["close"] == lc[[2, 3], LAST_COLUMN_INDEX["last_close"]]).all()
     assert (a["high"] == lc[[2, 3], LAST_COLUMN_INDEX["last_high"]]).all()
 

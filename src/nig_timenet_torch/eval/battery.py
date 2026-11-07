@@ -4,7 +4,8 @@ PURPOSE: Ten many-angle sections plus classics and a ranked verdict over a tidy 
     dir_true, last_ret, coin, end_time); pure functions, no model.
 TAGS: battery, evaluation, trade grid, verdict, uncertainty filter, weekly stability, flip test
 PITFALLS: columns are the battery table, not the PredictionTable (build it with eval.battery_adapter); cost 0.0008 is a
-    pinned default; Sharpe is per trade, not annualised.
+    pinned default charged PER SIDE (a trade pays it twice); direction is p_dir in every section (mu only ranks and
+    sizes); Sharpe is per trade, not annualised.
 SOURCE: ported from feat/ar-stream 7c9736b, f052cf6 (owner's work)
 
 The evaluation battery: a many-angle judgment of one run, the way a trader would interrogate it before trusting
@@ -24,7 +25,16 @@ from nig_timenet_torch.eval.battery_classics import (
     selective_evaluation,
     table_integrity,
 )
-from nig_timenet_torch.eval.battery_lib import _HEADER, _dir_pnl, _fmt, _scored, _section, _stats, _top_abs
+from nig_timenet_torch.eval.battery_lib import (
+    _HEADER,
+    _dir_pnl,
+    _fmt,
+    _scored,
+    _section,
+    _stats,
+    _top_abs,
+    round_trip,
+)
 from nig_timenet_torch.eval.battery_profit import profit_sections
 from nig_timenet_torch.stats.metrics import spearman
 
@@ -50,12 +60,14 @@ def sanity(val, test) -> dict:
         keep = _scored(df)
         mu, y = df["mu"].values, df["y_ret"].values
         ic = spearman(mu[keep], y[keep])
-        acc = float(((mu[keep] > 0) == (y[keep] > 0)).mean())
-        rows.append(f"  {name:<5} IC(mu, y_ret)={ic:+.4f}  dir_acc={acc:.4f}  "
-                    f"P(mu>0)={float((mu > 0).mean()):.3f}  P(y>0)={float((y > 0).mean()):.3f}  "
+        up = df["p_dir"].values > 0.5
+        acc = float((up[keep] == (y[keep] > 0)).mean())
+        rows.append(f"  {name:<5} IC(mu, y_ret)={ic:+.4f}  dir_acc(p_dir)={acc:.4f}  "
+                    f"P(p_dir>0.5)={float(up.mean()):.3f}  P(y>0)={float((y > 0).mean()):.3f}  "
                     f"n={int(keep.sum()):,}")
     return _section("SANITY - IC, direction accuracy, up-bias", rows,
-                    "IC > 0 means the model's magnitude ranks moves correctly; a big P(mu>0) - P(y>0) gap is bias.")
+                    "IC > 0 means the model's magnitude ranks moves correctly; direction is the close class head "
+                    "(p_dir); a big P(p_dir>0.5) - P(y>0) gap is bias.")
 
 
 def confidence_buckets(test, n_buckets: int = 5) -> dict:
@@ -96,31 +108,31 @@ def cowardice(test) -> dict:
 
 def trade_grid(test, cost: float, pcts: tuple = (0.05, 0.10, 0.20)) -> dict:
     """Section 4: trade the predicted direction, market exit at the true close, top-% by |mu|."""
-    rows = [_HEADER]
+    rows, rt = [_HEADER], round_trip(cost)
     for pct in pcts:
         for side, sign in (("LONG", 1.0), ("SHORT", -1.0)):
             mask = (np.where(test["p_dir"].values > 0.5, 1.0, -1.0) == sign) & _scored(test)
             idx = _top_abs(test, "mu", pct, mask)
             rows.append(_fmt(f"{side} top{int(pct * 100)}% |mu| (market exit)",
-                             _stats(sign * test["y_ret"].values[idx] - cost)))
+                             _stats(sign * test["y_ret"].values[idx] - rt)))
     rows.append(_fmt("ALL rows, trade the direction (market exit)",
-                     _stats(np.where(test["p_dir"].values > 0.5, 1, -1) * test["y_ret"].values
-                            - cost * np.ones(len(test)))))
+                     _stats(np.where(test["p_dir"].values > 0.5, 1, -1) * test["y_ret"].values - rt)))
     return _section("TRADING GRID (TEST) - market exit", rows,
-                    f"cost={cost:.4%} per trade. Compare with the persistence baseline before believing any row.")
+                    f"cost={cost:.4%} per side, {rt:.4%} per round trip. "
+                    "Compare with the persistence baseline before believing any row.")
 
 
 def limit_execution(test, cost: float, pcts: tuple = (0.05, 0.10, 0.20)) -> dict:
     """Section 5: realistic execution - a limit order AT the predicted mu; if the market never reaches
     it, fall back to the market exit (the true close). This is the closest to a tradeable backtest."""
     rows = [f"{'strategy':<44}{'n':>8}{'fill%':>8}{'avg%':>10}{'Sharpe':>9}{'PF':>7}"]
-    mu, y = test["mu"].values, test["y_ret"].values
+    mu, y, rt = test["mu"].values, test["y_ret"].values, round_trip(cost)
     for pct in pcts:
         for side, sign in (("LONG", 1.0), ("SHORT", -1.0)):
             mask = (np.where(test["p_dir"].values > 0.5, 1.0, -1.0) == sign) & _scored(test)
             idx = _top_abs(test, "mu", pct, mask)
             hit = (y[idx] >= mu[idx]) if sign > 0 else (y[idx] <= mu[idx])
-            pnl = np.where(hit, np.abs(mu[idx]) - cost, sign * y[idx] - cost)
+            pnl = np.where(hit, np.abs(mu[idx]) - rt, sign * y[idx] - rt)
             s = _stats(pnl)
             if s:
                 rows.append(f"{f'{side} top{int(pct * 100)}% (limit at mu)':<44}{s['n']:>8,}"
@@ -161,7 +173,7 @@ def shock_split(test, cost: float, n_groups: int = 5, pct: float = 0.10) -> dict
         if m.sum() < 50:
             continue
         sub = test[m]
-        acc = float(((sub["mu"] > 0) == (sub["y_ret"] > 0)).mean())
+        acc = float(((sub["p_dir"] > 0.5) == (sub["y_ret"] > 0)).mean())
         pnl = _stats(_dir_pnl(test, np.where(m)[0], cost))
         rows.append(f"  move q{int((i + 1) * 100 / n_groups):<3} |y| in [{edges[i]:.4f}, {edges[i + 1]:.4f}]"
                     f"  n={len(sub):>7,}  dir_acc={acc:.4f}  "
@@ -186,7 +198,7 @@ def weekly_stability(test, cost: float, pct: float = 0.10, min_n: int = 50) -> d
         if len(wm) < min_n:
             continue
         pnl = _dir_pnl(test, np.array(wm), cost)
-        acc = float(((test["mu"].values[wm] > 0) == (test["y_ret"].values[wm] > 0)).mean())
+        acc = float(((test["p_dir"].values[wm] > 0.5) == (test["y_ret"].values[wm] > 0)).mean())
         pos += int(pnl.mean() > 0)
         sd = pnl.std(ddof=1)
         rows.append(f"  week {w}  n={len(wm):>6,}  dir_acc={acc:.4f}  avg={pnl.mean() * 100:+.4f}%"
@@ -208,7 +220,7 @@ def per_coin(test, cost: float, pct: float = 0.10, min_n: int = 30) -> dict:
         if len(idx) < min_n:
             continue
         pnl = _stats(_dir_pnl(test, idx, cost))
-        acc = float(((test["mu"].values[idx] > 0) == (test["y_ret"].values[idx] > 0)).mean())
+        acc = float(((test["p_dir"].values[idx] > 0.5) == (test["y_ret"].values[idx] > 0)).mean())
         rows.append((coin, len(idx), acc, pnl))
     rows.sort(key=lambda r: -(r[3]["sharpe"] if r[3] else -9))
     lines = [f"  {'coin':<12}{'n':>7}{'dir_acc':>9}{'avg%':>10}{'Sharpe':>9}{'PF':>7}"]
@@ -224,7 +236,7 @@ def flip_test(test, cost: float, pct: float = 0.10) -> dict:
     """Section 10: is the direction inverted? Compare trading the signal against trading AGAINST it."""
     idx = _top_abs(test, "mu", pct, _scored(test))
     pnl = _dir_pnl(test, idx, cost)
-    flipped = -pnl - 2 * cost * np.ones(len(pnl))
+    flipped = -pnl - 2 * round_trip(cost)  # -(pnl + rt) is the gross against-trade; it pays rt as well
     rows = [f"  trade the direction : Sharpe={pnl.mean() / max(pnl.std(ddof=1), 1e-12):+.3f}  "
             f"avg={pnl.mean() * 100:+.4f}%",
             f"  trade AGAINST it   : Sharpe={flipped.mean() / max(flipped.std(ddof=1), 1e-12):+.3f}  "
@@ -262,9 +274,14 @@ def verdict(test, cost: float, sections: dict) -> dict:
     for pct in (0.05, 0.10, 0.20):
         for name, sign in (("LONG", 1.0), ("SHORT", -1.0)):
             idx = _top_abs(test, "mu", pct, keep & (side == sign))
-            s = _stats(sign * test["y_ret"].values[idx] - cost)
+            s = _stats(sign * test["y_ret"].values[idx] - round_trip(cost))
             if s and (best["sharpe"] != best["sharpe"] or s["sharpe"] > best["sharpe"]):
                 best = {"name": f"{name} top{int(pct * 100)}%", "sharpe": s["sharpe"], "stats": s}
+    if "stats" not in best:  # no strategy reached 50 trades (a smoke run or a tiny split)
+        out = _section("VERDICT", ["  BEST: none (no strategy reached 50 trades)", "  الحكم: غير قابل للتداول"],
+                       "tradeable=False marginal=False")
+        out.update(best=best, tradeable=False)
+        return out
     b = best["stats"]
     label = ("قابل للتداول نظرياً (Sharpe>0.10)" if best["sharpe"] > 0.10
              else "هامشي - يحتاج تحقق" if best["sharpe"] > 0.05 else "غير قابل للتداول")

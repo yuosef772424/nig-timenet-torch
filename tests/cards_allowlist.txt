@@ -21,5 +21,4 @@ trainer/task_weighting.py
 trainer/trace.py
 trainer/tracker.py
 workflow/rolling.py
-workflow/settings.py
 workflow/staleness.py

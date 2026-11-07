@@ -88,7 +88,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
-| `jobs/baseline.py` | Entry ``baseline``: trains one seed of the default NIG-TimeNet model on the contract artifact, then writes the summary, health report and test report (ROADMAP T5r). | baseline job, colab entry, training run, test report, health report, resume, smoke job |
+| `jobs/baseline.py` | Entry ``baseline``: trains one seed of the default NIG-TimeNet model on the contract artifact, then writes the summary, health report and test report (ROADMAP T5r); a thin entry over workflow.run. | baseline job, colab entry, training run, test report, health report, resume, smoke job |
 | `jobs/device_smoke.py` | Entry ``device_smoke``: proves that the runner, the device assertion and the output contract work on this VM. | device smoke, colab entry, device assertion, runner proof, rule e1 |
 
 ### model
@@ -132,11 +132,14 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
-| `workflow/battery_run.py` | Adapts the VAL and TEST stage (table, labels, anchors, last_close, codec state) to battery tables and runs the full battery with the T-profit sections; optionally writes the text report next to the run. | battery run, stage inputs, t-profit, battery report, adapter entry point |
+| `workflow/battery_run.py` | Adapts the VAL and TEST stage (table, labels, anchors, last_close, codec state) to battery tables and runs the full battery with the T-profit sections; battery_step does it for a finished Run and writes the reports. | battery run, stage inputs, t-profit, battery report, adapter entry point, battery step, profit json |
+| `workflow/flat_run.py` | The flat model (one row per coin window, NIG regression + binary class head per price target) as run steps: inputs, anchors, model settings, trainer, fit settings, one chunked predict per stage. | flat run, run steps, trainer config, stage inputs, anchors by name, head kinds, predict stage |
 | `workflow/health_report.py` | T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer trace) as JSON and markdown next to the checkpoint. | health report, diagnostics, t-sharp, probe, trainer trace, markdown report |
 | `workflow/prediction_table.py` | The one batched predict that turns a model and its inputs into the canonical PredictionTable, with one writer and one validating reader. | prediction table, batched predict, table meta, table writer, table reader |
 | `workflow/rolling.py` | P37: rolling-retrain loop — SEAM ONLY (the shape of the loop; no experiment is run through it in this repo). |  |
-| `workflow/settings.py` | Workflow settings (BUILD_PLAN.md P37): the RunSettings-equivalent section that carries the rolling seam. |  |
+| `workflow/run.py` | The run steps of one flat single-split run (prepare, build, train, health report, test report, summary) and run_all() that calls them in order. Jobs and notebooks call the steps; nobody copies them. | run steps, single split, flat run, train step, health step, test report step, run summary, notebook steps |
+| `workflow/run_common.py` | Steps every run shares: load the artifact, read its facts, split by time, pick the device, build the run identity. Small functions of the settings so a notebook can call them one by one. | run steps, load data, split plan, run identity, device, artifact facts, smoke mode |
+| `workflow/settings.py` | Settings of the workflow layer: the strict RunSettings tree of one flat single-split run, and the rolling seam (RollingSettings) that the I4 package will connect to the run steps. | run settings, strict settings tree, split settings, train settings, evaluation settings, rolling seam |
 | `workflow/staleness.py` | P38: staleness seam — pure functions over already-written PredictionTables (P27); nothing is trained here and |  |
 
 ## Registries (`core/registry.py`; add a component = one file + one registration line)
@@ -164,3 +167,4 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `jobs/device_smoke.py`: job entry (`docs/jobs/*.json` name it)
 - `notebooks/colab_nig_timenet_torch.ipynb`: notebook runner
 - `notebooks/data_pipeline.ipynb`: notebook runner
+- `notebooks/main.ipynb`: notebook runner

@@ -3,7 +3,8 @@
 PURPOSE: Four classic checks of the old TF project over the tidy table: integrity, persistence baseline, selective
     evaluation (VAL thresholds, TEST judgment), market-neutral portfolio.
 TAGS: battery classics, integrity, persistence baseline, selective evaluation, market neutral
-PITFALLS: market_neutral needs >= 4 coins plus end_time and persistence needs last_ret (both skip otherwise).
+PITFALLS: cost is PER SIDE (a trade pays it twice, a neutral period twice on each leg); direction is p_dir, never
+    sign(mu); market_neutral needs >= 4 coins plus end_time and persistence needs last_ret (both skip otherwise).
 SOURCE: ported from feat/ar-stream 7c9736b, f052cf6 (owner's work)
 
 Ported from the crypto-signal-prediction evaluation package; each re-derived as a pure function over the table,
@@ -14,7 +15,16 @@ from __future__ import annotations
 
 import numpy as np
 
-from nig_timenet_torch.eval.battery_lib import _HEADER, _dir_pnl, _fmt, _scored, _section, _stats, _top_abs
+from nig_timenet_torch.eval.battery_lib import (
+    _HEADER,
+    _dir_pnl,
+    _fmt,
+    _scored,
+    _section,
+    _stats,
+    _top_abs,
+    round_trip,
+)
 from nig_timenet_torch.stats.metrics import spearman
 
 
@@ -47,16 +57,17 @@ def persistence_baseline(test, cost: float, pct: float = 0.10) -> dict:
                         "The last-candle line needs the previous close.")
     keep = _scored(test)
     y, mu, last = test["y_ret"].values, test["mu"].values, test["last_ret"].values
+    p_up = test["p_dir"].values - 0.5
     rows = [f"  {'predictor':<28}{'dir_acc':>9}{'IC':>9}"]
-    for name, pred in (("model (mu)", mu), ("last candle (momentum)", last)):
-        rows.append(f"  {name:<28}{float(((pred[keep] > 0) == (y[keep] > 0)).mean()):>9.4f}"
-                    f"{spearman(pred[keep], y[keep]):>+9.4f}")
+    for name, direction, rank in (("model (p_dir; IC of mu)", p_up, mu), ("last candle (momentum)", last, last)):
+        rows.append(f"  {name:<28}{float(((direction[keep] > 0) == (y[keep] > 0)).mean()):>9.4f}"
+                    f"{spearman(rank[keep], y[keep]):>+9.4f}")
     rows.append("")
     rows.append(_HEADER)
     idx = _top_abs(test, "mu", pct, keep)
-    for name, sign in (("model direction", np.where(mu[idx] > 0, 1.0, -1.0)),
+    for name, sign in (("model direction (p_dir)", np.where(p_up[idx] > 0, 1.0, -1.0)),
                        ("momentum direction", np.where(last[idx] > 0, 1.0, -1.0))):
-        rows.append(_fmt(f"{name}, top{int(pct * 100)}% |mu| rows", _stats(sign * y[idx] - cost)))
+        rows.append(_fmt(f"{name}, top{int(pct * 100)}% |mu| rows", _stats(sign * y[idx] - round_trip(cost))))
     return _section("PERSISTENCE BASELINE (TEST) - the last candle alone", rows,
                     "Momentum is the cheapest possible edge; a model that only ties it learned the "
                     "previous candle, not the market.")
@@ -103,7 +114,7 @@ def market_neutral(val, test, cost: float, quantiles: tuple = (0.2, 0.3, 0.4)) -
             k = max(1, int(len(g) * q))
             ranked = g.sort_values("mu")["y_ret"].values
             rets.append(ranked[-k:].mean() - ranked[:k].mean())
-        return np.asarray(rets) - 2 * cost
+        return np.asarray(rets) - 2 * round_trip(cost)
 
     best = max(quantiles, key=lambda q: float(_period_pnl(val, q).mean()))
     rows = [_HEADER]
@@ -112,7 +123,8 @@ def market_neutral(val, test, cost: float, quantiles: tuple = (0.2, 0.3, 0.4)) -
         rows.append(_fmt(f"long top{int(q * 100)}% / short bottom{int(q * 100)}%{mark}",
                          _stats(_period_pnl(test, q))))
     return _section("MARKET-NEUTRAL PORTFOLIO (TEST)", rows,
-                    "Each period pays the full round trip on BOTH legs (2x cost) - the harshest cost "
-                    "assumption; a positive VAL-chosen q on TEST is real relative-ranking skill.")
+                    "Each period pays the full round trip on BOTH legs (4 sides: 4x the per-side cost) - the "
+                    "harshest cost assumption; the cross-section is ranked by mu (a ranking, not a direction); a "
+                    "positive VAL-chosen q on TEST is real relative-ranking skill.")
 
 

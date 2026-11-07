@@ -75,10 +75,12 @@ def _snapshot(case):
 
 
 def _baseline_config():
-    from nig_timenet_torch.jobs.baseline import model_settings
+    from nig_timenet_torch.workflow.flat_run import model_settings
+    from nig_timenet_torch.workflow.settings import default_model_settings
 
     meta = ARCHITECTURES.entry("nig_timenet_v2").meta
-    return json.loads(json.dumps({**meta["default_config"], **model_settings(("high", "low", "close")).overrides}))
+    ms = model_settings(default_model_settings(), ("high", "low", "close"))
+    return json.loads(json.dumps({**meta["default_config"], **ms.overrides}))
 
 
 def _pins():
