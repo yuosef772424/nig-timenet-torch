@@ -174,3 +174,27 @@ def test_artifact_to_identity_to_fit(art, tmp_path):
     other_data = dataclasses.replace(ident, data_fingerprint="0" * 64)
     with pytest.raises(ResumeMismatchError, match="data_fingerprint"):
         fit(make_trainer(), data, settings, run_dir=tmp_path / "run", identity=other_data)
+
+
+def test_declared_timeframes_must_describe_the_data(art):
+    write_manifest(art, base_tf="1h", timeframes=["1h"])
+    m = load_artifact(art).manifest
+    assert m.declares_timeframes and m.base_tf == "1h" and m.timeframes == ("1h",)
+    write_manifest(art, base_tf="4h", timeframes=["4h"])
+    with pytest.raises(ArtifactError, match="does not describe this data"):
+        load_artifact(art)
+    write_manifest(art, base_tf="1h")
+    with pytest.raises(ArtifactError, match="together or not at all"):
+        load_artifact(art)
+
+
+def test_an_artifact_without_declared_timeframes_loads_and_is_flagged(art):
+    m = load_artifact(art).manifest
+    assert not m.declares_timeframes and m.base_tf is None and m.timeframes is None
+
+
+def test_a_job_can_refuse_an_artifact_of_another_interval(art):
+    from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
+    load_dataset(LoaderSettings(name=str(art), local_dir="", expect_base_tf="1h"))
+    with pytest.raises(ArtifactError, match="expects base_tf '4h'"):
+        load_dataset(LoaderSettings(name=str(art), local_dir="", expect_base_tf="4h"))

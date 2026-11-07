@@ -209,6 +209,7 @@ with any of these inconsistent:
 | `time_seal` | `2026-10-01T00:00:00+00:00` | equals the constant in `artifact.py` |
 | `max_bar_time` | latest LABEL bar open time (last window bar + `forecast_horizon` x base-tf bar) | `< time_seal`; the loader recomputes it from `last_candles` and refuses data that reaches later than the manifest says |
 | `data_sha256` | sha256 of the JSON of `files` (sorted keys); this is the `data_fingerprint` of `RunIdentity` | 64 lowercase hex |
+| `base_tf`, `timeframes` | OPTIONAL (D-015): the bar interval and the timeframes the export holds; declared together or not at all | when present, equal to the dataset's `base_tf` / `timeframes` (else refused); when absent the artifact loads and `ArtifactManifest.declares_timeframes` is False. A job passes `LoaderSettings.expect_base_tf` (baseline key `base_tf`) to refuse another interval |
 | `files` | sha256 of every file in the directory except `manifest.json` | format; re-hashed only by `verify_hashes` / `--verify-hashes` |
 | `sealed_found`, `max_window_time`, `rows`, `rows_source`, `dropped_*`, `source_*` (incl. `source_format`: `"pkl.gz"` or `"npy_dir"`, TF PR 66) | provenance for the reader | not checked |
 
