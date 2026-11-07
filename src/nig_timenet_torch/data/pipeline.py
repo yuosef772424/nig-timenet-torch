@@ -4,6 +4,7 @@ import logging
 
 from nig_timenet_torch.data.artifact_writer import write_artifact
 from nig_timenet_torch.data.build import build_dataset
+from nig_timenet_torch.data.publish import publish_artifact
 from nig_timenet_torch.data.settings import DataSettings
 
 __all__ = ["build_artifact", "summary_lines"]
@@ -30,6 +31,10 @@ def build_artifact(settings: DataSettings, loader=None) -> tuple[dict, dict | No
         for line in summary_lines(dataset):
             log.info(line)
     o = settings.output
+    if o.directory:
+        dated, manifest = publish_artifact(dataset, o)
+        log.info("written to %s", dated)
+        return dataset, manifest
     if not o.path:
         return dataset, None
     manifest = write_artifact(dataset, o.path, source_commit=o.source_commit, producer=o.producer,

@@ -247,6 +247,10 @@ class OutputSettings:
     holdout_start: str | None = None
     source_commit: str = ""                   # 40 hex; "" = this checkout's git HEAD
     producer: str = "nig_timenet_torch.data"
+    directory: str = ""                       # non-empty: write <name>_<stamp>.dataset and <name>_latest.dataset here
+    name: str = "preprocessing_output"        # base name of the two folders above (the TF file-name convention)
+    stamp: str = ""                           # "" = the build time, UTC, YYYYMMDD_HHMMSS
+    latest: bool = True                       # also (re)write <name>_latest.dataset
 
 
 @dataclass(frozen=True)
