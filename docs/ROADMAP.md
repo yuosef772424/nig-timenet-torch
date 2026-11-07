@@ -55,10 +55,11 @@ Step header: change type, size (S < ~150 changed lines, M ~150-500, L more), age
 the cheaper agent model suffices; **researcher** = open question, a stronger agent model, says why). `r` = a Colab run
 plus its reading in the next session.
 
-## Block 1 — hardening and integration (plan: `docs/hardening/PLAN.md`; do not duplicate it here)
+## Block 1 — hardening and integration — DONE 2026-11-07 (plan and per-package outcome: `docs/hardening/PLAN.md`; PRs #26-#39 in `docs/STATUS.md`)
 Order: `T4b -> I1 -> H2 -> H1 -> I5 -> I2 -> H3 -> H4 -> I3 -> H5 -> H6`. T4b is a ROADMAP fix that goes first (below).
 I4 is split: its rolling half becomes step F2, its panel half is parked (Later); I7 (ar-stream) is not opened (PLAN.md
-"Final campaign order" gives the reasons and the reopen condition). T5r job runs may continue meanwhile.
+"Final campaign order" gives the reasons and the reopen condition). The T4b text below is kept as the record of the fix
+(merged, #29).
 
 ### T4b — T-sharp per head vs the predicted move (`fix` + `test`, S, builder) — FIRST, before I1
 - `eval/target_report.py` `_sharp` (~L95-103): replace the range reference `pred_high - pred_low` by each head's
@@ -77,14 +78,31 @@ Then I1 ... H6 per `docs/hardening/PLAN.md`.
 
 ## Block 2 — read the baseline, then build the gates
 
-### T5r — read the baseline (`docs`/`exp`, S, builder)
-- Inputs: `colab-results/runs/baseline-001-s0/` (`baseline_summary.json`, `health_report.md`, `test_report.json`).
-- FIRST check the artifact's `reg_target_mode` (HF-13 / B-034): if it is not `return`, the decoded prices, T-sharp and
-  coverage of that run are wrong; recompute the reports from `best.pt` with the codec of the artifact (H2 path), do not
-  retrain. Record whether B-020 (bar OPEN time) can be settled from the run's data.
-- If the reports came from pre-T4b code, recompute T-sharp from the saved checkpoint.
-- Output: `docs/results/baseline-001.md` (targets per head with trivial baselines, step time split train / val, GPU
-  name, epochs, gate failures if known), bottleneck rows. Acceptance: every number has its source file named.
+### T5r — read the baseline (`docs`/`exp`, S-M, researcher: the stronger model, because it decides what to try next)
+- Inputs that already exist on `colab-results` (read with `git show origin/colab-results:<path>`, do not copy): `runs/baseline-001-s0-r2/`
+  (`baseline_summary.json`, `health_report.md`, `test_report.json`; 2026-11-07 @44f6e71, 5 epochs, T4, 972 s; its
+  `reg_target_mode` is `return`, scale 1.0, so the decodes are right: HF-13 settled for this run). Older: `baseline-001-s0`
+  (@55e2db4, pre-T4b, history only), `trial-002`, smoke `baseline-smoke-001`. Known so far: best epoch 1 of 5 (val
+  -5.062 -> -4.947 while train -5.75 -> -6.12: overfit after epoch 1, B-038); test rank IC high 0.393 / low 0.436 /
+  close 0.057 (shuffled ~0); T-sharp share 0.84 / 0.89 but 80 % coverage 0.89 / 0.93 / 0.88 (> 0.85: intervals too
+  wide); confidence decile Spearman -0.81 / -1.00 / -0.99; ~169 s per epoch (median), 2,015,804 / 239,297 / 239,772
+  windows. NOT yet known: whether high/low IC beats the last-bar-range volatility baseline (rule C1/D), and any T-profit
+  number (the battery was wired in I3, after this run).
+- What the r2 run cannot give: the battery (`battery_report.txt`, `battery_profit.json`), the persisted predictions and the
+  volatility baseline inputs are not in its folder, and its checkpoint lives only on Drive (`.../baseline-001-s0-r2/train`).
+  No entry recomputes a report from a checkpoint (`jobs/` has `baseline` and `device_smoke` only). DECISION: do NOT build a
+  recompute entry; queue a FRESH baseline at current main (about 16 minutes on a T4): new run_dir `baseline-002-s0`, same
+  config as `docs/jobs/baseline-001-s0.json` (5 epochs, seed 0), preceded by `baseline-smoke-001` on the same commit (rule
+  E5, the commit has not run on the GPU). The planner queues it; the reading session starts when its folder is on
+  `colab-results`. Compare it with r2 (same seed, same data; differences are code changes I2-I3 and nondeterminism).
+- Compute in the reading: (1) the volatility baseline for high/low (rank IC of the last bar's range vs the truth, same
+  rows) and report only the excess as skill; (2) the battery from the run folder (profit per use of the outputs with
+  its trivial baselines and day-block CI, cost 0.0008 per side); (3) T-conf / T-sharp per head from `test_report.json`;
+  (4) record whether B-020 (bar OPEN time) can be settled from the run's data; (5) the validation curve vs train
+  (best epoch 1) as the input to M1/M2r.
+- Output: `docs/results/baseline-001.md` (targets per head with trivial baselines, step time, GPU name, epochs, gate
+  failures if known), bottleneck rows (B-022, B-025, B-026, B-038, B-043 updated). Acceptance: every number has its source
+  file named; no statement of profit without the baseline rows and the CI.
 
 ### T3b — interactive notebook section + Drive cached env (`feat`, M, builder)
 - Inputs: PLANNER_HANDOFF "Next" 2; the run steps of I3. A notebook section: a settings cell -> train -> test report
@@ -132,7 +150,7 @@ Registered options in `FitSettings` / `Trainer`, defaults reproduce today (D-nnn
 ## Block 3 — explain the memorization (protocol section 5)
 
 ### M1 — memorization study, CPU part (`exp`, M, researcher)
-- Card first. On the real artifact and the T5r checkpoint: H-M8 (eval-mode train metric vs val; defines the effect
+- Card first. On the real artifact and the T5r checkpoint (`baseline-002-s0` on Drive): H-M8 (eval-mode train metric vs val; defines the effect
   size), H-M1 counts (distinct timestamps, label autocorrelation, cross-coin correlation, ESS), H-M2 (timestamp R^2,
   gap decomposition, month-id probe), H-M3 probes (coin id from inputs / tokens / embedding), H-M5 (boundary overlap,
   B-020), H-M9 (duplicate / stale windows). Re-runnable code goes into a tool with a test (not a notebook).

@@ -2,6 +2,9 @@
 
 What this project consumes from `crypto-signal-prediction`'s data pipeline, recorded from the real code, not
 designed. Source: `yuosef772424/crypto-signal-prediction` at `aeafc564f25c78f252936affbd374f68aa49b8d9`, read only.
+Two commits matter: the FIXTURE below (`tests/fixtures/tiny_dataset.dataset`, 1h, 6 coins) is pinned at `aeafc564`; a REAL
+artifact carries its own `export.source_commit` in its manifest (the TF commit that ran the export, section "Export manifest" below),
+and D1 checks that. The manifest may also declare `base_tf` / `timeframes` (D-015).
 
 ## How the fixture was produced
 

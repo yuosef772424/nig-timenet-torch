@@ -88,3 +88,26 @@ Unchanged from the first review (G2, G3, B5, F3 counter): F3 ran on time this ro
 
 ### Actions
 - Next review: after 5 more merged PRs (counter reset in `docs/STATUS.md`).
+
+## 2026-11-07 — third review (run inside step H6; covers #33-#39: I5, I2, H3, H4 + #37, I3, H5)
+
+Seven PRs merged since the second review (rule F3 says 5; the campaign merged faster than the hand counter, suggestion
+row 131 proposes deriving it). New rows since #32: friction 79-98, suggestions 94-130 (37), bottlenecks B-042..B-046.
+Every open suggestions row now carries `2026-11-07 review (third): accepted -> <step>`, `done by <step>` or
+`declined (<why>)`. Totals of the 37 + 3 older open rows: done 15, accepted 19 (T3b 4, F1 4, TR1 2, T5r 1, T6b 1, D1 1,
+B-046 2, later 5), declined 6.
+
+### Repeated frictions -> rule proposals
+| friction | count | proposal |
+|---|---|---|
+| a plan or count fact was stale when the step started (G2 "<= 3", RunSettings sections, "fills defaults", allowlist) (rows 95, 119, 124, 128, 129) | 5 | no new rule (B6 covers it); H6 appended "Outcome" / as-built sections; future plans carry an as-built table (row 132) |
+| the pandas-vs-settings-field G4 blind spot and pins by parameter NAME (rows 104, 120, 130) | 3 | none: counted in ratchets, reviewed here |
+| the F3 counter ran 2 PRs over (rows 131 + friction) | 2 | derive it from PR numbers (row 131), not a rule |
+No new rule. No rule retired: B7, E5 and the pin diff each caught or prevented something in this window.
+
+### Rules whose enforcement is weaker than the table claims
+G2 now counts declared vocabularies (honest 5, B-046); G3 caps exceptions (H5); B5/B-030 closed by H4; F3 counter still hand-kept.
+C4 (>= 2 seeds) and C6 (gates) remain `manual` until ROADMAP G2 builds the job-side refusal.
+
+### Actions
+- T5r reading with a fresh `baseline-002-s0` (smoke first); next review after 5 more merged PRs (counter in `docs/STATUS.md`).
