@@ -22,7 +22,7 @@ PyTorch. The TF project (`yuosef772424/crypto-signal-prediction`) is the frozen 
   from the last close, `|decoded pred_price - last_close|`, in >= 80 % of samples (owner example: high predicted +5 %
   above the close -> uncertainty ~2-3 %). At the same time the empirical coverage of the head's 80 % interval stays
   within 75-85 %. A zero std scores 1.0 on the share (trivial), hence the coverage condition. The earlier text
-  ("width < pred_high - pred_low") was a wrong interpretation; `eval/target_report.py` still computes it until T4b.
+  ("width < pred_high - pred_low") was a wrong interpretation; `eval/target_report.py` computes the per-head version since T4b.
   Warning measured in H0c: even the true conditional distribution fails this on the close head (share 0.00; high /
   low 1.00), see `docs/MODEL_DEV_PROTOCOL.md` gate C; owner decision O-1 in STATUS.
 - **Direction:** SUSPENDED for the high and low heads (owner): their sign / hit rate / up-down accuracy / class AUC
