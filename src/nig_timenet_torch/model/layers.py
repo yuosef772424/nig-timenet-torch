@@ -1,5 +1,11 @@
 """Encoder layers of NIG-TimeNet v2, ported from crypto-signal-prediction model/*.py @ aeafc564 (BUILD_PLAN.md
 P08-P13). Tensor layout is the TF one throughout: (batch, time, features), channels last.
+
+PURPOSE:  The layer classes of NIG-TimeNet v2 (instance norm, symlog, decomposition, patch embedding, relative GQA
+          attention, transformer block, pooling, FiLM, gated fusion, Keras-style GRU) with TF-identical numerics.
+TAGS:     layers, instance norm, stats mode, symlog, attention, transformer block, gru, film, keras port
+PITFALLS: Attribute names are weights.json attr_paths and checkpoint keys: never rename. InstanceNorm stats modes are
+          the STATS_TRANSFORMS table (None = no statistics, ``returns_stats`` False): a new mode is one table row.
 """
 
 import torch
