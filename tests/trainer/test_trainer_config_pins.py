@@ -19,9 +19,10 @@ import torch
 
 from nig_timenet_torch.colab.identity import identity_for_run
 from nig_timenet_torch.data_io.artifact import load_artifact
-from nig_timenet_torch.jobs import baseline
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
+from nig_timenet_torch.workflow import flat_run
+from nig_timenet_torch.workflow.settings import TrainSettings
 from tests.data_io.test_artifact import art, write_manifest  # noqa: F401  (fixture)
 from tests.trainer.fixture_setup import build_model
 
@@ -36,8 +37,8 @@ def _hash(cfg: dict) -> str:
 def _identity_fingerprint(manifest, cfg: dict) -> str:
     torch.manual_seed(0)
     model = build_model(16, 18, dropout=0.1)
-    trainer = Trainer(model, cfg, optimizer=lambda ps: torch.optim.AdamW(ps, lr=baseline.LR,
-                                                                         weight_decay=baseline.WEIGHT_DECAY))
+    trainer = Trainer(model, cfg, optimizer=lambda ps: torch.optim.AdamW(ps, lr=TrainSettings().lr,
+                                                                         weight_decay=TrainSettings().weight_decay))
     ms = ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))
     return identity_for_run(trainer, FitSettings(epochs=5, batch_size=64, seed=0, trace=True), ms, manifest,
                             "0" * 40).fingerprint()
@@ -46,7 +47,7 @@ def _identity_fingerprint(manifest, cfg: dict) -> str:
 def _current(manifest) -> dict:
     out = {}
     for name, targets in TARGET_SETS.items():
-        cfg = baseline.trainer_config(targets)
+        cfg = flat_run.trainer_config(targets, TrainSettings().label_smoothing)
         out[name] = {"config": cfg, "trainer_hash": _hash(cfg),
                      "identity_fingerprint": _identity_fingerprint(manifest, cfg) if len(targets) == 3 else None}
     return out

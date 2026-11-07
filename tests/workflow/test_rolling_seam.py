@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.data_io import npy_dir
 from nig_timenet_torch.data_io.split_plan import check_split_purity
 from nig_timenet_torch.trainer.identity import RunIdentity
@@ -23,8 +22,8 @@ def settings(**over):
     return RollingSettings(**{**base, **over})
 
 
-def test_rolling_settings_default_is_none_equivalent_to_single_split():
-    assert RunSettings().rolling is None and from_dict(RunSettings, {}).rolling is None
+def test_single_split_path_is_untouched_by_the_rolling_seam():
+    assert not hasattr(RunSettings, "rolling")  # rolling is package I4; the run steps are single-split only
     # the single-split path (P25) is untouched: same plan as before the seam existed
     a, b = fixture_plan(), fixture_plan()
     assert all(np.array_equal(getattr(a, f), getattr(b, f)) for f in ("train_idx", "val_idx", "test_idx"))

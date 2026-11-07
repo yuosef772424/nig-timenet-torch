@@ -13,10 +13,10 @@ from pathlib import Path
 import pytest
 
 from nig_timenet_torch.core.registry import UnknownNameError
-from nig_timenet_torch.jobs import baseline
 from nig_timenet_torch.trainer.selection_metric import NOT_SELECTABLE, SELECTION_METRICS
 from nig_timenet_torch.trainer.targets import resolve_loss, resolve_targets, targets_config, validate_trainer_config
 from nig_timenet_torch.trainer.trainer import Trainer
+from nig_timenet_torch.workflow import flat_run
 from tests.trainer.fixture_setup import build_model
 
 GOLDEN = json.loads((Path(__file__).resolve().parents[1] / "pins" / "trainer_config.json").read_text("utf-8"))
@@ -24,12 +24,12 @@ ALL = ("high", "low", "close")
 
 
 def _cfg():
-    return baseline.trainer_config(ALL)
+    return flat_run.trainer_config(ALL, 0.1)
 
 
 def test_targets_config_equals_the_pre_refactor_dict():
-    assert baseline.trainer_config(ALL) == GOLDEN["high_low_close"]["config"]
-    assert baseline.trainer_config(("close",)) == GOLDEN["close_only"]["config"]
+    assert flat_run.trainer_config(ALL, 0.1) == GOLDEN["high_low_close"]["config"]
+    assert flat_run.trainer_config(("close",), 0.1) == GOLDEN["close_only"]["config"]
     head_types = {t: ["nig_regression", "binary_classification"] for t in ALL}
     assert targets_config(head_types, options_by_kind={"nig_regression": {"use_calibration_loss": True},
                                                        "binary_classification": {"binary": True}}).keys() == \
