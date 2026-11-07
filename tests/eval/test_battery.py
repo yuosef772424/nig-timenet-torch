@@ -23,6 +23,7 @@ from nig_timenet_torch.eval.battery import (
     verdict,
     weekly_stability,
 )
+from nig_timenet_torch.eval.battery_lib import _dir_pnl
 
 
 def _frame(n: int = 2400, seed: int = 0, good: bool = True, coins=("AAA", "BBB")) -> pd.DataFrame:
@@ -53,8 +54,7 @@ def _frame(n: int = 2400, seed: int = 0, good: bool = True, coins=("AAA", "BBB")
 
 def test_sanity_flags_a_good_model_and_a_biased_one():
     good = _frame(good=True)
-    assert sanity(good, good)["rows"][1].count("dir_acc=1.0000") or \
-        "dir_acc=" in sanity(good, good)["rows"][1]  # the good table scores its direction honestly
+    assert "dir_acc(p_dir)=" in sanity(good, good)["rows"][1]  # the good table scores its direction honestly
     rows = sanity(_frame(good=False), _frame(good=False))["rows"]
     assert any("IC(mu, y_ret)=-" in r or "IC(mu, y_ret)=0.0" in r or "IC(mu, y_ret)=+" in r
                for r in rows)  # an IC is always reported, whatever it is
@@ -201,3 +201,51 @@ def test_verdict_survives_a_table_with_too_few_trades():
     small, other = _frame(n=64, seed=3), _frame(n=64, seed=4)
     out = full_battery(small, other)["verdict"]
     assert out["tradeable"] is False and out["best"]["name"] == "none" and "none" in out["rows"][0]
+
+
+def _avg(row: str) -> float:
+    """The ``avg%`` column of a battery row as a fraction."""
+    return float(row.split("%")[1].split()[-1].replace("+", "")) / 100 if row.count("%") > 1 else float("nan")
+
+
+def test_every_section_charges_the_cost_per_side():
+    """Rule B3 guard for the cost class: a trade pays ``cost`` on each of its two sides in every section."""
+    from nig_timenet_torch.eval.battery_lib import round_trip
+    test = _frame(seed=2)
+    side = np.where(test["p_dir"].values > 0.5, 1.0, -1.0)
+    gross = float((side * test["y_ret"].values).mean())
+    zero, one = trade_grid(test, 0.0)["rows"][-1], trade_grid(test, 0.001)["rows"][-1]
+    assert abs(_avg(zero) - gross) < 1e-6 and abs(_avg(one) - (gross - round_trip(0.001))) < 1e-6
+    assert round_trip(0.001) == 0.002
+    pnl0, pnl1 = (_dir_pnl(test, np.arange(len(test)), c) for c in (0.0, 0.001))
+    assert np.allclose(pnl0 - pnl1, 0.002)
+    f0, f1 = (flip_test(test, c)["rows"][1] for c in (0.0, 0.001))
+    assert "AGAINST" in f0 and f0 != f1
+
+
+def test_direction_comes_from_p_dir_in_every_section():
+    """The class head is the one direction source: flipping the sign of mu changes no direction number."""
+    a, b = _frame(seed=5), _frame(seed=5)
+    b["mu"] = -b["mu"]
+    for fn in (sanity, ):
+        assert fn(a, a)["rows"][0].split("dir_acc")[1] == fn(b, b)["rows"][0].split("dir_acc")[1]
+    for fn in (shock_split, weekly_stability, per_coin):
+        ra, rb = fn(a, 0.0008)["rows"], fn(b, 0.0008)["rows"]
+        assert [r.split("dir_acc=")[1].split()[0] for r in ra if "dir_acc=" in r] == \
+               [r.split("dir_acc=")[1].split()[0] for r in rb if "dir_acc=" in r]
+
+
+def test_no_battery_section_takes_a_direction_from_the_sign_of_mu():
+    import re
+    from pathlib import Path
+
+    import nig_timenet_torch.eval as ev
+    bad = []
+    for path in sorted(Path(ev.__file__).parent.glob("battery*.py")):
+        if path.name == "battery_adapter.py":
+            continue  # the adapter's Gaussian P(return > 0) fallback is the documented exception
+        for n, line in enumerate(path.read_text().splitlines(), 1):
+            if re.search(r"\bmu\b(\[[^\]]*\])?\s*[<>]=?\s*0(?![.\d])", line) or "np.sign(mu" in line \
+                    or re.search(r"\[\"mu\"\](\.values)?(\[[^\]]*\])?\s*[<>]=?\s*0(?![.\d])", line):
+                bad.append(f"{path.name}:{n}: {line.strip()}")
+    assert not bad, "direction must come from p_dir (single source):\n" + "\n".join(bad)

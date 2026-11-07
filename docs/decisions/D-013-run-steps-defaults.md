@@ -13,6 +13,11 @@ entry over `workflow/run.py` and its summary / test report equal the pre-refacto
   80/10/10 time quantiles, chunk 20000, anti-memorization preset). `epochs=5` and `batch_size=256` are notebook defaults only.
 - `RunSettings.rolling` is removed (it was read by nothing; rolling folds are package I4 and use `RollingSettings` directly).
 
+- Battery behaviour change (no default value changes, so no key line): every battery section charges `cost` PER SIDE (a trade pays
+  `2 x 0.0008`; the older sections paid it once, the market-neutral one `2 x cost` instead of `4 x cost`), and the direction of
+  every section is the close class head `p_dir` (sanity, shock, weekly, per-coin and persistence used `sign(mu)` before).
+  Ranking by `|mu|` stays. Fixture numbers are in the PR description.
+
 - `nig_timenet_torch.jobs.baseline.ANTI_MEMORIZATION_CONFIG.class_head_hidden`: `32` -> `<removed>`
 - `nig_timenet_torch.jobs.baseline.ANTI_MEMORIZATION_CONFIG.d_model`: `64` -> `<removed>`
 - `nig_timenet_torch.jobs.baseline.ANTI_MEMORIZATION_CONFIG.dropout`: `0.25` -> `<removed>`
