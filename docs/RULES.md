@@ -36,6 +36,7 @@ artifacts from it through its own tools.
 | C3 | Best epoch is chosen by a registered selection metric with a fixed definition, independent of loss weights. | TF C7: selection = training objective | `trainer/selection_metric.py` tests |
 | C4 | A comparison between arms uses >= 2 seeds per arm on one commit and a paired, dependence-aware test; one seed is "a look", never a result. | TF E-norm-001 seeds on different commits were discarded | manual (card template) |
 | C5 | Exploratory results are labelled exploratory. Strict confirmation (holdout, forward data, realistic costs) happens only when the owner asks; until then the goal is to improve the model. | owner, 2026-11-02 | manual |
+| C6 | Every agent that changes or trains the model follows `docs/MODEL_DEV_PROTOCOL.md`: a configuration passes the gradient, confidence and uncertainty gates on synthetic, shuffled-label and small real data on >= 3 seeds BEFORE any full training (baseline arm exempt, failures recorded); T-sharp is judged per head against the head's own predicted move; high / low direction is never evidence. | TF: the InstanceNorm memorization (F-0029) and the 99 % high/low hit rate (F-0085) were found only after full runs; here three GPU runs failed in a row (#21-#23) before any result; the T4 T-sharp code compared against the wrong reference (H0c) | manual (the job card names its `gate_report.json`) until ROADMAP G2 builds the job-side refusal |
 
 ## D. Data integrity
 | # | Rule | Why | Enforced by |

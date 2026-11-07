@@ -1,4 +1,4 @@
-# Planner handoff (rewritten 2026-11-03, after the first GPU runs)
+# Planner handoff (rewritten 2026-11-03, after the first GPU runs; State / Next updated 2026-11-07 by H0c)
 
 The planner conversation plans, reviews and merges; step sessions or ONE background agent (owner: one at a time,
 Sonnet, lean: the weekly usage budget is nearly spent) do the work. Reply to the owner in Arabic. Merge with
@@ -13,8 +13,10 @@ PRs (T6+) and anything large still go to the owner first.
 | `yuosef772424/crypto-signal-prediction` | FROZEN reference (TF). Only `tools/export_torch_artifact.py` changes there (T2/T3). | `master` |
 
 ## State
-- Merged in torch: R0 #14, T1 #16, T2 #17, T3 #18, T4 #19, T5r job #20, fixes #21-#23. TF: #62 (D-013 defaults),
-  #65 + #66 (export tool, `.pkl.gz` input). TF #64 (TF-final settings catalog) still OPEN with conflicts, parked.
+- Merged in torch: R0 #14, T1 #16, T2 #17, T3 #18, T4 #19, T5r job #20, fixes #21-#24, hardening H0 #26 (audit),
+  H0b #27 (PR #25 evaluation), H0c #28 (this ROADMAP + `docs/MODEL_DEV_PROTOCOL.md`, rule C6). PR #25
+  (`feat/ar-stream`) stays open, not merged: ported piecewise in I1, I2, I3, I5; I4 split; I7 not opened. TF: #62
+  (D-013 defaults), #65 + #66 (export tool, `.pkl.gz` input). TF #64 (TF-final settings catalog) still OPEN, parked.
 - Data: artifact `MyDrive/crypto_model/torch_artifacts/preprocessing_output_1` from
   `preprocessing_output_latest.pkl.gz` (TF main data, 4h): 2,520,913 windows, 535 coins, sealed 183/183 removed,
   max_bar_time 2026-09-26T20:00Z, data fingerprint `c572b1b36960`. The artifact has `split_dates = None`: the job
@@ -33,16 +35,24 @@ PRs (T6+) and anything large still go to the owner first.
   design (RunIdentity holds `code_sha`): a new commit means a fresh start of that run_dir (or use a new run_dir).
 
 ## Next
-1. Read the first full result (`colab-results/runs/baseline-001-s0/`: `baseline_summary.json` with epoch seconds,
-   `health_report.md` on validation, `test_report.json` on the test split). Write `docs/results/baseline-001.md`.
-2. Owner asked for: an interactive notebook section (settings cell -> train -> test report shown inline) and a Drive
-   cached Python env (prompt "T3b" written earlier: venv `--system-site-packages`, one tar on Drive keyed by
-   Python + torch + requirements hash). Neither is built.
-3. Then seed 1, then T6 (switches). First R-REVIEW done 2026-11-07 in step H0 (`docs/reviews.md`); the hardening
-   (`docs/hardening/PLAN.md`: H0b, H0c, then H1-H6) runs before T6.
+1. Campaign (one builder session each, merged before the next): `T4b -> I1 -> H2 -> H1 -> I5 -> I2 -> H3 -> H4 -> I3 ->
+   H5 -> H6` (`docs/hardening/PLAN.md` "Final campaign order"). T4b first: T-sharp per head vs the predicted move.
+2. Then the ROADMAP model plan: T5r reading (check `reg_target_mode` first) -> T3b -> G1 -> G2 -> TR1 -> G3r -> M1 ->
+   M2r -> TR2 -> T5r-s1 -> T6a/b/c -> T7r -> T8 -> D1 -> D2 -> F1 -> F2 -> F3 -> (F4 on the owner's request) -> F5.
+   Builder steps take the cheaper agent model; G3r, M1, M2r, T7r, T8, F4 are research steps.
+3. Every model step obeys `docs/MODEL_DEV_PROTOCOL.md`: gates A (gradient), B (confidence), C (uncertainty) on E1
+   synthetic / E2 shuffled / E3 small real, 3 seeds, before any full training; direction only on the close head.
+4. Owner decisions open (STATUS bottom): O-1 close-head T-sharp (unattainable even for the true distribution), O-2
+   F2 in/out, O-3 doctor earlier, O-4 I7, O-5 seeds per arm, O-6 holdout definition, O-7 memorization run ids.
+5. The T5r queue may keep running during the campaign; read its result in step T5r (after H6) unless the owner asks
+   earlier (then T4b must be merged first).
 
 ## Facts worth keeping (do not re-derive)
 - PyTorch port: forward/loss/gradient parity with TF proven; weight init is torch default (results differ from TF).
+- T-sharp (owner 2026-11-07) = per head, predictive std (price) < |pred_price - last_close| in >= 80 % + coverage
+  75-85 %. H0c oracle probe (true conditional distribution, 4h, horizon 2): share 1.00 high/low, 0.00 close; a
+  calibrated close head would need R^2 >= 0.94 (decision O-1).
+- AdamW weight decay in the baseline job is a no-op in effect (lr 1e-3 x wd 1e-4 = 1e-7 per step), as in TF (F-0029).
 - TF "hit rate" (sign of pred-entry) is ~99 % for high/low with any model: meaningless; torch T-conf ranks error
   within coin instead.
 - TF profile-004 (4h, h2, 3 features, `logret_std`): model+GBM rank average +0.153 %/period, CI [+0.082, +0.220],
