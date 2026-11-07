@@ -1,4 +1,10 @@
-"""Stdlib-only git and token kit of the Colab notebook (ROADMAP T3): secrets masking, a GitHub token kept on Drive,
+"""PURPOSE: Stdlib-only git and token kit of the Colab notebook: secrets masking, a Drive-kept GitHub token, clean
+    clones and the --no-deps install that leaves Colab's torch alone.
+TAGS: colab bootstrap, git clone, github token, pip install, purge package, stdlib only
+PITFALLS: imports nothing from the package (the notebook execs this one file); install_package now also purges stale
+    modules of this repo from sys.modules and sibling-checkout src paths from sys.path (purge_package).
+
+Stdlib-only git and token kit of the Colab notebook (ROADMAP T3): secrets masking, a GitHub token kept on Drive,
 a CLEAN clone (``rm -rf`` first, then ``git clone``, then the exact ref) of every repo the run needs, and the
 ``--no-deps`` install that leaves Colab's own CUDA torch alone.
 
@@ -24,6 +30,9 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+
+__all__ = ["SHA40", "BootstrapError", "Secrets", "read_token", "save_token", "token_accepted", "acquire_token",
+           "git_env", "run_git", "clean_clone", "setup_clones", "purge_package", "install_package"]
 
 SHA40 = re.compile(r"[0-9a-fA-F]{40}")
 

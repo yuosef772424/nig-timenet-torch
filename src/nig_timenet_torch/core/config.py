@@ -1,4 +1,10 @@
-"""Strict settings primitive (BUILD_PLAN.md P04): every ``*Settings`` / ``*Config`` class of this repo is a frozen
+"""PURPOSE: Strict settings primitive: from_dict builds frozen dataclasses (unknown keys raise), to_dict is its inverse
+    and updated copies a settings object with dotted-key changes.
+TAGS: strict config, settings dataclass, from_dict, to_dict, updated, did you mean
+PITFALLS: to_dict turns tuples into lists (from_dict accepts them back); updated re-runs __post_init__ through
+    dataclasses.replace, and a mapping switches an optional (None) section on built from its defaults.
+
+Strict settings primitive (BUILD_PLAN.md P04): every ``*Settings`` / ``*Config`` class of this repo is a frozen
 dataclass built through :func:`from_dict`. Unknown keys raise (with a did-you-mean), defaults live only on the dataclass
 fields (no second default source such as ``d.get(key, default)``).
 

@@ -1,4 +1,11 @@
-"""One way to load a prepared dataset: name resolution, format detection, memory-mapping, local copy, checks.
+"""PURPOSE: One way to load a prepared dataset by base name, latest name or full name, memory-mapped or copied to local
+    disk, with the rule D1 artifact checks applied by default.
+TAGS: dataset loading, latest name, mmap, local copy, artifact checks, rule d1
+PITFALLS: a pickle or a folder without a valid export block is refused unless allow_unchecked=True (then manifest is
+    None); with format auto the NEWER of the .dataset folder and the .pkl.gz wins by mtime; local_dir auto copies only
+    under /content/drive.
+
+One way to load a prepared dataset: name resolution, format detection, memory-mapping, local copy, checks.
 
 ``name`` accepts both spellings the TF project uses:
   * a base name, ``preprocessing_output`` or ``preprocessing_output_20261027``: ``_latest`` is added and the newer of

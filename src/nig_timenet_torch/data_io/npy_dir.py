@@ -1,4 +1,10 @@
-"""Reader of the ``npy_dir`` dataset format (BUILD_PLAN.md P06; contract: docs/DATA_ARTIFACT_CONTRACT.md).
+"""PURPOSE: Reader of the npy_dir dataset format (manifest.json + one .npy per array + meta.pkl), optionally memory-
+    mapped, and a local-disk copy helper.
+TAGS: npy dir, dataset reader, mmap, localize, data format, manifest
+PITFALLS: with mmap=True arrays up to small_bytes (64 MiB) are read into memory, only bigger ones stay memmaps; localize
+    copies manifest.json last so an interrupted copy is never taken for a finished one.
+
+Reader of the ``npy_dir`` dataset format (BUILD_PLAN.md P06; contract: docs/DATA_ARTIFACT_CONTRACT.md).
 
 On-disk format, written by crypto-signal-prediction ``data/storage.py::save_dataset_dir`` (@ aeafc56, lines 61-85):
 one ``<key>.npy`` per numpy-array key, ``meta.pkl`` (pickle) with every other key, ``manifest.json`` written last as
