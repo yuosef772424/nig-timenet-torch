@@ -42,6 +42,9 @@ def persistence_baseline(test, cost: float, pct: float = 0.10) -> dict:
     """Section 12: what does the LAST candle alone say? The old project asked whether the model adds
     anything over candle shape; the floor here is momentum - trade sign(last candle's return) on the
     same rows the model trades. If the model cannot beat this line, the 32-candle history adds nothing."""
+    if "last_ret" not in test:
+        return _section("PERSISTENCE BASELINE - SKIPPED", ["  (no last_ret column: pass prev_close to the adapter)"],
+                        "The last-candle line needs the previous close.")
     keep = _scored(test)
     y, mu, last = test["y_ret"].values, test["mu"].values, test["last_ret"].values
     rows = [f"  {'predictor':<28}{'dir_acc':>9}{'IC':>9}"]

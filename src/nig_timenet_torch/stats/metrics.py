@@ -1,5 +1,11 @@
 """The single owner of every metric this project computes (C7; BUILD_PLAN.md P21). Pure numpy — no torch.
 
+PURPOSE: Every metric of the project in one module (AUC, rank IC, calibration, interval and sharpness shares,
+    confidence-error gap, block-bootstrap CI), each with its trivial baseline stated and tested (rule C1).
+TAGS: metrics, auc, rank ic, calibration, coverage, bootstrap, trivial baseline
+PITFALLS: NaN rows are dropped pairwise and an undefined metric returns nan, never 0; bootstrap CIs resample
+    rows or blocks only, so serial dependence between blocks is not covered.
+
 Shared NaN policy: rows where ANY input is NaN are dropped first (pairwise); a metric that is undefined on what is
 left returns ``float("nan")`` instead of raising. Ties are always handled by average ranks.
 """
@@ -10,7 +16,7 @@ import numpy as np
 
 __all__ = ["auc", "rank_ic", "pearson", "spearman", "wilson_interval", "pinball_loss", "ece", "ece_bins", "mae",
            "average_ranks", "confidence_error_spearman", "confidence_error_gap", "width_below_share",
-           "interval_coverage"]
+           "interval_coverage", "block_bootstrap_ci"]
 
 
 def _clean(*arrays: np.ndarray) -> list[np.ndarray]:
@@ -217,3 +223,30 @@ def interval_coverage(y_true: np.ndarray, lower: np.ndarray, upper: np.ndarray) 
     NaN if no rows."""
     y, lo, hi = _clean(y_true, lower, upper)
     return float(((y >= lo) & (y <= hi)).mean()) if y.shape[0] else float("nan")
+
+
+def block_bootstrap_ci(values: np.ndarray, blocks: np.ndarray, level: float = 0.95, n_boot: int = 500,
+                       seed: int = 0) -> tuple[float, float, float]:
+    """(mean, lo, hi): the mean of ``values`` with a percentile CI from resampling whole BLOCKS (rows sharing a
+    block id, e.g. the same calendar day) with replacement, so rows that move together (coins on one day) are not
+    counted as independent. TRIVIAL: zero-mean noise has a CI around 0 (it contains 0 at the stated rate); a
+    constant series has a zero-width CI. NaN values are dropped; fewer than 2 blocks -> (mean, nan, nan); no rows ->
+    all nan. This ignores serial dependence BETWEEN blocks (use blocks at least as long as the dependence)."""
+    v, b = np.asarray(values, dtype=np.float64).reshape(-1), np.asarray(blocks).reshape(-1)
+    if v.shape[0] != b.shape[0]:
+        raise ValueError(f"length mismatch: {v.shape[0]} values, {b.shape[0]} blocks")
+    if not 0.0 < level < 1.0:
+        raise ValueError("level must be in (0, 1)")
+    keep = ~np.isnan(v)
+    v, b = v[keep], b[keep]
+    if v.shape[0] == 0:
+        return float("nan"), float("nan"), float("nan")
+    _, inv = np.unique(b, return_inverse=True)
+    sums, counts = np.bincount(inv, weights=v), np.bincount(inv).astype(np.float64)
+    mean = float(v.mean())
+    if sums.shape[0] < 2:
+        return mean, float("nan"), float("nan")
+    ix = np.random.default_rng(seed).integers(0, sums.shape[0], (n_boot, sums.shape[0]))
+    boots = sums[ix].sum(axis=1) / counts[ix].sum(axis=1)
+    tail = 100.0 * (1.0 - level) / 2.0
+    return mean, float(np.percentile(boots, tail)), float(np.percentile(boots, 100.0 - tail))

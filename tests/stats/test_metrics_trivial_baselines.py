@@ -148,3 +148,19 @@ def test_trivial_baseline_interval_coverage(rng):
     assert metrics.interval_coverage(y, np.full(N, -np.inf), np.full(N, np.inf)) == 1.0, "infinite covers all"
     z = 1.2815515655446004  # exact 80 % two-sided normal quantile
     assert metrics.interval_coverage(y, np.full(N, -z), np.full(N, z)) == pytest.approx(0.8, abs=0.02)
+
+
+def test_trivial_baseline_block_bootstrap_ci(rng):
+    days = np.repeat(np.arange(N // 20), 20)
+    noise = rng.normal(size=N)
+    mean, lo, hi = metrics.block_bootstrap_ci(noise, days)
+    assert lo < 0.0 < hi, "zero-mean noise: the 95 % CI contains 0"
+    assert metrics.block_bootstrap_ci(np.full(N, 0.3), days)[1:] == pytest.approx((0.3, 0.3)), "a constant has no width"
+    # rows of one day move together: the iid CI (one row per block) is far too narrow for them
+    daily = np.repeat(rng.normal(size=N // 20), 20) + 0.1 * rng.normal(size=N)
+    wide = metrics.block_bootstrap_ci(daily, days)
+    iid = metrics.block_bootstrap_ci(daily, np.arange(N))
+    assert (wide[2] - wide[1]) > 2.0 * (iid[2] - iid[1]), "dependence-aware CI is wider than the iid one"
+    assert np.isnan(metrics.block_bootstrap_ci(noise, np.zeros(N))[1]), "one block: no interval"
+    assert metrics.block_bootstrap_ci(noise, days, level=0.999)[2] > hi, "a higher level widens the interval"
+    assert np.isnan(metrics.block_bootstrap_ci(np.full(3, np.nan), np.arange(3))[0])
