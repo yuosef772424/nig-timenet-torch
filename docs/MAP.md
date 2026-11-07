@@ -81,7 +81,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `eval/battery_lib.py` | Shared private helpers of the battery: trade stats, row masks, top-\|x\| selection, section shaping. | battery helpers, trade stats, sharpe, profit factor, section |
 | `eval/battery_profit.py` | The T-profit sections of the battery: per-side-cost profit with trivial baselines and a block-bootstrap CI that is widened for the number of variants tried; limit orders at the predicted high / low; sigma as position size. | t-profit, profit after cost, limit order, position size, block bootstrap, trivial baselines, battery |
 | `eval/calibrator.py` | P29: role-checked learned-state calibrator (C6). Isotonic regression only, mirroring the TF side's |  |
-| `eval/nig_floor.py` | T4 NIG floor-hit shares: how often each NIG parameter of each head sits on its floor (B-001 evidence). |  |
+| `eval/nig_floor.py` | T4 NIG floor-hit shares: how often each NIG parameter of each head sits on its floor; floors are read from the model's own ``head_modules()`` (architecture-neutral). | nig floor, floor hit, t4 diagnostics, head modules, nu alpha beta, health report |
 | `eval/target_report.py` | T4/T4b target report for one stage of one run: T-skill, T-conf, T-sharp (per head, std vs the head's own predicted move from the last close) and 80 % coverage. | target report, t-sharp, coverage, uncertainty, evaluation, nig head |
 
 ### jobs
@@ -95,14 +95,15 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
-| `model/architectures.py` | P32/P33/P33b: the ARCHITECTURES registry — pluggable models behind one boundary contract (model.contract). |  |
-| `model/builder.py` | build_nig_timenet_v2 / NigTimeNetV2: the full model, wired as crypto-signal-prediction model/builder.py |  |
+| `model/architectures.py` | The ARCHITECTURES registry (build_fn + default_config per architecture), ModelSettings / build_model, the anti-memorization preset and the TinyMLP plug-in proof; every architecture exposes the health-report hooks. | architectures, registry, model settings, default config, tiny mlp, plugin, health report, probe points |
+| `model/builder.py` | NigTimeNetV2 (the fused model: input path, one encoder branch per timeframe, trunk, heads) and build_nig_timenet_v2; encoders come from model.encoders.ENCODERS, head kinds from HEAD_REGISTRY. | builder, nig timenet v2, model assembly, encoder dispatch, head dispatch, oracle weights, state dict |
 | `model/contract.py` | The boundary contract of a model (input and output names, shapes, dtypes, head kind), read from any built model by one forward pass and checked with a field-level diff; architectures plug in through it. | model contract, boundary, architecture, plugin, head kind, check_contract |
-| `model/heads.py` | Output heads (source: crypto-signal-prediction model/heads.py @ aeafc564): HeadSpec, HEAD_REGISTRY and the |  |
+| `model/encoders.py` | The ENCODERS registry: each encoder builds its modules through the model's ``add(name, module)`` (Keras layer names, so state_dict keys are unchanged) and owns its forward over the token sequence. | encoders, encoder registry, transformer, gru, tcn, causal conv, sequence encoder, plugin |
+| `model/heads.py` | The ONE head vocabulary: HEAD_REGISTRY (a head KIND -> output keys, label key, task type, output width, forward), head_spec, and the nig_outputs / class_outputs helpers that assemble a head's output dict. | heads, head registry, head spec, output keys, nig outputs, class outputs, task type, output width |
 | `model/layers.py` | Encoder layers of NIG-TimeNet v2, ported from crypto-signal-prediction model/*.py @ aeafc564 (BUILD_PLAN.md |  |
 | `model/nig_layers.py` | NIG (Normal-Inverse-Gamma) head layers, ported from crypto-signal-prediction model/nig_layers.py @ aeafc564 |  |
 | `model/panel.py` | Cross-asset panel model (source: crypto-signal-prediction cross_asset/model.py @ aeafc564), BUILD_PLAN.md P43. |  |
-| `model/parts.py` | P34: the ``input_skip`` seam on the transformer encoder (TF-side S15; crypto-signal-prediction |  |
+| `model/parts.py` | The registered input_skip variants of the transformer encoder (none, concat_each_block, dense_skip, late_raw, no_proj); class flags say what a variant adds, so builders never compare variant names. | input skip, variants, transformer encoder, patch embedding, readout, registry, flags |
 | `model/probe.py` | Per-layer ridge-probe report: forward-hook activations of named modules fitted to a label with time-ordered folds (AUC for binary y, else R^2), the raw input scored next to every layer. | probe, layer probe, ridge, activations, forward hook, health report |
 
 ### stats
@@ -144,6 +145,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | architecture | `ARCHITECTURES` | `model/architectures.py` | `nig_timenet_v2`, `tiny_mlp` |
 | calibrator | `CALIBRATORS` | `eval/calibrator.py` | `isotonic` |
 | custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` | `ath_distance`, `calendar`, `crash_rebound`, `direction_consistency`, `fisher`, `fractal`, `jump`, `mean_reversion`, `position_in_range`, `psar`, `range_rel`, `returns`, `risk_adj_momentum`, `rsi_divergence`, `rvi`, `supertrend`, `trend_age`, `vol_asymmetry`, `vol_estimators`, `vol_ratio`, `vol_term_structure`, `volume_z` |
+| encoder | `ENCODERS` | `model/encoders.py` | `gru`, `tcn`, `transformer` |
 | head | `HEAD_REGISTRY` | `model/heads.py` | `binary_classification`, `multiclass_classification`, `nig_regression` |
 | input_skip | `INPUT_SKIP_VARIANTS` | `model/parts.py` | `concat_each_block`, `dense_skip`, `late_raw`, `no_proj`, `none` |
 | selection_metric | `SELECTION_METRICS` | `trainer/selection_metric.py` | `val_auc_close_class`, `val_auc_high_class`, `val_auc_low_class`, `val_pinball_close_reg`, `val_pinball_high_reg`, `val_pinball_low_reg`, `val_raw_loss` |

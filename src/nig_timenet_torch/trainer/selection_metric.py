@@ -21,6 +21,8 @@ q=0.5 is the only quantile it gives without extra distributional assumptions).
 import numpy as np
 
 from nig_timenet_torch.core.registry import Contract, Registry
+from nig_timenet_torch.core.schema import TARGET_COLUMNS
+from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["SELECTION_METRICS", "compute_selection_metric"]
@@ -39,15 +41,19 @@ def _val_raw_loss(outputs, labels, logs) -> float:
 
 
 def _auc_fn(t):
-    return lambda outputs, labels, logs: metrics.auc(_np(labels[f"y_{t}_class"]), _np(outputs[f"y_{t}_class_logits"]))
+    spec = head_spec("binary_classification", t)
+    return lambda outputs, labels, logs: metrics.auc(_np(labels[spec.label_key]),
+                                                     _np(outputs[spec.output_keys["logits"]]))
 
 
 def _pinball_fn(t):
-    return lambda outputs, labels, logs: metrics.pinball_loss(_np(labels[f"y_{t}_reg"]), _np(outputs[f"y_{t}"]), 0.5)
+    spec = head_spec("nig_regression", t)
+    return lambda outputs, labels, logs: metrics.pinball_loss(_np(labels[spec.label_key]),
+                                                              _np(outputs[spec.output_keys["mu"]]), 0.5)
 
 
 SELECTION_METRICS.register("val_raw_loss", _val_raw_loss, version=1, higher_is_better=False)
-for _t in ("high", "low", "close"):
+for _t in TARGET_COLUMNS:
     SELECTION_METRICS.register(f"val_auc_{_t}_class", _auc_fn(_t), version=1, higher_is_better=True)
     SELECTION_METRICS.register(f"val_pinball_{_t}_reg", _pinball_fn(_t), version=1, higher_is_better=False)
 

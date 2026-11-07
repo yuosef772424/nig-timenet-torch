@@ -265,7 +265,7 @@ def _health(trainer, dataset, val_idx, x_val, y_val, ident, run_dir, dev, max_ro
     labels = {k: v[torch.as_tensor(pick)].numpy() for k, v in y_val.items()}
     run = HealthRun(run_dir=run_dir, model=trainer.model, x=xs, predictions=table, labels=labels, anchors=anchors,
                     last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]],
-                    codec_state=codec_state(dataset), probe_points=("trunk_norm",),
+                    codec_state=codec_state(dataset), probe_points=tuple(trainer.model.default_probe_points),
                     probe_labels=tuple(head_spec(k, probe_target).label_key
                                        for k in ("nig_regression", "binary_classification")))
     health_report(run)

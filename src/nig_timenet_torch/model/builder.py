@@ -5,45 +5,57 @@ encoder branch per timeframe (P41), nig_regression / binary / multiclass heads (
 Module attribute names equal the Keras layer names, so weights.json ``attr_path`` strings map 1:1 onto torch
 parameter names (see ``torch_param_name``). Options of the upstream builder that this port does not implement yet
 are accepted and validated: any non-default value raises NotImplementedError naming the step that adds it.
-"""
 
-import math
+PURPOSE:  NigTimeNetV2 (the fused model: input path, one encoder branch per timeframe, trunk, heads) and
+          build_nig_timenet_v2; encoders come from model.encoders.ENCODERS, head kinds from HEAD_REGISTRY.
+TAGS:     builder, nig timenet v2, model assembly, encoder dispatch, head dispatch, oracle weights, state dict
+PITFALLS: THE default config is the registry's (architectures.NIG_TIMENET_V2_DEFAULT_CONFIG: d_model 16, 2 layers);
+          this signature mirrors the TF builder (d_model 128, 4 layers, NIG heads only) and must not be edited to
+          "fix" that (HF-08). Attribute names are Keras layer names = checkpoint keys: never rename.
+"""
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from nig_timenet_torch.model.heads import classification_head_forward, multiclass_head_forward
+from nig_timenet_torch.core.schema import TARGET_COLUMNS
+from nig_timenet_torch.model.encoders import ENCODERS, CausalConv1D, EncoderDims, tcn_n_blocks
+from nig_timenet_torch.model.heads import (
+    HEAD_REGISTRY,
+    class_head_kind,
+    class_outputs,
+    head_spec,
+    head_width,
+    kinds_with_task,
+    nig_outputs,
+)
 from nig_timenet_torch.model.layers import (
     AttentionPool,
     BatchNormChannelsLast,
     CausalMultiScaleDecomp,
     GaussianNoise,
     InstanceNorm,
-    KerasGRU,
     LastToken,
-    PatchEmbedding,
     RMSNorm,
     SpatialDropout1D,
     SymLog,
-    TransformerBlock,
     keras_conv1d_weight_to_torch,
     keras_dense_weight_to_torch,
 )
 from nig_timenet_torch.model.nig_layers import ConfidenceHead, NIGHead, NIGUncertainty, OrderedMeans
-from nig_timenet_torch.model.parts import INPUT_SKIP_VARIANTS, build_input_skip
+from nig_timenet_torch.model.parts import INPUT_SKIP_VARIANTS, skip_variant
 
-__all__ = ["DEFAULT_HEAD_TYPES", "NigTimeNetV2", "build_nig_timenet_v2", "torch_param_name"]
+__all__ = ["DEFAULT_HEAD_TYPES", "NigTimeNetV2", "build_nig_timenet_v2", "torch_param_name", "CausalConv1D",
+           "tcn_n_blocks"]
 
-DEFAULT_HEAD_TYPES = {"high": ["nig_regression"], "low": ["nig_regression"], "close": ["nig_regression"]}
-HEAD_KINDS = ("nig_regression", "binary_classification", "multiclass_classification")
+DEFAULT_HEAD_TYPES = {t: ["nig_regression"] for t in TARGET_COLUMNS}
+NO_STATS_MODES = ("none",)  # InstanceNorm stats_mode values that return no per-window statistics
 
 # option -> (value this port implements, step that adds the rest)
 _NOT_YET = {
     "use_instance_norm": (True, "P34"), "use_decomposition": (True, "P34"), "use_linear_path": (True, "P34"),
     "level_film": (False, "P34"), "architecture": ("fused", "P34"), "fusion": ("concat", "P34"), "n_coins": (0, "P34"),
 }
-ENCODERS = ("transformer", "gru", "tcn")
 LEVEL_NORMS = (None, "batch")
 
 
@@ -58,23 +70,6 @@ def keras_to_torch_value(attr_path: str, value: torch.Tensor) -> torch.Tensor:
     if attr_path.endswith(".kernel"):
         return keras_conv1d_weight_to_torch(value) if value.ndim == 3 else keras_dense_weight_to_torch(value)
     return value
-
-
-class CausalConv1D(nn.Conv1d):
-    """Keras Conv1D(padding="causal"): left-pad (kernel_size - 1) * dilation zeros, then a valid convolution.
-    Channels-last in and out, like the Keras layer; weight is torch (out, in, k)."""
-
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, dilation: int):
-        super().__init__(in_channels, out_channels, kernel_size, dilation=dilation)
-        self.left_pad = (kernel_size - 1) * dilation
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return super().forward(F.pad(x.transpose(1, 2), (self.left_pad, 0))).transpose(1, 2)
-
-
-def tcn_n_blocks(seq_len: int) -> int:
-    """Upstream: max(1, ceil(log2(max(T, 2))) - 1) blocks, receptive field 1 + 2 * (2^n - 1) >= T."""
-    return max(1, int(math.ceil(math.log2(max(seq_len, 2)))) - 1)
 
 
 class NigTimeNetV2(nn.Module):
@@ -93,15 +88,14 @@ class NigTimeNetV2(nn.Module):
         self.price_targets = tuple(price_targets)
         self.head_types = {t: list(head_types.get(t, [])) for t in self.price_targets}
         for t, kinds in self.head_types.items():
-            bad = [k for k in kinds if k not in HEAD_KINDS]
+            bad = [k for k in kinds if k not in HEAD_REGISTRY]
             if bad:
-                raise NotImplementedError(f"head types {bad} for {t!r} are not ported (known: {HEAD_KINDS})")
-            if {"binary_classification", "multiclass_classification"} <= set(kinds):
-                raise ValueError(f"{t!r}: binary and multiclass heads share the Keras layer names class_fc_{t}")
+                raise NotImplementedError(f"head types {bad} for {t!r} are not ported (known: {HEAD_REGISTRY.names()})")
+        self.class_kind = {t: k for t in self.price_targets if (k := class_head_kind(self.head_types[t], t))}
         self.linear_path_l2 = linear_path_l2  # kernel L2 of every linear_path, see regularization_loss()
         self.num_layers = num_layers
         self.encoder = encoder
-        self.use_stats = stats_mode != "none"
+        self.use_stats = stats_mode not in NO_STATS_MODES
         self.level_passthrough = level_passthrough
         self.input_skip = input_skip
 
@@ -117,46 +111,42 @@ class NigTimeNetV2(nn.Module):
             tfs = None
             branches = [("", int(seq_len), int(n_features))]
         self.timeframes = tuple(tfs) if tfs and len(tfs) > 1 else None
-        if self.timeframes and input_skip != "none":
+        if self.timeframes and skip_variant(input_skip).adds_modules:
             raise NotImplementedError("input_skip is defined on the single-timeframe transformer only (P34)")
         self.branch_suffixes = tuple(b[0] for b in branches)
         self.branch_blocks = {}
+        dims = EncoderDims(d_model, num_layers, num_heads, num_kv_heads, patch_len, stride, max_rel_pos, dropout,
+                           attn_dropout, causal, window)
         for sfx, T, nf in branches:
-            self._build_branch(sfx, T, nf, d_model=d_model, num_layers=num_layers, num_heads=num_heads,
-                               num_kv_heads=num_kv_heads, patch_len=patch_len, stride=stride,
-                               kernel_sizes=kernel_sizes, max_rel_pos=max_rel_pos, dropout=dropout,
-                               attn_dropout=attn_dropout, causal=causal, window=window, norm_eps=norm_eps,
-                               input_clip=input_clip, stats_mode=stats_mode, input_noise_std=input_noise_std,
+            self._build_branch(sfx, T, nf, dims, kernel_sizes=kernel_sizes, norm_eps=norm_eps, input_clip=input_clip,
+                               stats_mode=stats_mode, input_noise_std=input_noise_std,
                                feature_dropout=feature_dropout, level_norm=level_norm)
         h_dim = d_model * len(branches)
         self.trunk_norm = RMSNorm(h_dim)
         self.trunk_drop = nn.Dropout(dropout)
         self.trunk_dim = h_dim
 
-        self.nig_targets = [t for t in self.price_targets if "nig_regression" in self.head_types[t]]
+        self.nig_targets = [t for t in self.price_targets
+                            if kinds_with_task(self.head_types[t], "evidential")]
+        self.head_specs = {t: head_spec(k, t) for t in self.nig_targets
+                           for k in kinds_with_task(self.head_types[t], "evidential")}
         for t in self.nig_targets:
             setattr(self, f"nig_{t}", NIGHead(h_dim, head_hidden, dropout, nu_min, alpha_min, beta_min))
             setattr(self, f"unc_{t}", NIGUncertainty(unc_max))
             setattr(self, f"conf_{t}", ConfidenceHead(h_dim))
-        self.apply_order = enforce_order and {"high", "low", "close"} <= set(self.nig_targets)
+        self.apply_order = enforce_order and set(TARGET_COLUMNS) <= set(self.nig_targets)
         if self.apply_order:
             self.ordered_means = OrderedMeans()
-        self.class_kind = {}
-        for t in self.price_targets:
-            for kind in ("binary_classification", "multiclass_classification"):
-                if kind in self.head_types[t]:
-                    self.class_kind[t] = kind
         self.class_targets = list(self.class_kind)
+        self.class_specs = {t: head_spec(kind, t) for t, kind in self.class_kind.items()}
         for t, kind in self.class_kind.items():
-            k = 1 if kind == "binary_classification" else int(n_classes[t] if isinstance(n_classes, dict)
-                                                               else n_classes)
+            k = head_width(kind, n_classes[t] if isinstance(n_classes, dict) else n_classes)
             setattr(self, f"class_fc_{t}", nn.Linear(h_dim, class_head_hidden))
             setattr(self, f"class_drop_{t}", nn.Dropout(dropout))
-            setattr(self, f"y_{t}_class_logits", nn.Linear(class_head_hidden, k))
+            setattr(self, self.class_specs[t].output_keys["logits"], nn.Linear(class_head_hidden, k))
 
-    def _build_branch(self, sfx, T, nf, *, d_model, num_layers, num_heads, num_kv_heads, patch_len, stride,
-                      kernel_sizes, max_rel_pos, dropout, attn_dropout, causal, window, norm_eps, input_clip,
-                      stats_mode, input_noise_std, feature_dropout, level_norm):
+    def _build_branch(self, sfx, T, nf, dims, *, kernel_sizes, norm_eps, input_clip, stats_mode, input_noise_std,
+                      feature_dropout, level_norm):
         def add(name, module):
             setattr(self, name + sfx, module)
 
@@ -178,33 +168,8 @@ class NigTimeNetV2(nn.Module):
             tok_width += nf
         if self.use_stats and level_norm == "batch":
             add("stats_bn", BatchNormChannelsLast(2 * nf))
-        seq_width = d_model  # width of the encoder output sequence
-        input_skip = self.input_skip
-        if self.encoder == "transformer":
-            n_blocks = num_layers
-            if input_skip == "no_proj":
-                seq_width = tok_width
-            else:
-                add("patch_embed", PatchEmbedding(tok_width, d_model, patch_len, stride, seq_len=T))
-            if input_skip != "none":  # "none" adds no module: P15 parameter names stay identical
-                self.skip = build_input_skip(input_skip, d_model=d_model, tok_width=tok_width, num_layers=num_layers,
-                                             patch_len=patch_len, stride=stride)
-        else:
-            add("step_proj", nn.Linear(tok_width, d_model))
-            n_blocks = num_layers if self.encoder == "gru" else tcn_n_blocks(T)
-        self.branch_blocks[sfx] = n_blocks
-        for i in range(n_blocks):
-            if self.encoder == "transformer":
-                add(f"block_{i + 1}", TransformerBlock(seq_width, num_heads, num_kv_heads, max_rel_pos, causal,
-                                                       window, dropout, attn_dropout))
-            elif self.encoder == "gru":  # RMSNorm -> GRU -> Dropout, residual add
-                add(f"gru_norm_{i + 1}", RMSNorm(d_model))
-                add(f"gru_{i + 1}", KerasGRU(d_model, d_model))
-                add(f"gru_drop_{i + 1}", nn.Dropout(dropout))
-            else:  # tcn: RMSNorm -> causal Conv1D(k=3, dilation 2^i, gelu) -> Dropout, residual add
-                add(f"tcn_norm_{i + 1}", RMSNorm(d_model))
-                add(f"tcn_conv_{i + 1}", CausalConv1D(d_model, d_model, 3, 2 ** i))
-                add(f"tcn_drop_{i + 1}", nn.Dropout(dropout))
+        d_model = dims.d_model
+        seq_width = ENCODERS.get(self.encoder).build(self, add, sfx, seq_len=T, tok_width=tok_width, dims=dims)
         add("final_norm", RMSNorm(seq_width))
         add("last_token", LastToken())
         add("attn_pool", AttentionPool(seq_width))
@@ -234,17 +199,7 @@ class NigTimeNetV2(nn.Module):
             tok = torch.cat([tok, lvl], dim=-1)
         if stats is not None and self._m("stats_bn", sfx) is not None:
             stats = self._m("stats_bn", sfx)(stats)
-        if self.encoder == "transformer":
-            h = self.encode_tokens(tok, sfx)
-        else:
-            h = self._m("step_proj", sfx)(tok)
-            kind = "gru" if self.encoder == "gru" else "tcn"
-            for i in range(self.branch_blocks[sfx]):
-                if kind == "gru":
-                    y = self._m(f"gru_{i + 1}", sfx)(self._m(f"gru_norm_{i + 1}", sfx)(h))
-                else:
-                    y = F.gelu(self._m(f"tcn_conv_{i + 1}", sfx)(self._m(f"tcn_norm_{i + 1}", sfx)(h)))
-                h = h + self._m(f"{kind}_drop_{i + 1}", sfx)(y)
+        h = self.encode_tokens(tok, sfx)
         h = self._m("final_norm", sfx)(h)
         parts = [self._m("last_token", sfx)(h), self._m("attn_pool", sfx)(h)]
         if stats is not None:
@@ -282,15 +237,9 @@ class NigTimeNetV2(nn.Module):
         return self.trunk_drop(self.trunk_norm(h))
 
     def encode_tokens(self, tok: torch.Tensor, sfx: str = "") -> torch.Tensor:
-        """Transformer encoder on the normalised token input (B, T, W) -> output sequence (the input_skip seam,
-        P34). Per-position: with causal=True, position j depends on no bar after the end of its patch (or bar)."""
-        blocks = [self._m(f"block_{i + 1}", sfx) for i in range(self.branch_blocks[sfx])]
-        if hasattr(self, "skip"):
-            return self.skip.encode(tok, self._m("patch_embed", sfx), blocks)
-        h = self._m("patch_embed", sfx)(tok)
-        for block in blocks:
-            h = block(h)
-        return h
+        """The registered encoder on the normalised token input (B, T, W) -> output sequence (for the transformer
+        this is the input_skip seam, P34)."""
+        return ENCODERS.get(self.encoder).encode(self, tok, sfx)
 
     def forward(self, x) -> dict[str, torch.Tensor]:
         h = self.trunk(x)
@@ -304,22 +253,29 @@ class NigTimeNetV2(nn.Module):
         for t in self.nig_targets:
             _, nu, alpha, beta = raw[t]
             epi, ale = getattr(self, f"unc_{t}")(nu, alpha, beta)
-            out.update({f"y_{t}": mus[t], f"y_{t}_nu": nu, f"y_{t}_alpha": alpha, f"y_{t}_beta": beta,
-                        f"y_{t}_epistemic": epi, f"y_{t}_aleatoric": ale,
-                        f"y_{t}_confidence": getattr(self, f"conf_{t}")(h, nu, alpha, beta)})
+            out.update(nig_outputs(self.head_specs[t], mus[t], nu, alpha, beta, epi, ale,
+                                   getattr(self, f"conf_{t}")(h, nu, alpha, beta)))
         for t, kind in self.class_kind.items():
-            head = classification_head_forward if kind == "binary_classification" else multiclass_head_forward
-            out[f"y_{t}_class_logits"] = head(h, getattr(self, f"class_fc_{t}"), getattr(self, f"y_{t}_class_logits"),
-                                              getattr(self, f"class_drop_{t}"))
+            spec = self.class_specs[t]
+            out_layer = getattr(self, spec.output_keys["logits"])
+            probs = HEAD_REGISTRY.get(kind)(h, getattr(self, f"class_fc_{t}"), out_layer,
+                                            getattr(self, f"class_drop_{t}"))
+            out.update(class_outputs(spec, probs))
         return out
+
+    default_probe_points = ("trunk_norm",)  # layer-probe points of the health report (module names)
+
+    def head_modules(self) -> dict[str, NIGHead]:
+        """{target: NIGHead} of every nig_regression head (floors and diagnostics read them, never by name)."""
+        return {t: getattr(self, f"nig_{t}") for t in self.nig_targets}
 
     def regularization_loss(self) -> torch.Tensor:
         """Sum of the Keras kernel_regularizer terms (l2 * sum(w^2), no 0.5): every NIGHead.fc (l2=1e-5) and
         linear_path (linear_path_l2). The trainer adds it to total and raw loss (TF: model.losses)."""
         reg = sum(self.linear_path_l2 * self._m("linear_path", sfx).weight.square().sum()
                   for sfx in self.branch_suffixes)
-        for t in self.nig_targets:
-            reg = reg + getattr(self, f"nig_{t}").regularization_loss()
+        for head in self.head_modules().values():
+            reg = reg + head.regularization_loss()
         return reg
 
     @staticmethod
@@ -362,7 +318,7 @@ class NigTimeNetV2(nn.Module):
 
 def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_layers=4, num_heads=4, num_kv_heads=2,
                          patch_len=4, stride=2, kernel_sizes=(3, 5, 9, 17), max_rel_pos=16, dropout=0.1,
-                         attn_dropout=0.0, causal=False, window=None, price_targets=("high", "low", "close"),
+                         attn_dropout=0.0, causal=False, window=None, price_targets=TARGET_COLUMNS,
                          head_types: dict[str, list[str]] | None = None, enforce_order=True, head_hidden=128,
                          nu_min=0.1, alpha_min=2.0, beta_min=0.01, unc_max=20.0, class_head_hidden=64,
                          encoder: str = "transformer", input_skip: str = "none", n_classes=3, norm_eps=1e-4,
@@ -371,11 +327,9 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) are opt-in: their defaults reproduce the P15 graph."""
-    if encoder not in ENCODERS:
-        raise ValueError(f"encoder must be one of {ENCODERS}, not {encoder!r}")
-    if input_skip not in INPUT_SKIP_VARIANTS:
-        INPUT_SKIP_VARIANTS.entry(input_skip)  # raises UnknownNameError with the known names + did-you-mean
-    if input_skip != "none" and encoder != "transformer":
+    ENCODERS.entry(encoder)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
+    INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
+    if skip_variant(input_skip).adds_modules and not ENCODERS.entry(encoder).meta["supports_input_skip"]:
         raise NotImplementedError(f"input_skip={input_skip!r} is defined on the transformer encoder only (P34)")
     if level_norm not in LEVEL_NORMS:
         raise ValueError(f"level_norm must be one of {LEVEL_NORMS}, not {level_norm!r}")

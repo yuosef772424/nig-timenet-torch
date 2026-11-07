@@ -96,7 +96,7 @@ def test_map_is_fresh():
 
 def test_map_lists_every_registry_and_module():
     text = (ROOT / build_map.MAP_REL).read_text(encoding="utf-8")
-    assert len(build_map.registry_definitions(PKG_DIR)) == 10
+    assert len(build_map.registry_definitions(PKG_DIR)) == 11
     assert all(f"`{m}`" in text for m in module_files())
 
 

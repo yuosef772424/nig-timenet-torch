@@ -30,3 +30,16 @@ def test_default_architecture_builds_and_matches_contract():
 def test_architecture_default_is_nig_timenet_v2():
     assert ModelSettings().architecture == "nig_timenet_v2"
     assert isinstance(build_model(ModelSettings(), 16, 18), NigTimeNetV2)
+
+
+def test_every_architecture_exposes_the_health_report_hooks():
+    """model_plugin_howto: head_modules() and default_probe_points on every registered architecture; the probe points
+    are real module names of the built model."""
+    from nig_timenet_torch.model.nig_layers import NIGHead
+
+    for name in ARCHITECTURES.names():
+        model = build_model(ModelSettings(name), 8, 4)
+        heads = model.head_modules()
+        assert set(heads) == {"high", "low", "close"} and all(isinstance(h, NIGHead) for h in heads.values()), name
+        modules = dict(model.named_modules())
+        assert model.default_probe_points and all(p in modules for p in model.default_probe_points), name

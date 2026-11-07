@@ -51,7 +51,7 @@ def test_load_oracle_weights_rejects_partial():
 def test_unported_options_raise():
     with pytest.raises(NotImplementedError, match="P34"):
         build_nig_timenet_v2(32, 6, level_film=True)
-    with pytest.raises(ValueError, match="encoder must be one of"):
+    with pytest.raises(ValueError, match="lstm"):
         build_nig_timenet_v2(32, 6, encoder="lstm")
 
 
@@ -62,3 +62,12 @@ def test_forward_matches_outputs_npz(model):
     assert sorted(got) == sorted(expected) and len(got) == 24
     for k in sorted(expected):
         ol.assert_close(got[k], expected[k], "forward", k)
+
+
+def test_encoders_registry_is_the_one_source():
+    from nig_timenet_torch.model.encoders import ENCODERS
+
+    assert ENCODERS.names() == ("transformer", "gru", "tcn")
+    assert [ENCODERS.entry(n).meta["supports_input_skip"] for n in ENCODERS.names()] == [True, False, False]
+    with pytest.raises(NotImplementedError, match="transformer encoder only"):
+        build_nig_timenet_v2(32, 6, encoder="gru", input_skip="late_raw")

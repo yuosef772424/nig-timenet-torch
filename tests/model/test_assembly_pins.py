@@ -8,6 +8,7 @@ PITFALLS: The pin file is tests/pins/model_assembly.json; regenerate it only for
   (``UPDATE_MODEL_PINS=1 pytest tests/model/test_assembly_pins.py``) and list that change as a behaviour change.
 """
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -67,7 +68,8 @@ def _snapshot(case):
     model, x = _build(case)
     with torch.no_grad():
         out = model(x)
-    return {"state_dict": {k: list(v.shape) for k, v in sorted(model.state_dict().items())},
+    order = hashlib.sha1("|".join(n for n, _ in model.named_parameters()).encode()).hexdigest()[:12]
+    return {"state_dict": {k: list(v.shape) for k, v in sorted(model.state_dict().items())}, "param_order": order,
             "outputs": {k: [round(float(v.double().sum()), 5), round(float(v.double().abs().max()), 5),
                             list(v.shape)] for k, v in sorted(out.items())}}
 
@@ -94,6 +96,12 @@ def test_regenerate_pins_when_asked():
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_state_dict_keys_and_shapes_pinned(case):
     assert _snapshot(case)["state_dict"] == _pins()[case]["state_dict"]
+
+
+@pytest.mark.parametrize("case", sorted(CASES))
+def test_parameter_order_pinned(case):
+    """named_parameters() order = optimizer / checkpoint param-group order."""
+    assert _snapshot(case)["param_order"] == _pins()[case]["param_order"]
 
 
 @pytest.mark.parametrize("case", sorted(CASES))
