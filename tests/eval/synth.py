@@ -13,7 +13,7 @@ ANCHOR = 100.0
 
 
 def codec_state() -> dict:
-    return TARGET_CODECS["return"]().fit({})
+    return TARGET_CODECS["return"]().fit({"reg_target_scale": 1.0})
 
 
 def make(*, scale: float = 0.005, conf_informative: bool = True, skilled: bool = True, seed: int = 0,

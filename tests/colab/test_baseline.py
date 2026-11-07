@@ -58,6 +58,21 @@ def test_job_files_are_valid(seed):
     job = parse_job((ROOT / "docs" / "jobs" / f"baseline-001-s{seed}.json").read_text())
     assert job["entry"] == "baseline" and job["device"] == "cuda" and job["needs_drive"] and job["max_minutes"] == 170
     assert job["config"]["seed"] == seed and job["config"]["run_dir"].endswith(f"baseline-001-s{seed}/train")
+    assert "test_report.json" in job["expected_outputs"]
+
+
+def test_every_long_job_has_a_smoke_job():
+    """Rule E5: a job file with max_minutes > 30 needs a smoke job file of the same entry (max_rows, <= 30 min)."""
+    jobs = [parse_job(p.read_text()) for p in sorted((ROOT / "docs" / "jobs").glob("*.json"))]
+    smokes = {j["entry"] for j in jobs if j["max_minutes"] <= 30 and j["config"].get("max_rows")}
+    long_without = [j["job_id"] for j in jobs if j["max_minutes"] > 30 and j["entry"] not in smokes]
+    assert not long_without, f"rule E5: no smoke job for the entry of {long_without}"
+
+
+def test_smoke_job_file_is_valid():
+    job = parse_job((ROOT / "docs" / "jobs" / "baseline-smoke-001.json").read_text())
+    assert job["entry"] == "baseline" and job["device"] == "cuda" and job["config"]["max_rows"] == 20000
+    assert job["config"]["epochs"] == 1 and job["max_minutes"] == 15 and "test_report.json" in job["expected_outputs"]
 
 
 def test_input_key_follows_the_artifact_timeframe():
@@ -78,10 +93,10 @@ def test_split_bounds_without_split_dates_uses_tf_shares():
     from nig_timenet_torch.jobs.baseline import split_bounds
     lc = np.zeros((100, 7))
     lc[:, TS_COL] = pd.date_range("2026-01-01", periods=100, freq="4h", tz="UTC").as_unit("ns").asi8
-    tr, va = split_bounds({"split_dates": None, "last_candles": lc}, {})
+    tr, va = split_bounds({"split_dates": None, "last_candles": lc}, None)
     assert tr == pd.Timestamp(int(lc[80, TS_COL]), tz="UTC") and va == pd.Timestamp(int(lc[90, TS_COL]), tz="UTC")
     given = {"train_end": "2026-01-05", "val_end": "2026-01-10"}
-    got = split_bounds({"split_dates": None, "last_candles": lc}, {"split_dates": given})
+    got = split_bounds({"split_dates": None, "last_candles": lc}, given)
     assert got == ("2026-01-05", "2026-01-10")
 
 
@@ -91,3 +106,74 @@ def test_epoch_line_shows_progress():
                        "val_selection_metric": 0.52, "trace_epoch_seconds": 41.2}, 60)
     assert line.startswith("epoch 3/60") and "val_loss 0.6000" in line and "41s" in line
     assert "train_loss -" in epoch_line({"epoch": 1, "lr": 1e-3}, 60)
+
+
+def run_cfg(tmp_path, name, art_dir, monkeypatch, **over):
+    """baseline.main on ``art_dir`` with a job config (1 epoch, CPU); ``over`` overrides / adds config keys."""
+    monkeypatch.setenv("NIG_REPO_DIR", str(ROOT))
+    cfg = {"device": "cpu", "seed": 0, "epochs": 1, "batch_size": 64, "run_dir": str(tmp_path / f"{name}_run"),
+           "artifact": str(art_dir), "health_max_rows": 50, **over}
+    cp, out = tmp_path / f"{name}.json", tmp_path / name
+    cp.write_text(json.dumps(cfg))
+    assert baseline.main(["--config", str(cp), "--out", str(out), "--max-minutes", "5"]) == 0
+    return out
+
+
+def test_baseline_on_a_tf_shaped_artifact(tmp_path, monkeypatch):
+    """HF-15: 4h, split_dates None, real-artifact-like manifest (the shape that broke runs #21 and #22)."""
+    from tests.data_io.variants import tf_shaped_artifact
+    art_dir = tf_shaped_artifact(tmp_path / "tf.dataset")
+    out = run_cfg(tmp_path, "tf", art_dir, monkeypatch, max_rows=100)
+    s = json.loads((out / "baseline_summary.json").read_text())
+    assert s["input_key"] == "X_4h" and s["max_rows"] == 100 and s["targets"] == ["high", "low", "close"]
+    assert s["reg_target_mode"] == "return" and s["reg_target_scale"] == 100.0
+    assert 0 < s["n_windows"]["train"] <= 100 and 0 < s["n_windows"]["test"] <= 100
+    assert (out / "test_report.json").is_file()
+
+
+def test_unknown_job_config_key_raises(tmp_path, art, monkeypatch):  # noqa: F811
+    with pytest.raises(ValueError, match="unknown key.*epoch"):
+        run_cfg(tmp_path, "bad", art, monkeypatch, epoch=3)
+
+
+def test_unknown_codec_mode_or_missing_scale_or_bad_targets_raise(tmp_path, monkeypatch):
+    from nig_timenet_torch.core.registry import UnknownNameError
+    from tests.data_io.variants import tf_shaped_artifact
+    with pytest.raises(UnknownNameError):
+        run_cfg(tmp_path, "m", tf_shaped_artifact(tmp_path / "m.dataset", reg_target_mode="volnorm"), monkeypatch)
+    with pytest.raises(ValueError, match="reg_target_scale"):
+        run_cfg(tmp_path, "s", tf_shaped_artifact(tmp_path / "s.dataset", reg_target_scale=...), monkeypatch)
+    with pytest.raises(ValueError, match="price_targets"):
+        run_cfg(tmp_path, "t", tf_shaped_artifact(tmp_path / "t.dataset", price_targets=["high", "mid"]), monkeypatch)
+
+
+def test_pickle_artifact_is_refused_by_the_job(tmp_path, monkeypatch):
+    from nig_timenet_torch.data_io.artifact import ArtifactError
+    (tmp_path / "x.pkl.gz").write_bytes(b"")
+    with pytest.raises(ArtifactError, match="D1"):
+        run_cfg(tmp_path, "p", tmp_path / "x.pkl.gz", monkeypatch)
+
+
+def test_stride_rows_and_anchors_by_name():
+    import numpy as np
+
+    from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
+    idx = np.arange(1000)
+    assert baseline.stride_rows(idx, None) is idx and len(baseline.stride_rows(idx, 50)) == 50
+    assert baseline.stride_rows(idx, 50)[0] == 0 and baseline.stride_rows(idx, 50)[-1] == 999
+    lc = np.arange(70, dtype=float).reshape(10, 7)
+    a = baseline.anchors_by_name(lc, np.array([2, 3]), ("close", "high"))
+    assert (a["close"] == lc[[2, 3], LAST_COLUMN_INDEX["last_close"]]).all()
+    assert (a["high"] == lc[[2, 3], LAST_COLUMN_INDEX["last_high"]]).all()
+
+
+def test_job_validator_checks_the_entry_config():
+    from nig_timenet_torch.colab.job import JobError, validate_job
+    base = {"job_id": "base-001", "repo_ref": "a" * 40, "entry": "baseline", "args": [],
+            "config": {"device": "cpu", "seed": 0, "epochs": 1, "batch_size": 8, "run_dir": "/x"},
+            "max_minutes": 5, "device": "cpu", "needs_drive": False, "expected_outputs": ["a.json"], "note": ""}
+    validate_job(base)
+    with pytest.raises(JobError, match="unknown key"):
+        validate_job({**base, "config": {**base["config"], "max_row": 5}})
+    with pytest.raises(JobError, match="missing required"):
+        validate_job({**base, "config": {"device": "cpu"}})

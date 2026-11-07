@@ -36,6 +36,10 @@ Entries are modules of `nig_timenet_torch.jobs`. `device_smoke` proves the whole
 `"device": "cuda"` and `"config": {"device": "cuda"}`). Training entries (T5r: `baseline`) use
 `colab/identity.py::identity_for_run` for the run identity.
 
+Smoke job (rule E5): before a long `baseline` job on a commit, queue `docs/jobs/baseline-smoke-001.json` (the same entry on the
+real artifact, `max_rows` 20000 per split, 1 epoch, a few minutes on a T4; `max_minutes` 15) on that commit and read its
+`baseline_summary.json` (targets, `reg_target_mode`, `input_key`, window counts) before queueing the long job.
+
 The notebook is committed without outputs. First Colab runs on a T4 (2026-11-03, `docs/STATUS.md` T3 row): setup, export,
 device and publish worked; the baseline job has not yet finished on the GPU (`docs/bottlenecks.csv` B-024). The previous demo notebook (parity
 table, all model variants, a small training run on the fixture) is in git history at commit `b34579c`.

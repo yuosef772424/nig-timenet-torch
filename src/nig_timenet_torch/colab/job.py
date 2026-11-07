@@ -1,4 +1,10 @@
-"""The job a Colab run executes: ``job.json`` on the ``colab-queue`` branch (ROADMAP T3).
+"""PURPOSE: The job a Colab run executes: ``job.json`` on the ``colab-queue`` branch, parsed and validated, including
+    the entry's own strict config.
+TAGS: colab job, job validation, queue branch, job config, expected outputs
+PITFALLS: validating the config imports the entry module (jobs.<entry>, torch included) and builds its ``CONFIG``
+    dataclass strictly; an entry without ``CONFIG`` is not config-checked; ``check-job`` runs all of this.
+
+The job a Colab run executes: ``job.json`` on the ``colab-queue`` branch (ROADMAP T3).
 
 Same idea as the TF runner (queue branch -> run -> results branch), with the two T3 changes built into the schema:
 ``device`` is required (rule E1: the run asserts and records it) and the entry is a module of
@@ -13,10 +19,14 @@ with ``PYTHONPATH=<checkout>/src`` and must write the files named in ``expected_
 ``manifest.json`` (``colab/contract.py``).
 """
 
+import importlib
 import json
 import re
 
 from nig_timenet_torch.colab.device import EXPECTED
+from nig_timenet_torch.core.config import from_dict
+
+__all__ = ["JobError", "parse_job", "validate_job", "check_entry_config", "REQUIRED", "OPTIONAL", "MAX_MINUTES_CAP"]
 
 REQUIRED = ("job_id", "repo_ref", "entry", "args", "config", "max_minutes", "device", "needs_drive",
             "expected_outputs", "note")
@@ -89,4 +99,25 @@ def validate_job(obj) -> dict:
     bad = [a for a in job["args"] if a.split("=")[0] in RESERVED_FLAGS]
     if bad:
         raise JobError(f"args may not set {bad}: the runner passes {RESERVED_FLAGS}")
+    check_entry_config(job["entry"], job["config"])
     return job
+
+
+def check_entry_config(entry: str, config: dict) -> None:
+    """If the entry module declares ``CONFIG`` (a frozen settings dataclass), build it strictly from ``config``:
+    an unknown or missing key, or a bad value, is a JobError now instead of a failure on the GPU (rule B5). An entry
+    module that does not exist, or that declares no CONFIG, is not checked here."""
+    name = f"nig_timenet_torch.jobs.{entry}"
+    try:
+        module = importlib.import_module(name)
+    except ModuleNotFoundError as e:
+        if e.name == name:
+            return  # no such entry module: the runner reports it when it runs the job
+        raise
+    cls = getattr(module, "CONFIG", None)
+    if cls is None:
+        return
+    try:
+        from_dict(cls, config)
+    except (ValueError, TypeError) as e:
+        raise JobError(f"config of entry {entry!r}: {e}") from None

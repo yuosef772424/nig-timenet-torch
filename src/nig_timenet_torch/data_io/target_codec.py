@@ -1,4 +1,10 @@
-"""TARGET_CODECS: the one place a regression target is encoded / decoded (C4; BUILD_PLAN.md P26). Only "return"
+"""PURPOSE: TARGET_CODECS, the one place a regression target is encoded from last_candles and decoded back to a price
+    (only "return" is registered).
+TAGS: target codec, return target, reg target scale, decode to price, own anchor
+PITFALLS: decode needs the head's OWN anchor (last_high / last_low / last_close) by column NAME; fit refuses a dataset
+    without reg_target_scale; LAST_COLUMNS lives in core.schema and is only re-exported here.
+
+TARGET_CODECS: the one place a regression target is encoded / decoded (C4; BUILD_PLAN.md P26). Only "return"
 is registered (the oracle's and fixture's reg_target_mode).
 
 "return" (crypto-signal-prediction data/windows.py + data/defaults.py reg_target_*): every head is compared with
@@ -13,11 +19,10 @@ reads nothing that fit did not put there.
 import numpy as np
 
 from nig_timenet_torch.core.registry import Contract, Registry
+from nig_timenet_torch.core.schema import LAST_COLUMNS
 
 __all__ = ["TARGET_CODECS", "ReturnCodec", "own_anchor_and_future", "LAST_COLUMNS"]
 
-LAST_COLUMNS = ("last_high", "last_low", "last_close", "timestamp", "future_close", "future_low_min",
-                "future_high_max")
 _OWN = {"high": ("last_high", "future_high_max"), "low": ("last_low", "future_low_min"),
         "close": ("last_close", "future_close")}
 
@@ -35,9 +40,13 @@ class ReturnCodec:
     name = "return"
 
     def fit(self, train: dict) -> dict:
-        """Nothing is learned; the state records the dataset's scale/clip stamps (defaults 1.0 / None)."""
+        """Nothing is learned; the state records the dataset's scale (REQUIRED contract key: a missing one raises,
+        there is no silent 1.0) and clip (optional, None) stamps."""
+        if "reg_target_scale" not in train:
+            raise ValueError("the dataset lacks 'reg_target_scale' (a DATA_ARTIFACT_CONTRACT key): the return codec "
+                             "cannot decode predictions without it")
         clip = train.get("reg_target_clip")
-        return {"mode": self.name, "version": 1, "scale": float(train.get("reg_target_scale", 1.0)),
+        return {"mode": self.name, "version": 1, "scale": float(train["reg_target_scale"]),
                 "clip": None if clip is None else float(clip)}
 
     def _check(self, state: dict) -> None:

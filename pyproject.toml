@@ -38,6 +38,5 @@ select = ["E", "F", "W", "I", "B"]
 "src/nig_timenet_torch/core/registry.py" = ["E501"]
 # card docstring headers (PURPOSE one line <= 240 chars, rule B7 / step H1) are longer than the 120 code limit
 "src/nig_timenet_torch/eval/target_report.py" = ["E501"]
-"src/nig_timenet_torch/jobs/baseline.py" = ["E501"]
 "src/nig_timenet_torch/trainer/selection_metric.py" = ["E501"]
 "src/nig_timenet_torch/workflow/health_report.py" = ["E501"]
