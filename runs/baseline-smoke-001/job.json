@@ -1,0 +1,25 @@
+{
+ "args": [],
+ "config": {
+  "batch_size": 512,
+  "device": "cuda",
+  "epochs": 1,
+  "max_rows": 20000,
+  "run_dir": "/content/drive/MyDrive/nig_timenet_runs/baseline-smoke-001/train",
+  "seed": 0
+ },
+ "device": "cuda",
+ "entry": "baseline",
+ "expected_outputs": [
+  "baseline_summary.json",
+  "health_report.json",
+  "health_report.md",
+  "test_report.json"
+ ],
+ "job_id": "baseline-smoke-001",
+ "max_minutes": 15,
+ "needs_drive": true,
+ "note": "Rule E5 smoke job of baseline-001: the same entry on the real artifact, 1 epoch, at most 20000 rows per split (a few minutes on a T4). repo_ref is a placeholder: the planner fills the merge sha at queue time. Run it on the commit of the long job BEFORE queueing the long job.",
+ "repo_ref": "44f6e7157f29ff5a60b50e91d35118d75a6b49c4",
+ "rerun": false
+}
