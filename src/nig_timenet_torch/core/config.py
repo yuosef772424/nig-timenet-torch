@@ -13,7 +13,7 @@ import typing
 from collections.abc import Mapping
 from typing import Any
 
-__all__ = ["from_dict"]
+__all__ = ["from_dict", "to_dict", "updated"]
 
 
 def _dataclass_type(hint: Any) -> type | None:
@@ -61,3 +61,55 @@ def from_dict(cls: type, d: Mapping[str, Any], *, strict: bool = True):
             value = from_dict(sub, value, strict=strict)
         kwargs[name] = value
     return cls(**kwargs)
+
+
+def to_dict(obj: Any) -> dict[str, Any]:
+    """The plain nested dict of a settings dataclass (tuples become lists), the inverse of :func:`from_dict`."""
+    def conv(v: Any) -> Any:
+        if dataclasses.is_dataclass(v) and not isinstance(v, type):
+            return {f.name: conv(getattr(v, f.name)) for f in dataclasses.fields(v) if f.init}
+        if isinstance(v, Mapping):
+            return {k: conv(x) for k, x in v.items()}
+        if isinstance(v, (list, tuple)):
+            return [conv(x) for x in v]
+        return v
+    return conv(obj)
+
+
+def updated(obj: Any, patch: Mapping[str, Any] | None = None, /, **changes: Any):
+    """A copy of the frozen dataclass `obj` with `patch` applied (the notebooks' ``settings.updated({...})``).
+
+    Keys may be dotted (``"train.epochs"``) and a mapping value for a nested-dataclass field is merged into it
+    instead of replacing it. Unknown keys raise ValueError with a did-you-mean; the copy is rebuilt through
+    ``dataclasses.replace`` so ``__post_init__`` validation runs again."""
+    merged = {**(patch or {}), **changes}
+    names = [f.name for f in dataclasses.fields(obj) if f.init]
+    grouped: dict[str, dict[str, Any]] = {}
+    direct: dict[str, Any] = {}
+    for key, value in merged.items():
+        head, _, rest = str(key).partition(".")
+        if head not in names:
+            close = difflib.get_close_matches(head, names, n=1)
+            raise ValueError(f"{type(obj).__name__}: unknown key {head!r}"
+                             + (f" (did you mean {close[0]!r}?)" if close else "") + f". Known keys: {sorted(names)}")
+        if rest:
+            grouped.setdefault(head, {})[rest] = value
+        else:
+            direct[head] = value
+    out = {}
+    hints = typing.get_type_hints(type(obj))
+    for head in {*direct, *grouped}:
+        current = getattr(obj, head)
+        value = direct.get(head, current)
+        sub = _dataclass_type(hints.get(head))
+        if current is None and sub is not None and (head in grouped or isinstance(value, Mapping)):
+            # an optional section that is off (None): a mapping switches it on, built strictly from its defaults
+            value = from_dict(sub, {**(value if isinstance(value, Mapping) else {}), **grouped.get(head, {})})
+        elif head in grouped:
+            if not dataclasses.is_dataclass(value):
+                raise ValueError(f"{type(obj).__name__}.{head} is not a settings section; dotted keys need one")
+            value = updated(value, grouped[head])
+        elif dataclasses.is_dataclass(current) and isinstance(value, Mapping):
+            value = updated(current, value)
+        out[head] = value
+    return dataclasses.replace(obj, **out)

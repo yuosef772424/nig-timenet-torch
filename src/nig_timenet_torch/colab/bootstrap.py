@@ -191,6 +191,28 @@ def setup_clones(token: str, workdir: str, repos: dict, echo=print) -> dict:
     return shas
 
 
+def purge_package(repo_dir: str) -> dict:
+    """Drop every in-memory module of this repo's packages and their stale ``src`` paths. A reused
+    Colab runtime keeps code from an EARLIER checkout alive in ``sys.modules`` - the classic
+    'cannot import name ... from' ImportError when a fresh clone adds names - and an old checkout's
+    ``src`` entry in ``sys.path`` can shadow the fresh clone. Returns what was dropped."""
+    src = os.path.abspath(os.path.join(repo_dir, "src"))
+    pkgs = ([d for d in os.listdir(src) if os.path.isdir(os.path.join(src, d)) and not d.endswith(".egg-info")]
+            if os.path.isdir(src) else [])
+    gone = [m for m in list(sys.modules) if any(m == p or m.startswith(p + ".") for p in pkgs)]
+    for m in gone:
+        del sys.modules[m]
+    repo = os.path.basename(os.path.abspath(repo_dir))
+    stale = []
+    for p in [q for q in list(sys.path) if q]:
+        parent = os.path.basename(os.path.dirname(os.path.abspath(p)))
+        if os.path.basename(os.path.abspath(p)) == "src" and parent != repo and parent.startswith(repo):
+            stale.append(p)
+    for p in stale:
+        sys.path.remove(p)
+    return {"purged_modules": gone, "purged_paths": stale}
+
+
 def _installed_version(dist: str) -> str | None:
     from importlib import metadata
 
@@ -221,4 +243,4 @@ def install_package(repo_dir: str, python: str | None = None, run=subprocess.run
     src = os.path.join(repo_dir, "src")
     if src not in sys.path:
         sys.path.insert(0, src)
-    return {"torch_before": before, "torch_after": after}
+    return {"torch_before": before, "torch_after": after, **purge_package(repo_dir)}
