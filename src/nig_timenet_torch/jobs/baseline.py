@@ -15,7 +15,8 @@ Config (``BaselineConfig``, strict: an unknown key raises): ``device`` (required
 by running the same job again), optional ``artifact`` (default ``DEFAULT_ARTIFACT``), ``embargo_hours`` (default 0: the
 split already purges by label end), ``health_max_rows``, ``split_dates`` (``{"train_end", "val_end"}``; default: the
 artifact's, else the 80/10/10 time quantiles), ``max_rows`` (smoke mode: at most this many rows per split, evenly
-strided; default off). Stops cleanly before ``--max-minutes`` (the per-epoch checkpoint is the resume point).
+strided; default off), ``base_tf`` (the bar interval the job expects, e.g. "4h": another artifact is refused;
+default: accept the artifact's). Stops cleanly before ``--max-minutes`` (the per-epoch checkpoint is the resume point).
 """
 
 import os
@@ -55,6 +56,7 @@ class BaselineConfig:
     health_max_rows: int = DEFAULT_HEALTH_MAX_ROWS
     split_dates: dict | None = None
     max_rows: int | None = None
+    base_tf: str | None = None  # the bar interval the job expects ("4h"); a different artifact is refused at load
 
     def __post_init__(self):
         if self.device not in DEVICES:
@@ -73,7 +75,8 @@ def run_settings(cfg: BaselineConfig, code_sha: str = "") -> RunSettings:
     """The job config as the run's settings (everything the job does not name is the RunSettings default)."""
     sd = cfg.split_dates or {}
     return RunSettings(
-        run_dir=cfg.run_dir, code_sha=code_sha, data=LoaderSettings(name=cfg.artifact, mmap=True),
+        run_dir=cfg.run_dir, code_sha=code_sha,
+        data=LoaderSettings(name=cfg.artifact, mmap=True, expect_base_tf=cfg.base_tf),
         split=SplitSettings(embargo_hours=cfg.embargo_hours, max_rows=cfg.max_rows, **sd),
         train=TrainSettings(epochs=cfg.epochs, batch_size=cfg.batch_size, seed=cfg.seed, device=cfg.device),
         evaluation=EvalSettings(health_max_rows=cfg.health_max_rows))

@@ -9,7 +9,7 @@ import ast
 
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from tests import scan
-from tests.test_rules_growth import _ratchet
+from tests.ratchet import ratchet as _ratchet
 
 SCHEMA_HOME = "core/schema.py"
 SCHEMA_NAMES = {"TS_COL", "LAST_COLUMNS", "LAST_COLUMN_INDEX"}

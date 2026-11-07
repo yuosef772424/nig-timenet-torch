@@ -10,7 +10,7 @@ import subprocess
 
 import pytest
 
-from tests import build_map
+from tests import build_map, scan
 from tests.cards import (
     ALLOWLIST_REL,
     PKG_REL,
@@ -96,7 +96,17 @@ def test_map_is_fresh():
 
 def test_map_lists_every_registry_and_module():
     text = (ROOT / build_map.MAP_REL).read_text(encoding="utf-8")
-    assert len(build_map.registry_definitions(PKG_DIR)) == 11
+    defined = build_map.registry_definitions(PKG_DIR)
+    missing = [f"{rel}:{var}" for rel, var in defined if f"`{var}`" not in text]
+    assert not missing, f"registries missing from {build_map.MAP_REL}: {missing}"
+    import sys
+
+    from nig_timenet_torch.core.registry import Registry
+
+    scan.import_all()
+    live = {(m, n) for m, mod in list(sys.modules.items()) if m.startswith(f"{scan.PKG}.")
+            for n, v in vars(mod).items() if isinstance(v, Registry) and getattr(v, "kind", None)}
+    assert {n for _, n in defined} == {n for _, n in live}, "registries in the source and the map differ"
     assert all(f"`{m}`" in text for m in module_files())
 
 

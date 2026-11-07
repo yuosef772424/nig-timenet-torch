@@ -132,3 +132,27 @@ def test_entry_args_reads_the_runner_flags(tmp_path):
     config, out, minutes, rest = contract.entry_args(["--config", str(cfg), "--out", str(tmp_path / "o"),
                                                       "--max-minutes", "7", "--extra", "1"])
     assert (config, minutes, rest) == ({"k": 1}, 7, ["--extra", "1"]) and out.is_dir()
+
+
+def test_job_device_and_config_device_must_agree():
+    import pytest
+
+    from nig_timenet_torch.colab import job as job_mod
+    with pytest.raises(job_mod.JobError, match="differs from config.device"):
+        job_mod.check_entry_config("device_smoke", {"device": "cpu"}, "cuda")
+    job_mod.check_entry_config("device_smoke", {"device": "cuda"}, "cuda")
+
+
+def test_every_jobs_entry_exposes_a_strict_frozen_config():
+    """HF-17: validation at queue time needs ``CONFIG`` in every entry module of jobs/."""
+    import dataclasses
+    import importlib
+    import pkgutil
+
+    from nig_timenet_torch import jobs
+    entries = [m.name for m in pkgutil.iter_modules(jobs.__path__) if not m.name.startswith("_")]
+    assert entries, "jobs/ has no entry"
+    for name in entries:
+        cfg = getattr(importlib.import_module(f"nig_timenet_torch.jobs.{name}"), "CONFIG", None)
+        assert cfg is not None and dataclasses.is_dataclass(cfg), f"jobs/{name}.py must expose CONFIG (a dataclass)"
+        assert cfg.__dataclass_params__.frozen, f"jobs/{name}.py CONFIG must be frozen"

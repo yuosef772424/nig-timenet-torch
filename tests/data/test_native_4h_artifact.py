@@ -15,8 +15,8 @@ from nig_timenet_torch.data.lock import load_lock
 from nig_timenet_torch.data.pipeline import build_artifact
 from nig_timenet_torch.data_io.artifact import load_artifact
 from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
-from tests.colab.test_baseline import run_cfg
 from tests.data.helpers import COINS, tiny_settings
+from tests.jobs.helpers import run_cfg
 
 SHA = "cd" * 20
 

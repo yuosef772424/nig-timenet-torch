@@ -110,10 +110,30 @@ def registered_names() -> set[str]:
     return names
 
 
+#: module-level names that declare a closed vocabulary of mode names (HF-26)
+VOCABULARY_NAME = re.compile(r"^(ENCODERS|LEVEL_NORMS|[A-Z0-9_]*_MODES|[A-Z0-9_]*_KINDS)$")
+
+
+def declared_vocabularies() -> set[str]:
+    """String members of module-level tuples / lists / sets named ``ENCODERS``, ``LEVEL_NORMS``, ``*_MODES``,
+    ``*_KINDS``: mode names that are declared but not (yet) registered still count for G2."""
+    names: set[str] = set()
+    for _, (_, tree) in sources().items():
+        for node in tree.body:
+            target = (node.targets[0] if isinstance(node, ast.Assign) and len(node.targets) == 1
+                      else node.target if isinstance(node, ast.AnnAssign) else None)
+            value = getattr(node, "value", None)
+            if (isinstance(target, ast.Name) and VOCABULARY_NAME.match(target.id)
+                    and isinstance(value, (ast.Tuple, ast.List, ast.Set))):
+                names |= {e.value for e in value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)}
+    return names
+
+
 def mode_name_comparisons() -> list[str]:
-    """``x == "<registered name>"`` / ``!=`` / ``in ("<registered name>", ...)`` comparisons (name-based: a shared
-    word such as "none" counts wherever it is compared)."""
-    names = registered_names()
+    """``x == "<mode name>"`` / ``!=`` / ``in ("<mode name>", ...)`` comparisons, where a mode name is a registered
+    name or a member of a declared vocabulary (name-based: a shared word such as "none" counts wherever it is
+    compared)."""
+    names = registered_names() | declared_vocabularies()
     found = []
     for rel, (_, tree) in sources().items():
         for node in ast.walk(tree):
@@ -146,9 +166,22 @@ def _is_dataclass(cls: ast.ClassDef) -> bool:
     return False
 
 
+def _attribute_reads() -> dict[str, list[ast.Attribute]]:
+    """{attribute name: nodes} for every ``obj.name`` read that is not the callee of a call (``x.rolling(...)`` is a
+    method call, not a read of a settings field named ``rolling``)."""
+    out: dict[str, list[ast.Attribute]] = {}
+    for _, (_, tree) in sources().items():
+        callees = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Attribute) and isinstance(n.ctx, ast.Load) and id(n) not in callees:
+                out.setdefault(n.attr, []).append(n)
+    return out
+
+
 def dead_settings() -> list[str]:
     """Fields of ``*Settings`` / ``*Config`` dataclasses that no code outside the class reads as ``obj.field``."""
     dead = []
+    reads = _attribute_reads()
     for rel, (_, tree) in sources().items():
         for cls in [n for n in tree.body if isinstance(n, ast.ClassDef)]:
             if not (cls.name.endswith(SETTINGS_SUFFIXES) and _is_dataclass(cls)):
@@ -156,9 +189,7 @@ def dead_settings() -> list[str]:
             fields = [s.target.id for s in cls.body if isinstance(s, ast.AnnAssign) and isinstance(s.target, ast.Name)]
             inside = {id(n) for n in ast.walk(cls)}
             for field in fields:
-                read = any(isinstance(n, ast.Attribute) and n.attr == field and isinstance(n.ctx, ast.Load)
-                           and id(n) not in inside
-                           for _, (_, t) in sources().items() for n in ast.walk(t))
+                read = any(id(n) not in inside for n in reads.get(field, ()))
                 if not read:
                     dead.append(f"{rel}: {cls.name}.{field}")
     return dead

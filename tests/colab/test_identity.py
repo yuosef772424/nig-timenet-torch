@@ -11,10 +11,9 @@ from nig_timenet_torch.data_io.artifact import load_artifact
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.trainer.identity import build_run_identity
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
-from tests.data_io.test_artifact import art, write_manifest  # noqa: F401  (fixture)
 from tests.scan import sources
 from tests.trainer.fixture_setup import build_model, trainer_config
-from tests.trainer.test_fit import make_trainer
+from tests.trainer.helpers import make_trainer
 
 
 def test_identity_is_built_from_the_trainer_and_includes_the_kendall_group(art):  # noqa: F811

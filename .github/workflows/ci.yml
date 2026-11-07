@@ -21,6 +21,9 @@ jobs:
           pip install -e ".[dev,data]"
       - name: Navigation map is fresh
         run: python -m tests.build_map --check
+      - name: Pin changes are documented (rule B1)
+        if: github.event_name == 'pull_request'
+        run: python -m tests.pin_diff origin/${{ github.base_ref }}
       - name: Lint
         run: ruff check src tests
       - name: Test (fast + slow; time budget of rule E3 enforced by tests/conftest.py)

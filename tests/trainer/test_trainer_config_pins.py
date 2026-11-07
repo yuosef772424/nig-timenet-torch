@@ -23,7 +23,6 @@ from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, Mode
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
 from nig_timenet_torch.workflow import flat_run
 from nig_timenet_torch.workflow.settings import TrainSettings
-from tests.data_io.test_artifact import art, write_manifest  # noqa: F401  (fixture)
 from tests.trainer.fixture_setup import build_model
 
 PIN = Path(__file__).resolve().parents[1] / "pins" / "trainer_config.json"

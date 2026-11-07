@@ -50,15 +50,32 @@ def test_status_is_short():
     n = len(_read("docs/STATUS.md").splitlines())
     assert n < limit, f"docs/STATUS.md has {n} lines, the limit is < {limit}: move detail to docs/ or a PR description"
 
+#: B1.., R0r/T5r/T4b, H5 / H6, I3 (one id or two joined by ' / ')
+STEP_ID = re.compile(r"^(B\d+|([RTHI]\d+[a-z]?r?)( / [RTHI]\d+[a-z]?r?)?)$")
+
 
 def test_status_states_are_the_documented_ones():
     text = _read("docs/STATUS.md")
     assert "States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`." in text
     for line in text.splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if line.startswith("|") and len(cells) >= 5 and re.match(r"^(B\d+|[RT]\d+r?)$", cells[0]):
+        if line.startswith("|") and len(cells) >= 5 and STEP_ID.match(cells[0]):
             state = cells[3] if cells[0].startswith("B") else cells[2]
             assert state in STATE_WORDS or state.startswith("skipped ("), f"{cells[0]}: unknown state {state!r}"
+
+
+def test_review_is_not_overdue():
+    """suggestions.csv row 10: the R-REVIEW counter in STATUS may not pass the interval of the review rule."""
+    n = int(re.search(r"PRs since last R-REVIEW: (\d+)", _read("docs/STATUS.md")).group(1))
+    assert n <= 7, f"{n} PRs since the last R-REVIEW (docs/reviews.md): run it before more merges"
+
+
+def test_register_ids_are_unique():
+    """docs/bottlenecks.csv ids (B-nnn) are unique; B-041 was used twice once."""
+    import csv
+    ids = [r["id"] for r in csv.DictReader(_read("docs/bottlenecks.csv").splitlines())]
+    dup = sorted({i for i in ids if ids.count(i) > 1})
+    assert not dup, f"duplicate ids in docs/bottlenecks.csv: {dup}"
 
 
 def test_quoted_paths_exist():

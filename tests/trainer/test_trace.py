@@ -8,7 +8,7 @@ import torch
 
 from nig_timenet_torch.trainer.trace import head_gradient_share
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
-from tests.trainer.test_fit import data, fit, make_trainer  # noqa: F401 (fixture `data`)
+from tests.trainer.helpers import data, fit, make_trainer  # noqa: F401 (fixture `data`)
 
 
 def test_trace_is_log_only_training_is_identical(data):  # noqa: F811

@@ -6,7 +6,7 @@ import pytest
 
 from nig_timenet_torch.colab import prepare
 from tests.contract_doc import DATASET_DIR
-from tests.data_io.test_artifact import write_manifest
+from tests.data_io.helpers import write_manifest
 
 
 class Done:

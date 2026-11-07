@@ -9,7 +9,6 @@ from nig_timenet_torch.core.config import from_dict, updated
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.settings import RunSettings
-from tests.data_io.test_artifact import art  # noqa: F401  (fixture)
 
 
 def settings(art_dir, tmp_path, **over):  # noqa: F811

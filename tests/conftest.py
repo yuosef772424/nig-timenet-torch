@@ -24,3 +24,6 @@ def pytest_terminal_summary(terminalreporter):
         terminalreporter.section("time budget (rule E3)", red=True)
         for line in problems:
             terminalreporter.line(line, red=True)
+
+
+from tests.data_io.helpers import art  # noqa: E402,F401  (fixture shared by data_io, jobs, workflow, trainer, notebooks, colab)

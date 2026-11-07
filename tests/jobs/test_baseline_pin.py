@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 
 from nig_timenet_torch.jobs import baseline
-from tests.data_io.test_artifact import art  # noqa: F401  (fixture)
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PIN = ROOT / "tests" / "pins" / "baseline_fixture.json"

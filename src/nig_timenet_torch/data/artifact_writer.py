@@ -124,7 +124,8 @@ def write_artifact(dataset: dict, out_dir: str | Path, *, source_commit: str = "
             "coins": [b["name"] for b in dataset["asset_bounds"]], "sealed_excluded": sorted(lock.sealed),
             "lock_sha256": lock.sha256, "time_seal": lock.time_seal.isoformat(),
             "max_bar_time": iso(ts.max() + int(dataset["forecast_horizon"]) * bar_ns),
-            "max_window_time": iso(ts.max()), "rows": n, "files": files,
+            "max_window_time": iso(ts.max()), "rows": n,
+            "base_tf": dataset["base_tf"], "timeframes": [str(t) for t in dataset["timeframes"]], "files": files,
             "data_sha256": hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()}}
     with open(tmp / "manifest.json", "w", encoding="utf-8") as f:
         json.dump(manifest, f)

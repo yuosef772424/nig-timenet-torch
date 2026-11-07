@@ -8,7 +8,7 @@ import pytest
 from nig_timenet_torch.colab import contract
 from nig_timenet_torch.colab.job import parse_job
 from nig_timenet_torch.jobs import baseline
-from tests.data_io.test_artifact import art  # noqa: F401  (fixture)
+from tests.jobs.helpers import run_cfg
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -46,7 +46,7 @@ def test_baseline_runs_and_resumes(tmp_path, art, monkeypatch):  # noqa: F811
 
 def test_deadline_stops_cleanly_and_data_may_stay_on_cpu(tmp_path, art, monkeypatch):  # noqa: F811
     from nig_timenet_torch.trainer.trainer import FitSettings
-    from tests.trainer.test_fit import identity_for, load_fixture, make_trainer
+    from tests.trainer.helpers import identity_for, load_fixture, make_trainer
 
     x, y = load_fixture(120)
     t = make_trainer()
@@ -113,15 +113,6 @@ def test_epoch_line_shows_progress():
     assert "train_loss -" in epoch_line({"epoch": 1, "lr": 1e-3}, 60)
 
 
-def run_cfg(tmp_path, name, art_dir, monkeypatch, **over):
-    """baseline.main on ``art_dir`` with a job config (1 epoch, CPU); ``over`` overrides / adds config keys."""
-    monkeypatch.setenv("NIG_REPO_DIR", str(ROOT))
-    cfg = {"device": "cpu", "seed": 0, "epochs": 1, "batch_size": 64, "run_dir": str(tmp_path / f"{name}_run"),
-           "artifact": str(art_dir), "health_max_rows": 50, **over}
-    cp, out = tmp_path / f"{name}.json", tmp_path / name
-    cp.write_text(json.dumps(cfg))
-    assert baseline.main(["--config", str(cp), "--out", str(out), "--max-minutes", "5"]) == 0
-    return out
 
 
 def test_baseline_on_a_tf_shaped_artifact(tmp_path, monkeypatch):

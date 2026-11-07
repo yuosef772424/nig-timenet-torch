@@ -42,6 +42,7 @@ class LoaderSettings:
     local_dir: str = "auto"                    # "auto": copy to local disk if under /content/drive; "": never; path
     allow_unchecked: bool = False              # rule D1: False = only a contract artifact loads; True = skip the checks
     verify_hashes: bool = False                # re-hash every file of such an artifact (reads it all once)
+    expect_base_tf: str | None = None          # refuse an artifact whose base timeframe differs (None = accept any)
 
     def __post_init__(self):
         if self.format not in FORMATS:
@@ -107,6 +108,12 @@ def _read_pickle(path: Path) -> dict:
     return data
 
 
+def _check_expected_tf(dataset: dict, settings: LoaderSettings, path: Path) -> None:
+    if settings.expect_base_tf is not None and dataset["base_tf"] != settings.expect_base_tf:
+        raise artifact.ArtifactError(f"{path}: the job expects base_tf {settings.expect_base_tf!r}, the artifact holds "
+                                     f"{dataset['base_tf']!r}")
+
+
 def load_dataset(settings: LoaderSettings | None = None) -> LoadedData:
     """Resolve, copy to local disk if asked, read, and check (rule D1).
 
@@ -132,7 +139,10 @@ def load_dataset(settings: LoaderSettings | None = None) -> LoadedData:
         art = artifact.load_artifact(path, mmap=settings.mmap)      # raises ArtifactError without a valid export block
         if settings.verify_hashes:
             artifact.verify_hashes(path)
+        _check_expected_tf(art.dataset, settings, path)
         return LoadedData(art.dataset, path, "npy_dir", art.manifest)
     if settings.verify_hashes:
         raise ValueError(f"{path}: verify_hashes needs an artifact manifest (export block); this folder has none")
-    return LoadedData(npy_dir.load(path, mmap=settings.mmap), path, "npy_dir")
+    data = npy_dir.load(path, mmap=settings.mmap)
+    _check_expected_tf(data, settings, path)
+    return LoadedData(data, path, "npy_dir")

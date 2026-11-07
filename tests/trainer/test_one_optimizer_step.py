@@ -9,7 +9,7 @@ traceability only.
 import torch
 
 from tests.oracle import oracle_loader as ol
-from tests.trainer.test_losses_end_to_end import PRIMARY, grads_vs_oracle, named_trainable, run
+from tests.trainer.loss_helpers import PRIMARY, grads_vs_oracle, named_trainable, run
 
 
 def test_optimizer_step_runs_and_grads_match_oracle():

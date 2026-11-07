@@ -64,6 +64,14 @@ class ArtifactManifest:
     max_bar_time: pd.Timestamp
     data_fingerprint: str
     files: dict[str, str] | None
+    #: the bar interval and timeframes the export declares; None = an older artifact that does not say (flagged by
+    #: ``declares_timeframes``; the loader then trusts the arrays only)
+    base_tf: str | None = None
+    timeframes: tuple[str, ...] | None = None
+
+    @property
+    def declares_timeframes(self) -> bool:
+        return self.base_tf is not None
 
 
 @dataclass(frozen=True)
@@ -138,9 +146,18 @@ def read_manifest(path: str | Path) -> ArtifactManifest:
     files = block.get("files")
     if files is not None and not (isinstance(files, dict) and all(_SHA256.match(str(v)) for v in files.values())):
         raise ArtifactError(f"{path}: export.files must map file names to sha256 hex digests")
+    base_tf, tfs = block.get("base_tf"), block.get("timeframes")
+    if (base_tf is None) != (tfs is None):
+        raise ArtifactError(f"{path}: export.base_tf and export.timeframes are declared together or not at all")
+    if base_tf is not None:
+        if not (isinstance(base_tf, str) and isinstance(tfs, list) and tfs and all(isinstance(t, str) for t in tfs)):
+            raise ArtifactError(f"{path}: export.base_tf must be a string, export.timeframes a non-empty list of str")
+        if base_tf not in tfs:
+            raise ArtifactError(f"{path}: export.base_tf {base_tf!r} is not in export.timeframes {tfs}")
     return ArtifactManifest(source_commit=block["source_commit"], coins=coins, sealed_excluded=sealed, time_seal=seal,
                             max_bar_time=max_bar, data_fingerprint=block["data_sha256"],
-                            files=None if files is None else dict(files))
+                            files=None if files is None else dict(files), base_tf=base_tf,
+                            timeframes=None if tfs is None else tuple(tfs))
 
 
 def _bar_ns(tf: str) -> int:
@@ -159,6 +176,11 @@ def load_artifact(path: str | Path, *, mmap: bool = False) -> Artifact:
     if list(manifest.coins) != names:
         raise ArtifactError(f"{path}: export.coins {list(manifest.coins)[:5]}... differ from the dataset's "
                             f"asset_bounds {names[:5]}... (the manifest does not describe this data)")
+    if manifest.declares_timeframes and (manifest.base_tf != dataset["base_tf"]
+                                         or list(manifest.timeframes) != list(dataset["timeframes"])):
+        raise ArtifactError(f"{path}: export declares base_tf {manifest.base_tf!r} / timeframes "
+                            f"{list(manifest.timeframes)} but the data holds {dataset['base_tf']!r} / "
+                            f"{list(dataset['timeframes'])} (the manifest does not describe this data)")
     ts = np.asarray(dataset["last_candles"])[:, TS_COL].astype("int64")
     latest = pd.Timestamp(int(ts.max()) + int(dataset["forecast_horizon"]) * _bar_ns(dataset["base_tf"]), tz="UTC")
     if latest >= TIME_SEAL:
@@ -211,7 +233,9 @@ def main(argv: list[str]) -> int:
     print(f"OK {art.path}: {len(art.dataset['last_candles'])} windows, {len(m.coins)} coins, "
           f"source {m.source_commit[:10]}, max_bar_time {m.max_bar_time.isoformat()}, "
           f"sealed excluded {len(m.sealed_excluded)}, "
-          f"data_fingerprint {m.data_fingerprint[:12]}{' (hashes verified)' if args.verify_hashes else ''}")
+          f"data_fingerprint {m.data_fingerprint[:12]}{' (hashes verified)' if args.verify_hashes else ''}, "
+          + (f"base_tf {m.base_tf}, timeframes {list(m.timeframes)}" if m.declares_timeframes
+             else "timeframes NOT declared in the manifest (old artifact)"))
     return 0
 
 

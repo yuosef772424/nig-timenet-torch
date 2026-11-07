@@ -12,7 +12,7 @@ from nig_timenet_torch.data_io import npy_dir
 from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.workflow.prediction_table import predict_table, read_table, table_meta, write_table
 from tests.contract_doc import DATASET_DIR
-from tests.data_io.test_split_plan import fixture_plan
+from tests.data_io.helpers import fixture_plan
 from tests.trainer.fixture_setup import build_model
 
 IDENTITY = RunIdentity(schema_version=1, settings_hash="s" * 64, seed=0, data_fingerprint="d" * 64, code_sha="c" * 40)
