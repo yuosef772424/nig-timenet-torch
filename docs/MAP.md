@@ -103,13 +103,13 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `model/nig_layers.py` | NIG (Normal-Inverse-Gamma) head layers, ported from crypto-signal-prediction model/nig_layers.py @ aeafc564 |  |
 | `model/panel.py` | Cross-asset panel model (source: crypto-signal-prediction cross_asset/model.py @ aeafc564), BUILD_PLAN.md P43. |  |
 | `model/parts.py` | P34: the ``input_skip`` seam on the transformer encoder (TF-side S15; crypto-signal-prediction |  |
-| `model/probe.py` | P35: per-layer linear-probe report — the TOOL for the owner's hypothesis "an early Dense projection may destroy |  |
+| `model/probe.py` | Per-layer ridge-probe report: forward-hook activations of named modules fitted to a label with time-ordered folds (AUC for binary y, else R^2), the raw input scored next to every layer. | probe, layer probe, ridge, activations, forward hook, health report |
 
 ### stats
 
 | module | what it is for | tags |
 |---|---|---|
-| `stats/metrics.py` | Every metric of the project in one module (AUC, rank IC, calibration, interval and sharpness shares, confidence-error gap, block-bootstrap CI), each with its trivial baseline stated and tested (rule C1). | metrics, auc, rank ic, calibration, coverage, bootstrap, trivial baseline |
+| `stats/metrics.py` | Every metric of the project in one module (AUC, rank IC, R^2, calibration, interval and sharpness shares, confidence-error gap, block-bootstrap CI), each with its trivial baseline stated and tested (rule C1). | metrics, auc, rank ic, calibration, coverage, bootstrap, trivial baseline |
 | `stats/nig.py` | NIG predictive distribution in numpy (T4): the predictive std and central interval of a Normal-Inverse-Gamma head, |  |
 
 ### trainer
