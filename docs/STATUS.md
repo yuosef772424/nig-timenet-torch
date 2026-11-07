@@ -25,7 +25,7 @@ CAMPAIGN DONE (all rows merged). Outcome per package: `docs/hardening/PLAN.md` "
 | H4 | Strict trainer config | merged | [#36](https://github.com/yuosef772424/nig-timenet-torch/pull/36) | `trainer/targets.py`; unknown keys raise; D-012; `.get` ratchet 22 -> 0; direction AUCs not selectable |
 | I3 | Run steps (flat single split) | merged | [#38](https://github.com/yuosef772424/nig-timenet-torch/pull/38) | `workflow/run.py` steps; `jobs/baseline.py` 107 lines (config + 25-line main); battery in the run (cost per side, p_dir); `notebooks/main.ipynb`; D-013; HF-23, B-035 closed |
 | H5 | Rule and test tooling fixes | merged | [#39](https://github.com/yuosef772424/nig-timenet-torch/pull/39) | G2 honest 5 (B-046), `tests.pin_diff` in CI, D-014 pin scope, D-015 manifest `base_tf`/`timeframes`, `tests/jobs/`, helpers modules |
-| H6 | Facts refresh + third R-REVIEW | PR open | this PR | STATUS, handoff, ROADMAP T5r, PLAN/AUDIT outcomes, NOTES re-triage |
+| H6 | Facts refresh + third R-REVIEW | merged | [#40](https://github.com/yuosef772424/nig-timenet-torch/pull/40) | STATUS, handoff, ROADMAP T5r, PLAN/AUDIT outcomes, NOTES re-triage |
 
 ## Roadmap (`docs/ROADMAP.md`, rules `docs/RULES.md`, protocol `docs/MODEL_DEV_PROTOCOL.md`)
 PRs since last R-REVIEW: 1 (H6 itself; third review 2026-11-07 in H6, `docs/reviews.md`, covered #33-#39; the next is due after 5 more merged PRs).
