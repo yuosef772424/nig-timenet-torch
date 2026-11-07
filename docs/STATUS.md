@@ -19,7 +19,7 @@ One builder session per package, in this order, each merged before the next. T5r
 | I1 | Loading and config foundations | merged | [#30](https://github.com/yuosef772424/nig-timenet-torch/pull/30) | D1 mandatory in `load_dataset` (`allow_unchecked`); D-007; before H2 |
 | H2 | Job runs read the artifact; GPU smoke path | merged | [#31](https://github.com/yuosef772424/nig-timenet-torch/pull/31) | closes #21-#23 classes; rule E5; queue `baseline-smoke-001` before any long job |
 | H1 | Card convention + navigation map | merged | [#32](https://github.com/yuosef772424/nig-timenet-torch/pull/32) | rule B7; `docs/MAP.md` (`python -m tests.build_map`); allowlist 37; second R-REVIEW |
-| I5 | Evaluation battery + adapter | todo | | |
+| I5 | Evaluation battery + adapter | merged | [#33](https://github.com/yuosef772424/nig-timenet-torch/pull/33) | battery ported (`7c9736b`, `f052cf6`); `eval/battery_adapter.py`, `battery_profit.py`, `workflow/battery_run.py`; T-profit target; D-009; O-1 closed |
 | I2 | Native data pipeline | todo | | closes HF-15 |
 | H3 / H4 | Model via registries / strict trainer config | todo | | G1, G2, G3, G7, C2 down; unknown keys raise |
 | I3 | Run steps (flat single split) | todo | | baseline job -> ~30 lines |
@@ -45,4 +45,4 @@ Done: R0 [#14](https://github.com/yuosef772424/nig-timenet-torch/pull/14), T1 [#
 | D1 / D2 | Model doctor (checks / attribution + run) | todo | | protocol section 6 |
 | F1-F5 | Reproducibility + version, walk-forward, model card, final evaluation (owner asks), release | todo | | F4 only on the owner's request (C5) |
 
-Owner decisions open: **O-1** close-head T-sharp is unattainable even for the true distribution (H0c probe: share 0.00 vs 1.00 high/low): keep pass/fail (non-blocking until decided) or change its reference; **O-2** F2 walk-forward in or out; **O-3** model doctor before T7r instead of after T8; **O-4** I7 stays closed (reopen: confidence gate fails for every method); **O-5** 3 vs 2 seeds per arm in T7r; **O-6** holdout definition for F4; **O-7** which runs showed the memorization (run ids / settings).
+Owner decision 2026-11-07: the goal is **T-profit** (profit after costs from any use of the outputs; T-skill / T-conf / T-sharp are means). **O-1 CLOSED**: close-head T-sharp is informational only, never a target or gate. Owner decisions open: **O-2** F2 walk-forward in or out; **O-3** model doctor before T7r instead of after T8; **O-4** I7 stays closed (reopen: confidence gate fails for every method); **O-5** 3 vs 2 seeds per arm in T7r; **O-6** holdout definition for F4; **O-7** which runs showed the memorization (run ids / settings).

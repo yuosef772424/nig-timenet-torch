@@ -120,8 +120,8 @@ def _sharp(table, labels, specs, anchors, last_close, codec, state, level: float
                 "meets_target": bool(share >= T_SHARP_MIN_SHARE and in_range),
                 "blocking": blocking,
                 "verdict_note": ("" if blocking else
-                                 "informational pending owner decision O-1 (close-head T-sharp is unattainable "
-                                 "even for the true distribution): a failure is recorded, not blocking")})
+                                 "informational only, owner decision O-1 closed 2026-11-07 (close-head T-sharp is "
+                                 "unattainable even for the true distribution): recorded, never a target or gate")})
     return out
 
 

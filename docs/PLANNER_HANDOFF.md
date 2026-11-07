@@ -42,7 +42,7 @@ PRs (T6+) and anything large still go to the owner first.
    Builder steps take the cheaper agent model; G3r, M1, M2r, T7r, T8, F4 are research steps.
 3. Every model step obeys `docs/MODEL_DEV_PROTOCOL.md`: gates A (gradient), B (confidence), C (uncertainty) on E1
    synthetic / E2 shuffled / E3 small real, 3 seeds, before any full training; direction only on the close head.
-4. Owner decisions open (STATUS bottom): O-1 close-head T-sharp (unattainable even for the true distribution), O-2
+4. Owner decisions open (STATUS bottom): O-1 CLOSED 2026-11-07 (close-head T-sharp informational only; goal is T-profit), O-2
    F2 in/out, O-3 doctor earlier, O-4 I7, O-5 seeds per arm, O-6 holdout definition, O-7 memorization run ids.
 5. The T5r queue may keep running during the campaign; read its result in step T5r (after H6) unless the owner asks
    earlier (then T4b must be merged first).

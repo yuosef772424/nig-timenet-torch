@@ -4,7 +4,7 @@ PURPOSE:  T4 health_report(run): one call writes every diagnostic of a run (targ
           trace) as JSON and markdown next to the checkpoint.
 TAGS:     health report, diagnostics, t-sharp, probe, trainer trace, markdown report
 PITFALLS: ``last_close`` must be the last CLOSE price per row (not a head's own anchor). High/low AUC is information
-          only (direction suspended). The close-head T-sharp verdict is informational pending owner decision O-1.
+          only (direction suspended). The close-head T-sharp verdict is informational only (O-1 closed).
 
 T4 ``health_report(run)``: ONE call that writes every T4 diagnostic of a run next to its checkpoint.
 
