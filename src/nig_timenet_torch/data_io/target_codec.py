@@ -40,9 +40,13 @@ class ReturnCodec:
     name = "return"
 
     def fit(self, train: dict) -> dict:
-        """Nothing is learned; the state records the dataset's scale/clip stamps (defaults 1.0 / None)."""
+        """Nothing is learned; the state records the dataset's scale (REQUIRED contract key: a missing one raises,
+        there is no silent 1.0) and clip (optional, None) stamps."""
+        if "reg_target_scale" not in train:
+            raise ValueError("the dataset lacks 'reg_target_scale' (a DATA_ARTIFACT_CONTRACT key): the return codec "
+                             "cannot decode predictions without it")
         clip = train.get("reg_target_clip")
-        return {"mode": self.name, "version": 1, "scale": float(train.get("reg_target_scale", 1.0)),
+        return {"mode": self.name, "version": 1, "scale": float(train["reg_target_scale"]),
                 "clip": None if clip is None else float(clip)}
 
     def _check(self, state: dict) -> None:
