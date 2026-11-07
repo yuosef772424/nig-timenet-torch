@@ -6,11 +6,24 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-__all__ = ["InstanceNorm", "SymLog", "CausalMultiScaleDecomp", "keras_dense_weight_to_torch",
+__all__ = ["InstanceNorm", "STATS_TRANSFORMS", "SymLog", "CausalMultiScaleDecomp", "keras_dense_weight_to_torch",
            "keras_conv1d_weight_to_torch", "num_patches", "PatchEmbedding",
            "RMSNorm", "RelativeGQAttention", "SwiGLU", "TransformerBlock",
            "LastToken", "AttentionPool", "FiLM", "GatedFusion",
            "BatchNormChannelsLast", "SpatialDropout1D", "GaussianNoise", "KerasGRU"]
+
+
+def _stats_full(mean: torch.Tensor, log_std: torch.Tensor, clip: float) -> torch.Tensor:
+    return torch.cat([mean, log_std], dim=-1)
+
+
+def _stats_symlog(mean: torch.Tensor, log_std: torch.Tensor, clip: float) -> torch.Tensor:
+    mean = torch.sign(mean) * torch.log1p(torch.abs(mean))
+    return torch.cat([mean, torch.clamp(log_std, -clip, clip)], dim=-1)
+
+
+#: InstanceNorm stats_mode -> function (mean, log std, stats_clip) -> stats; None = the layer returns no statistics
+STATS_TRANSFORMS = {"full": _stats_full, "symlog": _stats_symlog, "none": None}
 
 
 class InstanceNorm(nn.Module):
@@ -23,7 +36,7 @@ class InstanceNorm(nn.Module):
     "none" = stats returned as None (P33b).
     """
 
-    STATS_MODES = ("full", "symlog", "none")
+    STATS_MODES = tuple(STATS_TRANSFORMS)
 
     def __init__(self, n_features: int, eps: float = 1e-4, affine: bool = True,
                  clip: float | None = None, stats_mode: str = "full", stats_clip: float = 8.0):
@@ -32,6 +45,7 @@ class InstanceNorm(nn.Module):
             raise ValueError(f"stats_mode must be one of {self.STATS_MODES}, not {stats_mode!r}")
         self.eps, self.affine, self.clip = eps, affine, clip
         self.stats_mode, self.stats_clip = stats_mode, stats_clip
+        self.returns_stats = STATS_TRANSFORMS[stats_mode] is not None
         if affine:
             self.gamma = nn.Parameter(torch.ones(n_features))
             self.beta = nn.Parameter(torch.zeros(n_features))
@@ -45,13 +59,9 @@ class InstanceNorm(nn.Module):
             z = self.clip * torch.tanh(z / self.clip)
         if self.affine:
             z = z * self.gamma + self.beta
-        if self.stats_mode == "none":
+        if not self.returns_stats:
             return z, None
-        m, log_s = mean.squeeze(1), torch.log(std.squeeze(1))
-        if self.stats_mode == "symlog":
-            m = torch.sign(m) * torch.log1p(torch.abs(m))
-            log_s = torch.clamp(log_s, -self.stats_clip, self.stats_clip)
-        return z, torch.cat([m, log_s], dim=-1)
+        return z, STATS_TRANSFORMS[self.stats_mode](mean.squeeze(1), torch.log(std.squeeze(1)), self.stats_clip)
 
 
 class SymLog(nn.Module):

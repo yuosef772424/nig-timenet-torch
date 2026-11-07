@@ -30,6 +30,7 @@ from nig_timenet_torch.model.heads import (
     nig_outputs,
 )
 from nig_timenet_torch.model.layers import (
+    STATS_TRANSFORMS,
     AttentionPool,
     BatchNormChannelsLast,
     CausalMultiScaleDecomp,
@@ -49,7 +50,8 @@ __all__ = ["DEFAULT_HEAD_TYPES", "NigTimeNetV2", "build_nig_timenet_v2", "torch_
            "tcn_n_blocks"]
 
 DEFAULT_HEAD_TYPES = {t: ["nig_regression"] for t in TARGET_COLUMNS}
-NO_STATS_MODES = ("none",)  # InstanceNorm stats_mode values that return no per-window statistics
+#: InstanceNorm stats_mode values that return no per-window statistics
+NO_STATS_MODES = tuple(m for m, f in STATS_TRANSFORMS.items() if f is None)
 
 # option -> (value this port implements, step that adds the rest)
 _NOT_YET = {
