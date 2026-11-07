@@ -21,13 +21,13 @@ One builder session per package, in this order, each merged before the next. T5r
 | H1 | Card convention + navigation map | merged | [#32](https://github.com/yuosef772424/nig-timenet-torch/pull/32) | rule B7; `docs/MAP.md` (`python -m tests.build_map`); allowlist 37; second R-REVIEW |
 | I5 | Evaluation battery + adapter | merged | [#33](https://github.com/yuosef772424/nig-timenet-torch/pull/33) | battery ported (`7c9736b`, `f052cf6`); `eval/battery_adapter.py`, `battery_profit.py`, `workflow/battery_run.py`; T-profit target; D-009; O-1 closed |
 | I2 | Native data pipeline | merged | [#34](https://github.com/yuosef772424/nig-timenet-torch/pull/34) | `data/` ported (no ar_windows/panel); TF parity bit-exact; native 4h artifact test closes HF-15; D-010 (155 keys) |
-| H3 | Model assembly through registries | PR open | | `model/encoders.py` ENCODERS, heads via HEAD_REGISTRY, `model/contract.py` (D-011), health report for every architecture; G1 0, G2 1, G3 0, G7 0, C2 0 |
+| H3 | Model assembly through registries | merged | [#35](https://github.com/yuosef772424/nig-timenet-torch/pull/35) | `model/encoders.py` ENCODERS, heads via HEAD_REGISTRY, `model/contract.py` (D-011), health report for every architecture; G1 0, G2 1, G3 0, G7 0, C2 0 |
 | H4 | Strict trainer config | todo | | unknown keys raise |
 | I3 | Run steps (flat single split) | todo | | baseline job -> ~30 lines |
 | H5 / H6 | Rule and test tooling / facts refresh | todo | | |
 
 ## Roadmap (`docs/ROADMAP.md`, rules `docs/RULES.md`, protocol `docs/MODEL_DEV_PROTOCOL.md`)
-PRs since last R-REVIEW: 1 (H1 itself; second review 2026-11-07 in H1, `docs/reviews.md`; the next R-REVIEW is due after 5 more merged PRs).
+PRs since last R-REVIEW: 2 (H1 itself; second review 2026-11-07 in H1, `docs/reviews.md`; the next R-REVIEW is due after 5 more merged PRs).
 Done: R0 [#14](https://github.com/yuosef772424/nig-timenet-torch/pull/14), T1 [#16](https://github.com/yuosef772424/nig-timenet-torch/pull/16), T2 [#17](https://github.com/yuosef772424/nig-timenet-torch/pull/17), T3 [#18](https://github.com/yuosef772424/nig-timenet-torch/pull/18), T4 [#19](https://github.com/yuosef772424/nig-timenet-torch/pull/19). Data: artifact `c572b1b36960` (2,520,913 windows, 535 coins, sealed 183/183 excluded; B-020, B-022 open).
 
 | Step | Title | State | PR / job | Note |
