@@ -1,8 +1,8 @@
 {
-  "_doc": "Ratchet file (docs/RULES.md section G, C2). Each count is today's value of one bad pattern, measured by tests/scan.py. CI fails if a count GROWS, and also if it SHRINKS without this file being lowered (so it can never grow back). Keep every non-zero count in docs/bottlenecks.csv.",
+  "_doc": "A G3 size exception is {\"max_lines\": N, \"why\": \"...\"}; the module may not exceed N lines. Ratchet file (docs/RULES.md section G, C2). Each count is today's value of one bad pattern, measured by tests/scan.py. CI fails if a count GROWS, and also if it SHRINKS without this file being lowered (so it can never grow back). Keep every non-zero count in docs/bottlenecks.csv.",
   "counts": {
     "G1_output_name_literals_outside_heads": 0,
-    "G2_registered_name_comparisons": 1,
+    "G2_mode_name_comparisons": 5,
     "G3_modules_over_400_lines": 0,
     "G3_functions_over_80_lines": 0,
     "G4_dead_settings_fields": 0,

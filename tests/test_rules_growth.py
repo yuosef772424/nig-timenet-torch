@@ -37,9 +37,10 @@ def test_g1_output_names_are_defined_once():
     _ratchet("G1_output_name_literals_outside_heads", scan.output_name_literals())
 
 
-def test_g2_no_branching_on_registered_names():
-    """G2: behaviour comes from a registered component, not from `if x == "<registered name>"`."""
-    _ratchet("G2_registered_name_comparisons", scan.mode_name_comparisons())
+def test_g2_no_branching_on_mode_names():
+    """G2: behaviour comes from a registered component, not from `if x == "<mode name>"` (registered names and
+    declared vocabularies: ENCODERS, LEVEL_NORMS, *_MODES, *_KINDS)."""
+    _ratchet("G2_mode_name_comparisons", scan.mode_name_comparisons())
 
 
 def test_h4_no_config_reads_with_a_code_default():
@@ -54,7 +55,11 @@ def test_g3_size_budget():
     assert not unexcused, f"over {MODULE_LINES} lines without a reason in G3_size_exceptions: {unexcused}"
     stale = [m for m in RATCHETS["G3_size_exceptions"] if m not in over_modules]
     assert not stale, f"G3_size_exceptions lists modules that are within budget now (remove them): {stale}"
-    assert all(RATCHETS["G3_size_exceptions"].values()), "every size exception needs a one-line reason"
+    lines = scan.module_lines()
+    for mod, exc in RATCHETS["G3_size_exceptions"].items():
+        assert set(exc) == {"max_lines", "why"} and exc["why"], f"{mod}: an exception is {{max_lines, why}}"
+        assert lines[mod] <= exc["max_lines"], (f"{mod} has {lines[mod]} lines, its G3 exception allows "
+                                                f"{exc['max_lines']}: split it or justify a new cap in ratchets.json")
     _ratchet("G3_modules_over_400_lines", over_modules)
     over_functions = sorted(f"{f}: {n} lines" for f, n in scan.function_lengths().items() if n > FUNCTION_LINES)
     _ratchet("G3_functions_over_80_lines", over_functions)
@@ -160,3 +165,14 @@ def test_scan_finds_dead_settings_and_orphans(monkeypatch):
     })
     assert scan.dead_settings() == ["w/s.py: RunSettings.dead"]
     assert scan.orphan_modules() == ["model/orphan.py", "model/user.py"]  # nobody imports user.py either
+
+
+def test_scan_finds_declared_vocabularies_and_ignores_method_calls(monkeypatch):
+    _scan_source(monkeypatch, {
+        "m/a.py": 'FOO_MODES = ("fast", "slow")\n\ndef f(x):\n    return x == "fast"\n',
+        "w/s.py": ("from dataclasses import dataclass\n@dataclass\nclass RunSettings:\n    rolling: int = 1\n"),
+        "w/use.py": "def f(df):\n    return df.rolling(3)\n",
+    })
+    assert scan.declared_vocabularies() == {"fast", "slow"}
+    assert [c.split(": ")[0] for c in scan.mode_name_comparisons()] == ["m/a.py:4"]
+    assert scan.dead_settings() == ["w/s.py: RunSettings.rolling"]  # a method call of that name is not a read
