@@ -6,7 +6,8 @@ PITFALLS: to_dict turns tuples into lists (from_dict accepts them back); updated
 
 Strict settings primitive (BUILD_PLAN.md P04): every ``*Settings`` / ``*Config`` class of this repo is a frozen
 dataclass built through :func:`from_dict`. Unknown keys raise (with a did-you-mean), defaults live only on the dataclass
-fields (no second default source such as ``d.get(key, default)``).
+fields (no second default source such as ``d.get(key, default)``). One exception: the trainer config is a nested
+dict validated by ``trainer/targets.py`` (``validate_trainer_config``, D-012), not a dataclass.
 
 Shape of the rule from crypto-signal-prediction docs/research/hardening/audit_2026-10-31.md:156-165 (C2);
 this is a fresh, smaller primitive, not a port (there is no legacy dict config to retrofit here).

@@ -397,3 +397,39 @@ What changes in the H packages:
 - Default artifact path from `NIG_DRIVE_ROOT`; one source for the job's device (`job.device` vs `config.device`)
   (HF-17).
 - Train-loop timing separate from validation and trace (HF-37): scheduled in ROADMAP TR1 (log-only switch 6).
+
+## Outcome (H6, 2026-11-07; append-only, the text above is the plan as written)
+
+Campaign merged: H0 #26, H0b #27, H0c #28, T4b #29, I1 #30, H2 #31, H1 #32, I5 #33, I2 #34, H3 #35, H4 #36 + #37, I3 #38,
+H5 #39, H6 (this PR). Tests 515 -> 749 (`pytest -q -m "slow or not slow"`: 749 passed, 1 skipped). Decisions D-007..D-015.
+
+| Package | Result | What landed / what was left |
+|---|---|---|
+| H0 / H0b / H0c | done | audit HF-01..HF-37; PR #25 evaluated (`BRANCH_AR_STREAM.md`); ROADMAP + `MODEL_DEV_PROTOCOL.md` + rule C6 |
+| T4b | done | T-sharp per head vs the predicted move (`share_std_below_move`) |
+| I1 | done | D1 mandatory in `load_dataset` (`allow_unchecked`), strict config foundations, D-007 |
+| H2 | done | job reads the artifact (targets, anchors by name, `reg_target_mode`), `BaselineConfig` (unknown keys raise), `max_rows` smoke job, rule E5, D-008 (HF-05, 11-16) |
+| H1 | done | rule B7 (cards), generated `docs/MAP.md`, allowlist 37 modules, second R-REVIEW (HF-01, 02, 10 by rule) |
+| I5 | done | battery ported with adapter (`eval/battery_adapter.py`, `eval/battery_profit.py`, `workflow/battery_run.py`), T-profit target, O-1 closed, D-009 |
+| I2 | done | native data pipeline (`data/`, no ar_windows/panel), TF parity bit-exact, native 4h artifact test (HF-15), D-010 |
+| H3 | done | `ENCODERS`, heads through `HEAD_REGISTRY`, `model/contract.py`, health report for every architecture, `stats.metrics.r2`; G1 0, G7 0, C2 0, D-011 (HF-08, 09, 18, 19, 27, 28) |
+| H4 | done | `trainer/targets.py`, strict trainer config, `.get` ratchet 22 -> 0, D-012 (HF-20, 21); `Trainer` task weighting still a bool switch (HF-22, B-036, later) |
+| I3 | done | `workflow/run.py` steps, `jobs/baseline.py` 107 lines, battery in every run, cost per side, p_dir single direction, `notebooks/main.ipynb`, D-013 (HF-23, 29 partly) |
+| H5 | done | G2 counts declared vocabularies (honest 5, B-046), G3 exceptions carry a cap (HF-25), `tests.pin_diff` CI step (HF-31), pin scope D-014 (HF-30), manifest `base_tf` / `timeframes` D-015, `tests/jobs/`, helper modules (HF-32, 33, 34, HF-17 device mismatch refused) |
+| H6 | done (this PR) | facts refreshed; third R-REVIEW; HF-36 (NOTES re-triage) |
+| I4 | split | rolling half = ROADMAP F2 (not built), panel half parked in "Later" |
+| I7 | not opened | reopen only if the confidence gate fails for every method |
+
+Honest ratchet values at the end: G1 0; G2 5 (the plan target "<= 3" is not met: the widened scan found 5 comparisons on
+`closed`, `pct_change`, `batch` (x2), `expanding`; fixing them needs tiny registries, B-046); G3 0 modules and 0
+functions; G4 0; G7 0; C2 0; G8 1 (`model/panel.py` is orphaned, parked with the panel idea);
+price-target literals outside the schema 2 (B-041); `.get` defaults 0.
+
+Left open on purpose: HF-17 default artifact path from `NIG_DRIVE_ROOT` (suggestions rows 60, 61: the device mismatch is
+refused, the path is not derived); HF-22 TASK_WEIGHTINGS (B-036); HF-24 `identity_for_run` placement; HF-37 train-loop
+timing (ROADMAP TR1).
+
+Stale facts found by later steps (listed here, not edited above): "1 of 61 modules carded, allowlist 50" (HF-01, H1 (c)) was
+15 of 52 non-`__init__` modules at H1 time and an allowlist of 37 (suggestions row 95); the H4 text says validation
+"fills" defaults, which would change the RunIdentity hash, so resolution stays in the readers (row 119); the I3 text lists
+RunSettings sections `panel` / `rolling` and a retrain path that were not ported (row 124); H5's "G2 <= 3" (row 128).
