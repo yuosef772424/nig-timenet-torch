@@ -295,7 +295,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg = from_dict(BaselineConfig, config)
     dev_rep = contract.write_device_json(out, cfg.device)
     dev = torch.device(cfg.device)
-    art = load_dataset(LoaderSettings(name=cfg.artifact))  # rule D1 checked by default
+    art = load_dataset(LoaderSettings(name=cfg.artifact, mmap=True))  # rule D1 checked by default
     ds = art.dataset
     targets = price_targets(ds)
     codec_state(ds)  # refuses an unknown reg_target_mode / a missing reg_target_scale before any work
