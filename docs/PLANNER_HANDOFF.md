@@ -38,7 +38,8 @@ PRs (T6+) and anything large still go to the owner first.
 2. Owner asked for: an interactive notebook section (settings cell -> train -> test report shown inline) and a Drive
    cached Python env (prompt "T3b" written earlier: venv `--system-site-packages`, one tar on Drive keyed by
    Python + torch + requirements hash). Neither is built.
-3. Then seed 1, then T6 (switches). R-REVIEW is due (10 PRs since the last one).
+3. Then seed 1, then T6 (switches). First R-REVIEW done 2026-11-07 in step H0 (`docs/reviews.md`); the hardening
+   (`docs/hardening/PLAN.md`: H0b, H0c, then H1-H6) runs before T6.
 
 ## Facts worth keeping (do not re-derive)
 - PyTorch port: forward/loss/gradient parity with TF proven; weight init is torch default (results differ from TF).

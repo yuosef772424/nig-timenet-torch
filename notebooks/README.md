@@ -33,11 +33,11 @@ choose a T4 GPU, then Runtime, then Run all. The first run asks for a GitHub tok
    that folder and the token file; nothing under `/tmp`, no earlier clone and no runner object.
 
 Entries are modules of `nig_timenet_torch.jobs`. `device_smoke` proves the whole path on a new VM (queue it first with
-`"device": "cuda"` and `"config": {"device": "cuda"}`). Training entries follow in T5r and use
+`"device": "cuda"` and `"config": {"device": "cuda"}`). Training entries (T5r: `baseline`) use
 `colab/identity.py::identity_for_run` for the run identity.
 
-The notebook is committed without outputs. Not verified: the notebook has never run on Colab itself (no Colab or GPU in
-the build session); the first Run all is the real check (`docs/bottlenecks.csv` B-024). The previous demo notebook (parity
+The notebook is committed without outputs. First Colab runs on a T4 (2026-11-03, `docs/STATUS.md` T3 row): setup, export,
+device and publish worked; the baseline job has not yet finished on the GPU (`docs/bottlenecks.csv` B-024). The previous demo notebook (parity
 table, all model variants, a small training run on the fixture) is in git history at commit `b34579c`.
 
 `baseline` (T5r) trains one seed of the default model; the job files `docs/jobs/baseline-001-s{0,1}.json` carry the

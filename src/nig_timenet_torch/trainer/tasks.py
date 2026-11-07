@@ -1,10 +1,10 @@
 """TASK_REGISTRY and the task losses, ported from crypto-signal-prediction trainer/tasks.py @ aeafc564
-(BUILD_PLAN.md P17): evidential NIG, regression, binary classification, confidence calibration.
+(BUILD_PLAN.md P17): evidential NIG, regression, binary and multiclass classification (P42), confidence calibration.
 
 Every task fn is ``(y_true, outputs, target_cfg, scheduled_vars, sample_weight=None) -> (loss, stats)``; stats
 always carry the registered ``stat_keys``. Losses are float32. Not ported (off in the oracle's config; add when a
-step's test needs them): ``beta_nll``, ``huber_weight``, ``normalize_reg``, ``alpha_floor_straight_through``,
-multiclass classification — each raises NotImplementedError when requested instead of being silently ignored.
+step's test needs them): ``beta_nll``, ``huber_weight``, ``normalize_reg``, ``alpha_floor_straight_through`` —
+each raises NotImplementedError when requested instead of being silently ignored.
 """
 
 import inspect
