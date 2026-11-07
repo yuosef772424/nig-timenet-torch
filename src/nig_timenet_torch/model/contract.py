@@ -1,5 +1,11 @@
 """P31: the boundary contract every architecture must satisfy (D-012 point 3 / TF-side S23).
 
+PURPOSE:  The boundary contract of a model (input and output names, shapes, dtypes, head kind), read from any built
+          model by one forward pass and checked with a field-level diff; architectures plug in through it.
+TAGS:     model contract, boundary, architecture, plugin, head kind, check_contract
+PITFALLS: Reads the head vocabulary from HEAD_REGISTRY, so a new head kind's output keys are matched automatically;
+          an output name no head kind claims raises ContractMismatchError. Lives in model/ (was core/: G7).
+
 A ModelContract describes ONLY a model's boundary: input names/shapes/dtypes and output names/shapes/dtypes plus
 ``head_kind`` (how to decode an output, from HEAD_REGISTRY). It never reaches into a model's layers.
 ``contract_of`` reads it from any built model by running one forward pass in eval mode; ``check_contract`` raises
@@ -11,6 +17,8 @@ import re
 from dataclasses import dataclass
 
 import torch
+
+from nig_timenet_torch.model.heads import HEAD_REGISTRY
 
 __all__ = ["InputSpec", "OutputSpec", "ModelContract", "ContractMismatchError", "contract_of", "check_contract",
            "head_kind_of"]
@@ -42,8 +50,6 @@ class ContractMismatchError(ValueError):
 
 
 def _key_patterns() -> list[tuple[re.Pattern, str]]:
-    from nig_timenet_torch.model.heads import HEAD_REGISTRY  # tier: core reads the head vocabulary lazily
-
     pats = []
     for kind in HEAD_REGISTRY.names():
         meta = HEAD_REGISTRY.entry(kind).meta

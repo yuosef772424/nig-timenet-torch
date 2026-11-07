@@ -164,3 +164,13 @@ def test_trivial_baseline_block_bootstrap_ci(rng):
     assert np.isnan(metrics.block_bootstrap_ci(noise, np.zeros(N))[1]), "one block: no interval"
     assert metrics.block_bootstrap_ci(noise, days, level=0.999)[2] > hi, "a higher level widens the interval"
     assert np.isnan(metrics.block_bootstrap_ci(np.full(3, np.nan), np.arange(3))[0])
+
+
+def test_trivial_baseline_r2(rng):
+    """The best constant for R^2 is mean(y) and scores exactly 0; any other constant or a shuffled score is below 0."""
+    y = rng.normal(loc=2.0, size=N)
+    assert metrics.r2(y, np.full(N, y.mean())) == pytest.approx(0.0, abs=1e-12)
+    assert metrics.r2(y, np.zeros(N)) < 0
+    assert metrics.r2(y, rng.permutation(y)) < 0
+    assert metrics.r2(y, y) == 1.0
+    assert np.isnan(metrics.r2(np.ones(5), np.zeros(5))), "constant y: undefined, not 0"

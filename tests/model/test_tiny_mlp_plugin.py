@@ -6,11 +6,11 @@ import math
 import numpy as np
 import torch
 
-from nig_timenet_torch.core.model_contract import check_contract, contract_of
 from nig_timenet_torch.core.prediction_schema import validate_table
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.data_io import npy_dir
 from nig_timenet_torch.model.architectures import ARCHITECTURES, ModelSettings, build_model
+from nig_timenet_torch.model.contract import check_contract, contract_of
 from nig_timenet_torch.stats import metrics
 from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.trainer.trainer import Trainer

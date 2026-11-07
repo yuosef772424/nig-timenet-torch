@@ -1,6 +1,6 @@
 """The single owner of every metric this project computes (C7; BUILD_PLAN.md P21). Pure numpy — no torch.
 
-PURPOSE: Every metric of the project in one module (AUC, rank IC, calibration, interval and sharpness shares,
+PURPOSE: Every metric of the project in one module (AUC, rank IC, R^2, calibration, interval and sharpness shares,
     confidence-error gap, block-bootstrap CI), each with its trivial baseline stated and tested (rule C1).
 TAGS: metrics, auc, rank ic, calibration, coverage, bootstrap, trivial baseline
 PITFALLS: NaN rows are dropped pairwise and an undefined metric returns nan, never 0; bootstrap CIs resample
@@ -15,7 +15,7 @@ import math
 import numpy as np
 
 __all__ = ["auc", "rank_ic", "pearson", "spearman", "wilson_interval", "pinball_loss", "ece", "ece_bins", "mae",
-           "average_ranks", "confidence_error_spearman", "confidence_error_gap", "width_below_share",
+           "average_ranks", "r2", "confidence_error_spearman", "confidence_error_gap", "width_below_share",
            "interval_coverage", "block_bootstrap_ci"]
 
 
@@ -141,6 +141,14 @@ def mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """mean |y - p|. NaN if no rows."""
     y, p = _clean(y_true, y_pred)
     return float(np.abs(y - p).mean()) if y.shape[0] else float("nan")
+
+
+def r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """Coefficient of determination 1 - SS_res / SS_tot (on the rows kept after the NaN policy). NaN if no rows or if
+    y is constant (SS_tot = 0). Trivial baseline: predicting mean(y) scores exactly 0."""
+    y, p = _clean(y_true, y_pred)
+    ss = float(((y - y.mean()) ** 2).sum()) if y.shape[0] else 0.0
+    return 1.0 - float(((y - p) ** 2).sum()) / ss if ss > 0 else float("nan")
 
 
 def _confidence_bins(abs_error, confidence, groups, n_bins: int) -> tuple[np.ndarray, np.ndarray]:

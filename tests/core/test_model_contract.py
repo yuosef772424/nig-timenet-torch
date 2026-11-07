@@ -3,8 +3,8 @@ import dataclasses
 import pytest
 import torch
 
-from nig_timenet_torch.core.model_contract import ContractMismatchError, check_contract, contract_of
 from nig_timenet_torch.model.builder import build_nig_timenet_v2
+from nig_timenet_torch.model.contract import ContractMismatchError, check_contract, contract_of
 from tests.oracle import oracle_loader as ol
 
 

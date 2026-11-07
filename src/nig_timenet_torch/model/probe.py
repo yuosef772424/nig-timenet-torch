@@ -2,6 +2,12 @@
 information" (TF-side S07 layer_probe.csv; crypto-signal-prediction docs/research/MODEL_DEV_PROTOCOL.md section 2-3).
 It reports numbers and never a verdict.
 
+PURPOSE:  Per-layer ridge-probe report: forward-hook activations of named modules fitted to a label with time-ordered
+          folds (AUC for binary y, else R^2), the raw input scored next to every layer.
+TAGS:     probe, layer probe, ridge, activations, forward hook, health report
+PITFALLS: Probe points are module names of the model (an architecture lists its own in default_probe_points); raw
+          input has T*F features, so delta_vs_raw is not width-matched. R^2 comes from stats.metrics.r2.
+
 For every probe point (a module name inside ``model``; the reserved name "raw_input" is the model's raw input itself),
 the module's forward output (first element when it returns a tuple) is captured by a forward hook, flattened per
 sample, standardised on the training fold, and a closed-form ridge regression (numpy only) is fitted to ``y``.
@@ -13,7 +19,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from nig_timenet_torch.stats.metrics import auc
+from nig_timenet_torch.stats.metrics import auc, r2
 
 __all__ = ["RAW_INPUT", "capture_activations", "ridge_fit_predict", "layer_probe_report"]
 
@@ -67,11 +73,6 @@ def ridge_fit_predict(a_train: np.ndarray, y_train: np.ndarray, a_test: np.ndarr
     return b @ w + y0
 
 
-def _r2(y: np.ndarray, pred: np.ndarray) -> float:
-    ss = float(((y - y.mean()) ** 2).sum())
-    return 1.0 - float(((y - pred) ** 2).sum()) / ss if ss > 0 else float("nan")
-
-
 def layer_probe_report(model: torch.nn.Module, x: torch.Tensor, y: np.ndarray, *, probe_points: list[str],
                        n_folds: int = 5, ridge: float = 10.0, batch_size: int = 256) -> pd.DataFrame:
     """For each name in ``probe_points`` (module names inside ``model``, e.g. "instance_norm", "patch_embed",
@@ -95,7 +96,7 @@ def layer_probe_report(model: torch.nn.Module, x: torch.Tensor, y: np.ndarray, *
         for k, test in enumerate(folds):
             train = np.concatenate([f for j, f in enumerate(folds) if j != k])
             pred = ridge_fit_predict(a[train], y[train], a[test], ridge)
-            scores.append(auc(y[test], pred) if binary else _r2(y[test], pred))
+            scores.append(auc(y[test], pred) if binary else r2(y[test], pred))
         scores = np.asarray(scores, dtype=np.float64)
         rows.append({"probe_point": p, "metric": "auc" if binary else "r2", "mean": float(np.mean(scores)),
                      "std": float(np.std(scores)), "n_features": int(a.shape[1]), "n_folds": n_folds,

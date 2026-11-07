@@ -12,6 +12,12 @@ is causal whenever the blocks are (no future bar reaches step t).
   dense_skip        block i input = proj_i([r ; h_0 ; ... ; h_{i-1}]), h_0 = patch_embed(tok) (DenseNet-style)
   late_raw          sequence as "none"; the last ``late_k`` normalised bars, flattened, join the readout concat
   no_proj           no patch/step projection: blocks run on tok at width W (one token per bar, W % num_heads == 0)
+
+PURPOSE:  The registered input_skip variants of the transformer encoder (none, concat_each_block, dense_skip,
+          late_raw, no_proj); class flags say what a variant adds, so builders never compare variant names.
+TAGS:     input skip, variants, transformer encoder, patch embedding, readout, registry, flags
+PITFALLS: ``adds_modules`` False ("none") must add no module at all (P15 parameter names); ``replaces_patch_embed``
+          True (no_proj) means the encoder builds no patch_embed and the blocks run at the token width.
 """
 
 import torch
@@ -20,7 +26,7 @@ from torch import nn
 from nig_timenet_torch.core.registry import Contract, Registry
 from nig_timenet_torch.model.layers import num_patches
 
-__all__ = ["INPUT_SKIP_VARIANTS", "InputSkip", "patch_tokens", "build_input_skip", "LATE_RAW_K"]
+__all__ = ["INPUT_SKIP_VARIANTS", "InputSkip", "patch_tokens", "build_input_skip", "skip_variant", "LATE_RAW_K"]
 
 INPUT_SKIP_VARIANTS = Registry("input_skip", Contract("input_skip", required_meta=("build_fn",)))
 LATE_RAW_K = 4  # bars; the PLAN says "last-k", k unspecified (docs/friction_log.csv, P34)
@@ -37,9 +43,12 @@ def patch_tokens(tok: torch.Tensor, patch_len: int, stride: int) -> torch.Tensor
 
 
 class InputSkip(nn.Module):
-    """Base = "none". ``patchwise``: output position j is a patch (False: one position per bar)."""
+    """Base = "none". ``patchwise``: output position j is a patch (False: one position per bar). ``adds_modules``:
+    the variant owns modules (``model.skip``); ``replaces_patch_embed``: the encoder builds no patch_embed."""
     name = "none"
     patchwise = True
+    adds_modules = False
+    replaces_patch_embed = False
     readout_extra_dim = 0
 
     def __init__(self, *, d_model: int, tok_width: int, num_layers: int, patch_len: int, stride: int):
@@ -57,6 +66,7 @@ class InputSkip(nn.Module):
 
 
 class ConcatEachBlock(InputSkip):
+    adds_modules = True
     name = "concat_each_block"
 
     def __init__(self, *, d_model, tok_width, num_layers, patch_len, stride):
@@ -72,6 +82,7 @@ class ConcatEachBlock(InputSkip):
 
 
 class DenseSkip(InputSkip):
+    adds_modules = True
     name = "dense_skip"
 
     def __init__(self, *, d_model, tok_width, num_layers, patch_len, stride):
@@ -90,6 +101,7 @@ class DenseSkip(InputSkip):
 
 
 class LateRaw(InputSkip):
+    adds_modules = True
     name = "late_raw"
 
     def __init__(self, *, d_model, tok_width, num_layers, patch_len, stride, late_k: int = LATE_RAW_K):
@@ -105,6 +117,8 @@ class LateRaw(InputSkip):
 class NoProj(InputSkip):
     name = "no_proj"
     patchwise = False
+    adds_modules = True
+    replaces_patch_embed = True
 
     def encode(self, tok, embed, blocks):
         h = tok
@@ -115,6 +129,11 @@ class NoProj(InputSkip):
 
 for _cls in (InputSkip, ConcatEachBlock, DenseSkip, LateRaw, NoProj):
     INPUT_SKIP_VARIANTS.register(_cls.name, _cls, version=1, build_fn=_cls)
+
+
+def skip_variant(name: str) -> type[InputSkip]:
+    """The registered variant class (its flags tell what it adds); unknown name -> UnknownNameError."""
+    return INPUT_SKIP_VARIANTS.entry(name).meta["build_fn"]
 
 
 def build_input_skip(name: str, **dims) -> InputSkip:

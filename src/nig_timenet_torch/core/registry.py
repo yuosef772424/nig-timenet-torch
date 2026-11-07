@@ -8,7 +8,7 @@ PURPOSE:  The ONE generic registry: `Registry(kind, contract)` registers objects
           (checked AT REGISTRATION); raises on a duplicate name and on an unknown name (known names + did-you-mean).
 TAGS:     registry, Registry, Contract, register, unknown name, duplicate name, did you mean, one component one
           interface, plugin, tier 0
-PITFALLS: The 7 registries of this repo (kind, variable, module, names) are listed in the Registries table of
+PITFALLS: The registries of this repo (kind, variable, module, names) are listed in the Registries table of
           docs/MAP.md. Dict-style READ API (`reg[name]`, `reg.get(name, default)`, `in`, `len`, iteration = names,
           `keys/values/items`) returns the entry's VALUE = `view(entry)` (default: the registered object);
           `get(name)` without a default raises on an unknown name; `entries()` is the Entry list; there is no item
