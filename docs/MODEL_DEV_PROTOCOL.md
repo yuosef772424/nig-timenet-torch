@@ -15,6 +15,16 @@ environments; 4 the confidence and uncertainty methods and how to choose; 5 the 
 
 ---
 
+## 0. The goal (owner decision 2026-11-07)
+
+The north star is **T-profit** (ROADMAP "Targets"): profit after realistic costs from ANY use of the model outputs,
+measured by the evaluation battery through `eval/battery_adapter.py`, per seed, with trivial baselines and a
+dependence-aware CI, every variant tried counted toward multiple testing, exploratory until the owner asks for strict
+confirmation (C5). T-skill, T-conf and T-sharp below are MEANS: diagnostics that explain profit. The gates in
+section 2 are health checks that run BEFORE a full training (they prevent wasted GPU time); passing them is not
+success and failing a diagnostic gate is not by itself a rejection of a model that shows T-profit. A profit-based
+selection metric is a T6a candidate (not built yet; selection stays `val_raw_loss` until then, B-003).
+
 ## 1. Definitions
 
 - **Full training**: any run on the full artifact longer than one epoch or 30 GPU minutes. Everything shorter (smoke,
@@ -106,8 +116,8 @@ TRUE conditional distribution (random walk, 4h bars of 48 sub-steps, horizon 2, 
 with IC 0.05 or 0.10), the oracle's T-sharp share is 1.00 for high and low (median std / move = 0.81) and 0.00 for
 close (median std / move 12.6-18.7). For a calibrated Gaussian close head, a share of 0.80 needs `sd(pred move) /
 noise sd >= 1 / 0.253`, i.e. R^2 >= 0.94: no return model reaches that. So the close-head T-sharp is expected to fail
-for any honest model; a close-only failure is recorded but does NOT block a step until the owner decides how to read it
-(STATUS decision O-1). High and low failures block.
+for any honest model. Owner decision O-1 (CLOSED 2026-11-07): the close-head T-sharp is informational only, never a
+target or a gate (recorded, never blocking); the code already marks it non-blocking. High and low failures block.
 
 ### Rule D — direction (owner decision 2026-11-07)
 
@@ -209,7 +219,8 @@ at 50 / 80 / 95 %, PIT histogram) off by > 5 points.
   `docs/research/templates/` is the model.
 - No "X is better" without beating seed noise (C4: >= 2 seeds per arm on one commit, paired test) AND the predicted
   diagnostic moving.
-- Every metric next to its trivial baseline (C1); direction per rule D.
+- Every metric next to its trivial baseline (C1); direction per rule D. T-profit numbers come from the battery with
+  their baselines and CI, and the number of variants tried is stated in the result file.
 - Exploratory until the owner opens the holdout (C5); the holdout is opened once, in ROADMAP F4, only on the owner's
   request.
 - Results: `docs/results/<run>.md` with the gate report, the doctor report and the commit; bottleneck rows updated.

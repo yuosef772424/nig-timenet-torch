@@ -11,6 +11,21 @@ asks, rule C5), a model card, a versioned release, runs anyone can reproduce, do
 PyTorch. The TF project (`yuosef772424/crypto-signal-prediction`) is the frozen reference.
 
 ## Targets (every model step reports these on val AND test, per head; numbers, not adjectives)
+- **T-profit (NORTH STAR, owner decision 2026-11-07: "I do not want the close itself; I want the model to be able to
+  make profits in any way"):** profit after realistic costs (default 0.0008 PER SIDE, i.e. 0.0016 per round trip, the
+  battery default `D-009`; the owner may correct it) from ANY use of the model outputs: close-direction trades, limit
+  orders at the predicted high / low, the uncertainty as a trade filter and as position size, cross-sectional
+  market-neutral ranking. Measured by the evaluation battery (`eval/battery*.py`) through the adapter
+  (`eval/battery_adapter.py`), per seed, on val AND test, each use next to its trivial baselines (always up / down,
+  shuffled, constant-offset limit, equal weights, last-candle momentum) and a dependence-aware CI (day-block
+  bootstrap, `stats.metrics.block_bootstrap_ci`). Every variant tried (model, switch, rule, threshold) counts toward
+  multiple testing: the CI level is `1 - 0.05 / n_variants`. Exploratory until the owner asks for strict confirmation
+  (rule C5, F4). A use of the outputs is profitable only if it beats every baseline row AND its CI excludes 0 on every
+  seed.
+- **The targets below are MEANS, not goals:** T-skill, T-conf and T-sharp are diagnostics that explain WHY a model does
+  or does not make profit (where the edge comes from, whether the uncertainty can be used). A step may not claim
+  success on them alone, and may not reject a configuration on them alone when T-profit says otherwise; the protocol
+  gates (gradient, confidence, uncertainty) stay as health checks before full training.
 - **T-skill:** per head, rank IC within timestamp (across coins) and per-coin Spearman of prediction vs truth, next to
   its trivial baseline (rule C1): shuffled prediction for every head, and for high / low also the last bar's range
   (a volatility baseline: only the excess over it is skill). No regression beyond seed spread vs the baseline.
@@ -24,7 +39,8 @@ PyTorch. The TF project (`yuosef772424/crypto-signal-prediction`) is the frozen 
   within 75-85 %. A zero std scores 1.0 on the share (trivial), hence the coverage condition. The earlier text
   ("width < pred_high - pred_low") was a wrong interpretation; `eval/target_report.py` computes the per-head version since T4b.
   Warning measured in H0c: even the true conditional distribution fails this on the close head (share 0.00; high /
-  low 1.00), see `docs/MODEL_DEV_PROTOCOL.md` gate C; owner decision O-1 in STATUS.
+  low 1.00), see `docs/MODEL_DEV_PROTOCOL.md` gate C; owner decision O-1 (CLOSED 2026-11-07: close-head T-sharp is informational only,
+  never a target or a gate; high and low heads keep it).
 - **Direction:** SUSPENDED for the high and low heads (owner): their sign / hit rate / up-down accuracy / class AUC
   is never evidence and never a selection metric. Direction is judged on the close head only, next to its trivial
   baselines (shuffled, constant, momentum sign, reversal sign).
@@ -147,7 +163,8 @@ Registered options in `FitSettings` / `Trainer`, defaults reproduce today (D-nnn
 ### T6a — switches 1-3 (`feat`, M, builder)
 1. `input_path="direct_wide"` in the input-variant registry (H3): no decomposition and no learned projection before
    the deep blocks; inputs lifted to d_model by a fixed information-preserving map (B-002; check with the probe).
-2. Selection metrics (C3): `val_rank_ic_close` (close-head within-timestamp rank IC) and `val_t_skill_excess` (mean
+2. Selection metrics (C3): a profit-based selection metric (battery profit of the close / limit / sigma-sized uses on
+   VAL, with its baselines) is a T6a candidate (T-profit); not built in I5. `val_rank_ic_close` (close-head within-timestamp rank IC) and `val_t_skill_excess` (mean
    per-head rank IC minus its trivial baseline: shuffled for close, last range for high / low); T-conf / T-sharp as
    tie-breakers. Default stays `val_raw_loss` (B-003). High / low direction never enters (rule D).
 3. Confidence methods registry: today's loss; ranking loss on own |error| within coin without the diversity penalty
@@ -170,7 +187,8 @@ Registered options in `FitSettings` / `Trainer`, defaults reproduce today (D-nnn
 ### T7r — gates, then baseline vs all switches on (`exp`, M, researcher)
 - Gates on the all-on configuration (must pass, protocol section 2). Card first: predicted movement per target,
   accept rule. Job `all-001`: 3 seeds per arm (C4 minimum 2; owner decision O-5), one commit, health / doctor report.
-- Acceptance (to call it improved): T-conf and T-sharp (high, low; close per O-1) closer to target on every seed,
+- Acceptance (to call it improved): T-profit (battery, with baselines and CI) first; then T-conf and T-sharp (high, low; the close head's T-sharp is
+  informational, O-1) closer to target on every seed,
   T-skill not below the baseline beyond seed spread, close direction never claimed without its trivial baselines.
 
 ### T8 — read T7r, ablate or diagnose, fix, propose the default (`exp`, M, researcher)
