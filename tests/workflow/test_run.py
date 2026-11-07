@@ -53,3 +53,16 @@ def test_battery_can_be_switched_off(art, tmp_path):  # noqa: F811
     out = tmp_path / "out"
     r = steps.run_all(settings(art, tmp_path, **{"evaluation.battery.enabled": False}), out)
     assert not (out / "battery_report.txt").exists() and steps.battery_step(r) == {}
+
+
+def test_battery_reruns_from_the_finished_folder_alone(art, tmp_path):  # noqa: F811
+    from nig_timenet_torch.workflow.battery_run import battery_from_folder, render
+    out = tmp_path / "out"
+    r = steps.run_all(settings(art, tmp_path), out)
+    again = battery_from_folder(out, cost=0.0008)
+    assert render(again) == (out / "battery_report.txt").read_text()
+    other = battery_from_folder(out, cost=0.002, n_variants=3, out_dir=tmp_path / "again")
+    assert "0.2000%" in other["trades"]["note"] and (tmp_path / "again" / "battery_profit.json").is_file()
+    assert r.settings.evaluation.battery.cost_per_side == 0.0008
+    with pytest.raises(FileNotFoundError, match="battery tables"):
+        battery_from_folder(tmp_path)

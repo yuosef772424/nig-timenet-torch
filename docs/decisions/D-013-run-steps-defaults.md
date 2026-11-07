@@ -93,3 +93,9 @@ entry over `workflow/run.py` and its summary / test report equal the pre-refacto
 - `nig_timenet_torch.workflow.settings.EvalSettings(battery)`: `<new>` -> `BatterySettings(enabled=True, cost_per_side=0.0008, n_variants=1)`
 - `nig_timenet_torch.workflow.settings.RunSettings(evaluation)`: `<new>` -> `EvalSettings(chunk=20000, health_max_rows=100000)`
 - `nig_timenet_torch.workflow.settings.RunSettings(evaluation)`: `EvalSettings(chunk=20000, health_max_rows=100000)` -> `EvalSettings(chunk=20000, health_max_rows=100000, battery=BatterySettings(enabled=True, cost_per_side=0.0008, n_variants=1))`
+- `nig_timenet_torch.workflow.battery_run.battery_from_folder(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.workflow.battery_run.battery_from_folder(n_variants)`: `<new>` -> `1`
+- `nig_timenet_torch.workflow.battery_run.battery_from_folder(out_dir)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.battery_run.run_tables(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.workflow.battery_run.run_tables(n_variants)`: `<new>` -> `1`
+- `nig_timenet_torch.workflow.battery_run.run_tables(out_dir)`: `<new>` -> `None`

@@ -167,3 +167,4 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `jobs/device_smoke.py`: job entry (`docs/jobs/*.json` name it)
 - `notebooks/colab_nig_timenet_torch.ipynb`: notebook runner
 - `notebooks/data_pipeline.ipynb`: notebook runner
+- `notebooks/main.ipynb`: notebook runner

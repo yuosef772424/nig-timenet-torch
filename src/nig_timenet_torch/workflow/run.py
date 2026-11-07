@@ -86,6 +86,8 @@ def _need(run: Run, what: str, step: str) -> None:
 def prepare(settings: RunSettings, out=None) -> Run:
     """Load the artifact (rule D1), read its facts (they raise on a missing or unknown one before any work), split by
     time and build the train / validation inputs."""
+    if out is not None:
+        os.makedirs(out, exist_ok=True)
     art = run_common.load_data(settings)
     ds = art.dataset
     targets = run_common.price_targets(ds)
@@ -214,8 +216,6 @@ def write_summary(run: Run, extra: dict | None = None) -> dict:
 
 def run_all(settings: RunSettings, out=None, *, deadline: float | None = None, on_epoch=None) -> Run:
     """prepare -> build -> train -> health report -> test report -> battery (when ``evaluation.battery.enabled``)."""
-    if out is not None:
-        os.makedirs(out, exist_ok=True)
     r = build(prepare(settings, out))
     train(r, deadline=deadline, on_epoch=on_epoch)
     health_step(r)

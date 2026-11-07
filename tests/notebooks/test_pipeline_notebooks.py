@@ -1,6 +1,6 @@
-"""The data pipeline notebook (data_pipeline): thin, static-checked, and RUN headless.
+"""The data pipeline and main notebooks: thin, static-checked, and RUN headless.
 
-(The main and cross-asset notebooks follow with I3 / I4.)
+(The cross-asset notebook follows with I4.)
 
 Static: committed without outputs, no ``def``/``class``, short cells, every call into the package matches a real
 signature, every name a cell reads is defined by an earlier cell, the settings cell holds every option the cells use.
@@ -17,13 +17,15 @@ from importlib import import_module
 import pytest
 
 from nig_timenet_torch.colab import bootstrap
+from tests.data_io.test_artifact import art  # noqa: F401  (fixture)
 from tests.notebooks.test_colab_notebook import MAX_CELL_LINES, code_cells
 from tests.scan import ROOT
 
-NAMES = ("data_pipeline",)
+NAMES = ("data_pipeline", "main")
 COMMON = {"TORCH_REPO", "TORCH_REF", "EXPECT_DEVICE", "TOKEN_PATH", "WORKDIR", "TORCH_DIR", "DRIVE_RUNS",
           "EXTRA_MODULES"}
-NEEDS = {"data_pipeline": {"RAW_ROOT", "OUT_DIR", "NAME", "PRESETS", "CHANGES", "FETCH"}}
+NEEDS = {"data_pipeline": {"RAW_ROOT", "OUT_DIR", "NAME", "PRESETS", "CHANGES", "FETCH"},
+         "main": {"ARTIFACT", "RUN_DIR", "OUT_DIR", "CHANGES", "BATTERY_FOLDER", "BATTERY_COST", "BATTERY_VARIANTS"}}
 
 
 def _check_call(call, fn, where):
@@ -83,12 +85,19 @@ def test_every_call_matches_a_real_signature_and_every_name_is_defined_earlier(n
             if isinstance(n, ast.ImportFrom) and n.module and n.module.startswith("nig_timenet_torch"):
                 mod = import_module(n.module)
                 for a in n.names:
+                    if not hasattr(mod, a.name):
+                        import_module(f"{n.module}.{a.name}")  # a submodule: from package import module
                     assert hasattr(mod, a.name), f"{name} cell {i}: {n.module} has no {a.name}"
                     imported[a.asname or a.name] = getattr(mod, a.name)
         for call in [n for n in ast.walk(tree) if isinstance(n, ast.Call)]:
             f = call.func
             if isinstance(f, ast.Name) and f.id in imported:
                 _check_call(call, imported[f.id], f"{name} cell {i} {f.id}")
+                checked += 1
+            elif (isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name)
+                  and inspect.ismodule(imported.get(f.value.id))):  # steps.prepare(...)
+                assert hasattr(imported[f.value.id], f.attr), f"{name} cell {i}: no {f.value.id}.{f.attr}"
+                _check_call(call, getattr(imported[f.value.id], f.attr), f"{name} cell {i} {f.value.id}.{f.attr}")
                 checked += 1
             elif (isinstance(f, ast.Subscript) and isinstance(f.value, ast.Name) and f.value.id == "boot"
                   and isinstance(f.slice, ast.Constant)):
@@ -127,3 +136,18 @@ def test_data_notebook_builds_a_named_dataset_that_the_loader_reads_back(tmp_pat
     assert (tmp_path / f"{base}_latest.dataset").is_dir()
     assert any(p.name.startswith(f"{base}_2") for p in tmp_path.iterdir())
     assert data["loaded"].path.name == f"{base}_latest.dataset" and data["manifest"]["export"]["rows"] > 0
+
+
+def test_main_notebook_runs_the_fixture_end_to_end(tmp_path, art):  # noqa: F811
+    """Settings -> data -> split -> model -> train -> health -> test report -> battery -> summary -> battery of the
+    finished folder, all through the workflow.run steps, on the fixture artifact (1 epoch, CPU)."""
+    out = tmp_path / "out"
+    ns = run_notebook("main", {"ARTIFACT": str(art), "RUN_DIR": str(tmp_path / "train"), "OUT_DIR": str(out),
+                               "CHANGES": {"train.epochs": 1, "train.batch_size": 64, "train.device": "cpu",
+                                           "evaluation.health_max_rows": 50},
+                               "BATTERY_FOLDER": str(out)})
+    for file in ("baseline_summary.json", "test_report.json", "health_report.md", "battery_report.txt",
+                 "battery_profit.json", "battery_table_val.parquet", "battery_table_test.parquet"):
+        assert (out / file).is_file(), file
+    assert ns["summary"]["epochs_done"] == 1 and ns["report"]["n_rows"] == len(ns["run"].idx["test"])
+    assert "VERDICT" in ns["render"](ns["sections"])

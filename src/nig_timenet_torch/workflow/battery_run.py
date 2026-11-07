@@ -6,8 +6,10 @@ TAGS: battery run, stage inputs, t-profit, battery report, adapter entry point, 
 PITFALLS: VAL thresholds are applied to TEST (no leakage), so val and test must be different stages of ONE run;
     n_variants is the number of variants tried so far and widens the CI, state it in the result file.
 
-``battery_step(run)`` (after ``workflow.run.test_step``) writes ``battery_report.txt`` (every section) and
-``battery_profit.json`` (the T-profit sections with their numbers and the verdict) into the run's output folder.
+``battery_step(run)`` (after ``workflow.run.test_step``) writes ``battery_report.txt`` (every section),
+``battery_profit.json`` (the T-profit sections with their numbers and the verdict) and the two battery tables
+(``battery_table_val.parquet`` / ``battery_table_test.parquet``) into the run's output folder. ``battery_from_folder``
+re-runs the battery from those tables alone (any model that writes them, other costs or more variants), no model needed.
 ``StageInputs`` bundles exactly what ``eval.target_report.target_report`` takes for one stage (plus the optional
 ``prev_close`` for the persistence baseline). ``run_battery`` returns ``{section: {title, rows, note, ...}}``;
 ``render`` prints it the way the battery does; ``battery_report.txt`` is written when ``out_dir`` is given.
@@ -25,8 +27,8 @@ from nig_timenet_torch.eval.battery import full_battery, show
 from nig_timenet_torch.eval.battery_adapter import to_battery_table
 from nig_timenet_torch.workflow import flat_run, run_common
 
-__all__ = ["StageInputs", "run_battery", "render", "battery_step", "stage_inputs", "profit_json", "REPORT_TXT",
-           "PROFIT_JSON"]
+__all__ = ["StageInputs", "run_battery", "run_tables", "render", "battery_step", "battery_from_folder", "stage_inputs",
+           "profit_json", "table_path", "REPORT_TXT", "PROFIT_JSON"]
 
 REPORT_TXT = "battery_report.txt"
 PROFIT_JSON = "battery_profit.json"
@@ -54,11 +56,21 @@ def render(sections: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def table_path(folder, stage: str) -> Path:
+    return Path(folder) / f"battery_table_{stage}.parquet"
+
+
 def run_battery(val: StageInputs, test: StageInputs, *, cost: float = 0.0008, n_variants: int = 1,
                 out_dir=None) -> dict:
     """The full battery (14 sections, 3 T-profit sections, verdict) for one run; writes ``battery_report.txt``
-    into ``out_dir`` when given."""
-    sections = full_battery(val.battery_table(), test.battery_table(), cost, n_variants)
+    into ``out_dir`` when given. ``cost`` is charged per side of a trade."""
+    return run_tables(val.battery_table(), test.battery_table(), cost=cost, n_variants=n_variants, out_dir=out_dir)
+
+
+def run_tables(val: pd.DataFrame, test: pd.DataFrame, *, cost: float = 0.0008, n_variants: int = 1,
+               out_dir=None) -> dict:
+    """The same from two ready battery tables (``eval.battery_adapter.to_battery_table`` output)."""
+    sections = full_battery(val, test, cost, n_variants)
     if out_dir is not None:
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
@@ -91,10 +103,27 @@ def battery_step(run) -> dict:
     b = run.settings.evaluation.battery
     if not b.enabled:
         return {}
-    sections = run_battery(stage_inputs(run, "val"), stage_inputs(run, "test"), cost=b.cost_per_side,
-                           n_variants=b.n_variants, out_dir=run.out)
+    val, test = stage_inputs(run, "val").battery_table(), stage_inputs(run, "test").battery_table()
+    sections = run_tables(val, test, cost=b.cost_per_side, n_variants=b.n_variants, out_dir=run.out)
     if run.out is not None:
+        val.to_parquet(table_path(run.out, "val"), index=False)
+        test.to_parquet(table_path(run.out, "test"), index=False)
         (run.out / PROFIT_JSON).write_text(json.dumps({"cost_per_side": b.cost_per_side, "n_variants": b.n_variants,
                                                        **profit_json(sections)}, indent=1, default=float),
                                            encoding="utf-8")
+    return sections
+
+
+def battery_from_folder(folder, *, cost: float = 0.0008, n_variants: int = 1, out_dir=None) -> dict:
+    """The battery of a FINISHED run folder: reads its two battery tables, no model and no artifact needed (any model
+    that writes ``battery_table_{val,test}.parquet`` can use it). ``out_dir`` None = write nothing."""
+    missing = [str(table_path(folder, st)) for st in ("val", "test") if not table_path(folder, st).is_file()]
+    if missing:
+        raise FileNotFoundError(f"not a finished run folder (no battery tables): {missing}")
+    val, test = (pd.read_parquet(table_path(folder, st)) for st in ("val", "test"))
+    sections = run_tables(val, test, cost=cost, n_variants=n_variants, out_dir=out_dir)
+    if out_dir is not None:
+        (Path(out_dir) / PROFIT_JSON).write_text(json.dumps({"cost_per_side": cost, "n_variants": n_variants,
+                                                             **profit_json(sections)}, indent=1, default=float),
+                                                 encoding="utf-8")
     return sections

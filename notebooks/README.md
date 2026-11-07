@@ -21,6 +21,15 @@ choose a T4 GPU, then Runtime, then Run all. The first run asks for a GitHub tok
 candle files on Drive and writes `<NAME>_<stamp>.dataset` plus `<NAME>_latest.dataset`. It is a thin caller too:
 `tests/notebooks/test_pipeline_notebooks.py` checks it statically and runs its non-Colab cells headless.
 
+## The main notebook
+
+[`main.ipynb`](main.ipynb) is one run from settings to profit: one settings cell (`ARTIFACT`, `RUN_DIR`, `OUT_DIR`, dotted
+`RunSettings` keys in `CHANGES`), then the steps of `src/nig_timenet_torch/workflow/run.py` one cell each: `prepare`
+(load, split) -> `build` -> `train` -> `health_step` -> `test_step` -> `battery_step` -> `write_summary`; the same steps
+`jobs/baseline.py` calls. The last section reads a finished run folder and runs the battery again (`BATTERY_FOLDER`,
+another cost per side or more variants, no model needed). `tests/notebooks/test_pipeline_notebooks.py` checks it statically
+and runs it headless on the fixture artifact.
+
 ## The runner
 
 1. **Queue.** A job is a `job.json` at the root of branch `colab-queue` (schema and field meanings in
