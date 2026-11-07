@@ -24,7 +24,8 @@ One builder session per package, in this order, each merged before the next. T5r
 | H3 | Model assembly through registries | merged | [#35](https://github.com/yuosef772424/nig-timenet-torch/pull/35) | `model/encoders.py` ENCODERS, heads via HEAD_REGISTRY, `model/contract.py` (D-011), health report for every architecture; G1 0, G2 1, G3 0, G7 0, C2 0 |
 | H4 | Strict trainer config | merged | [#36](https://github.com/yuosef772424/nig-timenet-torch/pull/36) | `trainer/targets.py`; unknown keys raise; D-012; `.get` ratchet 22 -> 0; direction AUCs not selectable |
 | I3 | Run steps (flat single split) | PR open | [#38](https://github.com/yuosef772424/nig-timenet-torch/pull/38) | `workflow/run.py` steps; `jobs/baseline.py` 107 lines (config + 25-line main); battery in the run (cost per side, p_dir); `notebooks/main.ipynb`; D-013; HF-23, B-035 closed |
-| H5 / H6 | Rule and test tooling / facts refresh | todo | | |
+| H5 | Rule and test tooling fixes | merged | [#39](https://github.com/yuosef772424/nig-timenet-torch/pull/39) | G2 honest 5 (B-046), `tests.pin_diff` in CI, D-014 pin scope, D-015 manifest `base_tf`/`timeframes`, `tests/jobs/`, helpers modules |
+| H6 | Facts refresh | todo | | |
 
 ## Roadmap (`docs/ROADMAP.md`, rules `docs/RULES.md`, protocol `docs/MODEL_DEV_PROTOCOL.md`)
 PRs since last R-REVIEW: 2 (H1 itself; second review 2026-11-07 in H1, `docs/reviews.md`; the next R-REVIEW is due after 5 more merged PRs).
