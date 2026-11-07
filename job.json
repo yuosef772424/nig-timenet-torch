@@ -1,6 +1,6 @@
-{"job_id": "baseline-smoke-001", "repo_ref": "44f6e7157f29ff5a60b50e91d35118d75a6b49c4", "entry": "baseline", "args": [],
- "config": {"device": "cuda", "seed": 0, "epochs": 1, "batch_size": 512, "max_rows": 20000,
-            "run_dir": "/content/drive/MyDrive/nig_timenet_runs/baseline-smoke-001/train"},
- "max_minutes": 15, "device": "cuda", "needs_drive": true,
+{"job_id": "baseline-001-s0-r2", "repo_ref": "44f6e7157f29ff5a60b50e91d35118d75a6b49c4", "entry": "baseline", "args": [],
+ "config": {"device": "cuda", "seed": 0, "epochs": 5, "batch_size": 512,
+            "run_dir": "/content/drive/MyDrive/nig_timenet_runs/baseline-001-s0-r2/train"},
+ "max_minutes": 170, "device": "cuda", "needs_drive": true,
  "expected_outputs": ["baseline_summary.json", "health_report.json", "health_report.md", "test_report.json"],
- "note": "Rule E5 smoke job of baseline-001: the same entry on the real artifact, 1 epoch, at most 20000 rows per split (a few minutes on a T4). repo_ref is a placeholder: the planner fills the merge sha at queue time. Run it on the commit of the long job BEFORE queueing the long job."}
+ "note": "T5r baseline-001 seed 0, second run on current main (T4b T-sharp per head, H2 artifact-driven job), 5 epochs (owner), new run_dir because resume across a code change is refused. Smoke baseline-smoke-001 passed on the same commit (rule E5)."}
