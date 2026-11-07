@@ -118,14 +118,15 @@ line range). A module without a card shows its first docstring line; it gets a c
 | module | what it is for | tags |
 |---|---|---|
 | `trainer/checkpoint.py` | Checkpoint files of a run folder (ROADMAP T1; TF source: trainer/checkpoints.py, simplified). |  |
-| `trainer/identity.py` | RunIdentity: a persisted, immutable run fingerprint so resume-with-a-changed-objective fails loudly (C3; |  |
+| `trainer/identity.py` | RunIdentity: the persisted, immutable fingerprint of a run (settings hash incl. the WHOLE trainer config, seed, data fingerprint, code sha); ``check_resume`` refuses a resume whose identity changed. | run identity, fingerprint, resume, settings hash, checkpoint, ResumeMismatchError |
 | `trainer/schedules.py` | Lambda / learning-rate schedules (ROADMAP T1; source: crypto-signal-prediction trainer/schedules.py, identical at |  |
 | `trainer/selection_metric.py` | SELECTION_METRICS registry: named, fixed validation metrics for checkpoint / early-stopping selection (val_raw_loss, per-head AUC and pinball). | selection metric, early stopping, checkpoint selection, validation, auc, pinball |
+| `trainer/targets.py` | The trainer config schema: ``validate_trainer_config`` (unknown keys raise), ``resolve_targets`` / ``resolve_loss`` (defaults filled once) and ``targets_config``, the ONE builder of the targets (from HeadSpec). | trainer config, strict config, validate, targets_config, HeadSpec, task config_keys, loss defaults, did you mean |
 | `trainer/task_weighting.py` | Kendall et al. uncertainty task weighting (source: crypto-signal-prediction trainer/task_weighting.py @ aeafc564). |  |
-| `trainer/tasks.py` | TASK_REGISTRY and the task losses, ported from crypto-signal-prediction trainer/tasks.py @ aeafc564 |  |
+| `trainer/tasks.py` | TASK_REGISTRY: the task losses (evidential NIG, regression, classification) with, per task, the registered ``config_keys`` (the options a target config may carry) and ``default_options`` (their values when left out). | task loss, task registry, evidential, classification, regression, config_keys, default_options, calibration |
 | `trainer/trace.py` | T4 trainer trace: what the loss weighting and the schedules did, one row of numbers per epoch (log-only). |  |
 | `trainer/tracker.py` | Best epoch + early stopping in one resumable object (ROADMAP T1; source: crypto-signal-prediction |  |
-| `trainer/trainer.py` | Trainer + compute_losses (source: crypto-signal-prediction trainer/trainer.py @ aeafc564, GenericTrainer |  |
+| `trainer/trainer.py` | Trainer: loss weighting (loss_weight, Kendall for the non-excluded task types), train / eval steps and the ``fit`` epoch loop; its config is validated by ``trainer.targets`` first and its schedules are parsed once. | trainer, fit, compute_losses, kendall uncertainty weighting, scheduled vars, selection metric, resume, config |
 
 ### workflow
 

@@ -16,13 +16,10 @@ model/nig_layers.py
 model/panel.py
 stats/nig.py
 trainer/checkpoint.py
-trainer/identity.py
 trainer/schedules.py
 trainer/task_weighting.py
-trainer/tasks.py
 trainer/trace.py
 trainer/tracker.py
-trainer/trainer.py
 workflow/rolling.py
 workflow/settings.py
 workflow/staleness.py

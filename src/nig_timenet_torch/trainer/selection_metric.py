@@ -25,9 +25,14 @@ from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats import metrics
 
-__all__ = ["SELECTION_METRICS", "compute_selection_metric"]
+__all__ = ["SELECTION_METRICS", "compute_selection_metric", "check_selectable", "NOT_SELECTABLE"]
 
-SELECTION_METRICS = Registry("selection_metric", Contract("selection_metric", required_meta=("higher_is_better",)))
+#: direction metrics of the high / low heads: suspended by the owner (never evidence, never used for selection); they
+#: stay registered for reporting
+NOT_SELECTABLE = ("val_auc_high_class", "val_auc_low_class")
+
+SELECTION_METRICS = Registry("selection_metric", Contract("selection_metric",
+                                                       required_meta=("higher_is_better", "selectable")))
 
 
 def _np(x) -> np.ndarray:
@@ -52,10 +57,21 @@ def _pinball_fn(t):
                                                               _np(outputs[spec.output_keys["mu"]]), 0.5)
 
 
-SELECTION_METRICS.register("val_raw_loss", _val_raw_loss, version=1, higher_is_better=False)
+SELECTION_METRICS.register("val_raw_loss", _val_raw_loss, version=1, higher_is_better=False, selectable=True)
 for _t in TARGET_COLUMNS:
-    SELECTION_METRICS.register(f"val_auc_{_t}_class", _auc_fn(_t), version=1, higher_is_better=True)
-    SELECTION_METRICS.register(f"val_pinball_{_t}_reg", _pinball_fn(_t), version=1, higher_is_better=False)
+    SELECTION_METRICS.register(f"val_auc_{_t}_class", _auc_fn(_t), version=1, higher_is_better=True,
+                               selectable=f"val_auc_{_t}_class" not in NOT_SELECTABLE)
+    SELECTION_METRICS.register(f"val_pinball_{_t}_reg", _pinball_fn(_t), version=1, higher_is_better=False,
+                               selectable=True)
+
+
+def check_selectable(name: str) -> None:
+    """Raise UnknownNameError for an unregistered name and ValueError for a registered metric that must not select
+    (the high / low direction AUCs: owner decision, direction is suspended)."""
+    if not SELECTION_METRICS.entry(name).meta["selectable"]:
+        raise ValueError(f"selection metric {name!r} is registered for reporting only: the direction of the high / low "
+                         f"heads is suspended (never evidence, never used for selection). Selectable: "
+                         f"{sorted(n for n in SELECTION_METRICS if SELECTION_METRICS.entry(n).meta['selectable'])}")
 
 
 def compute_selection_metric(name: str, outputs, labels, logs) -> float:

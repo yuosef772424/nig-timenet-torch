@@ -1,0 +1,152 @@
+{
+ "close_only": {
+  "config": {
+   "constraints": [],
+   "loss": {
+    "schedules": {
+     "lambda_calib": {
+      "end": 0.1,
+      "schedule": "cosine",
+      "start": 0.0,
+      "warmup_epochs": 5
+     },
+     "lambda_reg": {
+      "end": 0.05,
+      "schedule": "linear",
+      "start": 0.0,
+      "warmup_epochs": 5
+     }
+    },
+    "uncertainty_weighting_exclude_task_types": [
+     "evidential"
+    ],
+    "use_uncertainty_weighting": true
+   },
+   "targets": {
+    "close_class": {
+     "binary": true,
+     "label_smoothing": 0.1,
+     "output_keys": {
+      "logits": "y_close_class_logits"
+     },
+     "task_type": "classification",
+     "true_key": "y_close_class"
+    },
+    "close_reg": {
+     "lambda_calib_var": "lambda_calib",
+     "lambda_reg_var": "lambda_reg",
+     "output_keys": {
+      "alpha": "y_close_alpha",
+      "beta": "y_close_beta",
+      "confidence": "y_close_confidence",
+      "mu": "y_close",
+      "nu": "y_close_nu"
+     },
+     "task_type": "evidential",
+     "true_key": "y_close_reg",
+     "use_calibration_loss": true
+    }
+   }
+  },
+  "identity_fingerprint": null,
+  "trainer_hash": "d6f7848aca6d81c0abe3b7a8b8274d2f0bcea4b3803a1782d72323d4bfb3a8a1"
+ },
+ "high_low_close": {
+  "config": {
+   "constraints": [],
+   "loss": {
+    "schedules": {
+     "lambda_calib": {
+      "end": 0.1,
+      "schedule": "cosine",
+      "start": 0.0,
+      "warmup_epochs": 5
+     },
+     "lambda_reg": {
+      "end": 0.05,
+      "schedule": "linear",
+      "start": 0.0,
+      "warmup_epochs": 5
+     }
+    },
+    "uncertainty_weighting_exclude_task_types": [
+     "evidential"
+    ],
+    "use_uncertainty_weighting": true
+   },
+   "targets": {
+    "close_class": {
+     "binary": true,
+     "label_smoothing": 0.1,
+     "output_keys": {
+      "logits": "y_close_class_logits"
+     },
+     "task_type": "classification",
+     "true_key": "y_close_class"
+    },
+    "close_reg": {
+     "lambda_calib_var": "lambda_calib",
+     "lambda_reg_var": "lambda_reg",
+     "output_keys": {
+      "alpha": "y_close_alpha",
+      "beta": "y_close_beta",
+      "confidence": "y_close_confidence",
+      "mu": "y_close",
+      "nu": "y_close_nu"
+     },
+     "task_type": "evidential",
+     "true_key": "y_close_reg",
+     "use_calibration_loss": true
+    },
+    "high_class": {
+     "binary": true,
+     "label_smoothing": 0.1,
+     "output_keys": {
+      "logits": "y_high_class_logits"
+     },
+     "task_type": "classification",
+     "true_key": "y_high_class"
+    },
+    "high_reg": {
+     "lambda_calib_var": "lambda_calib",
+     "lambda_reg_var": "lambda_reg",
+     "output_keys": {
+      "alpha": "y_high_alpha",
+      "beta": "y_high_beta",
+      "confidence": "y_high_confidence",
+      "mu": "y_high",
+      "nu": "y_high_nu"
+     },
+     "task_type": "evidential",
+     "true_key": "y_high_reg",
+     "use_calibration_loss": true
+    },
+    "low_class": {
+     "binary": true,
+     "label_smoothing": 0.1,
+     "output_keys": {
+      "logits": "y_low_class_logits"
+     },
+     "task_type": "classification",
+     "true_key": "y_low_class"
+    },
+    "low_reg": {
+     "lambda_calib_var": "lambda_calib",
+     "lambda_reg_var": "lambda_reg",
+     "output_keys": {
+      "alpha": "y_low_alpha",
+      "beta": "y_low_beta",
+      "confidence": "y_low_confidence",
+      "mu": "y_low",
+      "nu": "y_low_nu"
+     },
+     "task_type": "evidential",
+     "true_key": "y_low_reg",
+     "use_calibration_loss": true
+    }
+   }
+  },
+  "identity_fingerprint": "e30d30b3747c96b85f39a5d06593bccd1f31fbb7066c9281c7cbe682a2d33cde",
+  "trainer_hash": "77a5737954efd5f32909b7c4a1762abe1acb9d3349c12b69c3c1bfc8655a9a29"
+ }
+}

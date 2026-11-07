@@ -11,7 +11,7 @@ import torch
 
 from nig_timenet_torch.model.builder import build_nig_timenet_v2, tcn_n_blocks
 from nig_timenet_torch.model.panel import build_panel_model, panel_encoder
-from nig_timenet_torch.trainer.tasks import classification_task_loss
+from nig_timenet_torch.trainer.tasks import classification_task_loss, with_defaults
 from tests.oracle import oracle_loader as ol
 
 D = Path(__file__).resolve().parents[2] / "reference" / "data_variants"
@@ -132,7 +132,8 @@ def test_multiclass_loss_matches_upstream_classification_task_loss(ls, weighted)
     inp = _npz("multiclass", "inputs.npz")
     out = _npz("multiclass", "outputs.npz")
     exp = json.loads((D / "multiclass" / "losses.json").read_text())[f"ls={ls},weighted={weighted}"]
-    cfg = {"output_keys": {"logits": "y_close_class_logits"}, "binary": False, "label_smoothing": ls}
+    cfg = with_defaults("classification", {"output_keys": {"logits": "y_close_class_logits"}, "binary": False,
+                                           "label_smoothing": ls})
     loss, stats = classification_task_loss(inp["y_close_class"], out, cfg, {},
                                            sample_weight=inp["sample_weight"] if weighted else None)
     ol.assert_close(loss, torch.tensor(exp["loss"]["value"]), "loss", "multiclass loss")

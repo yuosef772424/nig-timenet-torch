@@ -306,3 +306,21 @@ def metric_definitions_outside_stats() -> list[str]:
             elif (isinstance(node, ast.Attribute) and node.attr == "corrcoef"):
                 found.append(f"{rel}:{node.lineno}: corrcoef")
     return found
+
+
+# ----------------------------------------------------------------------- H4 (no silent config defaults)
+CONFIG_GET_LAYERS = ("trainer", "jobs")
+
+
+def config_get_defaults() -> list[str]:
+    """``<expr>.get(key, default)`` calls (two or more arguments) in ``trainer/`` and ``jobs/``: a default that lives
+    in the code instead of a registry entry or a strict dataclass (rule B5). ``.get(key)`` alone is not counted."""
+    found = []
+    for rel, (_, tree) in sources().items():
+        if layer_of(rel) not in CONFIG_GET_LAYERS:
+            continue
+        for n in ast.walk(tree):
+            if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "get"
+                    and len(n.args) + len(n.keywords) >= 2):
+                found.append(f"{rel}:{n.lineno}: .get(..., default)")
+    return found

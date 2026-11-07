@@ -1,4 +1,12 @@
-"""Trainer + compute_losses (source: crypto-signal-prediction trainer/trainer.py @ aeafc564, GenericTrainer
+"""PURPOSE: Trainer: loss weighting (loss_weight, Kendall for the non-excluded task types), train / eval steps and the
+    ``fit`` epoch loop; its config is validated by ``trainer.targets`` first and its schedules are parsed once.
+TAGS: trainer, fit, compute_losses, kendall uncertainty weighting, scheduled vars, selection metric, resume, config
+PITFALLS: ``Trainer.config`` is the dict as given (it is hashed into the RunIdentity); the resolved copies are
+    ``targets_cfg`` and ``schedules``. Kendall weights ONLY the task types NOT in
+    ``uncertainty_weighting_exclude_task_types`` (default: evidential); the excluded ones are added unweighted.
+    A selection metric that is not ``selectable`` (the high/low direction AUCs) raises at construction.
+
+Trainer + compute_losses (source: crypto-signal-prediction trainer/trainer.py @ aeafc564, GenericTrainer
 __init__ / _compute_losses / train_step / test_step; BUILD_PLAN.md P18, P22). ``Trainer.fit`` (ROADMAP T1) adds the
 epoch loop; its pieces live in schedules.py, tracker.py and checkpoint.py.
 
@@ -9,6 +17,7 @@ total and raw loss, as the TF trainer adds ``model.losses``.
 
 import json
 import time
+from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
@@ -19,7 +28,8 @@ from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
 from nig_timenet_torch.trainer.schedules import LrSettings, ParamSchedule, apply_schedules, lr_at
-from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS, compute_selection_metric
+from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS, check_selectable, compute_selection_metric
+from nig_timenet_torch.trainer.targets import resolve_loss, resolve_targets, validate_trainer_config
 from nig_timenet_torch.trainer.task_weighting import UncertaintyWeightedLoss
 from nig_timenet_torch.trainer.tasks import TASK_REGISTRY
 from nig_timenet_torch.trainer.trace import epoch_trace
@@ -73,7 +83,8 @@ def compute_losses(model: torch.nn.Module, x, y, targets_cfg: dict, scheduled_va
     """-> (total_loss, raw_loss, per_target_losses, per_stat_values, per_constraint_values).
     raw_loss = sum of loss * loss_weight (no Kendall terms) + regularisation; total applies Kendall to
     kendall_task_names and adds fixed_task_names unweighted. ``training`` only gates flooding (the model's own
-    train()/eval() mode gates dropout). ``outputs``: precomputed model(x) (then x is not used)."""
+    train()/eval() mode gates dropout). ``outputs``: precomputed model(x) (then x is not used). ``targets_cfg`` must be
+    RESOLVED (``targets.resolve_targets``: base and task defaults filled)."""
     if outputs is None:
         outputs = model(x)
     per_target, per_stat = {}, {}
@@ -87,7 +98,7 @@ def compute_losses(model: torch.nn.Module, x, y, targets_cfg: dict, scheduled_va
         else:
             loss, stats = entry["fn"](y[tcfg["true_key"]], outputs, tcfg, scheduled_vars)
         loss = loss.to(torch.float32)
-        flood = tcfg.get("flood_level")
+        flood = tcfg["flood_level"]
         if training and flood is not None:
             loss = (loss - float(flood)).abs() + float(flood)
         per_target[t] = loss * float(loss_weights[t])
@@ -119,25 +130,27 @@ class Trainer:
     names raise UnknownNameError here, at construction)."""
 
     def __init__(self, model: torch.nn.Module, tasks_cfg: dict, optimizer=None, selection_metric: str = "val_raw_loss"):
-        SELECTION_METRICS.entry(selection_metric)
+        validate_trainer_config(tasks_cfg)
+        check_selectable(selection_metric)
         self.selection_metric = selection_metric
-        config = tasks_cfg
+        config = tasks_cfg  # kept as given: it is hashed into the RunIdentity (defaults are never written into it)
         self.model, self.config = model, config
-        self.target_names = list(config["targets"])
-        loss_cfg = config["loss"]
-        self.scheduled_vars = {n: float(c.get("start", 0.0)) for n, c in loss_cfg.get("schedules", {}).items()}
-        self.loss_weights = {t: float(c.get("loss_weight", 1.0)) for t, c in config["targets"].items()}
-        use_kendall = bool(loss_cfg.get("use_uncertainty_weighting", False))
-        excluded = set(loss_cfg.get("uncertainty_weighting_exclude_task_types", ["evidential"]))
-        self.kendall_task_names = [t for t, c in config["targets"].items()
+        self.targets_cfg = resolve_targets(config)
+        self.target_names = list(self.targets_cfg)
+        loss_cfg = resolve_loss(config)
+        self.schedules = {n: from_dict(ParamSchedule, c) for n, c in loss_cfg["schedules"].items()}  # parsed once
+        self.scheduled_vars = {n: float(s.start) for n, s in self.schedules.items()}
+        self.loss_weights = {t: float(c["loss_weight"]) for t, c in self.targets_cfg.items()}
+        use_kendall = bool(loss_cfg["use_uncertainty_weighting"])
+        excluded = set(loss_cfg["uncertainty_weighting_exclude_task_types"])
+        self.kendall_task_names = [t for t, c in self.targets_cfg.items()
                                    if use_kendall and c["task_type"] not in excluded]
         self.fixed_task_names = [t for t in self.target_names if t not in self.kendall_task_names]
         self.uncertainty_layer = UncertaintyWeightedLoss(self.kendall_task_names) if self.kendall_task_names else None
         first = next(iter(model.parameters()), None)
         if self.uncertainty_layer is not None and first is not None:  # Kendall log-vars live on the model's device
             self.uncertainty_layer.to(first.device)
-        constraints = list(loss_cfg.get("constraints", [])) + list(config.get("constraints", []))
-        if constraints:
+        if loss_cfg["all_constraints"]:
             raise NotImplementedError("output constraints are not ported yet")
         self.optimizer = self._attach_optimizer(optimizer)
 
@@ -157,7 +170,7 @@ class Trainer:
             yield from self.uncertainty_layer.parameters()
 
     def compute_losses(self, x, y, sample_weight=None, training: bool = False, outputs: dict | None = None):
-        return compute_losses(self.model, x, y, self.config["targets"], self.scheduled_vars, self.loss_weights,
+        return compute_losses(self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights,
                               self.uncertainty_layer, self.kendall_task_names, self.fixed_task_names,
                               sample_weight=sample_weight, training=training, outputs=outputs)
 
@@ -218,12 +231,12 @@ class Trainer:
 
     def _train_epoch(self, x, y, batch_size: int) -> dict[str, float]:
         """One shuffled pass; the mean of every log, weighted by batch size."""
-        sums: dict[str, float] = {}
+        sums: defaultdict[str, float] = defaultdict(float)  # a metric accumulator, not a config read
         dev = self._device()
         for ix in self.batch_indices(len(x), batch_size):
             logs = self.train_step(x[ix].to(dev), {k: v[ix].to(dev) for k, v in y.items()})
             for k, v in logs.items():
-                sums[k] = sums.get(k, 0.0) + v * len(ix)
+                sums[k] += v * len(ix)
         return {k: v / len(x) for k, v in sums.items()}
 
     def _begin_epoch(self, epoch: int, settings: FitSettings, schedules: dict[str, ParamSchedule]) -> float:
@@ -273,7 +286,6 @@ class Trainer:
             raise SeedMismatchError(f"identity.seed ({identity.seed}) != settings.seed ({settings.seed}): the identity "
                                     f"would describe a different run than the one that is trained")
         seed_everything(settings.seed)
-        schedules = {n: from_dict(ParamSchedule, c) for n, c in self.config["loss"].get("schedules", {}).items()}
         higher = SELECTION_METRICS.entry(self.selection_metric).meta["higher_is_better"]
         tracker = BestTracker(settings.early_stop, higher)
         history: list[dict] = []
@@ -291,7 +303,7 @@ class Trainer:
             if deadline is not None and longest and time.monotonic() + longest > deadline:
                 break
             t0 = time.monotonic()
-            lr = self._begin_epoch(epoch, settings, schedules)
+            lr = self._begin_epoch(epoch, settings, self.schedules)
             row = {"epoch": epoch + 1, "lr": lr}
             row.update({f"train_{k}": v for k, v in self._train_epoch(x_train, y_train, settings.batch_size).items()})
             val = self.evaluate(x_val, y_val, settings.batch_size)

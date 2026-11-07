@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from nig_timenet_torch.core.registry import ContractError, UnknownNameError
-from nig_timenet_torch.trainer.tasks import TASK_REGISTRY, register_task_type
+from nig_timenet_torch.trainer.tasks import TASK_REGISTRY, register_task_type, with_defaults
 from tests.oracle import oracle_loader as ol
 
 SCENARIOS = list(ol.load_losses()["scenarios"])
@@ -18,7 +18,8 @@ def run_task(t, scenario):
     cfg = targets_cfg()[t]
     sc = ol.load_losses()["scenarios"][scenario]
     entry = TASK_REGISTRY[cfg["task_type"]]
-    loss, stats = entry["fn"](ol.load_labels()[cfg["true_key"]], ol.load_outputs(), cfg, sc["scheduled_vars"])
+    full = with_defaults(cfg["task_type"], cfg)
+    loss, stats = entry["fn"](ol.load_labels()[cfg["true_key"]], ol.load_outputs(), full, sc["scheduled_vars"])
     assert sorted(stats) == sorted(entry["stat_keys"])
     return loss, stats, sc
 
@@ -45,7 +46,7 @@ def test_regression_task_loss_kinds():
     fn = TASK_REGISTRY["regression"]["fn"]
     y, out = torch.tensor([0.0, 2.0]), {"p": torch.tensor([1.0, 0.0])}
     for kind, expected in [("mse", 2.5), ("mae", 1.5), ("huber", 1.0)]:
-        loss, stats = fn(y, out, {"output_keys": {"pred": "p"}, "loss_fn": kind}, {})
+        loss, stats = fn(y, out, with_defaults("regression", {"output_keys": {"pred": "p"}, "loss_fn": kind}), {})
         torch.testing.assert_close(loss, torch.tensor(expected))
         torch.testing.assert_close(stats["mae"], torch.tensor(1.5))
 
@@ -53,7 +54,8 @@ def test_regression_task_loss_kinds():
 def test_unported_options_raise():
     cfg = dict(targets_cfg()["close_reg"], beta_nll=0.5)
     with pytest.raises(NotImplementedError):
-        TASK_REGISTRY["evidential"]["fn"](ol.load_labels()["y_close_reg"], ol.load_outputs(), cfg, {})
+        fn = TASK_REGISTRY["evidential"]["fn"]
+        fn(ol.load_labels()["y_close_reg"], ol.load_outputs(), with_defaults("evidential", cfg), {})
 
 
 def test_unknown_task_type_raises():
