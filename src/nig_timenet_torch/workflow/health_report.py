@@ -1,4 +1,8 @@
-"""T4 ``health_report(run)``: ONE call that writes every T4 diagnostic of a run next to its checkpoint.
+"""PURPOSE: T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer trace) as JSON and markdown next to the checkpoint.
+TAGS: health report, diagnostics, t-sharp, probe, trainer trace, markdown report
+PITFALLS: ``last_close`` must be the last CLOSE price per row (not a head's own anchor). High/low AUC is information only (direction suspended). The close-head T-sharp verdict is informational pending owner decision O-1.
+
+T4 ``health_report(run)``: ONE call that writes every T4 diagnostic of a run next to its checkpoint.
 
 Input contract (what T5r's job passes): the run folder ``Trainer.fit(run_dir=...)`` wrote (``checkpoint.pt`` with the
 history and the Kendall state, ``best.pt`` / ``best_meta.json``) plus the predictions of the model on VALIDATION:
@@ -38,6 +42,7 @@ class HealthRun:
     predictions: pd.DataFrame
     labels: dict
     anchors: dict
+    last_close: np.ndarray           # last CLOSE price per row (reference of the predicted move in T-sharp)
     codec_state: dict
     probe_points: tuple[str, ...]    # module names inside ``model``; "raw_input" is always added
     probe_labels: tuple[str, ...]    # label keys to probe (a binary label gives AUC, a regression label R^2)
@@ -79,7 +84,8 @@ def build_report(run: HealthRun) -> dict:
     if run.x.shape[0] != n:
         raise ValueError(f"x has {run.x.shape[0]} rows, predictions has {n}")
     return {"run_dir": str(run.run_dir),
-            "targets": target_report(run.predictions, run.labels, anchors=run.anchors, codec_state=run.codec_state),
+            "targets": target_report(run.predictions, run.labels, anchors=run.anchors, last_close=run.last_close,
+                                     codec_state=run.codec_state),
             "nig_floor": nig_floor_hit_report(run.predictions, nig_floors(run.model)),
             "probe": _probe_section(run), "trace": _trace_section(Path(run.run_dir))}
 
@@ -105,17 +111,21 @@ def render_markdown(rep: dict) -> str:
     L = [f"# Health report — {rep['run_dir']}", "", f"Rows: {rep['targets']['n_rows']}", "",
          "## Targets (validation)", "",
          "| head | rank IC (ts) | per-coin rho | AUC (const / shuffled) | T-conf rho | gap CI95 | conf ok | "
-         "range-share | coverage80 | sharp ok |", "|---|---|---|---|---|---|---|---|---|---|"]
+         "std<move share | coverage80 | sharp ok |", "|---|---|---|---|---|---|---|---|---|---|"]
     for t, r in rep["targets"]["targets"].items():
         sk, c, s = r["skill"], r["conf"], r["sharp"]
         cl = sk.get("class")
         auc = "n/a" if cl is None else (f"{_f(cl['auc'])} ({_f(cl['auc_constant_baseline'], 2)} / "
-                                        f"{_f(cl['auc_shuffled_baseline'])})")
+                                        f"{_f(cl['auc_shuffled_baseline'])})"
+                                        + (" info only (direction suspended)" if cl.get("information_only") else ""))
+        ok = s.get("meets_target", "n/a")
+        if not s.get("blocking", True):
+            ok = f"{ok} (informational, O-1)"
         L.append(f"| {t} | {_f(sk['rank_ic_by_timestamp'])} | {_f(sk['spearman_per_coin']['mean'])} | {auc} | "
                  f"{_f(c['decile_error_spearman'])} | [{_f(c['gap_ci95'][0])}, {_f(c['gap_ci95'][1])}] | "
-                 f"{c['meets_target']} | {_f(s.get('share_width_below_range'))} | {_f(s['coverage'])} | "
-                 f"{s.get('meets_target', 'n/a')} |")
-    L += ["", "Baselines: constant confidence scores 0; a zero-width interval scores 1.0 on range-share (read it with "
+                 f"{c['meets_target']} | {_f(s.get('share_std_below_move'))} | {_f(s['coverage'])} | "
+                 f"{ok} |")
+    L += ["", "Baselines: constant confidence scores 0; a zero std scores 1.0 on std<move share (read it with "
           "coverage); constant AUC 0.5.", "", "## NIG floor-hit shares", "",
           "| head | nu | alpha | beta |", "|---|---|---|---|"]
     for t, p in rep["nig_floor"].items():
