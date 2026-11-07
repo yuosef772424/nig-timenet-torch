@@ -33,7 +33,7 @@ class LoaderSettings:
     format: str = "auto"                       # "auto" | "pkl.gz" | "npy_dir"
     mmap: bool = True                          # npy_dir: big arrays stay on disk, only read pages enter memory
     local_dir: str = "auto"                    # "auto": copy to local disk if under /content/drive; "": never; path
-    check_artifact: bool = True                # folder with an `export` manifest block: apply the D1 checks
+    allow_unchecked: bool = False              # rule D1: False = only a contract artifact loads; True = skip the checks
     verify_hashes: bool = False                # re-hash every file of such an artifact (reads it all once)
 
     def __post_init__(self):
@@ -48,7 +48,7 @@ class LoadedData:
     dataset: dict
     path: Path
     format: str                                # "pkl.gz" | "npy_dir"
-    manifest: object | None = None             # artifact.ArtifactManifest when the D1 checks ran
+    manifest: object | None = None             # artifact.ArtifactManifest; None only for an allow_unchecked load
 
 
 def _is_dataset_dir(p: Path) -> bool:
@@ -101,20 +101,31 @@ def _read_pickle(path: Path) -> dict:
 
 
 def load_dataset(settings: LoaderSettings | None = None) -> LoadedData:
-    """Resolve, copy to local disk if asked, read, and (for an artifact folder) check."""
+    """Resolve, copy to local disk if asked, read, and check (rule D1).
+
+    By default ONLY a contract artifact folder (``export`` manifest block, every D1 field consistent with the data)
+    loads; anything else (a ``.pkl.gz``, a plain ``npy_dir`` without the block) raises ``ArtifactError``. Skipping
+    the check is explicit: ``allow_unchecked=True`` (tests, fixtures, old files) lets a source WITHOUT a manifest
+    through (``manifest`` is None); a folder that has the export block is checked either way."""
     settings = settings or LoaderSettings()
     path = resolve_dataset_path(settings.directory, settings.name, settings.format)
     if not path.is_dir():
+        if not settings.allow_unchecked:
+            raise artifact.ArtifactError(
+                f"{path}: a pickle file carries no D1 manifest (rule D1: source commit, coin list, sealed coins "
+                f"excluded, time seal); export it as an artifact folder, or pass allow_unchecked=True")
+        if settings.verify_hashes:
+            raise ValueError(f"{path}: verify_hashes needs an artifact manifest (export block); a pickle has none")
         return LoadedData(_read_pickle(path), path, "pkl.gz")
     target = _local_target(path, settings.local_dir)
     if target is not None:
         path = npy_dir.localize(path, target)
-    manifest_has_export = "export" in json.loads((path / "manifest.json").read_text())
-    if settings.check_artifact and manifest_has_export:
-        art = artifact.load_artifact(path, mmap=settings.mmap)
+    has_export = "export" in json.loads((path / "manifest.json").read_text())
+    if has_export or not settings.allow_unchecked:
+        art = artifact.load_artifact(path, mmap=settings.mmap)      # raises ArtifactError without a valid export block
         if settings.verify_hashes:
             artifact.verify_hashes(path)
         return LoadedData(art.dataset, path, "npy_dir", art.manifest)
-    if settings.verify_hashes and not manifest_has_export:
+    if settings.verify_hashes:
         raise ValueError(f"{path}: verify_hashes needs an artifact manifest (export block); this folder has none")
     return LoadedData(npy_dir.load(path, mmap=settings.mmap), path, "npy_dir")

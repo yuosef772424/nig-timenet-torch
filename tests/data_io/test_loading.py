@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from nig_timenet_torch.data_io import npy_dir
+from nig_timenet_torch.data_io.artifact import ArtifactError
 from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset, resolve_dataset_path
 from tests.contract_doc import DATASET_DIR
 from tests.data_io.test_artifact import COMMIT, write_manifest
@@ -41,8 +42,8 @@ def test_a_base_name_gets_latest_added_and_a_full_name_is_read_as_written(tmp_pa
     _pkl(tmp_path / "preprocessing_outputvjd_284027.pkl.gz", {"tag": "full"})
     for name in ("preprocessing_output_20261027", "preprocessing_output_20261027_latest",
                  "preprocessing_output_20261027_latest.pkl.gz"):
-        assert load_dataset(LoaderSettings(str(tmp_path), name)).dataset == {"tag": "latest"}
-    got = load_dataset(LoaderSettings(str(tmp_path), "preprocessing_outputvjd_284027.pkl.gz"))
+        assert load_dataset(LoaderSettings(str(tmp_path), name, allow_unchecked=True)).dataset == {"tag": "latest"}
+    got = load_dataset(LoaderSettings(str(tmp_path), "preprocessing_outputvjd_284027.pkl.gz", allow_unchecked=True))
     assert got.dataset == {"tag": "full"} and got.format == "pkl.gz"
     absolute = resolve_dataset_path(".", str(tmp_path / "preprocessing_outputvjd_284027.pkl.gz"))
     assert absolute.name.endswith("284027.pkl.gz")
@@ -97,16 +98,49 @@ def test_local_copy_is_made_reused_and_refreshed(tmp_path):
     assert npy_dir.localize(tmp_path / "src", tmp_path / "src") == tmp_path / "src"
 
 
+def test_unchecked_sources_are_refused_by_default_rule_d1(tmp_path):
+    """The branch loaded a plain npy_dir and any pickle without a single D1 check; now that needs an explicit flag."""
+    assert LoaderSettings().allow_unchecked is False
+    shutil.copytree(DATASET_DIR, tmp_path / "plain")
+    with pytest.raises(ArtifactError, match="no 'export' block"):
+        load_dataset(LoaderSettings(str(tmp_path), "plain"))
+    _pkl(tmp_path / "old_latest.pkl.gz", {"tag": "old"})
+    with pytest.raises(ArtifactError, match="rule D1.*allow_unchecked=True"):
+        load_dataset(LoaderSettings(str(tmp_path), "old"))
+    with pytest.raises(ArtifactError, match="rule D1"):
+        load_dataset(LoaderSettings(str(tmp_path), "old_latest.pkl.gz"))
+    # explicit opt-out: loads, and says so (no manifest)
+    plain = load_dataset(LoaderSettings(str(tmp_path), "plain", allow_unchecked=True))
+    assert plain.manifest is None and plain.format == "npy_dir"
+    old = load_dataset(LoaderSettings(str(tmp_path), "old", allow_unchecked=True))
+    assert old.manifest is None and old.dataset == {"tag": "old"}
+    # a checked source carries its manifest, with or without the flag
+    _artifact(tmp_path / "good")
+    for flag in (False, True):
+        got = load_dataset(LoaderSettings(str(tmp_path), "good", allow_unchecked=flag))
+        assert got.manifest.source_commit == COMMIT
+
+
+def test_an_invalid_export_block_is_refused_even_with_allow_unchecked(tmp_path):
+    _artifact(tmp_path / "bad")
+    write_manifest(tmp_path / "bad", coins=["ZZZ"])
+    for flag in (False, True):
+        with pytest.raises(ArtifactError, match="differ from the dataset"):
+            load_dataset(LoaderSettings(str(tmp_path), "bad", allow_unchecked=flag))
+
+
 def test_a_plain_npy_dir_without_export_block_and_the_failure_modes(tmp_path):
     shutil.copytree(DATASET_DIR, tmp_path / "plain")
-    assert set(load_dataset(LoaderSettings(str(tmp_path), "plain")).dataset) >= {"X_1h", "last_candles"}
     with pytest.raises(ValueError, match="verify_hashes needs"):
-        load_dataset(LoaderSettings(str(tmp_path), "plain", verify_hashes=True))
+        load_dataset(LoaderSettings(str(tmp_path), "plain", verify_hashes=True, allow_unchecked=True))
+    _pkl(tmp_path / "old_latest.pkl.gz", {"tag": "old"})
+    with pytest.raises(ValueError, match="verify_hashes needs"):
+        load_dataset(LoaderSettings(str(tmp_path), "old", verify_hashes=True, allow_unchecked=True))
     with pytest.raises(ValueError, match="format must be"):
         LoaderSettings(format="zip")
     _pkl(tmp_path / "list_latest.pkl.gz", [1, 2])
     with pytest.raises(ValueError, match="expected a dataset dict"):
-        load_dataset(LoaderSettings(str(tmp_path), "list"))
+        load_dataset(LoaderSettings(str(tmp_path), "list", allow_unchecked=True))
     _artifact(tmp_path / "b")
     np.save(tmp_path / "b" / "y_close_reg.npy", np.zeros(3, "float32"))
     with pytest.raises(ValueError):
