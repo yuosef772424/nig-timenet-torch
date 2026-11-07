@@ -21,7 +21,7 @@ artifacts from it through its own tools.
 ## B. Changes and defaults
 | # | Rule | Why | Enforced by |
 |---|---|---|---|
-| B1 | A new option's default reproduces the old behaviour exactly; a default change (and, since T1, a NEW default) needs an owner decision file `docs/decisions/D-nnn-*.md` in the SAME PR, and the PR title/description lists every behaviour change. | TF PR #62 changed 3 defaults under an "add profiler" title | `tests/test_decisions.py` + `tests/pins/defaults.json`: a changed or removed default without a `docs/decisions/D-nnn-*.md` line fails; a new default must be pinned |
+| B1 | A new option's default reproduces the old behaviour exactly; a default change (and, since T1, a NEW default) needs an owner decision file `docs/decisions/D-nnn-*.md` in the SAME PR, and the PR title/description lists every behaviour change. The SESSION writes the decision file and cites the owner's instruction (step prompt or message) as the decision; the owner confirms by merging. | TF PR #62 changed 3 defaults under an "add profiler" title | `tests/test_decisions.py` + `tests/pins/defaults.json`: a changed or removed default without a `docs/decisions/D-nnn-*.md` line fails; a new default must be pinned; CI step `python -m tests.pin_diff origin/<base>` fails a PR whose pin-file change has no decision line in that PR |
 | B2 | One change type per commit (`feat`/`fix`/`refactor`/`docs`/`test`/`exp`); a refactor proves equal outputs. | TF hardening discipline (kept, it worked) | manual + review |
 | B3 | A fix of a CLASS of problem lands with a guard test that scans for the class, not only the instance. | TF S02: first pass fixed 5 of 16 sites; the AST guard caught the rest | manual (review asks "where is the guard?") |
 | B4 | Every learned-state transform (normalizer, scaler, target codec, calibrator) is ONE registered component (`fit` on train only -> state, `transform`, `inverse`), stored with the model; consumers call it. Unknown names raise. | TF "one component, one interface" (kept) | `core/registry.py` + tests |
@@ -48,7 +48,7 @@ artifacts from it through its own tools.
 ## E. Runs and infrastructure
 | # | Rule | Why | Enforced by |
 |---|---|---|---|
-| E1 | Every Colab job asserts the device it expects and writes `device`, torch/CUDA versions and GPU name into its output; a GPU job on CPU fails. | TF: months of "GPU" runs were on CPU (`tensorflow-cpu` pin) | job entry + output validator (built in T3) |
+| E1 | Every Colab job asserts the device it expects and writes `device`, torch/CUDA versions and GPU name into its output; a GPU job on CPU fails, and a CPU job asserts `cpu` and writes the same record. The job's `device` and its config's `device` must be the same. | TF: months of "GPU" runs were on CPU (`tensorflow-cpu` pin) | job entry + output validator (built in T3) |
 | E2 | Run outputs are published so the next session can read them without the owner copying anything; a failed publish keeps a retry path (`republish`). Never depend on `/tmp` surviving a long job. | TF profile-005: results stuck on Drive (askpass.sh in /tmp vanished) | runner tests (built in T3) |
 | E3 | The fast test suite runs in < 5 minutes on CPU; slower tests are marked `slow` and run in CI only. Step sessions run the tests of what they touched. | TF: full suite > 50 min locally, died on session restart | `tests/conftest.py` + `tests/budget.py` fail the run when the non-`slow` tests exceed 300 s (or one exceeds 60 s); CI prints `--durations` |
 | E4 | Normal Python imports only (no shared-namespace loaders, no notebook globals). Notebooks are thin runners. | TF W1: implicit namespace edges made changes slow | `tests/test_package_imports.py` |
@@ -61,9 +61,9 @@ here the counts start near zero.
 
 | # | Rule | Why (TF incident) | Enforced by |
 |---|---|---|---|
-| G1 | One source per concept: heads, targets and output names are defined once (`HeadSpec` / schema); every other list is derived from it. | TF C1: "a head" was defined in 4 vocabularies; each addition was an N-file edit | `tests/test_rules_growth.py::test_g1_*`: ratchet on output-name literals outside `model/heads.py` |
-| G2 | No branching on a mode name (`if mode == "..."`): behaviour comes from a registered component. | TF C4: 20+ `entry_range` branches | `tests/test_rules_growth.py::test_g2_*`: ratchet on `== "<registered name>"` comparisons |
-| G3 | Size budget: a module <= 400 lines, a function <= 80 lines; exceeding needs a one-line reason in the ratchet file. | TF: 700-line modules, a 180-line wiring function | `tests/test_rules_growth.py::test_g3_*`: module size exceptions listed with a reason, function ratchet |
+| G1 | One source per concept: heads, targets and output names are defined once (`HeadSpec` / schema); every other list is derived from it. Output names are spelled only in `model/heads.py` (`HeadSpec`, `HEAD_REGISTRY`). | TF C1: "a head" was defined in 4 vocabularies; each addition was an N-file edit | `tests/test_rules_growth.py::test_g1_*`: ratchet on output-name literals outside `model/heads.py` |
+| G2 | No branching on a mode name (`if mode == "..."`): behaviour comes from a registered component. | TF C4: 20+ `entry_range` branches | `tests/test_rules_growth.py::test_g2_*`: ratchet on `== "<mode name>"` comparisons, where a mode name is a registered name or a member of a declared vocabulary (`ENCODERS`, `LEVEL_NORMS`, `*_MODES`, `*_KINDS`) |
+| G3 | Size budget: a module <= 400 lines, a function <= 80 lines; exceeding needs an entry `{max_lines, why}` in the ratchet file; the module may not grow past `max_lines`. | TF: 700-line modules, a 180-line wiring function | `tests/test_rules_growth.py::test_g3_*`: module size exceptions with a line cap and a reason, function ratchet |
 | G4 | No dead setting: every settings field is read by code. | TF C2: 19 of 101 config keys read nowhere | `tests/test_rules_growth.py::test_g4_*`: every `*Settings` / `*Config` dataclass field must be read as `obj.field` elsewhere |
 | G5 | One system per job: one trainer, one evaluation path, one prediction table. New work extends them, never runs beside them. | TF: `cross_asset/` became a second trainer; evaluation had two producers | `tests/test_rules_growth.py::test_g5_*`: no `.step()` / `.backward()` / `.zero_grad()` outside `trainer/`, one `Trainer` class; plus review |
 | G6 | Notebooks and studies are runners: no `def` in notebooks; a study never imports another study; shared code is lifted into the package. | TF: logic piled up in notebooks; research scripts copied package code | `tests/test_rules_growth.py::test_g6_*` (ratchet on notebook `def`s; no study imports a study) |
@@ -73,7 +73,7 @@ here the counts start near zero.
 ## F. Self-correction (why these rules do not decay)
 | # | Rule | Enforced by |
 |---|---|---|
-| F1 | Every session appends real obstacles to `docs/friction_log.csv` (what, where, minutes lost, root cause, fix idea). | manual |
+| F1 | Every session (a fix PR included) appends real obstacles to `docs/friction_log.csv` (what, where, minutes lost, root cause, fix idea). | manual |
 | F2 | `docs/bottlenecks.csv` is the one register of what limits the project (model-quality / runtime / development): code location, evidence, cause status (verified / suspected / unverified), difficulty and why, step that addresses it. Rows are never deleted; wrong rows are marked `rejected` with the reason. | manual |
 | F3 | R-REVIEW every 5 merged PRs (a short session): read friction + bottlenecks + suggestions, rank open bottlenecks by gain / difficulty, reorder ROADMAP, add a rule for any repeated friction, mark each new suggestions.csv row accepted (-> a ROADMAP step or a rule) or declined (with why), retire rules that cost more than they save. Each review appends a dated section to `docs/reviews.md`. | STATUS row counts PRs since the last review |
 | F4 | Every rule row above has a "why"; a new rule without an incident or a check is not added. | review |
