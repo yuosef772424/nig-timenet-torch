@@ -4,6 +4,7 @@ Written by the H0 audit (`docs/hardening/AUDIT-2026-11.md`, findings HF-01..HF-3
 H0 (this audit) -> H0b (planner: read PR #25 `feat/ar-stream`, decide what to adopt) -> H0c (planner: the
 post-hardening ROADMAP) -> H1 ... H6, one builder session at a time, one PR each, merged before the next starts.
 H0b may reorder or drop packages; every package below lists the files PR #25 also changes so H0b can decide.
+**Final order (H0c, 2026-11-07): see "Final campaign order" at the end of this file.**
 
 Rules for every package (from `docs/RULES.md`):
 - one change type per commit (B2 types: `feat` / `fix` / `refactor` / `docs` / `test` / `exp`); a file move is its own
@@ -351,7 +352,8 @@ Written by H0b (`docs/hardening/BRANCH_AR_STREAM.md`, full evaluation of PR #25 
 porting into new PRs (commit messages say "ported from feat/ar-stream <sha>"); PR #25 is not merged. Packages: **I1** loading
 and config foundations, **I2** native data pipeline, **I3** run steps (flat single split, `jobs/baseline.py` becomes a thin
 entry), **I4** rolling + panel on the run steps (optional), **I5** evaluation battery + adapter for our `PredictionTable`,
-**I7** ar-stream experimental package (optional, only on H0c's go). Campaign order now:
+**I7** ar-stream experimental package (optional, only on H0c's go). Campaign order proposed by H0b (superseded by
+"Final campaign order" below):
 `H0b -> H0c -> I1 -> H2 -> H1 -> I5 -> I2 -> H3 -> H4 -> I3 -> H5 -> H6 -> (I4) -> (I7)`.
 
 What changes in the H packages:
@@ -367,9 +369,31 @@ What changes in the H packages:
 
 ---
 
+## Final campaign order (H0c, 2026-11-07)
+
+`H0 -> H0b -> H0c -> T4b -> I1 -> H2 -> H1 -> I5 -> I2 -> H3 -> H4 -> I3 -> H5 -> H6`, then the model plan in
+`docs/ROADMAP.md` (Block 2 onward). One builder session per package, merged before the next starts.
+
+- **T4b first** (a ROADMAP `fix`, S): the T-sharp reference in `eval/target_report.py` is wrong (owner correction,
+  2026-11-07: per head, std vs the head's own predicted move from the last close). It must land before any T5r number
+  is read, it is independent of the H/I packages, and its one overlap (the job passes `last_close`;
+  `jobs/baseline.py:150,164`) is a two-line rebase for H2 (which rewrites those anchor lines for HF-12 anyway).
+- **I4 split, not run in the campaign.** Its rolling half (rolling folds over the run steps through the one
+  `Trainer`) becomes ROADMAP F2 (walk-forward stability before the final evaluation; owner decision O-2), built after
+  T8 when there is a model worth folding. Its panel half (grid panel model, panel tasks, within-day IC selection) is
+  parked in ROADMAP "Later" 1: T6-T8 and the memorization study do not need it, it adds a second sample shape to
+  every H3/H4 registry, and the TF slot-panel idea must first be checked against failure-registry row F-0035.
+- **I7 not opened.** Reasons: (1) the ar-stream `log_sigma` is a heuristic L1 pull toward `log1p(|error| / vol)`, not a
+  likelihood, with no coverage test (BRANCH_AR_STREAM section 4): it is not a better route to the confidence and
+  uncertainty targets than the NIG heads plus the methods of `docs/MODEL_DEV_PROTOCOL.md` section 4; (2) it has no
+  result on real data (B-028); (3) it brings a second training loop (rule G5), 128 new defaults and ~1.4k source lines (L);
+  (4) its useful ideas are harvested anyway: the czar / Cauchy-type loss is ROADMAP T6b switch 6, and the battery
+  evaluation style arrives with I5. Reopen condition (ROADMAP "Later" 2): the confidence gate fails for every method
+  of protocol section 4, or the owner asks. Keep the branch as `archive/feat-ar-stream`.
+
 ## Later (does not fit six packages; rows in `docs/bottlenecks.csv` / `docs/suggestions.csv`)
 - TASK_WEIGHTINGS registry for Kendall and alternatives (HF-22, B-036).
 - Move `identity_for_run` next to the run steps once H0b settles them (HF-24).
 - Default artifact path from `NIG_DRIVE_ROOT`; one source for the job's device (`job.device` vs `config.device`)
   (HF-17).
-- Train-loop timing separate from validation and trace (HF-37), with the trainer improvements of H0c.
+- Train-loop timing separate from validation and trace (HF-37): scheduled in ROADMAP TR1 (log-only switch 6).
