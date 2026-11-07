@@ -23,7 +23,7 @@ One builder session per package, in this order, each merged before the next. T5r
 | I2 | Native data pipeline | merged | [#34](https://github.com/yuosef772424/nig-timenet-torch/pull/34) | `data/` ported (no ar_windows/panel); TF parity bit-exact; native 4h artifact test closes HF-15; D-010 (155 keys) |
 | H3 | Model assembly through registries | merged | [#35](https://github.com/yuosef772424/nig-timenet-torch/pull/35) | `model/encoders.py` ENCODERS, heads via HEAD_REGISTRY, `model/contract.py` (D-011), health report for every architecture; G1 0, G2 1, G3 0, G7 0, C2 0 |
 | H4 | Strict trainer config | merged | [#36](https://github.com/yuosef772424/nig-timenet-torch/pull/36) | `trainer/targets.py`; unknown keys raise; D-012; `.get` ratchet 22 -> 0; direction AUCs not selectable |
-| I3 | Run steps (flat single split) | PR open | PR_LINK | `workflow/run.py` steps; `jobs/baseline.py` 107 lines (config + 25-line main); battery in the run (cost per side, p_dir); `notebooks/main.ipynb`; D-013; HF-23, B-035 closed |
+| I3 | Run steps (flat single split) | PR open | [#38](https://github.com/yuosef772424/nig-timenet-torch/pull/38) | `workflow/run.py` steps; `jobs/baseline.py` 107 lines (config + 25-line main); battery in the run (cost per side, p_dir); `notebooks/main.ipynb`; D-013; HF-23, B-035 closed |
 | H5 / H6 | Rule and test tooling / facts refresh | todo | | |
 
 ## Roadmap (`docs/ROADMAP.md`, rules `docs/RULES.md`, protocol `docs/MODEL_DEV_PROTOCOL.md`)
