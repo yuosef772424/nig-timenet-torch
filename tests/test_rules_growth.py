@@ -42,6 +42,11 @@ def test_g2_no_branching_on_registered_names():
     _ratchet("G2_registered_name_comparisons", scan.mode_name_comparisons())
 
 
+def test_h4_no_config_reads_with_a_code_default():
+    """H4: trainer and jobs read config values strictly; defaults live in registries / strict dataclasses (rule B5)."""
+    _ratchet("H4_config_get_defaults_in_trainer_and_jobs", scan.config_get_defaults())
+
+
 def test_g3_size_budget():
     """G3: module <= 400 lines, function <= 80 lines; a module over budget needs a reason in ratchets.json."""
     over_modules = sorted(m for m, n in scan.module_lines().items() if n > MODULE_LINES)

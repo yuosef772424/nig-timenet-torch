@@ -24,6 +24,7 @@ Outputs: ``baseline_summary.json``, ``health_report.json``, ``health_report.md``
 The training data stay on the CPU and move to the model's device batch by batch (B-019).
 """
 
+import copy
 import json
 import os
 import shutil
@@ -49,13 +50,15 @@ from nig_timenet_torch.data_io.target_codec import TARGET_CODECS
 from nig_timenet_torch.eval.target_report import target_report
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings, build_model
 from nig_timenet_torch.model.heads import head_spec
+from nig_timenet_torch.trainer.targets import targets_config
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
 from nig_timenet_torch.workflow.health_report import REPORT_JSON, REPORT_MD, HealthRun, health_report
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
 
 __all__ = ["BaselineConfig", "CONFIG", "DEFAULT_ARTIFACT", "DEFAULT_HEALTH_MAX_ROWS", "SUMMARY", "TEST_REPORT",
-           "anchors_by_name", "codec_state", "epoch_line", "evaluate_test", "input_key", "main", "model_settings",
-           "price_targets", "split_bounds", "stride_rows", "test_lines", "trainer_config"]
+           "HEAD_KINDS", "LAMBDA_SCHEDULES", "anchors_by_name", "codec_state", "epoch_line", "evaluate_test",
+           "input_key", "main", "model_settings", "price_targets", "split_bounds", "stride_rows", "test_lines",
+           "trainer_config"]
 
 DEFAULT_ARTIFACT = "/content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1"
 DEFAULT_HEALTH_MAX_ROWS = 100_000
@@ -147,21 +150,20 @@ def anchors_by_name(last_candles: np.ndarray, idx: np.ndarray, targets) -> dict:
     return {t: lc[idx, LAST_COLUMN_INDEX[f"last_{t}"]] for t in targets}
 
 
+HEAD_KINDS = ("nig_regression", "binary_classification")
+LAMBDA_SCHEDULES = {"lambda_reg": {"start": 0.0, "end": 0.05, "warmup_epochs": 5, "schedule": "linear"},
+                    "lambda_calib": {"start": 0.0, "end": 0.1, "warmup_epochs": 5, "schedule": "cosine"}}
+
+
 def trainer_config(targets, label_smoothing: float = LABEL_SMOOTHING) -> dict:
-    """The oracle's trainer config (reference/data_default/config.json) with the anti-memorization label smoothing."""
-    tasks = {}
-    for t in targets:
-        reg, cls = head_spec("nig_regression", t), head_spec("binary_classification", t)
-        tasks[reg.name] = {"true_key": reg.label_key, "task_type": reg.task_type, "output_keys": reg.output_keys,
-                             "use_calibration_loss": True, "lambda_reg_var": "lambda_reg",
-                             "lambda_calib_var": "lambda_calib"}
-        tasks[cls.name] = {"true_key": cls.label_key, "task_type": cls.task_type, "binary": True,
-                             "output_keys": cls.output_keys, "label_smoothing": label_smoothing}
-    return {"targets": tasks,
+    """The oracle's trainer config (reference/data_default/config.json) with the anti-memorization label smoothing;
+    the per-target part comes from ``trainer.targets.targets_config`` (HeadSpec), only the options are the job's."""
+    options = {"nig_regression": {"use_calibration_loss": True, "lambda_reg_var": "lambda_reg",
+                                  "lambda_calib_var": "lambda_calib"},
+               "binary_classification": {"binary": True, "label_smoothing": label_smoothing}}
+    return {"targets": targets_config({t: list(HEAD_KINDS) for t in targets}, options_by_kind=options),
             "loss": {"use_uncertainty_weighting": True, "uncertainty_weighting_exclude_task_types": ["evidential"],
-                     "schedules": {"lambda_reg": {"start": 0.0, "end": 0.05, "warmup_epochs": 5, "schedule": "linear"},
-                                   "lambda_calib": {"start": 0.0, "end": 0.1, "warmup_epochs": 5,
-                                                    "schedule": "cosine"}}},
+                     "schedules": copy.deepcopy(LAMBDA_SCHEDULES)},
             "constraints": []}
 
 
@@ -200,13 +202,13 @@ def epoch_line(row: dict, epochs: int) -> str:
         return "-" if v is None else f"{v:.4f}"
     secs = row.get("trace_epoch_seconds")
     return (f"epoch {row['epoch']}/{epochs}  train_loss {f('train_total_loss')}  val_loss {f('val_total_loss')}  "
-            f"val_selection {f('val_selection_metric')}  lr {row.get('lr', 0):.2e}"
+            f"val_selection {f('val_selection_metric')}  lr {row['lr']:.2e}"
             + ("" if secs is None else f"  {secs:.0f}s"))
 
 
 def _tensors(dataset: dict, idx: np.ndarray) -> tuple[torch.Tensor, dict]:
     x = torch.as_tensor(np.asarray(dataset[input_key(dataset)])[idx], dtype=torch.float32)
-    kinds = ("nig_regression", "binary_classification")
+    kinds = HEAD_KINDS
     keys = [head_spec(kind, t).label_key for t in price_targets(dataset) for kind in kinds]
     y = {k: torch.as_tensor(np.asarray(dataset[k])[idx], dtype=torch.float32) for k in keys}
     return x, y

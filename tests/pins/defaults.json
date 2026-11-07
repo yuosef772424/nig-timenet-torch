@@ -1,5 +1,5 @@
 {
- "fingerprint": "a0b4fce77220e6e1",
+ "fingerprint": "fe1b8a08cc6f1064",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -488,12 +488,20 @@
   "nig_timenet_torch.trainer.schedules.ParamSchedule(warmup_epochs)": "0",
   "nig_timenet_torch.trainer.schedules.cosine_warm_restarts(cycle_length)": "10",
   "nig_timenet_torch.trainer.schedules.cosine_warm_restarts(cycle_mult)": "1.5",
+  "nig_timenet_torch.trainer.targets.LOSS_DEFAULTS.constraints": "[]",
+  "nig_timenet_torch.trainer.targets.LOSS_DEFAULTS.schedules": "{}",
+  "nig_timenet_torch.trainer.targets.LOSS_DEFAULTS.uncertainty_weighting_exclude_task_types": "['evidential']",
+  "nig_timenet_torch.trainer.targets.LOSS_DEFAULTS.use_uncertainty_weighting": "False",
+  "nig_timenet_torch.trainer.targets.TARGET_DEFAULTS.flood_level": "None",
+  "nig_timenet_torch.trainer.targets.TARGET_DEFAULTS.loss_weight": "1.0",
+  "nig_timenet_torch.trainer.targets.targets_config(options_by_kind)": "None",
   "nig_timenet_torch.trainer.tasks.classification_task_loss(sample_weight)": "None",
   "nig_timenet_torch.trainer.tasks.compute_confidence_calibration_loss(sample_weight)": "None",
   "nig_timenet_torch.trainer.tasks.evidential_task_loss(sample_weight)": "None",
   "nig_timenet_torch.trainer.tasks.nig_regularizer(normalize)": "False",
   "nig_timenet_torch.trainer.tasks.nig_regularizer(stop_grad)": "True",
   "nig_timenet_torch.trainer.tasks.register_task_type(config_keys)": "()",
+  "nig_timenet_torch.trainer.tasks.register_task_type(default_options)": "None",
   "nig_timenet_torch.trainer.tasks.register_task_type(supports_sample_weight)": "False",
   "nig_timenet_torch.trainer.tasks.regression_task_loss(sample_weight)": "None",
   "nig_timenet_torch.trainer.tracker.EarlyStopSettings(ema_beta)": "0.7",
@@ -564,6 +572,17 @@
   "registry:architecture:tiny_mlp.default_config.price_targets": "['high', 'low', 'close']",
   "registry:head:binary_classification.default_weight": "1.0",
   "registry:head:multiclass_classification.default_weight": "1.0",
-  "registry:head:nig_regression.default_weight": "1.0"
+  "registry:head:nig_regression.default_weight": "1.0",
+  "registry:task:classification.default_options.binary": "True",
+  "registry:task:classification.default_options.label_smoothing": "0.0",
+  "registry:task:evidential.default_options.alpha_floor_straight_through": "False",
+  "registry:task:evidential.default_options.beta_nll": "0.0",
+  "registry:task:evidential.default_options.huber_weight": "0.0",
+  "registry:task:evidential.default_options.lambda_calib_var": "'lambda_calib'",
+  "registry:task:evidential.default_options.lambda_reg_var": "'lambda_reg'",
+  "registry:task:evidential.default_options.normalize_reg": "False",
+  "registry:task:evidential.default_options.use_calibration_loss": "False",
+  "registry:task:regression.default_options.huber_delta": "1.0",
+  "registry:task:regression.default_options.loss_fn": "'mse'"
  }
 }

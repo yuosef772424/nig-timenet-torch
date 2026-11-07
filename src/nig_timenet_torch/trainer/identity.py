@@ -1,4 +1,10 @@
-"""RunIdentity: a persisted, immutable run fingerprint so resume-with-a-changed-objective fails loudly (C3;
+"""PURPOSE: RunIdentity: the persisted, immutable fingerprint of a run (settings hash incl. the WHOLE trainer config,
+    seed, data fingerprint, code sha); ``check_resume`` refuses a resume whose identity changed.
+TAGS: run identity, fingerprint, resume, settings hash, checkpoint, ResumeMismatchError
+PITFALLS: the trainer config is hashed AS GIVEN: a default added to it (or a key renamed) changes every identity and
+    orphans existing runs; tests/trainer/test_trainer_config_pins.py pins the baseline fingerprint.
+
+RunIdentity: a persisted, immutable run fingerprint so resume-with-a-changed-objective fails loudly (C3;
 BUILD_PLAN.md P23). Field names follow crypto-signal-prediction docs/research/hardening/audit_2026-10-31.md C3;
 fresh implementation (no TF code). settings_hash covers every objective/arch/optimizer/data setting except
 epochs and verbosity, so RunIdentity has no epochs field."""
@@ -59,7 +65,8 @@ class RunIdentity:
         if unknown:
             raise ValueError(f"unknown RunIdentity fields: {sorted(unknown)}")
         d = dict(d)
-        d["parent_hashes"] = tuple(d.get("parent_hashes", ()))
+        if "parent_hashes" in d:  # absent -> the dataclass default ()
+            d["parent_hashes"] = tuple(d["parent_hashes"])
         return cls(**d)
 
     def fingerprint(self) -> str:
