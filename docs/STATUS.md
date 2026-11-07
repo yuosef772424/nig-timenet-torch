@@ -25,7 +25,7 @@ in that batch starts.
 States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`.
 
 ## Roadmap 2026-11 (`docs/ROADMAP.md`, rules `docs/RULES.md`)
-Model work moved here from TF (owner, 2026-11-02). PRs since last R-REVIEW: 10 (R0, T1, T2, T3, T4, T5r job #20, fixes #21-#23, this one): R-REVIEW is due.
+Model work moved here from TF (owner, 2026-11-02). PRs since last R-REVIEW: 0 (first review 2026-11-07 in H0, `docs/reviews.md`; next after 5 merged PRs).
 
 | Step | Title | State | PR / job | Note |
 |---|---|---|---|---|
@@ -34,7 +34,22 @@ Model work moved here from TF (owner, 2026-11-02). PRs since last R-REVIEW: 10 (
 | T2 | Real data in (TF export + manifest lock fields) | merged | [#17](https://github.com/yuosef772424/nig-timenet-torch/pull/17) + TF [#65](https://github.com/yuosef772424/crypto-signal-prediction/pull/65) | `data_io/artifact.py` loader, `build_run_identity`, `SeedMismatchError`. Owner Colab run 2026-11-03 (TF `c0634ba`, torch `b34579c`): artifact `preprocessing_output_1` = 2,520,913 of 3,460,789 windows, 535 coins, max_bar_time 2026-09-26T20:00Z, sealed present 183/183 (all excluded), data_sha256 `c572b1b36960`, hash check passed. B-020 partly closed: that `last_candles` column 3 is the bar OPEN time is still unproven. The 183 sealed coins were all inside the TF main data, so TF results (profile-004 incl.) are not a clean holdout (B-022) |
 | T3 | Colab runner (device assert, republish) | merged | [#18](https://github.com/yuosef772424/nig-timenet-torch/pull/18) + TF [#66](https://github.com/yuosef772424/crypto-signal-prediction/pull/66) | one thin notebook (setup / data / runner) over `src/nig_timenet_torch/colab/` + `jobs/`; device asserted AND validated (E1); bundle on Drive before push, `republish`, nothing in `/tmp` (E2); `identity_for_run` builds RunIdentity in one place; TF #66 = `--dataset *.pkl.gz`. first Colab runs 2026-11-03: setup, export (fingerprint `c572b1b36960`), device and publish work on a T4; 64 new defaults in D-002 |
 | T4 | Diagnostics on the targets (`health_report`) | merged | [#19](https://github.com/yuosef772424/nig-timenet-torch/pull/19) | `workflow/health_report.py` (`HealthRun` -> JSON + md in the run folder), `eval/target_report.py` (T-skill/T-conf/T-sharp/coverage), `eval/nig_floor.py`, probe with raw next to every layer, `FitSettings.trace` (default off, log-only); 4 new metrics; 9 defaults in D-003; G8 ratchet 2 -> 1. trace grad-share needed cuDNN off on GPU (#23) |
-| T5r | Baseline on GPU (`baseline-001`) | in progress | [#20](https://github.com/yuosef772424/nig-timenet-torch/pull/20), fixes #21 (4h input), #22 (split bounds when `split_dates` is None), #23 (progress lines, cuDNN eval backward), this PR (test-split evaluation, D-005) | queue `colab-queue` = `baseline-001-s0`, 5 epochs (owner), rerun true. Three Colab runs failed before a full result (each fixed); one epoch trained on the GPU. No result yet; step time unmeasured |
+| T5r | Baseline on GPU (`baseline-001`) | in progress | [#20](https://github.com/yuosef772424/nig-timenet-torch/pull/20), fixes #21 (4h input), #22 (split bounds when `split_dates` is None), #23 (progress lines, cuDNN eval backward), #24 (test-split evaluation, D-005) | queue `colab-queue` = `baseline-001-s0`, 5 epochs (owner), rerun true. Three Colab runs failed before a full result (each fixed); one epoch trained on the GPU. No result yet; step time unmeasured |
 | T6 | Switches (direct_wide, selection, confidence, NIG floor, interval scale) | todo | | |
 | T7r | Baseline vs all switches (`all-001`) | todo | | needs T5r, T6 |
 | T8 | Ablate or diagnose, fix, propose default | todo | | needs T7r |
+
+## Hardening 2026-11 (`docs/hardening/PLAN.md`, findings `docs/hardening/AUDIT-2026-11.md`)
+Runs before T6; one builder session per package, in order, after H0b and H0c. T5r job runs may continue meanwhile.
+
+| Step | Title | State | PR | Note |
+|---|---|---|---|---|
+| H0 | Audit + plan + first R-REVIEW | PR open | | docs only; 37 findings HF-01..HF-37 |
+| H0b | Read PR #25 (`feat/ar-stream`), decide what to adopt | todo | | planner; file overlap in the audit, section F |
+| H0c | Post-hardening ROADMAP | todo | | planner; model notes in the audit, "For H0c" |
+| H1 | Card convention + navigation map | todo | | rule B7 + a card check that fails on touched card-less modules |
+| H2 | Job runs read the artifact; GPU smoke path | todo | | closes the #21-#23 classes; rule E5 |
+| H3 | Model assembly through registries | todo | | G1, G2, G3, G7, C2 down |
+| H4 | Strict trainer config from HeadSpec | todo | | unknown keys raise |
+| H5 | Rule and test tooling fixes | todo | | high overlap with PR #25 |
+| H6 | Refresh STATUS / handoff / ROADMAP facts | todo | | docs |
