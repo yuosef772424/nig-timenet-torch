@@ -143,7 +143,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 |---|---|---|---|
 | architecture | `ARCHITECTURES` | `model/architectures.py` | `nig_timenet_v2`, `tiny_mlp` |
 | calibrator | `CALIBRATORS` | `eval/calibrator.py` | `isotonic` |
-| custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` |  |
+| custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` | `ath_distance`, `calendar`, `crash_rebound`, `direction_consistency`, `fisher`, `fractal`, `jump`, `mean_reversion`, `position_in_range`, `psar`, `range_rel`, `returns`, `risk_adj_momentum`, `rsi_divergence`, `rvi`, `supertrend`, `trend_age`, `vol_asymmetry`, `vol_estimators`, `vol_ratio`, `vol_term_structure`, `volume_z` |
 | head | `HEAD_REGISTRY` | `model/heads.py` | `binary_classification`, `multiclass_classification`, `nig_regression` |
 | input_skip | `INPUT_SKIP_VARIANTS` | `model/parts.py` | `concat_each_block`, `dense_skip`, `late_raw`, `no_proj`, `none` |
 | selection_metric | `SELECTION_METRICS` | `trainer/selection_metric.py` | `val_auc_close_class`, `val_auc_high_class`, `val_auc_low_class`, `val_pinball_close_reg`, `val_pinball_high_reg`, `val_pinball_low_reg`, `val_raw_loss` |

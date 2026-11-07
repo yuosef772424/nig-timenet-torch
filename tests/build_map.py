@@ -70,6 +70,9 @@ def registries_section(pkg_dir: Path) -> str:
     out = ["## Registries (`core/registry.py`; add a component = one file + one registration line)", "",
            "| kind | variable | module | registered names |", "|---|---|---|---|"]
     rows = []
+    for rel in module_files():  # registrations happen in the modules that use the decorator: import them all, so the
+        if not rel.endswith("__main__.py"):  # table does not depend on what a test run imported before
+            importlib.import_module(f"{PKG}.{rel[:-3].replace('/', '.')}")
     for rel, var in registry_definitions(pkg_dir):
         mod = importlib.import_module(f"{PKG}.{rel[:-3].replace('/', '.')}")
         reg = getattr(mod, var)
