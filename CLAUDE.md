@@ -5,6 +5,7 @@ The port record is `docs/BUILD_PLAN.md` (done; read a section only when a step p
 The reference TF project is `yuosef772424/crypto-signal-prediction` (frozen for model work; read-only except what
 ROADMAP allows).
 
+- Navigate: `docs/MAP.md` -> the module's card -> the symbol (grep, then read by line range). A module you change gets a card (rule B7).
 - Reply to the owner in Arabic; code, docs and prompts in English.
 - No subagents unless the owner asks.
 - Tests: `pytest -q` (fast suite). Run the tests of what you touched; CI runs everything. Lint: `ruff check src tests`.

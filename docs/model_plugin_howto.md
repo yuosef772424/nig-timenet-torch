@@ -12,7 +12,8 @@ A model plugs into this repo by matching a boundary contract, not by sharing int
    Each output is `(batch, 1)` float32. The simplest route is to reuse the head modules in `model/nig_layers.py`
    and `heads.classification_head_forward`, as `TinyMLP` does. If you have kernel regularisers, add
    `regularization_loss()`; the trainer adds it to the loss when present.
-2. Write a `build_fn(seq_len, n_features, **config)` and register it:
+2. Write a `build_fn(seq_len, n_features, **config)` and register it (all registries and their names: the Registries
+   table of `docs/MAP.md`):
    ```python
    ARCHITECTURES.register("my_model", build_my_model, version=1, build_fn=build_my_model,
                           default_config={...})
