@@ -10,7 +10,6 @@ core/constants.py
 core/model_contract.py
 core/prediction_schema.py
 core/roles.py
-core/schema.py
 core/seeds.py
 eval/calibrator.py
 eval/nig_floor.py

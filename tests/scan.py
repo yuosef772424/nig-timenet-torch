@@ -189,6 +189,7 @@ def trainer_classes() -> list[str]:
 ALLOWED_IMPORTS: dict[str, set[str] | None] = {
     "core": set(),
     "stats": {"core"},
+    "data": {"core", "data_io"},
     "data_io": None,
     "eval": None,
     "model": None,
@@ -198,7 +199,7 @@ ALLOWED_IMPORTS: dict[str, set[str] | None] = {
     "jobs": None,
 }
 #: T3: the Colab layers sit on top; nothing below them imports them (colab/ and jobs/ may import everything)
-_ON_TOP = {"workflow", "colab", "jobs"}
+_ON_TOP = {"workflow", "colab", "jobs", "data"}
 FORBIDDEN_IMPORTS = {"model": _ON_TOP, "trainer": _ON_TOP, "data_io": {"colab", "jobs"}, "eval": {"colab", "jobs"}}
 
 
@@ -257,6 +258,9 @@ def orphan_modules() -> list[str]:
                 imported |= {f"{node.module}.{a.name}" for a in node.names}
             elif isinstance(node, ast.Import):
                 imported |= {a.name for a in node.names}
+    # console scripts declared in pyproject.toml are entry points: nothing else needs to import them
+    scripts = re.findall(r'^\S+\s*=\s*"([\w.]+):\w+"', (ROOT / "pyproject.toml").read_text(), re.M)
+    imported |= set(scripts)
     folders = registry_folders()
     orphans = []
     for rel, (_, tree) in sources().items():

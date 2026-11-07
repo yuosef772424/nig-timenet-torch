@@ -14,6 +14,13 @@ choose a T4 GPU, then Runtime, then Run all. The first run asks for a GitHub tok
 | 2. Data | exports `preprocessing_output_latest.pkl.gz` as a contract artifact with the TF tool and checks it with the loader (`--verify-hashes`); skips the export when a sound artifact from the same source exists | `colab/prepare.py` |
 | 3. Runner | queue -> run -> results, then republish if the push failed | `colab/runner.py`, `colab/publish.py`, `colab/contract.py` |
 
+## The data notebook
+
+[`data_pipeline.ipynb`](data_pipeline.ipynb) builds the training artifact with the native pipeline
+(`src/nig_timenet_torch/data/`, same windows and targets as the TF project, `tests/data/test_parity_tf.py`) from the raw
+candle files on Drive and writes `<NAME>_<stamp>.dataset` plus `<NAME>_latest.dataset`. It is a thin caller too:
+`tests/notebooks/test_pipeline_notebooks.py` checks it statically and runs its non-Colab cells headless.
+
 ## The runner
 
 1. **Queue.** A job is a `job.json` at the root of branch `colab-queue` (schema and field meanings in

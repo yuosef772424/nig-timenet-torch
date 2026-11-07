@@ -31,8 +31,36 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `core/prediction_schema.py` | PredictionTable schema (C5; BUILD_PLAN.md P27): pure constants + one validator. Besides the mandatory columns a |  |
 | `core/registry.py` | The ONE generic registry: `Registry(kind, contract)` registers objects by name with a declared contract (checked AT REGISTRATION); raises on a duplicate name and on an unknown name (known names + did-you-mean). | registry, Registry, Contract, register, unknown name, duplicate name, did you mean, one component one interface, plugin, tier 0 |
 | `core/roles.py` | Data roles (C6; BUILD_PLAN.md P25): every split is stamped with what it may be used for. A learned-state |  |
-| `core/schema.py` | Data schema names shared with the TF side (BUILD_PLAN.md P03). |  |
+| `core/schema.py` | The last_candles column schema, price target columns, target modes and raw OHLCV column names, defined once so no package copies them. | schema, constants, last candles, price targets, target modes, ohlcv columns |
 | `core/seeds.py` | ONE seeding entry point (C3; BUILD_PLAN.md P23): call ``seed_everything(seed)`` before any dataset / model |  |
+
+### data
+
+| module | what it is for | tags |
+|---|---|---|
+| `data/align.py` | Resample candles to each time frame and cut windows that end on the base frame, without look-ahead across frames. | resample, time frame, aligned windows, closed bars, legacy mode, no look-ahead |
+| `data/artifact_writer.py` | Write a built dataset as a contract artifact (npy_dir plus manifest export block) that data_io.load_artifact accepts, dropping sealed coins and windows after the time seal. | artifact writer, contract artifact, manifest, time seal, sealed coins, sha256 |
+| `data/build.py` | Turn the raw candles of many coins into the dataset dict every other module reads, with two passes so cross-asset columns see the whole universe. | dataset build, two pass, cross asset, windows, skipped assets, feature order |
+| `data/cli.py` | Build, fetch or show the resolved settings of the native data pipeline from the command line (python -m nig_timenet_torch.data.cli). | cli, nig-data, console script, build, fetch, settings override |
+| `data/coins.py` | The coin lists of the old project by category; SourceSettings.coins always wins when non-empty. | coin universe, categories, symbols, source settings |
+| `data/context.py` | Market context, breadth, momentum rank and orthogonal momentum columns: how a coin relates to the reference coin and to the universe. | cross asset, market context, breadth, momentum rank, orthogonal momentum |
+| `data/custom_advanced.py` | Custom feature families that are off by default: fractals, RVI, Fisher, range volatility, mean reversion, jumps, SAR, regime and risk-adjusted momentum. | custom features, advanced, volatility estimators, mean reversion, hurst, jumps |
+| `data/custom_basic.py` | Custom feature families built from the bars alone: returns, relative range, candle shape, position in range, volume z-score, calendar. | custom features, basic, returns, candle shape, calendar, volume z-score |
+| `data/custom_features.py` | Run the registered custom feature families over a frame in registry order. | custom features, families, registry order, feature matrix |
+| `data/custom_registry.py` | The registry of custom feature families and the Bars view they read; adding a family is one function plus one decorator line. | custom features, registry, bars, family order |
+| `data/fetch.py` | Download raw candles (Binance USDT-perpetual API and the public data.binance.vision archive) into the layout the old project reads. | fetch, binance, klines, csv layout, asset registry, resume |
+| `data/indicators.py` | Compute pandas_ta_classic indicators by name plus the custom families, and derive the feature list from what really ran. | indicators, pandas_ta_classic, feature list, synthetic frame, exclude from features |
+| `data/lock.py` | The sealed-coin list of the holdout lock, shipped as a hash-pinned package resource; sealed coins are never built. | holdout lock, sealed coins, time seal, sha256, package resource |
+| `data/pipeline.py` | The data pipeline as one call: settings to dataset dict to an optional contract artifact on disk. | pipeline, build artifact, settings, summary |
+| `data/presets.py` | Named patches (dotted keys) for DataSettings.updated; the defaults already are the production hourly preset. | presets, data settings, dotted keys, tiny, 4h |
+| `data/publish.py` | Publish a built artifact as <name>_<stamp>.dataset plus a <name>_latest.dataset copy in the old file-name convention. | publish, named output, latest dataset, stamp, file name |
+| `data/scaling.py` | Per-window normalisation of the input features (window_scale and pct_change) with a kind chosen by the column-name prefix. | scaling, normalisation, window scale, pct change, feature kinds, prefix |
+| `data/settings.py` | Strict frozen settings of the native data pipeline: one dataclass per section, unknown keys raise, whole tree round-trips through JSON. | data settings, frozen dataclass, dotted keys, defaults, round trip, strict |
+| `data/sources.py` | Candle sources (files in the old layout, Speirsy11 parquet, synthetic) and OHLCV re-aggregation of finer bars up to the requested interval. | candle source, files, parquet, synthetic, resample ohlcv, interval, full bars |
+| `data/ta_backend.py` | Import pandas_ta_classic on first use so the rest of the package works without the [data] extra. | ta backend, pandas_ta_classic, lazy import, data extra |
+| `data/targets.py` | Regression and class targets from the last-candle record, and retarget() to switch the target mode after the data is built. | targets, target modes, retarget, last candle, regression, class, clip |
+| `data/timeframe.py` | Normalise time-frame names once (pandas offset aliases are case sensitive and deprecated for hours). | time frame, normalise, offset alias, timedelta |
+| `data/windows.py` | One coin's frames to windows, targets and the last-candle record, the unit the pipeline builds datasets from. | windows, last candle, targets, horizon, stride, sample filter |
 
 ### data_io
 
@@ -115,16 +143,21 @@ line range). A module without a card shows its first docstring line; it gets a c
 |---|---|---|---|
 | architecture | `ARCHITECTURES` | `model/architectures.py` | `nig_timenet_v2`, `tiny_mlp` |
 | calibrator | `CALIBRATORS` | `eval/calibrator.py` | `isotonic` |
+| custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` | `ath_distance`, `calendar`, `crash_rebound`, `direction_consistency`, `fisher`, `fractal`, `jump`, `mean_reversion`, `position_in_range`, `psar`, `range_rel`, `returns`, `risk_adj_momentum`, `rsi_divergence`, `rvi`, `supertrend`, `trend_age`, `vol_asymmetry`, `vol_estimators`, `vol_ratio`, `vol_term_structure`, `volume_z` |
 | head | `HEAD_REGISTRY` | `model/heads.py` | `binary_classification`, `multiclass_classification`, `nig_regression` |
 | input_skip | `INPUT_SKIP_VARIANTS` | `model/parts.py` | `concat_each_block`, `dense_skip`, `late_raw`, `no_proj`, `none` |
 | selection_metric | `SELECTION_METRICS` | `trainer/selection_metric.py` | `val_auc_close_class`, `val_auc_high_class`, `val_auc_low_class`, `val_pinball_close_reg`, `val_pinball_high_reg`, `val_pinball_low_reg`, `val_raw_loss` |
+| source | `SOURCES` | `data/sources.py` | `files`, `synthetic` |
 | target_codec | `TARGET_CODECS` | `data_io/target_codec.py` | `return` |
+| target_raw | `TARGET_RAW` | `data/targets.py` | `entry_range`, `magnitude`, `return`, `return_close`, `scaled`, `volnorm`, `window_scale` |
 | task | `TASK_REGISTRY` | `trainer/tasks.py` | `classification`, `evidential`, `regression` |
 
 ## Entry points
 
 - `colab/__main__.py`: runnable (`python -m nig_timenet_torch.colab`)
+- `data/cli.py`: runnable (`python -m nig_timenet_torch.data.cli`)
 - `data_io/artifact.py`: runnable (`python -m nig_timenet_torch.data_io.artifact`)
 - `jobs/baseline.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/device_smoke.py`: job entry (`docs/jobs/*.json` name it)
 - `notebooks/colab_nig_timenet_torch.ipynb`: notebook runner
+- `notebooks/data_pipeline.ipynb`: notebook runner
