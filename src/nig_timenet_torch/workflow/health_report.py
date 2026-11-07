@@ -4,7 +4,8 @@ PURPOSE:  T4 health_report(run): one call writes every diagnostic of a run (targ
           trace) as JSON and markdown next to the checkpoint.
 TAGS:     health report, diagnostics, t-sharp, probe, trainer trace, markdown report
 PITFALLS: ``last_close`` must be the last CLOSE price per row (not a head's own anchor). High/low AUC is information
-          only (direction suspended). The close-head T-sharp verdict is informational only (O-1 closed).
+          only (direction suspended). ``probe_points`` None = the
+          architecture's ``default_probe_points``. The close-head T-sharp verdict is informational only (O-1 closed).
 
 T4 ``health_report(run)``: ONE call that writes every T4 diagnostic of a run next to its checkpoint.
 
@@ -48,8 +49,8 @@ class HealthRun:
     anchors: dict
     last_close: np.ndarray           # last CLOSE price per row (reference of the predicted move in T-sharp)
     codec_state: dict
-    probe_points: tuple[str, ...]    # module names inside ``model``; "raw_input" is always added
     probe_labels: tuple[str, ...]    # label keys to probe (a binary label gives AUC, a regression label R^2)
+    probe_points: tuple[str, ...] | None = None  # module names inside ``model``; None = model.default_probe_points
     probe_max_rows: int = 2000       # an evenly strided, order-preserving subsample (folds are contiguous in time)
 
 
@@ -72,6 +73,7 @@ def _trace_section(run_dir: Path) -> dict:
 
 def _probe_section(run: HealthRun) -> dict:
     n = run.x.shape[0]
+    points = run.model.default_probe_points if run.probe_points is None else run.probe_points
     ix = np.unique(np.linspace(0, n - 1, min(n, run.probe_max_rows)).astype(np.int64))
     out = {}
     for key in run.probe_labels:
@@ -79,7 +81,7 @@ def _probe_section(run: HealthRun) -> dict:
             raise KeyError(f"probe label {key!r} is not in labels")
         y = np.asarray(run.labels[key], dtype=np.float64)[ix]
         out[key] = layer_probe_report(run.model, run.x[torch.as_tensor(ix)], y,
-                                      probe_points=list(run.probe_points)).to_dict("records")
+                                      probe_points=list(points)).to_dict("records")
     return out
 
 

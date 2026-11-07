@@ -265,6 +265,11 @@ def verdict(test, cost: float, sections: dict) -> dict:
             s = _stats(sign * test["y_ret"].values[idx] - cost)
             if s and (best["sharpe"] != best["sharpe"] or s["sharpe"] > best["sharpe"]):
                 best = {"name": f"{name} top{int(pct * 100)}%", "sharpe": s["sharpe"], "stats": s}
+    if "stats" not in best:  # no strategy reached 50 trades (a smoke run or a tiny split)
+        out = _section("VERDICT", ["  BEST: none (no strategy reached 50 trades)", "  الحكم: غير قابل للتداول"],
+                       "tradeable=False marginal=False")
+        out.update(best=best, tradeable=False)
+        return out
     b = best["stats"]
     label = ("قابل للتداول نظرياً (Sharpe>0.10)" if best["sharpe"] > 0.10
              else "هامشي - يحتاج تحقق" if best["sharpe"] > 0.05 else "غير قابل للتداول")

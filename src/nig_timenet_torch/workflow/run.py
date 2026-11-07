@@ -9,9 +9,9 @@ SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run.py); changes: single sp
     jobs/baseline.py moved here.
 
 Every step is a function of a ``Run`` (the settings plus what the earlier steps produced).
-``run_all(settings, out=...)`` is: prepare -> build -> train -> health_step -> test_step. Outputs in
-``out``: ``test_report.json`` and a copy of ``health_report.json`` / ``.md``; ``write_summary`` adds
-``baseline_summary.json``.
+``run_all(settings, out=...)`` is: prepare -> build -> train -> health_step -> test_step -> battery_step. Outputs in
+``out``: ``test_report.json``, ``battery_report.txt``, ``battery_profit.json`` and a copy of ``health_report.json`` /
+``.md``; ``write_summary`` adds ``baseline_summary.json``.
 """
 
 import json
@@ -34,12 +34,13 @@ from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.trainer.trainer import FitResult, FitSettings, Trainer
 from nig_timenet_torch.workflow import flat_run, run_common
+from nig_timenet_torch.workflow.battery_run import battery_step
 from nig_timenet_torch.workflow.health_report import REPORT_JSON, REPORT_MD, HealthRun, health_report
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
 from nig_timenet_torch.workflow.settings import RunSettings
 
-__all__ = ["Run", "prepare", "build", "train", "health_step", "test_step", "write_summary", "run_all", "test_lines",
-           "SUMMARY", "TEST_REPORT"]
+__all__ = ["Run", "prepare", "build", "train", "health_step", "test_step", "battery_step", "write_summary", "run_all",
+           "test_lines", "SUMMARY", "TEST_REPORT"]
 
 SUMMARY = "baseline_summary.json"
 TEST_REPORT = "test_report.json"
@@ -66,6 +67,15 @@ class Run:
     @property
     def dataset(self) -> dict:
         return self.art.dataset
+
+    def table(self, stage: str) -> pd.DataFrame:
+        """PredictionTable of ALL rows of ``stage`` (the model holds the best weights after fit)."""
+        _need(self, "result", "train")
+        if stage not in self.x:
+            self.x[stage], self.y[stage] = flat_run.flat_inputs(self.dataset, self.idx[stage])
+        return flat_run.predict_stage(self.trainer, self.dataset, self.idx[stage], self.x[stage], self.ident,
+                                      self.device, stage=stage, train_end=self.bounds[0],
+                                      chunk=self.settings.evaluation.chunk)
 
 
 def _need(run: Run, what: str, step: str) -> None:
@@ -132,7 +142,6 @@ def health_step(run: Run) -> Run:
     hr = HealthRun(run_dir=Path(run.settings.run_dir), model=run.trainer.model, x=xs, predictions=table,
                    labels=labels, anchors=flat_run.anchors_by_name(lc, idx, run.targets),
                    last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]], codec_state=run_common.codec_state(ds),
-                   probe_points=tuple(run.trainer.model.default_probe_points),
                    probe_labels=tuple(head_spec(k, probe_target).label_key
                                       for k in ("nig_regression", "binary_classification")))
     health_report(hr)
@@ -141,15 +150,6 @@ def health_step(run: Run) -> Run:
         for name in (REPORT_JSON, REPORT_MD):
             shutil.copyfile(Path(run.settings.run_dir) / name, run.out / name)
     return run
-
-
-def stage_table(run: Run, stage: str) -> pd.DataFrame:
-    """PredictionTable of ALL rows of ``stage`` (the model holds the best weights after fit)."""
-    _need(run, "result", "train")
-    if stage not in run.x:
-        run.x[stage], run.y[stage] = flat_run.flat_inputs(run.dataset, run.idx[stage])
-    return flat_run.predict_stage(run.trainer, run.dataset, run.idx[stage], run.x[stage], run.ident, run.device,
-                                  stage=stage, train_end=run.bounds[0], chunk=run.settings.evaluation.chunk)
 
 
 def stage_report(run: Run, stage: str, table: pd.DataFrame) -> dict:
@@ -166,7 +166,7 @@ def test_step(run: Run) -> dict:
     for training or selection. The test table is kept in ``run.extra['tables']`` for the battery."""
     if not len(run.idx["test"]):
         raise ValueError("the split has no test rows")
-    table = stage_table(run, "test")
+    table = run.table("test")
     run.extra.setdefault("tables", {})["test"] = table
     rep = stage_report(run, "test", table)
     if run.out is not None:
@@ -213,8 +213,7 @@ def write_summary(run: Run, extra: dict | None = None) -> dict:
 
 
 def run_all(settings: RunSettings, out=None, *, deadline: float | None = None, on_epoch=None) -> Run:
-    """prepare -> build -> train -> health report -> test report; the evaluation battery is
-    ``workflow.battery_run.battery_step`` (called by jobs and notebooks after this)."""
+    """prepare -> build -> train -> health report -> test report -> battery (when ``evaluation.battery.enabled``)."""
     if out is not None:
         os.makedirs(out, exist_ok=True)
     r = build(prepare(settings, out))
@@ -223,4 +222,5 @@ def run_all(settings: RunSettings, out=None, *, deadline: float | None = None, o
     rep = test_step(r)
     print(f"test evaluation ({rep['n_rows']} rows, best-epoch weights):", flush=True)
     print("\n".join(test_lines(rep)), flush=True)
+    battery_step(r)
     return r

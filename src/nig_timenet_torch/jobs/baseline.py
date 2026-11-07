@@ -98,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"test evaluation ({rep['n_rows']} rows, best-epoch weights):", flush=True)
     print("\n".join(steps.test_lines(rep)), flush=True)
     steps.write_summary(r, {"device": cfg.device, "gpu_name": dev_rep.get("gpu_name")})
+    steps.battery_step(r)  # after the summary: a battery failure keeps every other output
     contract.write_manifest(out, config, input_fingerprint=r.art.manifest.data_fingerprint, started=started)
     print(f"baseline OK: seed {cfg.seed}, epochs {r.result.epochs_done}/{cfg.epochs}")
     return 0

@@ -1,5 +1,5 @@
 {
- "fingerprint": "0764ece5af1910db",
+ "fingerprint": "491549748002a9fe",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -526,6 +526,7 @@
   "nig_timenet_torch.workflow.battery_run.run_battery(n_variants)": "1",
   "nig_timenet_torch.workflow.battery_run.run_battery(out_dir)": "None",
   "nig_timenet_torch.workflow.health_report.HealthRun(probe_max_rows)": "2000",
+  "nig_timenet_torch.workflow.health_report.HealthRun(probe_points)": "None",
   "nig_timenet_torch.workflow.prediction_table.predict_table(batch_size)": "512",
   "nig_timenet_torch.workflow.rolling.run_rolling_study(out_dir)": "None",
   "nig_timenet_torch.workflow.run.Run(extra)": "{}",
@@ -557,6 +558,10 @@
   "nig_timenet_torch.workflow.settings.ANTI_MEMORIZATION_CONFIG.linear_path_l2": "0.001",
   "nig_timenet_torch.workflow.settings.ANTI_MEMORIZATION_CONFIG.num_layers": "2",
   "nig_timenet_torch.workflow.settings.ANTI_MEMORIZATION_CONFIG.stats_mode": "'symlog'",
+  "nig_timenet_torch.workflow.settings.BatterySettings(cost_per_side)": "0.0008",
+  "nig_timenet_torch.workflow.settings.BatterySettings(enabled)": "True",
+  "nig_timenet_torch.workflow.settings.BatterySettings(n_variants)": "1",
+  "nig_timenet_torch.workflow.settings.EvalSettings(battery)": "BatterySettings(enabled=True, cost_per_side=0.0008, n_variants=1)",
   "nig_timenet_torch.workflow.settings.EvalSettings(chunk)": "20000",
   "nig_timenet_torch.workflow.settings.EvalSettings(health_max_rows)": "100000",
   "nig_timenet_torch.workflow.settings.RollingSettings(max_folds)": "None",

@@ -81,3 +81,10 @@ entry over `workflow/run.py` and its summary / test report equal the pre-refacto
 - `nig_timenet_torch.workflow.settings.TrainSettings(seed)`: `<new>` -> `0`
 - `nig_timenet_torch.workflow.settings.TrainSettings(selection_metric)`: `<new>` -> `'val_raw_loss'`
 - `nig_timenet_torch.workflow.settings.TrainSettings(weight_decay)`: `<new>` -> `0.0001`
+- `nig_timenet_torch.workflow.health_report.HealthRun(probe_points)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.settings.BatterySettings(cost_per_side)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.workflow.settings.BatterySettings(enabled)`: `<new>` -> `True`
+- `nig_timenet_torch.workflow.settings.BatterySettings(n_variants)`: `<new>` -> `1`
+- `nig_timenet_torch.workflow.settings.EvalSettings(battery)`: `<new>` -> `BatterySettings(enabled=True, cost_per_side=0.0008, n_variants=1)`
+- `nig_timenet_torch.workflow.settings.RunSettings(evaluation)`: `<new>` -> `EvalSettings(chunk=20000, health_max_rows=100000)`
+- `nig_timenet_torch.workflow.settings.RunSettings(evaluation)`: `EvalSettings(chunk=20000, health_max_rows=100000)` -> `EvalSettings(chunk=20000, health_max_rows=100000, battery=BatterySettings(enabled=True, cost_per_side=0.0008, n_variants=1))`

@@ -194,3 +194,10 @@ def test_market_neutral_needs_a_cross_section_and_pays_for_ranking():
     assert section["title"] == "MARKET-NEUTRAL PORTFOLIO (TEST)"
     chosen = next(r for r in section["rows"][1:] if "VAL choice" in r)
     assert float(chosen.split()[-1]) > 1.0  # profit factor > 1: the ranking pays without cost
+
+
+def test_verdict_survives_a_table_with_too_few_trades():
+    """A smoke run has < 50 trades per side: the verdict says "none", it does not crash."""
+    small, other = _frame(n=64, seed=3), _frame(n=64, seed=4)
+    out = full_battery(small, other)["verdict"]
+    assert out["tradeable"] is False and out["best"]["name"] == "none" and "none" in out["rows"][0]

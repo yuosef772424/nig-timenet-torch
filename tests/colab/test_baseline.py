@@ -29,8 +29,11 @@ def test_baseline_runs_and_resumes(tmp_path, art, monkeypatch):  # noqa: F811
     s1 = json.loads((out1 / "baseline_summary.json").read_text())
     assert s1["epochs_done"] == 1 and s1["seed"] == 0 and s1["n_windows"]["train"] > 0
     assert s1["step_seconds_per_batch"] > 0 and len(s1["data_fingerprint"]) > 8 and s1["identity_fingerprint"]
-    for name in ("health_report.json", "health_report.md", "test_report.json", "device.json", "manifest.json"):
+    for name in ("health_report.json", "health_report.md", "test_report.json", "device.json", "manifest.json",
+                 "battery_report.txt", "battery_profit.json"):
         assert (out1 / name).is_file()
+    profit = json.loads((out1 / "battery_profit.json").read_text())
+    assert profit["cost_per_side"] == 0.0008 and {"profit_close", "verdict"} <= set(profit)
     test_rep = json.loads((out1 / "test_report.json").read_text())
     assert test_rep["n_rows"] == s1["n_windows"]["test"] > 0 and test_rep["targets"]
     job = {"device": "cpu", "expected_outputs": ["baseline_summary.json", "health_report.json", "health_report.md"]}
@@ -58,7 +61,7 @@ def test_job_files_are_valid(seed):
     job = parse_job((ROOT / "docs" / "jobs" / f"baseline-001-s{seed}.json").read_text())
     assert job["entry"] == "baseline" and job["device"] == "cuda" and job["needs_drive"] and job["max_minutes"] == 170
     assert job["config"]["seed"] == seed and job["config"]["run_dir"].endswith(f"baseline-001-s{seed}/train")
-    assert "test_report.json" in job["expected_outputs"]
+    assert {"test_report.json", "battery_report.txt", "battery_profit.json"} <= set(job["expected_outputs"])
 
 
 def test_every_long_job_has_a_smoke_job():
@@ -72,7 +75,8 @@ def test_every_long_job_has_a_smoke_job():
 def test_smoke_job_file_is_valid():
     job = parse_job((ROOT / "docs" / "jobs" / "baseline-smoke-001.json").read_text())
     assert job["entry"] == "baseline" and job["device"] == "cuda" and job["config"]["max_rows"] == 20000
-    assert job["config"]["epochs"] == 1 and job["max_minutes"] == 15 and "test_report.json" in job["expected_outputs"]
+    assert job["config"]["epochs"] == 1 and job["max_minutes"] == 15
+    assert {"test_report.json", "battery_report.txt", "battery_profit.json"} <= set(job["expected_outputs"])
 
 
 def test_input_key_follows_the_artifact_timeframe():

@@ -41,8 +41,15 @@ def test_run_all_writes_the_reports_and_smoke_mode_limits_rows(art, tmp_path):  
     out = tmp_path / "out"
     r = steps.run_all(settings(art, tmp_path, **{"split.max_rows": 60, "evaluation.health_max_rows": 40}), out)
     assert all(len(r.idx[k]) <= 60 for k in ("train", "val", "test"))
-    for name in ("test_report.json", "health_report.json", "health_report.md"):
+    for name in ("test_report.json", "health_report.json", "health_report.md", "battery_report.txt",
+                 "battery_profit.json"):
         assert (out / name).is_file()
     summary = steps.write_summary(r)
     assert summary["max_rows"] == 60 and summary["epochs_done"] == 1 and (out / steps.SUMMARY).is_file()
     assert json.loads((out / "test_report.json").read_text())["n_rows"] == len(r.idx["test"])
+
+
+def test_battery_can_be_switched_off(art, tmp_path):  # noqa: F811
+    out = tmp_path / "out"
+    r = steps.run_all(settings(art, tmp_path, **{"evaluation.battery.enabled": False}), out)
+    assert not (out / "battery_report.txt").exists() and steps.battery_step(r) == {}

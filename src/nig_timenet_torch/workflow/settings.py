@@ -6,7 +6,7 @@ PITFALLS: RunSettings has no rolling field (rolling and panel runs are package I
     default must reproduce the baseline job (tests/jobs/test_baseline_pin.py).
 
 ``RunSettings`` is everything ``workflow.run`` needs for ONE run on ONE chronological split: the data, the split, the
-model, the training and the evaluation (health report, test report). The jobs (``jobs/baseline.py``) and the
+model, the training and the evaluation (health report, test report, battery). The jobs (``jobs/baseline.py``) and the
 notebooks build it (``from_dict`` / ``updated``) and call the steps; nothing else configures a run. ``RollingSettings``
 is the walk-forward seam (BUILD_PLAN.md P37) used by ``workflow/rolling.py``.
 """
@@ -20,7 +20,7 @@ from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, Mode
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 
 __all__ = ["RollingSettings", "RunSettings", "ROLLING_MODES", "SplitSettings", "TrainSettings", "EvalSettings",
-           "default_model_settings"]
+           "BatterySettings", "default_model_settings"]
 
 ROLLING_MODES = ("expanding", "sliding")
 
@@ -92,9 +92,22 @@ class TrainSettings:
 
 
 @dataclass(frozen=True)
+class BatterySettings:
+    """The evaluation battery (eval/battery.py) on the val and test stage of the run (owner goal: profit)."""
+    enabled: bool = True
+    cost_per_side: float = 0.0008        # charged on EVERY side of a trade: a round trip pays twice this
+    n_variants: int = 1                  # variants tried so far (widens the confidence intervals)
+
+    def __post_init__(self):
+        if self.cost_per_side < 0 or self.n_variants < 1:
+            raise ValueError("cost_per_side >= 0 and n_variants >= 1")
+
+
+@dataclass(frozen=True)
 class EvalSettings:
     chunk: int = 20_000                  # rows per predict chunk (a big split must fit the device)
     health_max_rows: int = 100_000       # evenly strided subsample of the validation rows for the health report
+    battery: BatterySettings = field(default_factory=BatterySettings)
 
     def __post_init__(self):
         if self.chunk < 1 or self.health_max_rows < 1:

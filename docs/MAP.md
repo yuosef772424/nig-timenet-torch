@@ -132,7 +132,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
-| `workflow/battery_run.py` | Adapts the VAL and TEST stage (table, labels, anchors, last_close, codec state) to battery tables and runs the full battery with the T-profit sections; optionally writes the text report next to the run. | battery run, stage inputs, t-profit, battery report, adapter entry point |
+| `workflow/battery_run.py` | Adapts the VAL and TEST stage (table, labels, anchors, last_close, codec state) to battery tables and runs the full battery with the T-profit sections; battery_step does it for a finished Run and writes the reports. | battery run, stage inputs, t-profit, battery report, adapter entry point, battery step, profit json |
 | `workflow/flat_run.py` | The flat model (one row per coin window, NIG regression + binary class head per price target) as run steps: inputs, anchors, model settings, trainer, fit settings, one chunked predict per stage. | flat run, run steps, trainer config, stage inputs, anchors by name, head kinds, predict stage |
 | `workflow/health_report.py` | T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer trace) as JSON and markdown next to the checkpoint. | health report, diagnostics, t-sharp, probe, trainer trace, markdown report |
 | `workflow/prediction_table.py` | The one batched predict that turns a model and its inputs into the canonical PredictionTable, with one writer and one validating reader. | prediction table, batched predict, table meta, table writer, table reader |
