@@ -26,7 +26,8 @@ def _ratchet(name: str, found: list[str]) -> None:
 
 def test_every_pinned_count_has_a_test():
     """The ratchet file and this module stay in step: a count nobody checks is a dead pin."""
-    source = (scan.ROOT / "tests" / "test_rules_growth.py").read_text(encoding="utf-8")
+    source = "".join((scan.ROOT / "tests" / f).read_text(encoding="utf-8")
+                     for f in ("test_rules_growth.py", "test_hardcoded_guards.py"))
     for name in COUNTS:
         assert f'_ratchet("{name}"' in source, f"{name} is pinned in ratchets.json but no test checks it"
 
