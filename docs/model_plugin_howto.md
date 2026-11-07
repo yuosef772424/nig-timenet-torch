@@ -18,7 +18,7 @@ A model plugs into this repo by matching a boundary contract, not by sharing int
    ARCHITECTURES.register("my_model", build_my_model, version=1, build_fn=build_my_model,
                           default_config={...})
    ```
-3. Check it. `check_contract(my_model, contract_of(reference_model, x), x)` (from `core/model_contract.py`) raises
+3. Check it. `check_contract(my_model, contract_of(reference_model, x), x)` (from `model/contract.py`) raises
    with a field-level diff when a name, shape, dtype or head kind differs. Select it with
    `ModelSettings(architecture="my_model")` and `build_model(settings, seq_len, n_features)`.
 

@@ -27,7 +27,6 @@ line range). A module without a card shows its first docstring line; it gets a c
 |---|---|---|
 | `core/config.py` | Strict settings primitive: from_dict builds frozen dataclasses (unknown keys raise), to_dict is its inverse and updated copies a settings object with dotted-key changes. | strict config, settings dataclass, from_dict, to_dict, updated, did you mean |
 | `core/constants.py` | Numeric constants shared by model and evaluation (BUILD_PLAN.md P03). |  |
-| `core/model_contract.py` | P31: the boundary contract every architecture must satisfy (D-012 point 3 / TF-side S23). |  |
 | `core/prediction_schema.py` | PredictionTable schema (C5; BUILD_PLAN.md P27): pure constants + one validator. Besides the mandatory columns a |  |
 | `core/registry.py` | The ONE generic registry: `Registry(kind, contract)` registers objects by name with a declared contract (checked AT REGISTRATION); raises on a duplicate name and on an unknown name (known names + did-you-mean). | registry, Registry, Contract, register, unknown name, duplicate name, did you mean, one component one interface, plugin, tier 0 |
 | `core/roles.py` | Data roles (C6; BUILD_PLAN.md P25): every split is stamped with what it may be used for. A learned-state |  |
@@ -96,8 +95,9 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
-| `model/architectures.py` | P32/P33/P33b: the ARCHITECTURES registry — pluggable models behind one boundary contract (core.model_contract). |  |
+| `model/architectures.py` | P32/P33/P33b: the ARCHITECTURES registry — pluggable models behind one boundary contract (model.contract). |  |
 | `model/builder.py` | build_nig_timenet_v2 / NigTimeNetV2: the full model, wired as crypto-signal-prediction model/builder.py |  |
+| `model/contract.py` | The boundary contract of a model (input and output names, shapes, dtypes, head kind), read from any built model by one forward pass and checked with a field-level diff; architectures plug in through it. | model contract, boundary, architecture, plugin, head kind, check_contract |
 | `model/heads.py` | Output heads (source: crypto-signal-prediction model/heads.py @ aeafc564): HeadSpec, HEAD_REGISTRY and the |  |
 | `model/layers.py` | Encoder layers of NIG-TimeNet v2, ported from crypto-signal-prediction model/*.py @ aeafc564 (BUILD_PLAN.md |  |
 | `model/nig_layers.py` | NIG (Normal-Inverse-Gamma) head layers, ported from crypto-signal-prediction model/nig_layers.py @ aeafc564 |  |

@@ -1,6 +1,5 @@
 import torch
 
-from nig_timenet_torch.core.model_contract import check_contract, contract_of
 from nig_timenet_torch.model.architectures import (
     ARCHITECTURES,
     NIG_TIMENET_V2_DEFAULT_CONFIG,
@@ -8,6 +7,7 @@ from nig_timenet_torch.model.architectures import (
     build_model,
 )
 from nig_timenet_torch.model.builder import NigTimeNetV2
+from nig_timenet_torch.model.contract import check_contract, contract_of
 from tests.oracle import oracle_loader as ol
 
 

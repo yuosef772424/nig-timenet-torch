@@ -1,4 +1,4 @@
-"""P32/P33/P33b: the ARCHITECTURES registry — pluggable models behind one boundary contract (core.model_contract).
+"""P32/P33/P33b: the ARCHITECTURES registry — pluggable models behind one boundary contract (model.contract).
 
 Each entry: ``build_fn(seq_len, n_features, **config) -> nn.Module`` whose forward returns the HEAD_REGISTRY-named
 output dict, plus a ``default_config`` (constructor kwargs without seq_len / n_features). ``nig_timenet_v2`` is the

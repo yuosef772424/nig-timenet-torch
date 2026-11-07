@@ -69,7 +69,7 @@ HEAD_REGISTRY.register(
                  "confidence": "y_{target}_confidence"},
     label_key="y_{target}_reg", task_type="evidential", label_encoding="continuous", default_weight=1.0,
     eval_role="price",
-    # model outputs of this head kind that no loss reads (so not in output_keys); used by core.model_contract (P31)
+    # model outputs of this head kind that no loss reads (so not in output_keys); used by model.contract (P31)
     extra_output_keys={"epistemic": "y_{target}_epistemic", "aleatoric": "y_{target}_aleatoric"})
 HEAD_REGISTRY.register(
     "binary_classification", classification_head_forward, version=1, head_name="{target}_class",

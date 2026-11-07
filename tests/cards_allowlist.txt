@@ -7,7 +7,6 @@ colab/publish.py
 colab/runner.py
 colab/session.py
 core/constants.py
-core/model_contract.py
 core/prediction_schema.py
 core/roles.py
 core/seeds.py
