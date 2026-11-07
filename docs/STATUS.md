@@ -26,7 +26,7 @@ One builder session per package, in this order, each merged before the next. T5r
 | H5 / H6 | Rule and test tooling / facts refresh | todo | | |
 
 ## Roadmap (`docs/ROADMAP.md`, rules `docs/RULES.md`, protocol `docs/MODEL_DEV_PROTOCOL.md`)
-PRs since last R-REVIEW: 2 (H0b #27, H0c #28; review 2026-11-07 in H0, `docs/reviews.md`; next after 5).
+PRs since last R-REVIEW: 5 (H0b #27, H0c #28, T4b #29, I1 #30, H2; review 2026-11-07 in H0 #26, `docs/reviews.md`; the next R-REVIEW is due, after H2).
 Done: R0 [#14](https://github.com/yuosef772424/nig-timenet-torch/pull/14), T1 [#16](https://github.com/yuosef772424/nig-timenet-torch/pull/16), T2 [#17](https://github.com/yuosef772424/nig-timenet-torch/pull/17), T3 [#18](https://github.com/yuosef772424/nig-timenet-torch/pull/18), T4 [#19](https://github.com/yuosef772424/nig-timenet-torch/pull/19). Data: artifact `c572b1b36960` (2,520,913 windows, 535 coins, sealed 183/183 excluded; B-020, B-022 open).
 
 | Step | Title | State | PR / job | Note |
