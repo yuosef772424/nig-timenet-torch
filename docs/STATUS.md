@@ -44,7 +44,7 @@ Runs before T6; one builder session per package, in order, after H0b and H0c. T5
 
 | Step | Title | State | PR | Note |
 |---|---|---|---|---|
-| H0 | Audit + plan + first R-REVIEW | PR open | | docs only; 37 findings HF-01..HF-37 |
+| H0 | Audit + plan + first R-REVIEW | merged | [#26](https://github.com/yuosef772424/nig-timenet-torch/pull/26) | docs only; 37 findings HF-01..HF-37 |
 | H0b | Read PR #25 (`feat/ar-stream`), decide what to adopt | todo | | planner; file overlap in the audit, section F |
 | H0c | Post-hardening ROADMAP | todo | | planner; model notes in the audit, "For H0c" |
 | H1 | Card convention + navigation map | todo | | rule B7 + a card check that fails on touched card-less modules |
