@@ -1,7 +1,8 @@
-"""The native pipeline reproduces crypto-signal-prediction's datasets (float64 prices to 1e-12 relative, everything else bit for bit) (same candles, same settings).
+"""The native pipeline reproduces crypto-signal-prediction's datasets from the same candles and settings.
 
-The fixtures tests/fixtures/tf_parity_{1tf,2tf}.npz were written by the reference pipeline
-(tests/fixtures/make_tf_parity.py) on 4 seeded coins, 40 days, window 16 (+ 4h window 8, closed mode, float16)."""
+float64 prices match to 1e-12 relative, everything else bit for bit. The fixtures tests/fixtures/tf_parity_{1tf,2tf}.npz
+were written by the reference pipeline (tests/fixtures/make_tf_parity.py) on 4 seeded coins, 40 days, window 16
+(+ 4h window 8, closed mode, float16)."""
 
 from pathlib import Path
 
@@ -24,7 +25,7 @@ def test_dataset_equals_reference(two_tf, name):
     assert [[b["start"], b["end"]] for b in ds["asset_bounds"]] == ref["bounds"].tolist()
     for k in keys:
         assert ds[k].dtype == ref[k].dtype, k
-        if ds[k].dtype == np.float64:  # prices go through a few float64 operations: 1 ulp differs across CPUs/BLAS builds
+        if ds[k].dtype == np.float64:  # 1 ulp differs across CPU builds
             np.testing.assert_allclose(ds[k], ref[k], rtol=1e-12, atol=0, err_msg=k)
         else:                          # float32 / float16 inputs, labels and indices stay bit-exact
             np.testing.assert_array_equal(ds[k], ref[k], err_msg=k)
