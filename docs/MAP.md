@@ -49,8 +49,10 @@ line range). A module without a card shows its first docstring line; it gets a c
 | module | what it is for | tags |
 |---|---|---|
 | `eval/battery.py` | Ten many-angle sections plus classics and a ranked verdict over a tidy table (step, mu, sigma, p_dir, y_ret, dir_true, last_ret, coin, end_time); pure functions, no model. | battery, evaluation, trade grid, verdict, uncertainty filter, weekly stability, flip test |
+| `eval/battery_adapter.py` | Turns one stage of a run into the table the battery reads: close-only mu / sigma / p_dir / y_ret in return units, plus the high / low predicted and realised extremes the limit-order sections need. | battery adapter, prediction table, close return, nig predictive std, limit order inputs, target codec |
 | `eval/battery_classics.py` | Four classic checks of the old TF project over the tidy table: integrity, persistence baseline, selective evaluation (VAL thresholds, TEST judgment), market-neutral portfolio. | battery classics, integrity, persistence baseline, selective evaluation, market neutral |
 | `eval/battery_lib.py` | Shared private helpers of the battery: trade stats, row masks, top-\|x\| selection, section shaping. | battery helpers, trade stats, sharpe, profit factor, section |
+| `eval/battery_profit.py` | The T-profit sections of the battery: per-side-cost profit with trivial baselines and a block-bootstrap CI that is widened for the number of variants tried; limit orders at the predicted high / low; sigma as position size. | t-profit, profit after cost, limit order, position size, block bootstrap, trivial baselines, battery |
 | `eval/calibrator.py` | P29: role-checked learned-state calibrator (C6). Isotonic regression only, mirroring the TF side's |  |
 | `eval/nig_floor.py` | T4 NIG floor-hit shares: how often each NIG parameter of each head sits on its floor (B-001 evidence). |  |
 | `eval/target_report.py` | T4/T4b target report for one stage of one run: T-skill, T-conf, T-sharp (per head, std vs the head's own predicted move from the last close) and 80 % coverage. | target report, t-sharp, coverage, uncertainty, evaluation, nig head |
@@ -79,7 +81,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
-| `stats/metrics.py` | The single owner of every metric this project computes (C7; BUILD_PLAN.md P21). Pure numpy — no torch. |  |
+| `stats/metrics.py` | Every metric of the project in one module (AUC, rank IC, calibration, interval and sharpness shares, confidence-error gap, block-bootstrap CI), each with its trivial baseline stated and tested (rule C1). | metrics, auc, rank ic, calibration, coverage, bootstrap, trivial baseline |
 | `stats/nig.py` | NIG predictive distribution in numpy (T4): the predictive std and central interval of a Normal-Inverse-Gamma head, |  |
 
 ### trainer
