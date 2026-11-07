@@ -345,6 +345,28 @@ lines; each hardening row has its PR link.
 
 ---
 
+## Integration packages (from H0b)
+
+Written by H0b (`docs/hardening/BRANCH_AR_STREAM.md`, full evaluation of PR #25 / `feat/ar-stream`). Adopting from #25 means
+porting into new PRs (commit messages say "ported from feat/ar-stream <sha>"); PR #25 is not merged. Packages: **I1** loading
+and config foundations, **I2** native data pipeline, **I3** run steps (flat single split, `jobs/baseline.py` becomes a thin
+entry), **I4** rolling + panel on the run steps (optional), **I5** evaluation battery + adapter for our `PredictionTable`,
+**I7** ar-stream experimental package (optional, only on H0c's go). Campaign order now:
+`H0b -> H0c -> I1 -> H2 -> H1 -> I5 -> I2 -> H3 -> H4 -> I3 -> H5 -> H6 -> (I4) -> (I7)`.
+
+What changes in the H packages:
+- **H2**: reads the artifact through I1's `data_io/loading.py` (D1 mandatory there); its `max_rows` smoke path later becomes
+  the `max_rows` step of I3's `run.py`; HF-15's variant-artifact test can be built with I2's native pipeline.
+- **H3**: the single `ENCODERS` source lives in the registry; I7 must reuse it (no second tuple).
+- **H4**: `targets_config` is the ONE trainer-config builder; #25's `flat_trainer_config` / `panel_trainer_config` are not ported.
+- **H5**: runs after I3 so the G4 / G8 / layer-table re-base is done once; #25's `scan.py` hunks are re-applied by I2 (`data` layer)
+  and I4 (G8), not copied.
+- **H1**: every I-package ports its modules with cards; H1 runs before I5 and I2 for that reason.
+- **H6**: also refreshes the facts after I3 (HF-23, HF-29 closed there).
+- HF-15 closed by I2, HF-23 by I3, HF-29 by I3/I4 (G4 1 -> 0, G8 1 -> 0).
+
+---
+
 ## Later (does not fit six packages; rows in `docs/bottlenecks.csv` / `docs/suggestions.csv`)
 - TASK_WEIGHTINGS registry for Kendall and alternatives (HF-22, B-036).
 - Move `identity_for_run` next to the run steps once H0b settles them (HF-24).
