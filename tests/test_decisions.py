@@ -40,6 +40,10 @@ def test_defaults_match_pin_and_decisions():
     assert not msg, "\n\n".join(msg)
 
 
+#: numbers that exist on an unmerged branch and must not be reused here (a gap is allowed only for these)
+RESERVED_NUMBERS = {6: "D-006-ar-stream-defaults.md on feat/ar-stream (PR #25), not merged"}
+
+
 def test_decision_files_are_well_formed():
     files = dp.decision_files()
     numbers = []
@@ -48,7 +52,9 @@ def test_decision_files_are_well_formed():
         assert m, f"{path.name}: decision files are named D-nnn-short-name.md"
         numbers.append(int(m.group(1)))
         assert dp.parse_decision(path), f"{path.name}: no line of the form - `key`: `old` -> `new`"
-    assert numbers == list(range(1, len(numbers) + 1)), f"decision numbers must be 001, 002, ...: got {numbers}"
+    expected = [n for n in range(1, len(numbers) + 1 + len(RESERVED_NUMBERS)) if n not in RESERVED_NUMBERS]
+    assert numbers == expected, (f"decision numbers must be 001, 002, ... (reserved gaps "
+                                 f"{sorted(RESERVED_NUMBERS)}): got {numbers}")
     dp.apply_decisions(dp.load_pin())  # raises if a decision's old value is not the value in force
 
 

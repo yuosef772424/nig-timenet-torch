@@ -1,4 +1,10 @@
-"""Loader of a contract artifact exported by the TF side (ROADMAP T2, rule D1; docs/DATA_ARTIFACT_CONTRACT.md).
+"""PURPOSE: Loader of a contract artifact exported by the TF side: refuses it unless every rule D1 field is present and
+    consistent with the data itself.
+TAGS: artifact loader, rule d1, manifest, sealed coins, time seal, hash verification
+PITFALLS: the sealed count and lock hash are pinned in this module, never read from the manifest; verify_hashes re-reads
+    every file and is separate from load_artifact; mmap=True only changes how arrays are read, not what is checked.
+
+Loader of a contract artifact exported by the TF side (ROADMAP T2, rule D1; docs/DATA_ARTIFACT_CONTRACT.md).
 
 The artifact is an ``npy_dir`` dataset (data_io/npy_dir.py) whose ``manifest.json`` carries an ``export`` block
 written by crypto-signal-prediction ``tools/export_torch_artifact.py``. ``load_artifact`` REFUSES an artifact without
@@ -144,10 +150,11 @@ def _bar_ns(tf: str) -> int:
     return int(d.value)
 
 
-def load_artifact(path: str | Path) -> Artifact:
-    """Read an artifact and refuse it unless every D1 field is present and consistent with the data itself."""
+def load_artifact(path: str | Path, *, mmap: bool = False) -> Artifact:
+    """Read an artifact and refuse it unless every D1 field is present and consistent with the data itself.
+    ``mmap=True`` keeps the big arrays on disk (only the pages that are read enter memory)."""
     manifest = read_manifest(path)
-    dataset = npy_dir.load(path)
+    dataset = npy_dir.load(path, mmap=mmap)
     names = [b["name"] for b in dataset["asset_bounds"]]
     if list(manifest.coins) != names:
         raise ArtifactError(f"{path}: export.coins {list(manifest.coins)[:5]}... differ from the dataset's "

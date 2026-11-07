@@ -1,4 +1,10 @@
-"""Stdlib-only git and token kit of the Colab notebook (ROADMAP T3): secrets masking, a GitHub token kept on Drive,
+"""PURPOSE: Stdlib-only git and token kit of the Colab notebook: secrets masking, a Drive-kept GitHub token, clean
+    clones and the --no-deps install that leaves Colab's torch alone.
+TAGS: colab bootstrap, git clone, github token, pip install, purge package, stdlib only
+PITFALLS: imports nothing from the package (the notebook execs this one file); install_package now also purges stale
+    modules of this repo from sys.modules and sibling-checkout src paths from sys.path (purge_package).
+
+Stdlib-only git and token kit of the Colab notebook (ROADMAP T3): secrets masking, a GitHub token kept on Drive,
 a CLEAN clone (``rm -rf`` first, then ``git clone``, then the exact ref) of every repo the run needs, and the
 ``--no-deps`` install that leaves Colab's own CUDA torch alone.
 
@@ -24,6 +30,9 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+
+__all__ = ["SHA40", "BootstrapError", "Secrets", "read_token", "save_token", "token_accepted", "acquire_token",
+           "git_env", "run_git", "clean_clone", "setup_clones", "purge_package", "install_package"]
 
 SHA40 = re.compile(r"[0-9a-fA-F]{40}")
 
@@ -191,6 +200,28 @@ def setup_clones(token: str, workdir: str, repos: dict, echo=print) -> dict:
     return shas
 
 
+def purge_package(repo_dir: str) -> dict:
+    """Drop every in-memory module of this repo's packages and their stale ``src`` paths. A reused
+    Colab runtime keeps code from an EARLIER checkout alive in ``sys.modules`` - the classic
+    'cannot import name ... from' ImportError when a fresh clone adds names - and an old checkout's
+    ``src`` entry in ``sys.path`` can shadow the fresh clone. Returns what was dropped."""
+    src = os.path.abspath(os.path.join(repo_dir, "src"))
+    pkgs = ([d for d in os.listdir(src) if os.path.isdir(os.path.join(src, d)) and not d.endswith(".egg-info")]
+            if os.path.isdir(src) else [])
+    gone = [m for m in list(sys.modules) if any(m == p or m.startswith(p + ".") for p in pkgs)]
+    for m in gone:
+        del sys.modules[m]
+    repo = os.path.basename(os.path.abspath(repo_dir))
+    stale = []
+    for p in [q for q in list(sys.path) if q]:
+        parent = os.path.basename(os.path.dirname(os.path.abspath(p)))
+        if os.path.basename(os.path.abspath(p)) == "src" and parent != repo and parent.startswith(repo):
+            stale.append(p)
+    for p in stale:
+        sys.path.remove(p)
+    return {"purged_modules": gone, "purged_paths": stale}
+
+
 def _installed_version(dist: str) -> str | None:
     from importlib import metadata
 
@@ -221,4 +252,4 @@ def install_package(repo_dir: str, python: str | None = None, run=subprocess.run
     src = os.path.join(repo_dir, "src")
     if src not in sys.path:
         sys.path.insert(0, src)
-    return {"torch_before": before, "torch_after": after}
+    return {"torch_before": before, "torch_after": after, **purge_package(repo_dir)}
