@@ -18,7 +18,7 @@ One builder session per package, in this order, each merged before the next. T5r
 | T4b | T-sharp per head vs predicted move (ROADMAP fix, first) | merged | [#29](https://github.com/yuosef772424/nig-timenet-torch/pull/29) | key `share_std_below_move`; close verdict informational (O-1); before any T5r number is read |
 | I1 | Loading and config foundations | merged | [#30](https://github.com/yuosef772424/nig-timenet-torch/pull/30) | D1 mandatory in `load_dataset` (`allow_unchecked`); D-007; before H2 |
 | H2 | Job runs read the artifact; GPU smoke path | merged | [#31](https://github.com/yuosef772424/nig-timenet-torch/pull/31) | closes #21-#23 classes; rule E5; queue `baseline-smoke-001` before any long job |
-| H1 | Card convention + navigation map | PR open | | rule B7; `docs/MAP.md` (`python -m tests.build_map`); allowlist 37; second R-REVIEW |
+| H1 | Card convention + navigation map | merged | [#32](https://github.com/yuosef772424/nig-timenet-torch/pull/32) | rule B7; `docs/MAP.md` (`python -m tests.build_map`); allowlist 37; second R-REVIEW |
 | I5 | Evaluation battery + adapter | todo | | |
 | I2 | Native data pipeline | todo | | closes HF-15 |
 | H3 / H4 | Model via registries / strict trainer config | todo | | G1, G2, G3, G7, C2 down; unknown keys raise |
