@@ -77,6 +77,13 @@ def test_targets_config_refuses_an_option_the_task_does_not_register():
         targets_config({"close": ["binary_classification"]}, options_by_kind={"nig_regression": {}})
 
 
+@pytest.mark.parametrize("key", ["normalize_reg_stop_grad", "huber_delta"])
+def test_evidential_refuses_keys_nothing_reads(key):
+    """H5: these two were accepted but never read (their switches normalize_reg / huber_weight are not ported)."""
+    with pytest.raises(ValueError, match=key):
+        targets_config({"close": ["nig_regression"]}, options_by_kind={"nig_regression": {key: 1.0}})
+
+
 def test_defaults_come_from_the_registry_and_never_enter_the_config():
     cfg = {"targets": {"c": {"true_key": "y_close_class", "task_type": "classification",
                              "output_keys": {"logits": "y_close_class_logits"}}}, "loss": {}}

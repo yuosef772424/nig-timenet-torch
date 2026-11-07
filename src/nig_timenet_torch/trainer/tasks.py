@@ -149,7 +149,7 @@ register_task_type(
     "evidential", evidential_task_loss,
     ["nig_base", "nig_pen", "mae", "aleatoric", "epistemic", "confidence", "calib_loss"], supports_sample_weight=True,
     config_keys=("use_calibration_loss", "lambda_reg_var", "lambda_calib_var", "normalize_reg",
-                 "normalize_reg_stop_grad", "beta_nll", "huber_weight", "huber_delta", "alpha_floor_straight_through"),
+                 "beta_nll", "huber_weight", "alpha_floor_straight_through"),
     default_options={"use_calibration_loss": False, "lambda_reg_var": "lambda_reg", "lambda_calib_var": "lambda_calib",
                      "normalize_reg": False, "beta_nll": 0.0, "huber_weight": 0.0,
                      "alpha_floor_straight_through": False})

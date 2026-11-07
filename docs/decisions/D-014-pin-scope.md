@@ -68,3 +68,8 @@ Injection points (38):
 - `nig_timenet_torch.workflow.run.Run(out)`: `None` -> `<removed>`
 - `nig_timenet_torch.workflow.run.prepare(out)`: `None` -> `<removed>`
 - `nig_timenet_torch.workflow.run.run_all(out)`: `None` -> `<removed>`
+
+Not a default, same package: the evidential task type no longer lists `normalize_reg_stop_grad` and `huber_delta` in its
+`config_keys`. Both were accepted and never read (their switches `normalize_reg` and `huber_weight` raise
+NotImplementedError, `trainer/tasks.py`), so a config that set them silently did nothing; it now raises "unknown key".
+The regression task's own `huber_delta` (read, default 1.0) is unchanged.
