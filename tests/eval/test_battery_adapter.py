@@ -95,3 +95,13 @@ def test_the_whole_battery_runs_on_the_adapted_nig_table():
     assert "SKIPPED" not in out["neutral"]["title"]      # 6 coins x 1000 hourly periods: a cross-section exists
     no_prev = full_battery(_adapt(table, labels, anchors), _adapt(table, labels, anchors))
     assert "SKIPPED" in no_prev["baseline"]["title"]
+
+
+def test_run_battery_entry_point_writes_the_report(tmp_path):
+    from nig_timenet_torch.workflow.battery_run import REPORT_TXT, StageInputs, render, run_battery
+    table, labels, anchors = make()
+    stage = StageInputs(table, labels, anchors, np.full(len(table), ANCHOR), codec_state())
+    out = run_battery(stage, stage, out_dir=tmp_path, n_variants=2)
+    text = (tmp_path / REPORT_TXT).read_text()
+    assert text == render(out) and "T-PROFIT - close direction trades" in text and "VERDICT" in text
+    assert "n_variants=2" in out["profit_close"]["note"]

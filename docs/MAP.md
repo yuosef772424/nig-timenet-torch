@@ -102,6 +102,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
+| `workflow/battery_run.py` | Adapts the VAL and TEST stage (table, labels, anchors, last_close, codec state) to battery tables and runs the full battery with the T-profit sections; optionally writes the text report next to the run. | battery run, stage inputs, t-profit, battery report, adapter entry point |
 | `workflow/health_report.py` | T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer trace) as JSON and markdown next to the checkpoint. | health report, diagnostics, t-sharp, probe, trainer trace, markdown report |
 | `workflow/prediction_table.py` | The one batched predict that turns a model and its inputs into the canonical PredictionTable, with one writer and one validating reader. | prediction table, batched predict, table meta, table writer, table reader |
 | `workflow/rolling.py` | P37: rolling-retrain loop — SEAM ONLY (the shape of the loop; no experiment is run through it in this repo). |  |

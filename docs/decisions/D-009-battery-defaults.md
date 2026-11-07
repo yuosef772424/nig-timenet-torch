@@ -45,3 +45,7 @@ cost ONCE per trade (see `docs/suggestions.csv`: the owner may want one conventi
 - `nig_timenet_torch.stats.metrics.block_bootstrap_ci(level)`: `<new>` -> `0.95`
 - `nig_timenet_torch.stats.metrics.block_bootstrap_ci(n_boot)`: `<new>` -> `500`
 - `nig_timenet_torch.stats.metrics.block_bootstrap_ci(seed)`: `<new>` -> `0`
+- `nig_timenet_torch.workflow.battery_run.StageInputs(prev_close)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.battery_run.run_battery(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.workflow.battery_run.run_battery(n_variants)`: `<new>` -> `1`
+- `nig_timenet_torch.workflow.battery_run.run_battery(out_dir)`: `<new>` -> `None`

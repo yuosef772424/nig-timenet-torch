@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.prediction_schema import validate_table
+from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats.nig import nig_predictive_std
@@ -98,7 +99,7 @@ def to_battery_table(table: pd.DataFrame, labels: dict, *, anchors: dict, last_c
         out["last_ret"] = last_close / prev - 1.0
     out["coin"] = table["asset"].astype(str).to_numpy()
     out["end_time"] = table["prediction_made_at"].dt.tz_convert("UTC").dt.tz_localize(None).to_numpy()
-    for t in ("high", "low"):
+    for t in (c for c in TARGET_COLUMNS if c != "close"):
         if head_spec("nig_regression", t).output_keys["mu"] in table.columns:
             pred, real, width = _head(table, labels, anchors, last_close, codec, codec_state, t)
             out[f"pred_{t}"], out[f"fut_{t}"], out[f"sigma_{t}"] = pred, real, width
