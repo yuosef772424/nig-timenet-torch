@@ -252,7 +252,22 @@ converted by hand with `data.load_data_from_drive(fmt="pkl.gz")` + `data.save_da
 
 Two consequences. (1) All 183 sealed coins were inside the TF main data, so earlier TF results (profile-004 included) are
 not a clean holdout test (`docs/bottlenecks.csv` B-022). (2) STILL UNVERIFIED: that `last_candles` column 3 is the bar OPEN
-time; `max_bar_time` and the time-seal check rest on that assumption (B-020).
+time; `max_bar_time` and the time-seal check rest on that assumption (B-020). [2026-11-08: settled internally by T5r
+(`prediction_made_at - timestamp` = 4h on every TEST row, `future_close(i) = last_close(i+2)`); raw klines not checked.]
+
+### TF `price_norm_mode`: what it means for X and for the labels (T5r, D-017; checked on `c572b1b36960`)
+
+The name describes the TF input normalisation, but it also decides how the labels must be decoded, and the name is
+misleading for this export:
+
+| meta key | value in `c572b1b36960` | what the arrays hold |
+|---|---|---|
+| `price_norm_mode` | `"logret_std"` | X = RAW log moves (features high / low / close; sample std 0.026 / 0.030 / 0.029, mean 0.019 / -0.020 / -0.000): the std step was NOT applied (`price_norm_state` = `"unfitted"`) |
+| `reg_target_mode`, `reg_target_scale` | `"return"`, `1.0` | every `y_{t}_reg` = log(future price / LAST CLOSE), clipped at abs 1.0 (B-054), NOT an own-anchor simple return |
+
+So a TF artifact with a `logret_*` mode is decoded with the `logret_close` codec (`data_io.target_codec.codec_name`), and
+`workflow.run_common.check_decode` refuses an artifact whose labels do not decode back to `last_candles`. A future export
+should declare the label definition in its own key (suggestions row 158) instead of leaving it to `price_norm_mode`.
 
 To repeat it, open `notebooks/colab_nig_timenet_torch.ipynb` and run section 2: it exports with
 `tools/export_torch_artifact.py --dataset ...pkl.gz` (TF PR 66; the tool reads the old format the way `data/storage.py`

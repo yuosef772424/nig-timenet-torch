@@ -111,3 +111,108 @@ C4 (>= 2 seeds) and C6 (gates) remain `manual` until ROADMAP G2 builds the job-s
 
 ### Actions
 - T5r reading with a fresh `baseline-002-s0` (smoke first); next review after 5 more merged PRs (counter in `docs/STATUS.md`).
+
+## 2026-11-08 — fourth review (own docs PR; covers #41-#46: manager handoff + float32 fix, job files, T3b, T5r phase 1 / 2, G1)
+
+Six PRs merged since the third review, and the STATUS counter still said 1 (hand-kept; third failure, H7 derives it).
+Inputs: friction rows 99-112 (+ 113-116 written by this review), suggestions rows 130-161, bottlenecks B-047..B-056
+(+ B-057..B-059 written by this review from the T5r error map), `docs/results/baseline-001.md` (T5r verdict: no T-profit
+signal; high ~ HAR, low no skill beyond volatility). Row numbers are CSV line numbers (line 1 = header).
+
+### Open bottlenecks ranked by gain / difficulty (goal: T-profit)
+
+Gain = what it unlocks for profit after cost from any use of the outputs (directly, or by making a profit reading or a
+gate verdict trustworthy). Difficulty S / M / L.
+
+| rank | id | what | gain | difficulty | addressed by |
+|---|---|---|---|---|---|
+| 1 | B-040, B-056 | no cheap gate before a full run; Gate C's fixed band is unreachable for a symmetric high / low head (the TRUE mean / sd covers 0.88) | high: every later switch is judged by the gates | M | G2 (now; E1 high / low coverage relative to the oracle, manager decision) |
+| 2 | B-052 (+ B-001, B-026) | NIG beta on its floor in ~98 % of high / low rows: std set by alpha alone, intervals too wide in calm rows | high: the uncertainty as a trade filter / size is one of the T-profit uses, and it shapes every NLL gradient | S-M | owner picks the route (below); G3r gives the evidence (E1 at scale 1.0 vs 100) |
+| 3 | B-053 | battery LONG rows: side from p_dir, size from a mu of the opposite sign; limit-at-mu credits a falling long | high for MEASUREMENT (every LONG profit row is wrong), none for the model | S | a small fix PR with the martingale guard over every battery section (suggestions 151, 154); timing = owner question |
+| 4 | B-057 (new) | high / low tie HAR; IC 0.11-0.20 inside the middle 60 % of volatility; rule D's last-range baseline is weaker than HAR | high for the limit-order uses at the predicted high / low | M | T6c switch (HAR inputs or HAR-residual target), card first; G2 shows HAR next to rule D (informational) |
+| 5 | B-038 | memorization: val worse after epoch 1 on every head | high: picks the lever (capacity / data / regularisation) for every switch | M | M1 / M2r (unchanged) |
+| 6 | B-059 (new) | market-wide shock days dominate the worst errors and every positive-looking strategy row | medium-high | M (artifact rebuild) | next artifact + T6c card |
+| 7 | B-058 (new) | mu shrinks to the mean (slope 1.4-1.8) | medium: predicted extremes too close to the price | M | T6b (switch 6 / mu calibration) |
+| 8 | B-043 | selection by loss, not by profit | medium | M | T6a switch 2 |
+| 9 | B-018, B-041, B-007 | no clip / wd groups / EMA; wd a no-op; torch init | medium (wd is a memorization lever) | S-M | TR1 |
+| 10 | B-025 | T-conf gap CI is an iid row bootstrap | medium: Gate B verdicts would be too lenient | S | G2: gate verdicts with the day-block CI (`stats.metrics.block_bootstrap_ci`) |
+| 11 | B-005 | confidence loss with a diversity penalty | medium-low now (T-conf decile curve already monotone; Spearman(std, \|err\|) 0.35-0.42) | M | T6a switch 3 |
+| 12 | B-048, B-024 | Drive sync / env cache never ran on Colab | medium runtime risk (one GPU session) | S | the owner's next Colab session of `main.ipynb` |
+| 13 | B-054, B-055 | label clip at \|log\| 1; no volume in the artifact | low-medium | S each | next artifact export |
+| 14 | B-002 | first projection may drop information | unknown | M | T6a switch 1 |
+| 15 | B-008 | step time | low now (174 s / epoch measured, 16-minute runs) | S | TR2 (proposed later, below) |
+| 16 | B-047 | job_id reuse across commits | low (unique-file test since #42) | S | H7 (check-job vs colab-results) |
+| 17 | B-049, B-045, B-046, B-036, B-021 | development debt | low | S-M | when the module is next touched |
+| - | B-020, B-022 | bar open time (settled internally), TF results not a clean holdout | information | - | none |
+
+Status changes recorded today: B-019, B-027, B-034 closed (GPU path and health report ran; B-034 superseded by B-051);
+B-047 mitigated (with the correction of friction row 102, see below); B-001, B-008, B-040 updated; B-057..B-059 new.
+
+### Repeated frictions -> rule proposals
+
+| friction (rows) | count | proposal | where |
+|---|---|---|---|
+| a corrected result leaves stale copies of the number in live docs: T-sharp 0.84 / 0.89 in STATUS (sugg. 153), ROADMAP T5r, PLANNER_HANDOFF, MANAGER_HANDOFF (row 116); "HF-13 settled" (sugg. 152) | 5 | **B6 extension (proposal):** a measured number has one home (`docs/results/*.md` or the run folder); live docs link it; a correction lists the superseded values in `tests/test_docs_claims.py`, which fails on a live-doc line quoting one without its B-id | H7 (check); rule text by the manager |
+| the hand-kept R-REVIEW counter (rows 100, 115; sugg. 131) | 3 | no new rule: F3 enforcement derived from the PR numbers | H7 |
+| fix commits inside other PRs skip F1 and the PR body: #21-#23 (first review), #41 (row 114: "docs only" with a test tolerance change) | 2 | **B1 wording (proposal):** the PR body lists every commit subject; a test-tolerance change is a behaviour change of the suite | rule text by the manager; manual |
+| float32 parity drifts across runner CPUs (rows 93, 114) | 2 | no new rule (B3 class fix): one cross-machine float32 tolerance and a scan | H7 |
+| a clean-up deleted another component's files (row 106, B-050), and a record inferred, not read, a fact about it (row 102 / 113) | 2 | no new rule: an `rmtree` ratchet in `colab/` (sugg. 145) | H7 |
+| label / codec semantics had to be guessed from `price_norm_mode` (rows 107, 110; sugg. 155, 158) | 3 | no new rule: the contract now states it (`docs/DATA_ARTIFACT_CONTRACT.md`); the next export declares a label-codec key | next artifact |
+| venv activation per shell call (row 112) | 1 | none (agent prompt carries it) | - |
+
+### Rules: retire / amend
+- Retired: none. E5 cost one job file per commit (B-047) and caught nothing this window, but its cost is a few minutes
+  and the three failed rounds it targets cost hours. B7, G3, the pin diff: low cost, kept.
+- Amend (proposal; CLAUDE.md is touched too, so the manager / owner applies it): **A1** says one step = one fresh
+  session, but the owner's method (MANAGER_HANDOFF 2026-11-07) reuses and resumes one agent across consecutive steps;
+  **A3** says a short report, the method asks for detailed agent reports to the manager. Proposed text: one step = one
+  PR on a branch fresh from `main`; an agent may be resumed for the next step and then reads only that step; agent
+  reports to the manager are detailed, the owner gets a short Arabic summary.
+- Weaker than claimed: C6 stays manual until G2 builds the job-side refusal; F3's counter until H7.
+
+### Suggestions decided (rows 130-161)
+Every open row now carries `2026-11-08 review (fourth): ...`. 22 rows: accepted 13 (H7 6, G2 3, the B-053 fix PR 2,
+F1 1, next artifact 1), declined 4 (132, 137, 144, 156, with the reason in the row), owner decision 2 (138, 150), done by
+this review 3 (130: the injection-point list was reviewed, every exempt default in `src/` is a callable; 146; 155). The
+rows marked `fixed` by their own PR (133, 134, 136, 142, 143, 147, 149, 152, 153, 161) are unchanged.
+
+### ROADMAP after G2 in the light of T5r
+Applied in `docs/ROADMAP.md` (no owner decision needed): H7 added after G2 (tooling only); G3r also runs E1 at
+`reg_target_scale` 100 (D-018 parameter, CPU) as the evidence for the B-052 route; T6b lists B-052 / B-058 / B-056 as
+inputs; T6c lists HAR inputs or a HAR-residual target (B-057) and cross-coin day context (B-059). Resulting order:
+`G2 -> H7 -> TR1 -> G3r -> M1 -> M2r -> TR2 -> T5r-s1 -> T6a -> T6b -> T6c -> T7r -> T8 -> D1 -> D2 -> F1-F5`.
+
+Proposed, NOT applied (the manager decides; no owner decision named):
+1. Fold T5r-s1 into T7r: the T7r baseline arm runs seeds 0-2 on the T7r commit. Seed 1 on another commit cannot be
+   paired with the T7r arms (C4: one commit), and a second seed of a no-signal baseline buys little now.
+2. Move TR2 after T8: runs take ~16 minutes and B-008 is measured; the equal-output pipeline matters when runs get long.
+3. Run the B-053 fix (with suggestions 151 / 154) before the next T-profit reading; it changes battery outputs only.
+
+Needs an owner decision (listed, not reordered):
+- **B-052 route:** (a) re-export the artifact at `reg_target_scale` 100 (the native default D-010; new fingerprint, so
+  the baseline is re-run; can bundle B-054 unclipped prices, B-055 volume, a label-codec key (sugg. 158) and B-059 context
+  features into ONE "next artifact" step), or (b) a model option (a beta floor scaled by the label variance, T6b switch 4)
+  on today's artifact. G3r's E1 arms at scale 1.0 vs 100 show what each route changes.
+- **Re-read the old runs after B-051?** Only `baseline-002-s0` was re-read with the right decode (T5r); the recorded
+  high / low decodes of r2, s0, trial-002 stay wrong. If yes: a `jobs/reread.py` entry (S, sugg. 150).
+- **B-053 timing:** before the next T-profit reading (proposal 3) or in T6a as planned.
+- **B-056 for E3 and the real data:** a band derived from a symmetric oracle, a skewed / quantile interval (T6b), or a
+  redefined band for high / low; until then the high / low coverage verdict there is informational.
+- **Rule D's volatility baseline (B-057):** the last bar's range (protocol) vs HAR mean6 (stronger in T5r).
+- **Market context (B-059)** needs a new artifact: part of the "next artifact" step or later.
+- Sugg. 138: a write token to push from Colab. The A1 / A3 wording above.
+- Still open from STATUS: O-2 (F2), O-3 (doctor before T7r; T5r found B-052 through a health-report floor share, which
+  argues for doctor checks early), O-4, O-5, O-6, O-7 (T5r section 8 has the r2 / baseline-002-s0 curves).
+
+### Stale facts fixed in this PR (rule B6)
+- `docs/ROADMAP.md` T5r, `docs/PLANNER_HANDOFF.md` State, `docs/hardening/MANAGER_HANDOFF.md`: the misdecoded T-sharp
+  share, "profit not measured", B-020 "unproven", D-015 / 749 tests as the latest, the done "Next" items: dated notes.
+- `docs/PLANNER_HANDOFF.md` "next free: baseline-smoke-002": both smoke ids are used; the next commit needs a new file.
+- `docs/MODEL_DEV_PROTOCOL.md` Gate C E3: "T-sharp share >= 0.80 for every head" contradicted O-1 (close informational).
+- `docs/DATA_ARTIFACT_CONTRACT.md`: B-020 note; a section on what the TF `price_norm_mode` means for X and the labels
+  (checked on the real artifact: X std 0.026-0.030, labels log vs last close clipped at 1.0).
+- friction row 102 / B-047 ("holds the 44f6e71 checkpoint"): corrected by friction row 113 and the B-047 status.
+- STATUS: G1 merged, counter reset, H7 row.
+
+### Actions
+- Next review after 5 more merged PRs (counter in `docs/STATUS.md`, derived once H7 lands).
