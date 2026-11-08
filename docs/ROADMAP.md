@@ -89,7 +89,8 @@ Then I1 ... H6 per `docs/hardening/PLAN.md`.
   windows. NOT yet known: whether high/low IC beats the last-bar-range volatility baseline (rule C1/D), and any T-profit
   number (the battery was wired in I3, after this run).
 - What the r2 run cannot give: the battery (`battery_report.txt`, `battery_profit.json`), the persisted predictions and the
-  volatility baseline inputs are not in its folder, and its checkpoint lives only on Drive (`.../baseline-001-s0-r2/train`).
+  volatility baseline inputs are not in its folder, and its checkpoint is NOT on Drive: the publish sent
+  `.../baseline-001-s0-r2/train` to the Drive trash (B-050, fixed 2026-11-08; restore it from the trash).
   No entry recomputes a report from a checkpoint (`jobs/` has `baseline` and `device_smoke` only). DECISION: do NOT build a
   recompute entry; queue a FRESH baseline at current main (about 16 minutes on a T4): new run_dir `baseline-002-s0`, same
   config as `docs/jobs/baseline-001-s0.json` (5 epochs, seed 0; job file `docs/jobs/baseline-002-s0.json`), preceded by a

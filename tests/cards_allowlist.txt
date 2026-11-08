@@ -3,7 +3,6 @@ colab/contract.py
 colab/device.py
 colab/identity.py
 colab/prepare.py
-colab/publish.py
 colab/runner.py
 colab/session.py
 core/constants.py

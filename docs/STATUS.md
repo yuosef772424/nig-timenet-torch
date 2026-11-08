@@ -34,8 +34,8 @@ GPU results (branch `colab-results`): `baseline-001-s0-r2` (2026-11-07, @44f6e71
 
 | Step | Title | State | PR / job | Note |
 |---|---|---|---|---|
-| T5r | Read the baseline (`docs/results/baseline-001.md`) | todo | | stronger model; fresh run `baseline-002-s0` at current main (smoke `baseline-smoke-002` first, E5; job files in `docs/jobs/`) gives the battery; r2 numbers are the reference |
-| T3b | Interactive notebook section + Drive cached env | PR open | [#43](https://github.com/yuosef772424/nig-timenet-torch/pull/43) | Arabic `main.ipynb` (34 cells), Drive sync both ways, env tar; D-016; not run on real Colab (B-048) |
+| T5r | Read the baseline (`docs/results/baseline-001.md`) | in progress | phase 1 PR (B-050 fix) | `baseline-002-s0` done (@8451a62, equals r2); its weights were deleted by the publish (B-050, fixed in phase 1; r2 weights in the Drive trash); phase 2 = the reading |
+| T3b | Interactive notebook section + Drive cached env | merged | [#43](https://github.com/yuosef772424/nig-timenet-torch/pull/43) (c026624) | Arabic `main.ipynb` (34 cells), Drive sync both ways, env tar; D-016; not run on real Colab (B-048) |
 | G1 / G2 | Test environments E1-E3 / gate tooling + gate job | todo | | protocol sections 2-3 |
 | TR1 | Trainer switches (clip, wd groups, EMA, init, timing, train gap) | todo | | B-018, B-007, HF-37 |
 | G3r | Gates on the baseline configuration | todo | | 3 seeds |

@@ -19,7 +19,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `colab/identity.py` | The ONE place a real run's ``RunIdentity`` is built (T2 review, deferred to T3). |  |
 | `colab/job.py` | The job a Colab run executes: ``job.json`` on the ``colab-queue`` branch, parsed and validated, including the entry's own strict config. | colab job, job validation, queue branch, job config, expected outputs |
 | `colab/prepare.py` | Section 2 of the notebook (ROADMAP T3): turn the TF project's training data into a contract artifact, once. |  |
-| `colab/publish.py` | Results of a Colab run: bundle, Drive copy, push to ``colab-results``, and ``republish`` (rules E1/E2, ROADMAP T3). |  |
+| `colab/publish.py` | Results of a Colab run: the bundle folder on Drive (its own files listed in publish.json), the push of those files to colab-results and republish from the bundle alone (rules E1/E2, ROADMAP T3). | colab publish, bundle, results branch, drive copy, republish, git size limit, run folder, checkpoints |
 | `colab/runner.py` | One Colab job from queue to results (ROADMAP T3): ``fetch`` job.json from ``colab-queue`` -> ``check_rerun`` -> |  |
 | `colab/session.py` | Section 1 of the notebook, second half (ROADMAP T3): check the device the run will use and record the whole setup. |  |
 
