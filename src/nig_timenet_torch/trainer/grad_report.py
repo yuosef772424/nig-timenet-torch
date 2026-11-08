@@ -3,8 +3,9 @@
 TAGS: gate a, gradient health, grad report, dead parameters, update weight ratio, head gradient share, head conflict,
     dead units, representative batch set
 PITFALLS: A5 / A6 use the shared TRUNK (parameters two heads reach, minus the head modules' own), unlike the T4
-    trace's gradient share, which also counts the close NIG head the ordered means share; gradient code lives here, not in eval/ or workflow/ (rule G5); A4 takes ONE real optimizer step and then
-    restores the model, optimizer and Kendall state exactly; A3's spike test compares the R batch norms of one
+    trace's gradient share, which also counts the close NIG head the ordered means share; gradient code lives here,
+    not in eval/ or workflow/ (rule G5); A4 takes ONE real optimizer step and then restores the model, optimizer and
+    Kendall state exactly; A3's spike test compares the R batch norms of one
     measurement (the protocol's in-run spike needs per-step norms, not logged yet); A7 hooks the pre-activation layers
     the model lists in ``activation_points`` (activations are functional here), a unit is dead when its pre-activation
     is <= 0 on every row of the batch set.
