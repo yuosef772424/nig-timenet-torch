@@ -77,6 +77,8 @@ I4 is split: its rolling half becomes step F2, its panel half is parked (Later);
 Then I1 ... H6 per `docs/hardening/PLAN.md`.
 
 ## Block 2 — read the baseline, then build the gates
+Fourth R-REVIEW (2026-11-08, `docs/reviews.md`): H7 added after G2; order proposals that need the manager or the owner
+are listed there and not applied here.
 
 ### T5r — read the baseline (`docs`/`exp`, S-M, researcher: the stronger model, because it decides what to try next)
 - Inputs that already exist on `colab-results` (read with `git show origin/colab-results:<path>`, do not copy): `runs/baseline-001-s0-r2/`
@@ -85,7 +87,7 @@ Then I1 ... H6 per `docs/hardening/PLAN.md`.
   so the high / low decodes were WRONG until T5r (B-051, fixed with the `logret_close` codec; HF-13 was right)). Older: `baseline-001-s0`
   (@55e2db4, pre-T4b, history only), `trial-002`, smoke `baseline-smoke-001`. Known so far: best epoch 1 of 5 (val
   -5.062 -> -4.947 while train -5.75 -> -6.12: overfit after epoch 1, B-038); test rank IC high 0.393 / low 0.436 /
-  close 0.057 (shuffled ~0); T-sharp share 0.84 / 0.89 but 80 % coverage 0.89 / 0.93 / 0.88 (> 0.85: intervals too
+  close 0.057 (shuffled ~0); T-sharp share 0.84 / 0.89 (a B-051 misdecode; 0.012 / 0.272 after the fix, fourth R-REVIEW note) but 80 % coverage 0.89 / 0.93 / 0.88 (> 0.85: intervals too
   wide); confidence decile Spearman -0.81 / -1.00 / -0.99; ~169 s per epoch (median), 2,015,804 / 239,297 / 239,772
   windows. NOT yet known: whether high/low IC beats the last-bar-range volatility baseline (rule C1/D), and any T-profit
   number (the battery was wired in I3, after this run).
@@ -130,6 +132,17 @@ Then I1 ... H6 per `docs/hardening/PLAN.md`.
 - Acceptance: on E1 a correct small model passes; a planted defect fails the right check (a detached head -> A2, a
   constant confidence -> B, a zero std -> C coverage, a label leak -> canary); CPU < 60 s per test.
 
+### H7 — register and review tooling (`test` + small `fix`, S, builder; added by the fourth R-REVIEW, no model behaviour)
+- From `docs/suggestions.csv` (fourth review decisions): derive the R-REVIEW counter from the last review's `covers #a-#b`
+  line and the highest PR link in STATUS (row 131); every register row has the header's column count (row 149);
+  `check-job --results-branch` refuses a job_id already on `colab-results` (row 135, B-047); the notebook's metric names
+  exist in `target_report` (row 139); a ratchet on `shutil.rmtree` in `colab/` (row 145, B-050 class); one cross-machine
+  float32 tolerance used by every float32 parity test (friction row 114); `defaults_pin` exempts only CALLABLE defaults
+  of injection-point names (row 130); `notebooks/data_pipeline.ipynb` TORCH_REF = main (row 140); bootstrap card note (row 141).
+  From the review's own rows: a superseded-number check over the live docs (row 162) and the STATUS state check for every
+  step id (row 163).
+- Acceptance: each new check fails on a planted case and passes on main; no default or model output changes.
+
 ### TR1 — trainer switches (`feat`, M, builder)
 Registered options in `FitSettings` / `Trainer`, defaults reproduce today (D-nnn), each with a fixture test (default
 = outputs unchanged; on = changes what it should):
@@ -146,7 +159,8 @@ Registered options in `FitSettings` / `Trainer`, defaults reproduce today (D-nnn
 ### G3r — gates on the baseline configuration (`exp`, S-M, researcher)
 - Run the `gates` job on today's default (E1 -> E2 -> E3, seeds 0-2; CPU for E1, GPU for E3). Read: which checks fail,
   on which seeds; for each failure the fix of the protocol table becomes a card (switch from TR1 or an architecture
-  card for T6c). Output: docs/results/gates-baseline.md.
+  card for T6c). Output: docs/results/gates-baseline.md. Also run E1 at `reg_target_scale` 100 (a D-018 generator
+  parameter, CPU) next to the default 1.0: the evidence the owner needs for the B-052 route (fourth R-REVIEW).
 - Acceptance: every gate check has a value per env x seed; every failure has a named next action.
 
 ## Block 3 — explain the memorization (protocol section 5)
@@ -197,12 +211,16 @@ Registered options in `FitSettings` / `Trainer`, defaults reproduce today (D-nnn
 5. Interval scale: `eval/calibrator.py` fitted on a calibration half of val, measured on the other half and on test.
 6. Regression loss option `czar` (bounded / Cauchy-type loss harvested from PR #25, BRANCH_AR_STREAM section 4),
    default the NIG NLL; quantile heads as a confidence / interval method (protocol section 4).
-- Inputs: G3r and M1 / M2r results (which switches the evidence asks for first). Acceptance: as T6a.
+- Inputs: G3r and M1 / M2r results (which switches the evidence asks for first). From T5r: B-052 (switch 4 is one of
+  the two routes the owner chooses between), B-058 (mu shrinks to the mean, slope 1.4-1.8: test on bias slope = 1),
+  B-056 (a skewed / quantile interval for high / low). Acceptance: as T6a.
 
 ### T6c — architecture switches named by the evidence (`feat`, M, builder after a researcher card; skip with a reason)
 - Only changes that G3r, M1 / M2r or the doctor named (e.g. `linear_path` / level passthrough gated or off if they
   dominate; LayerNorm GRU if the hidden state saturates; a separate scale trunk if gate A6 shows mu / scale conflict;
-  removing the leak path H-M3 finds). One switch per finding, default today, card first.
+  removing the leak path H-M3 finds). One switch per finding, default today, card first. Named by T5r: HAR inputs or a
+  HAR-residual target codec for high / low (B-057), cross-coin day context (B-059, needs an artifact with the
+  `data/context.py` families).
 
 ### T7r — gates, then baseline vs all switches on (`exp`, M, researcher)
 - Gates on the all-on configuration (must pass, protocol section 2). Card first: predicted movement per target,
