@@ -34,9 +34,10 @@ GPU results (branch `colab-results`): `baseline-002-s0` (2026-11-08, @8451a62, e
 
 | Step | Title | State | PR / job | Note |
 |---|---|---|---|---|
-| T5r | Read the baseline (`docs/results/baseline-001.md`) | PR open | phase 1 [#44](https://github.com/yuosef772424/nig-timenet-torch/pull/44) merged; phase 2 PR | weights recovered, no re-training; B-051 decode fix (D-017); C1, strategy book, diagnosis, error map; verdict: no T-profit signal |
+| T5r | Read the baseline (`docs/results/baseline-001.md`) | merged | phase 1 [#44](https://github.com/yuosef772424/nig-timenet-torch/pull/44), phase 2 [#45](https://github.com/yuosef772424/nig-timenet-torch/pull/45) | weights recovered, no re-training; B-051 decode fix (D-017); C1, strategy book, diagnosis, error map; verdict: no T-profit signal |
 | T3b | Interactive notebook section + Drive cached env | merged | [#43](https://github.com/yuosef772424/nig-timenet-torch/pull/43) (c026624) | Arabic `main.ipynb` (34 cells), Drive sync both ways, env tar; D-016; not run on real Colab (B-048) |
-| G1 / G2 | Test environments E1-E3 / gate tooling + gate job | todo | | protocol sections 2-3 |
+| G1 | Test environments E1-E3 | PR open | [#46](https://github.com/yuosef772424/nig-timenet-torch/pull/46) | `data_io/synthetic.py` (E1, exact oracle moments, `data_io/walk_max.py`), `data_io/environments.py` (E2, E3), `nig-envs`; D-018; oracle T-sharp 1 / 1 / 0; a symmetric head with the TRUE mean / sd covers 0.88 on high / low (B-056) |
+| G2 | Gate tooling + gate job | todo | | protocol section 2 |
 | TR1 | Trainer switches (clip, wd groups, EMA, init, timing, train gap) | todo | | B-018, B-007, HF-37 |
 | G3r | Gates on the baseline configuration | todo | | 3 seeds |
 | M1 / M2r | Memorization study: CPU part / short GPU arms | todo | | B-038; protocol section 5; r2 shows overfit after epoch 1 |

@@ -11,6 +11,7 @@ dependencies = ["numpy==2.4.6", "pandas==3.0.6", "pyarrow~=25.0.1", "torch>=2.15
 
 [project.scripts]
 nig-data = "nig_timenet_torch.data.cli:main"
+nig-envs = "nig_timenet_torch.data_io.environments:main"
 
 [project.optional-dependencies]
 # torch: install the CPU wheel first (CI: --index-url https://download.pytorch.org/whl/cpu), then `pip install -e ".[dev]"`.

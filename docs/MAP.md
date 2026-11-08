@@ -68,10 +68,13 @@ line range). A module without a card shows its first docstring line; it gets a c
 | module | what it is for | tags |
 |---|---|---|
 | `data_io/artifact.py` | Loader of a contract artifact exported by the TF side: refuses it unless every rule D1 field is present and consistent with the data itself. | artifact loader, rule d1, manifest, sealed coins, time seal, hash verification |
+| `data_io/environments.py` | Test environments of MODEL_DEV_PROTOCOL section 3: E2 = one global label permutation (inputs untouched), E3 = a training-era slice of the real artifact (coins x months, own purged split); nig-envs writes E1 / E2 / E3. | e2 environment, e3 environment, shuffled labels, label permutation, real slice, training era, purged split, leakage canary, gates |
 | `data_io/loading.py` | One way to load a prepared dataset by base name, latest name or full name, memory-mapped or copied to local disk, with the rule D1 artifact checks applied by default. | dataset loading, latest name, mmap, local copy, artifact checks, rule d1 |
 | `data_io/npy_dir.py` | Reader of the npy_dir dataset format (manifest.json + one .npy per array + meta.pkl), optionally memory- mapped, and a local-disk copy helper. | npy dir, dataset reader, mmap, localize, data format, manifest |
 | `data_io/split_plan.py` | One global train/val/test split with purge by label end and embargo, plus the per-row times it needs (feature start, feature end, label end) derived from last_candles. | split plan, purge embargo, label end, sample times, leakage check |
+| `data_io/synthetic.py` | E1 test environment (MODEL_DEV_PROTOCOL section 3): synthetic 4h bars from intrabar random walks, HAR-like volatility, a planted close drift of known IC; a contract artifact with each label's exact conditional mean / sd. | synthetic data, e1 environment, oracle, planted signal, known ic, heteroscedastic noise, har volatility, intrabar path, contract artifact, gates |
 | `data_io/target_codec.py` | TARGET_CODECS, the one place a regression target is encoded from last_candles and decoded back to a price: "return" (own-anchor simple return) and "logret_close" (log return vs the last close, TF logret_* artifacts). | target codec, return target, log return, reg target scale, decode to price, own anchor, anchor column |
+| `data_io/walk_max.py` | Exact moments of the running maximum M_n = max(0, S_1..S_n) of a Gaussian random walk with iid N(mu, s^2) steps (Spitzer's identity), vectorised over rows: mean, variance and E[exp(theta M_n)]. | random walk, running maximum, spitzer identity, exact moments, moment generating function, oracle, synthetic |
 
 ### eval
 
@@ -170,6 +173,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `colab/__main__.py`: runnable (`python -m nig_timenet_torch.colab`)
 - `data/cli.py`: runnable (`python -m nig_timenet_torch.data.cli`)
 - `data_io/artifact.py`: runnable (`python -m nig_timenet_torch.data_io.artifact`)
+- `data_io/environments.py`: runnable (`python -m nig_timenet_torch.data_io.environments`)
 - `jobs/baseline.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/device_smoke.py`: job entry (`docs/jobs/*.json` name it)
 - `notebooks/colab_nig_timenet_torch.ipynb`: notebook runner
