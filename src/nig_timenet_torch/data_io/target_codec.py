@@ -23,7 +23,7 @@ from nig_timenet_torch.core.registry import Contract, Registry
 from nig_timenet_torch.core.schema import LAST_COLUMNS
 
 __all__ = ["TARGET_CODECS", "ReturnCodec", "LogCloseCodec", "own_anchor_and_future", "anchor_and_future",
-           "anchor_column", "codec_name", "LOGRET_NORM_MODES", "LAST_COLUMNS"]
+           "anchor_column", "future_column", "codec_name", "LOGRET_NORM_MODES", "LAST_COLUMNS"]
 
 #: price_norm_mode values of the TF pipeline whose regression labels are log(future price / last close), whatever
 #: reg_target_mode says (crypto-signal-prediction data/windows.py: ``nz.raw_reg_target(own_future, last_c)``)
@@ -45,6 +45,11 @@ def own_anchor_and_future(last_candles: np.ndarray, target: str) -> np.ndarray:
 def anchor_column(state: dict, target: str) -> str:
     """The last_candles column the codec of ``state`` decodes head ``target`` against."""
     return f"last_{target}" if TARGET_CODECS[state["mode"]].anchor == "own" else "last_close"
+
+
+def future_column(target: str) -> str:
+    """The last_candles column holding price target ``target``'s future price (the label's source)."""
+    return _OWN[target][1]
 
 
 def anchor_and_future(last_candles: np.ndarray, target: str, state: dict) -> np.ndarray:
