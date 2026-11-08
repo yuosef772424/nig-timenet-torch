@@ -12,6 +12,7 @@ TAGS:     builder, nig timenet v2, model assembly, encoder dispatch, head dispat
 PITFALLS: THE default config is the registry's (architectures.NIG_TIMENET_V2_DEFAULT_CONFIG: d_model 16, 2 layers);
           this signature mirrors the TF builder (d_model 128, 4 layers, NIG heads only) and must not be edited to
           "fix" that (HF-08). Attribute names are Keras layer names = checkpoint keys: never rename.
+          ``activation_points`` only lists module names for gate A7 (no behaviour).
 """
 
 import torch
@@ -266,6 +267,16 @@ class NigTimeNetV2(nn.Module):
         return out
 
     default_probe_points = ("trunk_norm",)  # layer-probe points of the health report (module names)
+
+    @property
+    def activation_points(self) -> tuple[str, ...]:
+        """Linear layers whose output feeds a ReLU-family activation (gate A7 hooks them; activations are functional):
+        stats projection and readout per branch, each NIG head's hidden layer, confidence hidden layer, class hidden
+        layer."""
+        names = dict(self.named_modules())
+        branch = [n + sfx for sfx in self.branch_suffixes for n in ("stats_proj", "readout_fc")]
+        heads = [f"nig_{t}.fc" for t in self.nig_targets] + [f"conf_{t}.d1" for t in self.nig_targets]
+        return tuple(n for n in branch + heads + [f"class_fc_{t}" for t in self.class_targets] if n in names)
 
     def head_modules(self) -> dict[str, NIGHead]:
         """{target: NIGHead} of every nig_regression head (floors and diagnostics read them, never by name)."""

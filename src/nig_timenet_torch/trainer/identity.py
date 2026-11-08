@@ -18,7 +18,7 @@ from dataclasses import dataclass
 import torch
 
 __all__ = ["RunIdentity", "ResumeMismatchError", "SeedMismatchError", "build_run_identity", "check_resume",
-           "optimizer_settings", "settings_hash"]
+           "optimizer_settings", "settings_hash", "configuration_hash"]
 
 IDENTITY_SCHEMA_VERSION = 1
 
@@ -125,6 +125,17 @@ def build_run_identity(fit_settings, model_settings, trainer_config, optimizer, 
     ``code_sha``: the git commit of this repository.
     All of these are required: a run whose objective or optimizer changed must not resume as the same run.
     """
+    payload = _payload(fit_settings, model_settings, trainer_config, optimizer)
+    if not isinstance(data_fingerprint, str) or not data_fingerprint:
+        raise ValueError("data_fingerprint must be the non-empty fingerprint string from the artifact manifest")
+    if not isinstance(code_sha, str) or not code_sha:
+        raise ValueError("code_sha must be the non-empty git commit of this repository")
+    return RunIdentity(schema_version=IDENTITY_SCHEMA_VERSION, settings_hash=settings_hash(payload),
+                       seed=int(payload["fit"]["seed"]), data_fingerprint=data_fingerprint, code_sha=code_sha)
+
+
+def _payload(fit_settings, model_settings, trainer_config, optimizer) -> dict:
+    """What ``settings_hash`` covers: fit settings without epochs / trace, model, trainer config, optimizer."""
     fit = _as_dict(fit_settings, "fit_settings")
     fit.pop("epochs", None)
     fit.pop("trace", None)  # log-only (T4): switching the trace on must not change a run's identity
@@ -134,10 +145,13 @@ def build_run_identity(fit_settings, model_settings, trainer_config, optimizer, 
         json.dumps(trainer, sort_keys=True)
     except (TypeError, ValueError) as e:
         raise TypeError(f"trainer_config must be plain JSON data (it is hashed into the run identity): {e}") from e
-    if not isinstance(data_fingerprint, str) or not data_fingerprint:
-        raise ValueError("data_fingerprint must be the non-empty fingerprint string from the artifact manifest")
-    if not isinstance(code_sha, str) or not code_sha:
-        raise ValueError("code_sha must be the non-empty git commit of this repository")
-    payload = {"fit": fit, "model": model, "trainer": trainer, "optimizer": optimizer_settings(optimizer)}
-    return RunIdentity(schema_version=IDENTITY_SCHEMA_VERSION, settings_hash=settings_hash(payload),
-                       seed=int(fit["seed"]), data_fingerprint=data_fingerprint, code_sha=code_sha)
+    return {"fit": fit, "model": model, "trainer": trainer, "optimizer": optimizer_settings(optimizer)}
+
+
+def configuration_hash(fit_settings, model_settings, trainer_config, optimizer) -> str:
+    """The CONFIGURATION a gate report is keyed by (MODEL_DEV_PROTOCOL section 1): the run identity's settings hash
+    without the seed (gates run every seed of one configuration) and without data or commit; arguments as
+    ``build_run_identity``. A changed switch, loss weight, learning rate or batch size is a new configuration."""
+    payload = _payload(fit_settings, model_settings, trainer_config, optimizer)
+    payload["fit"].pop("seed", None)
+    return settings_hash(payload)

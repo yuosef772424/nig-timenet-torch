@@ -23,7 +23,7 @@ import math
 
 import torch
 
-__all__ = ["epoch_trace", "head_gradient_share", "head_gradients"]
+__all__ = ["epoch_trace", "epoch_trace_mean", "head_gradient_share", "head_gradients"]
 
 
 def head_gradients(trainer, x, y) -> tuple[list, dict, list[int]]:
@@ -42,7 +42,8 @@ def head_gradients(trainer, x, y) -> tuple[list, dict, list[int]]:
             if trainer.uncertainty_layer is not None:
                 for t in trainer.kendall_task_names:
                     mult[t] = 0.5 * math.exp(-float(trainer.uncertainty_layer.log_var(t).detach()))
-            grads = {t: torch.autograd.grad(loss * mult[t], params, retain_graph=True, allow_unused=True)
+            grads = {t: (torch.autograd.grad(loss * mult[t], params, retain_graph=True, allow_unused=True)
+                         if loss.requires_grad else (None,) * len(params))   # a fully detached head: no gradient
                      for t, loss in per_target.items()}
     finally:
         model.train(was_training)
@@ -70,3 +71,12 @@ def epoch_trace(trainer, x, y) -> dict[str, float]:
         out.update({f"trace_kendall_logvar_{t}": float(layer.log_var(t).detach()) for t in layer.task_names})
     out.update({f"trace_gradshare_{t}": s for t, s in head_gradient_share(trainer, x, y).items()})
     return out
+
+
+def epoch_trace_mean(trainer, batches) -> dict[str, float]:
+    """The trace row as the mean over ``batches`` (a list of (x, y)): the gradient shares are averaged per head, the
+    schedule and Kendall values do not depend on the batch."""
+    rows = [epoch_trace(trainer, x, y) for x, y in batches]
+    if not rows:
+        raise ValueError("epoch_trace_mean needs at least one batch")
+    return {k: float(sum(r[k] for r in rows) / len(rows)) for k in rows[0]}

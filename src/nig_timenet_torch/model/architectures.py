@@ -5,7 +5,8 @@ PURPOSE:  The ARCHITECTURES registry (build_fn + default_config per architecture
 TAGS:     architectures, registry, model settings, default config, tiny mlp, plugin, health report, probe points
 PITFALLS: THE default of nig_timenet_v2 is NIG_TIMENET_V2_DEFAULT_CONFIG (d_model 16, 2 layers, NIG + binary heads);
           build_nig_timenet_v2's own signature mirrors TF and differs (HF-08). An architecture's model must provide
-          ``head_modules() -> {target: NIGHead}`` and ``default_probe_points`` (module names) for health_report.
+          ``head_modules() -> {target: NIGHead}`` and ``default_probe_points`` (module names) for health_report;
+          optional ``activation_points`` (pre-activation Linear names) for gate A7.
 
 Each entry: ``build_fn(seq_len, n_features, **config) -> nn.Module`` whose forward returns the HEAD_REGISTRY-named
 output dict, plus a ``default_config`` (constructor kwargs without seq_len / n_features). ``nig_timenet_v2`` is the
@@ -132,6 +133,12 @@ class TinyMLP(nn.Module):
 
     def head_modules(self) -> dict[str, NIGHead]:
         return dict(self.nig.items())
+
+    @property
+    def activation_points(self) -> tuple[str, ...]:
+        """Linear layers whose output feeds a ReLU-family activation (gate A7)."""
+        return ("fc1", *(f"nig.{t}.fc" for t in self.nig_targets), *(f"conf.{t}.d1" for t in self.nig_targets),
+                *(f"class_fc.{t}" for t in self.class_targets))
 
     def regularization_loss(self) -> torch.Tensor:
         return sum((m.regularization_loss() for m in self.head_modules().values()), torch.zeros(()))
