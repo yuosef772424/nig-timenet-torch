@@ -41,8 +41,8 @@ from nig_timenet_torch.workflow.health_report import REPORT_JSON, REPORT_MD, Hea
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
 from nig_timenet_torch.workflow.settings import RunSettings
 
-__all__ = ["Run", "prepare", "build", "train", "health_step", "test_step", "battery_step", "write_summary", "run_all",
-           "test_lines", "SUMMARY", "TEST_REPORT"]
+__all__ = ["Run", "prepare", "build", "train", "health_step", "test_step", "battery_step", "write_summary",
+           "run_all", "test_lines", "SUMMARY", "TEST_REPORT"]
 
 SUMMARY = "baseline_summary.json"
 TEST_REPORT = "test_report.json"
@@ -93,7 +93,7 @@ def prepare(settings: RunSettings, out=None) -> Run:
     art = run_common.load_data(settings)
     ds = art.dataset
     targets = run_common.price_targets(ds)
-    run_common.codec_state(ds)
+    run_common.check_decode(ds, targets)
     run_common.input_key(ds)
     (tr, va, te), bounds = run_common.make_plan(ds, settings.split)
     run = Run(settings, art, targets, {"train": tr, "val": va, "test": te}, bounds, run_common.pick_device(settings),
@@ -152,12 +152,12 @@ def health_step(run: Run) -> Run:
     xs = run.x["val"][torch.as_tensor(pick)].to(dev)
     meta = table_meta(ds, idx, stage="val", fold=0, train_end=run.bounds[0])
     table = predict_table(run.trainer.model, xs, meta, run.ident)
-    lc = np.asarray(ds["last_candles"])
+    lc, codec = np.asarray(ds["last_candles"]), run_common.codec_state(ds)
     probe_target = "close" if "close" in run.targets else run.targets[0]
     labels = {k: v[torch.as_tensor(pick)].numpy() for k, v in run.y["val"].items()}
     hr = HealthRun(run_dir=Path(run.settings.run_dir), model=run.trainer.model, x=xs, predictions=table,
-                   labels=labels, anchors=flat_run.anchors_by_name(lc, idx, run.targets),
-                   last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]], codec_state=run_common.codec_state(ds),
+                   labels=labels, anchors=flat_run.anchors_by_name(lc, idx, run.targets, codec),
+                   last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]], codec_state=codec,
                    probe_labels=tuple(head_spec(k, probe_target).label_key
                                       for k in ("nig_regression", "binary_classification")))
     health_report(hr)
@@ -169,12 +169,11 @@ def health_step(run: Run) -> Run:
 
 
 def stage_report(run: Run, stage: str, table: pd.DataFrame) -> dict:
-    lc = np.asarray(run.dataset["last_candles"])
+    lc, codec = np.asarray(run.dataset["last_candles"]), run_common.codec_state(run.dataset)
     idx = run.idx[stage]
     return target_report(table, {k: v.numpy() for k, v in run.y[stage].items()},
-                         anchors=flat_run.anchors_by_name(lc, idx, run.targets),
-                         last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]],
-                         codec_state=run_common.codec_state(run.dataset))
+                         anchors=flat_run.anchors_by_name(lc, idx, run.targets, codec),
+                         last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]], codec_state=codec)
 
 
 def test_step(run: Run) -> dict:

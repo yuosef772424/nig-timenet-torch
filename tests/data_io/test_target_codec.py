@@ -46,7 +46,7 @@ def test_clip_and_state_checks():
 
 
 def test_unregistered_mode_raises():
-    assert TARGET_CODECS.names() == ("return",)
+    assert TARGET_CODECS.names() == ("return", "logret_close")
     with pytest.raises(UnknownNameError):
         TARGET_CODECS["entry_range"]
 
@@ -62,3 +62,24 @@ def test_fit_requires_reg_target_scale():
 def test_unknown_codec_mode_raises():
     with pytest.raises(UnknownNameError):
         TARGET_CODECS["volnorm"]
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_logret_close_codec_round_trip(seed):
+    codec = TARGET_CODECS["logret_close"]()
+    state = codec.fit({"reg_target_scale": 1.0})
+    raw = synthetic_candles(seed)
+    y = codec.encode(raw, state)
+    np.testing.assert_allclose(y, np.log(raw[:, 1] / raw[:, 0]), rtol=1e-12)
+    np.testing.assert_allclose(codec.decode(y, state, anchors=raw[:, 0]), raw[:, 1], rtol=1e-12)
+
+
+def test_codec_name_reads_the_price_norm_mode():
+    """B-051: a TF logret_* artifact says reg_target_mode 'return' but its labels are log(future / last_close)."""
+    from nig_timenet_torch.data_io.target_codec import anchor_column, codec_name
+    assert codec_name({"reg_target_mode": "return"}) == "return"
+    assert codec_name({"reg_target_mode": "return", "price_norm_mode": "window_scale"}) == "return"
+    assert codec_name({"reg_target_mode": "return", "price_norm_mode": "logret_std"}) == "logret_close"
+    log_state = TARGET_CODECS["logret_close"]().fit({"reg_target_scale": 1.0})
+    own_state = TARGET_CODECS["return"]().fit({"reg_target_scale": 1.0})
+    assert anchor_column(log_state, "high") == "last_close" and anchor_column(own_state, "high") == "last_high"

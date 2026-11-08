@@ -15,6 +15,7 @@ import pandas as pd
 import torch
 
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS
+from nig_timenet_torch.data_io.target_codec import anchor_column
 from nig_timenet_torch.model.architectures import ModelSettings, build_model
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer.identity import RunIdentity
@@ -32,10 +33,14 @@ LAMBDA_SCHEDULES = {"lambda_reg": {"start": 0.0, "end": 0.05, "warmup_epochs": 5
                     "lambda_calib": {"start": 0.0, "end": 0.1, "warmup_epochs": 5, "schedule": "cosine"}}
 
 
-def anchors_by_name(last_candles: np.ndarray, idx: np.ndarray, targets) -> dict:
-    """{target: own last price of the head}, picked by column NAME (``last_<target>``), never by position."""
+def anchors_by_name(last_candles: np.ndarray, idx: np.ndarray, targets,
+                    codec_state: dict | None = None) -> dict:
+    """{target: the price the head's label is relative to}, picked by column NAME, never by position: the codec's
+    ``anchor_column`` (own last price ``last_<target>`` for "return", ``last_close`` for "logret_close"); without
+    ``codec_state`` the own last price."""
     lc = np.asarray(last_candles)
-    return {t: lc[idx, LAST_COLUMN_INDEX[f"last_{t}"]] for t in targets}
+    col = (lambda t: f"last_{t}") if codec_state is None else (lambda t: anchor_column(codec_state, t))
+    return {t: lc[idx, LAST_COLUMN_INDEX[col(t)]] for t in targets}
 
 
 def flat_inputs(dataset: dict, idx: np.ndarray) -> tuple[torch.Tensor, dict]:

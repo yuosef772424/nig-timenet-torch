@@ -86,7 +86,7 @@ def stage_inputs(run, stage: str) -> StageInputs:
     lc = np.asarray(run.dataset["last_candles"])
     idx = run.idx[stage]
     return StageInputs(tables[stage], {k: v.numpy() for k, v in run.y[stage].items()},
-                       flat_run.anchors_by_name(lc, idx, run.targets),
+                       flat_run.anchors_by_name(lc, idx, run.targets, run_common.codec_state(run.dataset)),
                        lc[idx, LAST_COLUMN_INDEX["last_close"]], run_common.codec_state(run.dataset))
 
 
