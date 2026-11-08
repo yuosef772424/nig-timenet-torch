@@ -1,0 +1,127 @@
+====================================================================================================
+TABLE INTEGRITY - the data first
+  VAL   n=20,000  NaN rows=0  dir_true mismatches=0  p_dir in [0.473, 0.518]
+  TEST  n=20,000  NaN rows=0  dir_true mismatches=0  p_dir in [0.473, 0.516]
+  VAL windows ending at/after the first TEST end_time: 0  (VAL max 2026-06-15 00:00:00 / TEST min 2026-06-20 20:00:00)
+-> A nonzero NaN/mismatch count or VAL/TEST overlap means leakage or a broken dump: fix the run before reading on.
+====================================================================================================
+SANITY - IC, direction accuracy, up-bias
+  VAL   IC(mu, y_ret)=+0.0037  dir_acc(p_dir)=0.5071  P(p_dir>0.5)=0.306  P(y>0)=0.474  n=19,817
+  TEST  IC(mu, y_ret)=-0.0031  dir_acc(p_dir)=0.5082  P(p_dir>0.5)=0.304  P(y>0)=0.484  n=19,825
+-> IC > 0 means the model's magnitude ranks moves correctly; direction is the close class head (p_dir); a big P(p_dir>0.5) - P(y>0) gap is bias.
+====================================================================================================
+CONFIDENCE CALIBRATION (TEST)
+  confidence [0.000, 0.001]  n=  3,965  dir_acc=0.4991  avg_pnl/trade=+0.0720%
+  confidence [0.001, 0.003]  n=  3,965  dir_acc=0.4979  avg_pnl/trade=-0.0751%
+  confidence [0.003, 0.005]  n=  3,965  dir_acc=0.5095  avg_pnl/trade=+0.0413%
+  confidence [0.005, 0.007]  n=  3,965  dir_acc=0.5208  avg_pnl/trade=+0.0493%
+  confidence [0.007, 0.027]  n=  3,965  dir_acc=0.5137  avg_pnl/trade=+0.0523%
+-> A reliable model's accuracy rises monotonically with its own confidence; flat means the probability carries no information.
+====================================================================================================
+ANTI-COWARDICE (TEST)
+  mean |mu| / mean |y_ret| = 1.371   (0 = coward, ~1 = honest magnitude)
+  q25: |mu|=+0.0254 vs |y|=+0.0056  q50: |mu|=+0.0289 vs |y|=+0.0129  q75: |mu|=+0.0324 vs |y|=+0.0253  q90: |mu|=+0.0356 vs |y|=+0.0459
+  share of predictions under a quarter of the median true move: 0.0%
+-> With the czar loss this should sit well above the v1 numbers; a tiny ratio means the model hedges by predicting ~0 and the trading grid below is meaningless.
+====================================================================================================
+TRADING GRID (TEST) - market exit
+strategy                                           n    win%      avg%   Sharpe     PF
+LONG top5% |mu| (market exit)                    301  48.17%  +0.2369%   +0.047   1.18
+SHORT top5% |mu| (market exit)                   690  52.90%  +0.2728%   +0.048   1.17
+LONG top10% |mu| (market exit)                   602  46.84%  +0.1847%   +0.040   1.15
+SHORT top10% |mu| (market exit)                1,380  50.80%  +0.0310%   +0.006   1.02
+LONG top20% |mu| (market exit)                 1,204  46.68%  +0.0687%   +0.018   1.06
+SHORT top20% |mu| (market exit)                2,760  48.95%  +0.0056%   +0.001   1.00
+ALL rows, trade the direction (market exit)   20,000  46.72%  -0.1323%   -0.036   0.88
+-> cost=0.0800% per side, 0.1600% per round trip. Compare with the persistence baseline before believing any row.
+====================================================================================================
+REALISTIC EXECUTION (TEST) - limit at mu, fallback close
+strategy                                           n   fill%      avg%   Sharpe     PF
+LONG top5% (limit at mu)                         301   92.4%  +3.0595%   +0.903   6.04
+SHORT top5% (limit at mu)                        690   15.9%  -0.4787%   -0.111   0.71
+LONG top10% (limit at mu)                        602   92.9%  +3.0215%   +1.010   6.94
+SHORT top10% (limit at mu)                     1,380   13.3%  -0.5582%   -0.140   0.64
+LONG top20% (limit at mu)                      1,204   93.4%  +2.9146%   +1.052   7.38
+SHORT top20% (limit at mu)                     2,760   11.8%  -0.4771%   -0.139   0.65
+-> A high fill% with a positive avg means the model's magnitude is honest; fills with negative avg mean the limit sits inside noise.
+====================================================================================================
+UNCERTAINTY FILTER (TEST) - low sigma only
+strategy                                           n    win%      avg%   Sharpe     PF
+top10% |mu| with sigma<=Q30(val)                 929  49.09%  +0.0364%   +0.007   1.02
+top10% |mu| with sigma<=Q50(val)               1,367  49.09%  +0.0895%   +0.017   1.06
+top10% |mu| with sigma<=Q70(val)               1,678  48.33%  +0.0434%   +0.009   1.03
+top10% |mu| unfiltered                         1,982  49.50%  +0.1475%   +0.030   1.11
+-> If accuracy/PnL improves as sigma tightens, the model KNOWS when it does not know.
+====================================================================================================
+SHOCK REGIMES (TEST) - calm to wildest quintile
+  move q20  |y| in [0.0000, 0.0044]  n=  3,965  dir_acc=0.4999  pnl avg=-0.1630%  sharpe=-0.641
+  move q40  |y| in [0.0044, 0.0096]  n=  3,965  dir_acc=0.5185  pnl avg=-0.1344%  sharpe=-0.190
+  move q60  |y| in [0.0096, 0.0169]  n=  3,965  dir_acc=0.5037  pnl avg=-0.1481%  sharpe=-0.112
+  move q80  |y| in [0.0169, 0.0298]  n=  3,965  dir_acc=0.5160  pnl avg=-0.0909%  sharpe=-0.040
+  move q100 |y| in [0.0298, 0.5420]  n=  3,965  dir_acc=0.5029  pnl avg=-0.1238%  sharpe=-0.016
+-> Accuracy is EXPECTED to decay toward the wildest quintile (those moves are news/liquidity, not pattern); what matters is that the PnL does not explode there.
+====================================================================================================
+WEEKLY STABILITY (TEST)
+  week 2026-06-25  n=    55  dir_acc=0.6727  avg=+0.6862%  sharpe=+0.173
+  week 2026-09-16  n=    54  dir_acc=0.3889  avg=-0.3450%  sharpe=-0.152
+-> 1 of 2 weeks positive - an edge that lives in one week only is noise.
+====================================================================================================
+PER-COIN (TEST)
+  coin              n  dir_acc      avg%   Sharpe     PF
+-> 0 coins with >= 30 scored top-10% trades
+====================================================================================================
+FLIP TEST (TEST)
+  trade the direction : Sharpe=+0.030  avg=+0.1475%
+  trade AGAINST it   : Sharpe=-0.096  avg=-0.4675%
+-> If 'against' wins, the model found the pattern but inverted its sign.
+====================================================================================================
+PERSISTENCE BASELINE - SKIPPED
+  (no last_ret column: pass prev_close to the adapter)
+-> The last-candle line needs the previous close.
+====================================================================================================
+SELECTIVE EVALUATION - VAL thresholds, TEST judgment
+  confidence >= Q25(val)  VAL   n= 14,873  dir_acc=0.5104  sharpe=-0.024  avg=-0.1014%
+  confidence >= Q25(val)  TEST  n= 14,559  dir_acc=0.5119  sharpe=-0.037  avg=-0.1422%
+  confidence >= Q50(val)  VAL   n=  9,918  dir_acc=0.5116  sharpe=-0.025  avg=-0.1105%
+  confidence >= Q50(val)  TEST  n=  9,694  dir_acc=0.5139  sharpe=-0.030  avg=-0.1211%
+  confidence >= Q75(val)  VAL   n=  4,959  dir_acc=0.5098  sharpe=-0.022  avg=-0.1070%
+  confidence >= Q75(val)  TEST  n=  4,761  dir_acc=0.5219  sharpe=-0.023  avg=-0.1001%
+-> Consistent only if the confident slice beats the overall accuracy on TEST too; a VAL-only rise is the split flattering itself.
+====================================================================================================
+MARKET-NEUTRAL PORTFOLIO (TEST)
+strategy                                           n    win%      avg%   Sharpe     PF
+long top20% / short bottom20% (VAL choice)       588  44.56%  -0.2622%   -0.104   0.75
+long top30% / short bottom30%                    588  45.58%  -0.1891%   -0.100   0.76
+long top40% / short bottom40%                    588  43.20%  -0.2199%   -0.139   0.68
+-> Each period pays the full round trip on BOTH legs (4 sides: 4x the per-side cost) - the harshest cost assumption; the cross-section is ranked by mu (a ranking, not a direction); a positive VAL-chosen q on TEST is real relative-ranking skill.
+====================================================================================================
+T-PROFIT - close direction trades after cost (TEST)
+  model (close p_dir)               n=  19,825  avg=-0.1320%  sharpe=-0.036  CI95.0%=[-0.2292%, -0.0220%]
+  always up                         n=  19,825  avg=-0.1631%  sharpe=-0.045  CI95.0%=[-0.3203%, -0.0120%]
+  always down                       n=  19,825  avg=-0.1569%  sharpe=-0.043  CI95.0%=[-0.3080%, +0.0003%]
+  shuffled direction                n=  19,825  avg=-0.1639%  sharpe=-0.045  CI95.0%=[-0.2385%, -0.0817%]
+-> cost 0.0800% per side x2; CI = day-block bootstrap at 95.0% (n_variants=1). Profit = model beats every baseline row AND its CI excludes 0.
+====================================================================================================
+T-PROFIT - LIMIT ORDERS at the predicted high / low (TEST), exit at the close
+  LONG at pred_low - model          n=   2,028  avg=+3.9514%  sharpe=+0.448  CI95.0%=[+3.3739%, +4.5611%]  fill=10.1%
+  LONG at pred_low - shuffled predictionsn=   3,139  avg=+3.1171%  sharpe=+0.458  CI95.0%=[+2.7976%, +3.4404%]  fill=15.7%
+  LONG at pred_low - constant offsetn=   3,180  avg=+3.1475%  sharpe=+0.477  CI95.0%=[+2.8047%, +3.4828%]  fill=15.9%
+  LONG at pred_low - market at last closen=  20,000  avg=-0.1630%  sharpe=-0.045  CI95.0%=[-0.3188%, -0.0133%]
+  SHORT at pred_high - model        n=   7,241  avg=+1.8557%  sharpe=+0.336  CI95.0%=[+1.6277%, +2.1032%]  fill=100.0%
+  SHORT at pred_high - shuffled predictionsn=   5,539  avg=+0.7738%  sharpe=+0.195  CI95.0%=[+0.5868%, +0.9561%]  fill=76.5%
+  SHORT at pred_high - constant offsetn=  17,542  avg=+0.7162%  sharpe=+0.189  CI95.0%=[+0.5603%, +0.8794%]  fill=87.7%
+  SHORT at pred_high - market at last closen=   7,243  avg=-0.0395%  sharpe=-0.009  CI95.0%=[-0.2571%, +0.1793%]
+-> Unfilled orders are no trade (pnl of filled orders only, fill% beside it). The model must beat its shuffled and constant-offset rows: those know nothing about THIS bar's range.
+====================================================================================================
+T-PROFIT - SIGMA AS POSITION SIZE (TEST)
+  sized by 1/sigma                  n=  19,825  avg=-0.1313%  sharpe=-0.036  CI95.0%=[-0.2291%, -0.0194%]
+  equal weight                      n=  19,825  avg=-0.1320%  sharpe=-0.036  CI95.0%=[-0.2292%, -0.0220%]
+  sized by shuffled 1/sigma         n=  19,825  avg=-0.1323%  sharpe=-0.036  CI95.0%=[-0.2290%, -0.0225%]
+-> Mean weight 1 in every row (same average exposure). If the 1/sigma row does not beat equal and shuffled weights, sigma is not a size signal.
+====================================================================================================
+VERDICT
+  BEST: SHORT top5%  Sharpe=+0.048  PF=1.17  n=690  avg=+0.2728%
+  الحكم: غير قابل للتداول
+  weekly consistency: 1 of 2 weeks positive - an edge that lives in one week only is noise.
+  (the verdict weighs the BEST strategy only - read the shock and weekly sections before trusting it: an edge that dies in the wildest quintile or lives in one week is not an edge)
+-> tradeable=False marginal=False

@@ -1,0 +1,221 @@
+{
+ "cost_per_side": 0.0008,
+ "n_variants": 1,
+ "profit_close": {
+  "title": "T-PROFIT - close direction trades after cost (TEST)",
+  "rows": [
+   "  model (close p_dir)               n=  19,825  avg=-0.1320%  sharpe=-0.036  CI95.0%=[-0.2292%, -0.0220%]",
+   "  always up                         n=  19,825  avg=-0.1631%  sharpe=-0.045  CI95.0%=[-0.3203%, -0.0120%]",
+   "  always down                       n=  19,825  avg=-0.1569%  sharpe=-0.043  CI95.0%=[-0.3080%, +0.0003%]",
+   "  shuffled direction                n=  19,825  avg=-0.1639%  sharpe=-0.045  CI95.0%=[-0.2385%, -0.0817%]"
+  ],
+  "note": "cost 0.0800% per side x2; CI = day-block bootstrap at 95.0% (n_variants=1). Profit = model beats every baseline row AND its CI excludes 0.",
+  "stats": {
+   "model (close p_dir)": {
+    "n": 19825,
+    "win": 0.47127364438839847,
+    "avg": -0.001320451084325746,
+    "sharpe": -0.036081990938821425,
+    "pf": 0.8822436111233461,
+    "ci_lo": -0.0022924675498745854,
+    "ci_hi": -0.00022040604303543866,
+    "level": 0.95
+   },
+   "always up": {
+    "n": 19825,
+    "win": 0.45316519546027745,
+    "avg": -0.001630722639189358,
+    "sharpe": -0.04455903305994328,
+    "pf": 0.8569478360902041,
+    "ci_lo": -0.003202824815814927,
+    "ci_hi": -0.0001204111091100369,
+    "level": 0.95
+   },
+   "always down": {
+    "n": 19825,
+    "win": 0.4751576292559899,
+    "avg": -0.0015692773608106416,
+    "sharpe": -0.042880058276091815,
+    "pf": 0.8615171861200502,
+    "ci_lo": -0.003079588890889969,
+    "ci_hi": 2.8248158149232926e-06,
+    "level": 0.95
+   },
+   "shuffled direction": {
+    "n": 19825,
+    "win": 0.46814627994955865,
+    "avg": -0.0016393044105561393,
+    "sharpe": -0.04479353757557461,
+    "pf": 0.8559398909623556,
+    "ci_lo": -0.0023848870494950747,
+    "ci_hi": -0.0008171630538766177,
+    "level": 0.95
+   }
+  }
+ },
+ "profit_limit": {
+  "title": "T-PROFIT - LIMIT ORDERS at the predicted high / low (TEST), exit at the close",
+  "rows": [
+   "  LONG at pred_low - model          n=   2,028  avg=+3.9514%  sharpe=+0.448  CI95.0%=[+3.3739%, +4.5611%]  fill=10.1%",
+   "  LONG at pred_low - shuffled predictionsn=   3,139  avg=+3.1171%  sharpe=+0.458  CI95.0%=[+2.7976%, +3.4404%]  fill=15.7%",
+   "  LONG at pred_low - constant offsetn=   3,180  avg=+3.1475%  sharpe=+0.477  CI95.0%=[+2.8047%, +3.4828%]  fill=15.9%",
+   "  LONG at pred_low - market at last closen=  20,000  avg=-0.1630%  sharpe=-0.045  CI95.0%=[-0.3188%, -0.0133%]",
+   "  SHORT at pred_high - model        n=   7,241  avg=+1.8557%  sharpe=+0.336  CI95.0%=[+1.6277%, +2.1032%]  fill=100.0%",
+   "  SHORT at pred_high - shuffled predictionsn=   5,539  avg=+0.7738%  sharpe=+0.195  CI95.0%=[+0.5868%, +0.9561%]  fill=76.5%",
+   "  SHORT at pred_high - constant offsetn=  17,542  avg=+0.7162%  sharpe=+0.189  CI95.0%=[+0.5603%, +0.8794%]  fill=87.7%",
+   "  SHORT at pred_high - market at last closen=   7,243  avg=-0.0395%  sharpe=-0.009  CI95.0%=[-0.2571%, +0.1793%]"
+  ],
+  "note": "Unfilled orders are no trade (pnl of filled orders only, fill% beside it). The model must beat its shuffled and constant-offset rows: those know nothing about THIS bar's range.",
+  "stats": {
+   "LONG at pred_low - model": {
+    "n": 2028,
+    "win": 0.7943786982248521,
+    "avg": 0.039513743600061636,
+    "sharpe": 0.4477704190388748,
+    "pf": 5.34180005041436,
+    "ci_lo": 0.03373918324765538,
+    "ci_hi": 0.04561063163448272,
+    "level": 0.95,
+    "fill": 0.1014
+   },
+   "LONG at pred_low - shuffled predictions": {
+    "n": 3139,
+    "win": 0.792609111181905,
+    "avg": 0.031171163472460413,
+    "sharpe": 0.45834814781509153,
+    "pf": 4.288652746520918,
+    "ci_lo": 0.02797592226598546,
+    "ci_hi": 0.03440412428573236,
+    "level": 0.95,
+    "fill": 0.15695
+   },
+   "LONG at pred_low - constant offset": {
+    "n": 3180,
+    "win": 0.8012578616352202,
+    "avg": 0.03147506883421026,
+    "sharpe": 0.4768291768792641,
+    "pf": 4.354091425788698,
+    "ci_lo": 0.028046500806920633,
+    "ci_hi": 0.03482802839429558,
+    "level": 0.95,
+    "fill": 0.159
+   },
+   "LONG at pred_low - market at last close": {
+    "n": 20000,
+    "win": 0.4492,
+    "avg": -0.0016304538160964513,
+    "sharpe": -0.04474789943541817,
+    "pf": 0.8558874212176676,
+    "ci_lo": -0.003188067792967453,
+    "ci_hi": -0.00013338358792373017,
+    "level": 0.95
+   },
+   "SHORT at pred_high - model": {
+    "n": 7241,
+    "win": 0.6769783179118907,
+    "avg": 0.018556819450679093,
+    "sharpe": 0.3360501544638881,
+    "pf": 3.4007812657909127,
+    "ci_lo": 0.01627678231499996,
+    "ci_hi": 0.02103246366117649,
+    "level": 0.95,
+    "fill": 0.999723871324037
+   },
+   "SHORT at pred_high - shuffled predictions": {
+    "n": 5539,
+    "win": 0.6302581693446471,
+    "avg": 0.007737604023585801,
+    "sharpe": 0.19493360636473267,
+    "pf": 1.9597311166391045,
+    "ci_lo": 0.005867774118795288,
+    "ci_hi": 0.00956100597221677,
+    "level": 0.95,
+    "fill": 0.7647383680795251
+   },
+   "SHORT at pred_high - constant offset": {
+    "n": 17542,
+    "win": 0.653289248660358,
+    "avg": 0.00716226106790787,
+    "sharpe": 0.18921904695275737,
+    "pf": 1.9074737062432507,
+    "ci_lo": 0.005603497432747001,
+    "ci_hi": 0.008794234837980097,
+    "level": 0.95,
+    "fill": 0.8771
+   },
+   "SHORT at pred_high - market at last close": {
+    "n": 7243,
+    "win": 0.47866905978185836,
+    "avg": -0.00039504651808432856,
+    "sharpe": -0.008588256717632681,
+    "pf": 0.9712076567493524,
+    "ci_lo": -0.0025712135374629003,
+    "ci_hi": 0.0017929758493068933,
+    "level": 0.95
+   }
+  }
+ },
+ "profit_sigma": {
+  "title": "T-PROFIT - SIGMA AS POSITION SIZE (TEST)",
+  "rows": [
+   "  sized by 1/sigma                  n=  19,825  avg=-0.1313%  sharpe=-0.036  CI95.0%=[-0.2291%, -0.0194%]",
+   "  equal weight                      n=  19,825  avg=-0.1320%  sharpe=-0.036  CI95.0%=[-0.2292%, -0.0220%]",
+   "  sized by shuffled 1/sigma         n=  19,825  avg=-0.1323%  sharpe=-0.036  CI95.0%=[-0.2290%, -0.0225%]"
+  ],
+  "note": "Mean weight 1 in every row (same average exposure). If the 1/sigma row does not beat equal and shuffled weights, sigma is not a size signal.",
+  "stats": {
+   "sized by 1/sigma": {
+    "n": 19825,
+    "win": 0.47127364438839847,
+    "avg": -0.0013129534540686578,
+    "sharpe": -0.035594754522079095,
+    "pf": 0.8831729783582325,
+    "ci_lo": -0.0022908455795627846,
+    "ci_hi": -0.00019428283768629153,
+    "level": 0.95
+   },
+   "equal weight": {
+    "n": 19825,
+    "win": 0.47127364438839847,
+    "avg": -0.001320451084325746,
+    "sharpe": -0.036081990938821425,
+    "pf": 0.8822436111233461,
+    "ci_lo": -0.0022924675498745854,
+    "ci_hi": -0.00022040604303543866,
+    "level": 0.95
+   },
+   "sized by shuffled 1/sigma": {
+    "n": 19825,
+    "win": 0.47127364438839847,
+    "avg": -0.0013225850283084526,
+    "sharpe": -0.03620447420880128,
+    "pf": 0.8820119767143924,
+    "ci_lo": -0.0022896266036038695,
+    "ci_hi": -0.00022512394502963054,
+    "level": 0.95
+   }
+  }
+ },
+ "verdict": {
+  "title": "VERDICT",
+  "rows": [
+   "  BEST: SHORT top5%  Sharpe=+0.048  PF=1.17  n=690  avg=+0.2728%",
+   "  \u0627\u0644\u062d\u0643\u0645: \u063a\u064a\u0631 \u0642\u0627\u0628\u0644 \u0644\u0644\u062a\u062f\u0627\u0648\u0644",
+   "  weekly consistency: 1 of 2 weeks positive - an edge that lives in one week only is noise.",
+   "  (the verdict weighs the BEST strategy only - read the shock and weekly sections before trusting it: an edge that dies in the wildest quintile or lives in one week is not an edge)"
+  ],
+  "note": "tradeable=False marginal=False",
+  "best": {
+   "name": "SHORT top5%",
+   "sharpe": 0.04765158702419568,
+   "stats": {
+    "n": 690,
+    "win": 0.5289855072463768,
+    "avg": 0.0027278726769368296,
+    "sharpe": 0.04765158702419568,
+    "pf": 1.1670907612989527
+   }
+  },
+  "tradeable": false
+ }
+}

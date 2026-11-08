@@ -1,0 +1,140 @@
+{
+ "n_rows": 20000,
+ "targets": {
+  "high": {
+   "skill": {
+    "rank_ic_by_timestamp": -0.052920226390283716,
+    "rank_ic_by_timestamp_shuffled_baseline": 0.0023836902474443705,
+    "spearman_per_coin": {
+     "mean": -0.054690939236256106,
+     "n_coins": 426,
+     "share_positive": 0.33098591549295775
+    },
+    "class": {
+     "auc": 0.6328750442858954,
+     "auc_constant_baseline": 0.5,
+     "auc_shuffled_baseline": 0.4990460985445894,
+     "base_rate": 0.58255,
+     "information_only": true
+    }
+   },
+   "conf": {
+    "decile_error_spearman": 0.9151515151515152,
+    "top_minus_bottom_error_gap": -0.21756150949130626,
+    "gap_ci95": [
+     -0.26056721382996234,
+     -0.1774650870708277
+    ],
+    "constant_confidence_baseline": 0.0,
+    "meets_target": false
+   },
+   "sharp": {
+    "coverage": 0.96325,
+    "level": 0.8,
+    "coverage_within_target": false,
+    "mean_interval_halfwidth": 0.10634156243124235,
+    "coverage_by_coin_min_max": [
+     0.6326530612244898,
+     1.0
+    ],
+    "share_std_below_move": 0.01025,
+    "share_target": 0.8,
+    "zero_std_baseline_share": 1.0,
+    "median_std_over_move": 9.008158773928507,
+    "meets_target": false,
+    "blocking": true,
+    "verdict_note": ""
+   }
+  },
+  "low": {
+   "skill": {
+    "rank_ic_by_timestamp": 0.05628291621182744,
+    "rank_ic_by_timestamp_shuffled_baseline": 0.0014809496529775343,
+    "spearman_per_coin": {
+     "mean": 0.03426401426902373,
+     "n_coins": 426,
+     "share_positive": 0.5892018779342723
+    },
+    "class": {
+     "auc": 0.6361700368508576,
+     "auc_constant_baseline": 0.5,
+     "auc_shuffled_baseline": 0.5068894543921879,
+     "base_rate": 0.40815,
+     "information_only": true
+    }
+   },
+   "conf": {
+    "decile_error_spearman": -0.8909090909090909,
+    "top_minus_bottom_error_gap": 0.08532061562060445,
+    "gap_ci95": [
+     0.04972488082514434,
+     0.12310890360851624
+    ],
+    "constant_confidence_baseline": 0.0,
+    "meets_target": true
+   },
+   "sharp": {
+    "coverage": 0.9897,
+    "level": 0.8,
+    "coverage_within_target": false,
+    "mean_interval_halfwidth": 0.10402938885885087,
+    "coverage_by_coin_min_max": [
+     0.8775510204081632,
+     1.0
+    ],
+    "share_std_below_move": 0.11205,
+    "share_target": 0.8,
+    "zero_std_baseline_share": 1.0,
+    "median_std_over_move": 1.4171768389179555,
+    "meets_target": false,
+    "blocking": true,
+    "verdict_note": ""
+   }
+  },
+  "close": {
+   "skill": {
+    "rank_ic_by_timestamp": 0.015710337763955272,
+    "rank_ic_by_timestamp_shuffled_baseline": -0.0019518428433492234,
+    "spearman_per_coin": {
+     "mean": -0.0009638762028936544,
+     "n_coins": 426,
+     "share_positive": 0.460093896713615
+    },
+    "class": {
+     "auc": 0.5070770033668426,
+     "auc_constant_baseline": 0.5,
+     "auc_shuffled_baseline": 0.49555069308258615,
+     "base_rate": 0.48385,
+     "information_only": false
+    }
+   },
+   "conf": {
+    "decile_error_spearman": -0.22424242424242424,
+    "top_minus_bottom_error_gap": -0.002545785000668044,
+    "gap_ci95": [
+     -0.05533056870108768,
+     0.05009950852548702
+    ],
+    "constant_confidence_baseline": 0.0,
+    "meets_target": false
+   },
+   "sharp": {
+    "coverage": 0.99775,
+    "level": 0.8,
+    "coverage_within_target": false,
+    "mean_interval_halfwidth": 0.26829266225789544,
+    "coverage_by_coin_min_max": [
+     0.9183673469387755,
+     1.0
+    ],
+    "share_std_below_move": 0.0,
+    "share_target": 0.8,
+    "zero_std_baseline_share": 1.0,
+    "median_std_over_move": 7.790288405943169,
+    "meets_target": false,
+    "blocking": false,
+    "verdict_note": "informational only, owner decision O-1 closed 2026-11-07 (close-head T-sharp is unattainable even for the true distribution): recorded, never a target or gate"
+   }
+  }
+ }
+}
