@@ -1,7 +1,10 @@
 """Colab runner and notebook support (ROADMAP T3). The notebook ``notebooks/colab_nig_timenet_torch.ipynb`` is a thin
 caller of this package; every behaviour has a test in ``tests/colab/``.
 
-    bootstrap  stdlib-only: token, clean clones, --no-deps install (the notebook's first cell downloads this one file)
+    bootstrap  stdlib-only: token, clean clones, code source (GitHub or the Drive copy, updating the copy without losing
+               local edits), --no-deps install (the notebook's first cell downloads or reads this one file)
+    drive_sync run folders between the VM disk and Drive: where a run works, push, restore (main.ipynb)
+    env_cache  Python env on Drive: one tar keyed by Python + torch + requirements (main.ipynb)
     device     device report / assertion / smoke computation (rule E1)
     session    notebook section 1: device check and the setup record
     prepare    notebook section 2: TF export -> contract artifact, skipped when already sound for the same source

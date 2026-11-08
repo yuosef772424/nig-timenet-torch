@@ -1,8 +1,8 @@
 """PURPOSE: Stdlib-only git and token kit of the Colab notebook: secrets masking, a Drive-kept GitHub token, clean
-    clones and the --no-deps install that leaves Colab's torch alone.
-TAGS: colab bootstrap, git clone, github token, pip install, purge package, stdlib only
-PITFALLS: imports nothing from the package (the notebook execs this one file); install_package now also purges stale
-    modules of this repo from sys.modules and sibling-checkout src paths from sys.path (purge_package).
+    clones, the code-source choice (GitHub / Drive copy) and the --no-deps install that leaves Colab's torch alone.
+TAGS: colab bootstrap, git clone, github token, code source, drive copy, pip install, purge package, stdlib only
+PITFALLS: imports nothing from the package (the notebook execs this one file); the Drive copy is only ever fetched and
+    checked out, never pushed (the token is read-only); update_drive_copy refuses local edits unless told to discard.
 
 Stdlib-only git and token kit of the Colab notebook (ROADMAP T3): secrets masking, a GitHub token kept on Drive,
 a CLEAN clone (``rm -rf`` first, then ``git clone``, then the exact ref) of every repo the run needs, and the
@@ -22,6 +22,7 @@ It is never in a URL, an argv or ``.git/config``, and every printed string goes 
 
 import base64
 import importlib.util
+import json
 import os
 import re
 import shutil
@@ -32,13 +33,22 @@ import urllib.parse
 import urllib.request
 
 __all__ = ["SHA40", "BootstrapError", "Secrets", "read_token", "save_token", "token_accepted", "acquire_token",
-           "git_env", "run_git", "clean_clone", "setup_clones", "purge_package", "install_package"]
+           "git_env", "run_git", "clean_clone", "setup_clones", "purge_package", "install_package",
+           "CODE_SOURCES", "LocalEditsError", "find_token", "resolve_code_source", "update_drive_copy", "load_code"]
 
 SHA40 = re.compile(r"[0-9a-fA-F]{40}")
 
 
+CODE_SOURCES = ("auto", "github", "drive")
+SYNC_MARK = ".drive_sync.json"          # in the Drive copy: the commit update_drive_copy last put there
+
+
 class BootstrapError(Exception):
     """Something the bootstrap refuses or cannot do; the message is already safe to print."""
+
+
+class LocalEditsError(BootstrapError):
+    """The Drive copy holds edits or commits of its own; the update would overwrite them."""
 
 
 # ------------------------------------------------------------------------------------------------ masking
@@ -112,16 +122,36 @@ def token_accepted(token: str, repo: str, urlopen=urllib.request.urlopen) -> boo
         raise BootstrapError(f"cannot reach GitHub to check the token ({type(e).__name__})") from None
 
 
-def acquire_token(path: str, repo: str, ask, accepted=token_accepted, attempts: int = 3) -> str:
-    """The saved token if GitHub still accepts it, else ask (``ask()`` -> str) up to ``attempts`` times and save the
-    first accepted one. Raises when none is accepted."""
+def find_token(secret_name: str, environ=None, secret_getter=None) -> str:
+    """A token that needs no prompt: ``$GITHUB_TOKEN``, then the Colab secret ``secret_name`` (``secret_getter(name)``;
+    the notebook passes ``google.colab.userdata.get``). ``""`` when there is none. Never raises, never prints."""
+    tok = (environ if environ is not None else os.environ).get("GITHUB_TOKEN", "")
+    if not tok and secret_getter is not None:
+        try:
+            tok = secret_getter(secret_name) or ""
+        except Exception:  # noqa: BLE001 - a missing secret / no notebook access is "no token", not an error
+            tok = ""
+    return tok.strip()
+
+
+def acquire_token(path: str, repo: str, ask, accepted=token_accepted, attempts: int = 3, preset: str = "",
+                  save: bool = True) -> str:
+    """``preset`` (from ``find_token`` or typed) if GitHub accepts it, else the saved token if accepted, else ask
+    (``ask()`` -> str) up to ``attempts`` times. A token that was not already the saved one is written to the token
+    file only when ``save`` (pass ``save=False`` for a Colab secret: it must not be copied to Drive). Raises when none
+    is accepted."""
+    if preset and accepted(preset, repo):
+        if save and read_token(path) != preset:
+            save_token(path, preset)
+        return preset
     saved = read_token(path)
     if saved and accepted(saved, repo):
         return saved
     for _ in range(attempts):
         new = (ask() or "").strip()
         if len(new) >= 8 and not any(c.isspace() for c in new) and accepted(new, repo):
-            save_token(path, new)
+            if save:
+                save_token(path, new)
             return new
     raise BootstrapError(f"no GitHub token accepted for {repo} after {attempts} attempts")
 
@@ -198,6 +228,73 @@ def setup_clones(token: str, workdir: str, repos: dict, echo=print) -> dict:
         shas[name] = clean_clone(f"https://github.com/{repo}.git", dest, ref, env=env, secrets=secrets)
         echo(f"{name}: {repo} @ {ref} -> {shas[name]} ({dest})")
     return shas
+
+
+# ------------------------------------------------------------------------------------------------ code source
+def resolve_code_source(mode: str, drive_dir: str, local_dir: str) -> dict:
+    """Where the code runs from. ``github``: a clean clone in ``local_dir``; ``drive``: the Drive copy as it is;
+    ``auto``: the Drive copy if one exists, else GitHub. -> {"resolved", "dir", "has_drive_copy"}."""
+    if mode not in CODE_SOURCES:
+        raise BootstrapError(f"REPO_SOURCE must be one of {CODE_SOURCES}, not {mode!r}")
+    has = os.path.isfile(os.path.join(drive_dir, "pyproject.toml"))
+    resolved = "drive" if mode == "drive" or (mode == "auto" and has) else "github"
+    if resolved == "drive" and not has:
+        raise BootstrapError(f"no project copy at {drive_dir}: run once with REPO_SOURCE='github' and "
+                             f"UPDATE_DRIVE_COPY=True to create it")
+    return {"resolved": resolved, "dir": drive_dir if resolved == "drive" else local_dir, "has_drive_copy": has}
+
+
+def update_drive_copy(token: str, url: str, ref: str, drive_dir: str, workdir: str, discard_local: bool = False,
+                      echo=print) -> dict:
+    """Bring the Drive copy to ``ref`` (branch, tag or sha) of ``url``: clone if absent, else fetch + detached checkout.
+    Refuses (LocalEditsError) when tracked files are edited or HEAD is not the commit this function put there last,
+    unless ``discard_local``. Fetch/checkout only: nothing is ever pushed. -> {"sha", "action"}."""
+    secrets, env = Secrets(token), git_env(token, os.path.join(workdir, "git_askpass"))
+    mark = os.path.join(drive_dir, SYNC_MARK)
+    if not os.path.isdir(os.path.join(drive_dir, ".git")):
+        if os.path.isdir(drive_dir) and os.listdir(drive_dir):
+            raise BootstrapError(f"{drive_dir} exists and is not a git copy; move it aside (it is not touched)")
+        sha, action = clean_clone(url, drive_dir, ref, env=env, secrets=secrets), "cloned"
+    else:
+        head = run_git(["rev-parse", "HEAD"], cwd=drive_dir, env=env, secrets=secrets)
+        dirty = run_git(["status", "--porcelain", "--untracked-files=no"], cwd=drive_dir, env=env, secrets=secrets)
+        last = json.load(open(mark, encoding="utf-8")).get("sha") if os.path.isfile(mark) else None
+        if (dirty or (last and last != head)) and not discard_local:
+            why = f"edited files: {dirty!r}" if dirty else f"HEAD {head[:10]} is not the synced commit {last[:10]}"
+            raise LocalEditsError(f"the Drive copy {drive_dir} has local changes ({why}); keep them "
+                                  f"(copy them away) or set DISCARD_LOCAL_CHANGES = True to overwrite them")
+        run_git(["fetch", "--quiet", url, ref], cwd=drive_dir, env=env, secrets=secrets)
+        sha = run_git(["rev-parse", "FETCH_HEAD^{commit}"], cwd=drive_dir, env=env, secrets=secrets)
+        action = "unchanged" if sha == head and not dirty else "updated"
+        run_git(["checkout", "--quiet", "-f", "--detach", sha], cwd=drive_dir, env=env, secrets=secrets)
+    run_git(["remote", "set-url", "origin", url], cwd=drive_dir, env=env, secrets=secrets)  # never holds the token
+    with open(mark, "w", encoding="utf-8") as fh:
+        json.dump({"sha": sha, "ref": ref}, fh)
+    echo(f"Drive copy {action}: {ref} -> {sha} ({drive_dir})")
+    return {"sha": sha, "action": action}
+
+
+def load_code(mode: str, repo: str, ref: str, drive_dir: str, local_dir: str, workdir: str, token: str = "",
+              update_drive: bool = False, discard_local: bool = False, remote_url: str | None = None,
+              echo=print) -> dict:
+    """The notebook's code-source step: optionally update the Drive copy from GitHub, then make ``dir`` ready to run
+    from (a clean clone for ``github``, the Drive copy for ``drive``). A token is needed only when GitHub is touched.
+    -> {"dir", "resolved", "sha", "drive_copy"}."""
+    src = resolve_code_source(mode, drive_dir, local_dir)
+    url = remote_url or f"https://github.com/{repo}.git"
+    if (src["resolved"] == "github" or update_drive) and not token:
+        raise BootstrapError("a GitHub token is needed to read GitHub (Colab secret GITHUB_TOKEN, the token file, or "
+                             "the prompt); with a Drive copy and REPO_SOURCE='drive' no token is needed")
+    drive_copy = update_drive_copy(token, url, ref, drive_dir, workdir, discard_local, echo) if update_drive else None
+    if src["resolved"] == "github":
+        env = git_env(token, os.path.join(workdir, "git_askpass"))
+        sha = clean_clone(url, src["dir"], ref, env=env, secrets=Secrets(token))
+        echo(f"code from GitHub: {repo} @ {ref} -> {sha} ({src['dir']})")
+    else:
+        mark = os.path.join(drive_dir, SYNC_MARK)
+        sha = json.load(open(mark, encoding="utf-8")).get("sha", "") if os.path.isfile(mark) else ""
+        echo(f"code from the Drive copy {drive_dir} (synced commit {sha or 'unknown'})")
+    return {"dir": src["dir"], "resolved": src["resolved"], "sha": sha, "drive_copy": drive_copy}
 
 
 def purge_package(repo_dir: str) -> dict:
