@@ -13,7 +13,7 @@ from nig_timenet_torch.jobs import baseline
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PIN = ROOT / "tests" / "pins" / "baseline_fixture.json"
-SKIP = {"step_seconds_per_batch", "epoch_seconds_median", "run_dir", "identity_fingerprint", "gpu_name",
+SKIP = {"step_seconds_per_batch", "epoch_seconds_median", "run_dir", "identity_fingerprint", "gpu_name", "key",
         "trace_epoch_seconds", "trace_epoch_start", "trace_forward_seconds", "trace_backward_seconds"}
 
 

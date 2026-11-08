@@ -81,6 +81,7 @@ class TrainSettings:
     selection_metric: str = "val_raw_loss"
     early_stop: EarlyStopSettings = field(default_factory=EarlyStopSettings)
     device: str = "auto"                                   # "auto" = cuda when available, else cpu
+    trace_representative: bool = False                     # trainer trace on the representative batch set (D-019)
 
     def __post_init__(self):
         for name in ("epochs", "batch_size"):

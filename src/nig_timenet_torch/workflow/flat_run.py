@@ -14,10 +14,11 @@ import numpy as np
 import pandas as pd
 import torch
 
-from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS
+from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io.target_codec import anchor_column
 from nig_timenet_torch.model.architectures import ModelSettings, build_model
 from nig_timenet_torch.model.heads import head_spec
+from nig_timenet_torch.trainer.batch_set import representative_batches
 from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.trainer.targets import targets_config
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
@@ -26,7 +27,7 @@ from nig_timenet_torch.workflow.run_common import input_key, price_targets
 from nig_timenet_torch.workflow.settings import RunSettings
 
 __all__ = ["HEAD_KINDS", "LAMBDA_SCHEDULES", "anchors_by_name", "flat_inputs", "model_settings", "trainer_config",
-           "make_trainer", "fit_settings_of", "predict_stage", "epoch_line"]
+           "make_trainer", "fit_settings_of", "predict_stage", "epoch_line", "row_coins", "batch_set"]
 
 HEAD_KINDS = ("nig_regression", "binary_classification")
 LAMBDA_SCHEDULES = {"lambda_reg": {"start": 0.0, "end": 0.05, "warmup_epochs": 5, "schedule": "linear"},
@@ -41,6 +42,20 @@ def anchors_by_name(last_candles: np.ndarray, idx: np.ndarray, targets,
     lc = np.asarray(last_candles)
     col = (lambda t: f"last_{t}") if codec_state is None else (lambda t: anchor_column(codec_state, t))
     return {t: lc[idx, LAST_COLUMN_INDEX[col(t)]] for t in targets}
+
+
+def row_coins(dataset: dict, idx: np.ndarray) -> np.ndarray:
+    """The coin name of each row ``idx`` (from ``asset_bounds``)."""
+    names = np.empty(np.asarray(dataset["last_candles"]).shape[0], dtype=object)
+    for b in dataset["asset_bounds"]:
+        names[b["start"]:b["end"]] = b["name"]
+    return names[np.asarray(idx)]
+
+
+def batch_set(dataset: dict, idx: np.ndarray, batch_size: int, seed: int) -> list[np.ndarray]:
+    """The representative batch set (MODEL_DEV_PROTOCOL section 1) of the rows ``idx``, as positions into them."""
+    times = np.asarray(dataset["last_candles"])[np.asarray(idx), TS_COL].astype(np.int64)
+    return representative_batches(row_coins(dataset, idx).astype(str), times, batch_size, seed=seed)
 
 
 def flat_inputs(dataset: dict, idx: np.ndarray) -> tuple[torch.Tensor, dict]:
