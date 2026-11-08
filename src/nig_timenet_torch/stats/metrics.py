@@ -1,7 +1,7 @@
 """The single owner of every metric this project computes (C7; BUILD_PLAN.md P21). Pure numpy — no torch.
 
-PURPOSE: Every metric of the project in one module (AUC, rank IC, R^2, calibration, interval and sharpness shares,
-    confidence-error gap, block-bootstrap CI), each with its trivial baseline stated and tested (rule C1).
+PURPOSE: Every metric of the project in one module (AUC, rank IC and partial rank IC, R^2, calibration, intervals,
+    sharpness, confidence-error gap, block-bootstrap CI), each with its trivial baseline stated and tested (rule C1).
 TAGS: metrics, auc, rank ic, calibration, coverage, bootstrap, trivial baseline
 PITFALLS: NaN rows are dropped pairwise and an undefined metric returns nan, never 0; bootstrap CIs resample
     rows or blocks only, so serial dependence between blocks is not covered.
@@ -16,7 +16,7 @@ import numpy as np
 
 __all__ = ["auc", "rank_ic", "pearson", "spearman", "wilson_interval", "pinball_loss", "ece", "ece_bins", "mae",
            "average_ranks", "r2", "confidence_error_spearman", "confidence_error_gap", "width_below_share",
-           "interval_coverage", "block_bootstrap_ci"]
+           "interval_coverage", "block_bootstrap_ci", "partial_rank_ic"]
 
 
 def _clean(*arrays: np.ndarray) -> list[np.ndarray]:
@@ -258,3 +258,35 @@ def block_bootstrap_ci(values: np.ndarray, blocks: np.ndarray, level: float = 0.
     boots = sums[ix].sum(axis=1) / counts[ix].sum(axis=1)
     tail = 100.0 * (1.0 - level) / 2.0
     return mean, float(np.percentile(boots, tail)), float(np.percentile(boots, 100.0 - tail))
+
+
+def _residual(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """``a`` minus its least-squares line on ``b`` (both centred)."""
+    a, b = a - a.mean(), b - b.mean()
+    bb = float(b @ b)
+    return a - (float(a @ b) / bb) * b if bb > 0 else a
+
+
+def partial_rank_ic(y_true: np.ndarray, y_pred: np.ndarray, baseline: np.ndarray, groups: np.ndarray) -> float:
+    """Rank IC of ``y_pred`` NET of ``baseline``: per group (e.g. timestamp) the Pearson correlation of the ranks of
+    ``y_true`` and of ``y_pred``, each with its linear dependence on the ranks of ``baseline`` removed (a partial
+    Spearman); the mean over groups with >= 4 rows. TRIVIAL: the baseline plus noise scores ~0 and a prediction with
+    the baseline's own ranks is undefined (NaN), so only information beyond the baseline counts (rule C1: the
+    volatility baseline of the high / low heads). NaN rows dropped; NaN if no group is defined."""
+    y, p, b = (np.asarray(a, dtype=np.float64).reshape(-1) for a in (y_true, y_pred, baseline))
+    g = np.asarray(groups).reshape(-1)
+    if not (y.shape == p.shape == b.shape == g.shape):
+        raise ValueError("y_true, y_pred, baseline and groups must have the same length")
+    keep = ~(np.isnan(y) | np.isnan(p) | np.isnan(b))
+    y, p, b, g = y[keep], p[keep], b[keep], g[keep]
+    order = np.argsort(g, kind="stable")
+    _, starts = np.unique(g[order], return_index=True)
+    vals = []
+    for ix in np.split(order, starts[1:]):
+        if ix.shape[0] < 4:
+            continue
+        rb = average_ranks(b[ix])
+        v = pearson(_residual(average_ranks(y[ix]), rb), _residual(average_ranks(p[ix]), rb))
+        if not math.isnan(v):
+            vals.append(v)
+    return float(np.mean(vals)) if vals else float("nan")

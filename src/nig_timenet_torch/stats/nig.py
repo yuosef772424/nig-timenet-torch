@@ -1,4 +1,10 @@
-"""NIG predictive distribution in numpy (T4): the predictive std and central interval of a Normal-Inverse-Gamma head,
+"""PURPOSE: The NIG predictive distribution in numpy: predictive std, central interval halfwidth and per-row NLL of a
+    Normal-Inverse-Gamma head from its saved nu / alpha / beta columns.
+TAGS: nig, student t, predictive std, interval halfwidth, nll, uncertainty, numpy
+PITFALLS: values are in label units (the codec's space, e.g. log move vs the last close); the model's own capped
+    _epistemic / _aleatoric outputs are not used; alpha - 1 is floored like the model layer (NIG_ALPHA_DEN_MIN).
+
+NIG predictive distribution in numpy (T4): the predictive std and central interval of a Normal-Inverse-Gamma head,
 computed from the saved ``nu / alpha / beta`` columns of a PredictionTable (the model's own ``_epistemic`` /
 ``_aleatoric`` outputs are capped at ``unc_max`` and so cannot be used for a coverage check).
 
@@ -6,13 +12,16 @@ Student-t marginal (Amini et al.): df = 2 alpha, scale^2 = beta (1 + nu) / (nu a
 (nu (alpha - 1)) = aleatoric^2 + epistemic^2 (the same alpha - 1 floor as the model layer, NIG_ALPHA_DEN_MIN).
 """
 
+import math
 from statistics import NormalDist
 
 import numpy as np
 
 from nig_timenet_torch.core.constants import NIG_ALPHA_DEN_MIN
 
-__all__ = ["student_t_quantile", "nig_predictive_std", "nig_interval_halfwidth"]
+__all__ = ["student_t_quantile", "nig_predictive_std", "nig_interval_halfwidth", "nig_nll"]
+
+_LGAMMA = np.frompyfunc(math.lgamma, 1, 1)
 
 
 def student_t_quantile(p: float, df: np.ndarray) -> np.ndarray:
@@ -42,3 +51,14 @@ def nig_interval_halfwidth(nu: np.ndarray, alpha: np.ndarray, beta: np.ndarray, 
     nu, alpha, beta = (np.asarray(a, dtype=np.float64) for a in (nu, alpha, beta))
     scale = np.sqrt(beta * (1.0 + nu) / (nu * alpha))
     return student_t_quantile((1.0 + level) / 2.0, 2.0 * alpha) * scale
+
+
+def nig_nll(y: np.ndarray, mu: np.ndarray, nu: np.ndarray, alpha: np.ndarray, beta: np.ndarray) -> np.ndarray:
+    """Per-row negative log likelihood of ``y`` under the NIG Student-t marginal (df = 2 alpha, loc mu, scale^2 =
+    beta (1 + nu) / (nu alpha)), in target units; lower is better."""
+    y, mu, nu, alpha, beta = (np.asarray(a, dtype=np.float64) for a in (y, mu, nu, alpha, beta))
+    df = 2.0 * alpha
+    scale = np.sqrt(beta * (1.0 + nu) / (nu * alpha))
+    z2 = ((y - mu) / scale) ** 2
+    lg = (_LGAMMA((df + 1.0) / 2.0) - _LGAMMA(df / 2.0)).astype(np.float64)
+    return -(lg - 0.5 * np.log(df * np.pi) - np.log(scale) - (df + 1.0) / 2.0 * np.log1p(z2 / df))
