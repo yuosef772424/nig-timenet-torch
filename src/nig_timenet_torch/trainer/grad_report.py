@@ -2,7 +2,8 @@
     with the planned optimizer and learning rate; one call = one measurement (step 0 or the end of a short run).
 TAGS: gate a, gradient health, grad report, dead parameters, update weight ratio, head gradient share, head conflict,
     dead units, representative batch set
-PITFALLS: gradient code lives here, not in eval/ or workflow/ (rule G5); A4 takes ONE real optimizer step and then
+PITFALLS: A5 / A6 use the shared TRUNK (parameters two heads reach, minus the head modules' own), unlike the T4
+    trace's gradient share, which also counts the close NIG head the ordered means share; gradient code lives here, not in eval/ or workflow/ (rule G5); A4 takes ONE real optimizer step and then
     restores the model, optimizer and Kendall state exactly; A3's spike test compares the R batch norms of one
     measurement (the protocol's in-run spike needs per-step norms, not logged yet); A7 hooks the pre-activation layers
     the model lists in ``activation_points`` (activations are functional here), a unit is dead when its pre-activation
@@ -160,11 +161,21 @@ def _a4(trainer, x, y, batches, dev, skip=()) -> dict:
                     f"in {list(A4_MATRIX)} (A2's dead tensors are left out: their update is the weight decay only)"}
 
 
+def _head_param_ids(model) -> set[int]:
+    """ids of the parameters inside the model's head modules (``head_modules()``, e.g. the NIG heads): not trunk."""
+    heads = getattr(model, "head_modules", None)
+    return set() if heads is None else {id(p) for m in heads().values() for p in m.parameters()}
+
+
 def _a5_a6(trainer, x, y, batches, dev) -> dict:
+    """On the SHARED TRUNK: parameters at least two heads reach, minus those inside a head module (the ordered means
+    make the close NIG head reachable from the high / low losses; that coupling is not the trunk)."""
     judged = [t for t in trainer.target_names if trainer.loss_weights[t] > 0]
+    head_ids = _head_param_ids(trainer.model)
     shares, cos = {t: [] for t in judged}, {p: [] for p in itertools.combinations(judged, 2)}
     for xb, yb in _batches(x, y, batches, dev):
-        _, grads, shared = head_gradients(trainer, xb, yb)
+        params, grads, shared = head_gradients(trainer, xb, yb)
+        shared = [i for i in shared if id(params[i]) not in head_ids]
         full = {t: _shared_vector(grads[t], grads, shared, dev) for t in judged}
         norms = {t: float(v.norm()) for t, v in full.items()}
         tot = sum(norms.values())

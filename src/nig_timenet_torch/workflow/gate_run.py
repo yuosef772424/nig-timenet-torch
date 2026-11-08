@@ -55,7 +55,7 @@ class GateSettings:
     e3_train_end: str = ""                      # the full run's train end; "" = its default split
     e3_n_coins: int = 20
     e3_months: int = 6
-    e3_epochs: int = 1
+    e3_epochs: int = 3                          # 1 epoch never trains the confidence head (lambda_calib 0 at epoch 0)
 
     def __post_init__(self):
         object.__setattr__(self, "seeds", tuple(int(s) for s in self.seeds))

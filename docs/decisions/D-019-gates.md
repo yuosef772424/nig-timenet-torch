@@ -38,7 +38,9 @@ until now they were a manual check (B-040).
   measurement, not per training step: not logged yet); A4 one real optimizer step, median update / weight in
   [1e-4, 1e-2] (fail outside [1e-5, 1e-1]), every weight matrix in [1e-6, 1e-1], A2's dead tensors left out (state
   restored exactly); A5 every judged head (loss weight > 0) >= 0.02, the largest <= 0.60, shares of the gradient norm on
-  the parameters at least two heads reach (the T4 trace definition); A6 mean pairwise cosine >= -0.10 (< 0 warn), a fail
+  the shared TRUNK (parameters at least two heads reach, minus the parameters of `head_modules()`: the ordered means make
+  the close NIG head reachable from the high / low losses, and with it the high / low cosine is -0.999, on the trunk
+  alone +0.79 on E1; the T4 trace keeps its own definition); A6 mean pairwise cosine >= -0.10 (< 0 warn), a fail
   blocks only when it fails on every seed; A7 share of never-active units per layer <= 0.20 (> 0.50 fail), a unit is
   never active when its pre-activation (the model's `activation_points`, Linear layers feeding ReLU / GELU / SiLU) is
   <= 0 on every row of the batch set.
@@ -60,7 +62,9 @@ until now they were a manual check (B-040).
 - Information until the owner decides B-056: high / low coverage on E2 and E3 (E2 permutes E3, the same skewed labels).
   Close-head T-sharp is information everywhere (O-1).
 - `workflow/gate_run.py` + entry `jobs/gates.py`: E1 (D-018 generator, 3 epochs), E3 (`real_slice` of `e3_source`,
-  1 epoch; protocol: "1/4 epoch" for gate A, the whole epoch here because the run steps have no step limit), E2 (the
+  3 epochs; the protocol's "1/4 epoch" is for gate A only and the run steps have no step limit; a first local run with
+  1 epoch showed it is too short for gates B / C: the default `lambda_calib` schedule is 0 in epoch 0, so the confidence
+  heads are never trained and the NIG alpha has not grown, coverage 0.999), E2 (the
   label permutation of E3, of E1 when no E3 source is given, 3 epochs), seeds 0, 1, 2; each env is written as a contract
   artifact and read back; each env x seed run folder is rebuilt (gate runs never resume). `gate_report.json` / `.md`
   carry the key `trainer.identity.configuration_hash` (the run identity's settings hash without the seed, the data and
@@ -80,7 +84,7 @@ until now they were a manual check (B-040).
 - `nig_timenet_torch.jobs.gates.GatesConfig(e1_epochs)`: `<new>` -> `3`
 - `nig_timenet_torch.jobs.gates.GatesConfig(e2_epochs)`: `<new>` -> `3`
 - `nig_timenet_torch.jobs.gates.GatesConfig(e2_permutation_seed)`: `<new>` -> `0`
-- `nig_timenet_torch.jobs.gates.GatesConfig(e3_epochs)`: `<new>` -> `1`
+- `nig_timenet_torch.jobs.gates.GatesConfig(e3_epochs)`: `<new>` -> `3`
 - `nig_timenet_torch.jobs.gates.GatesConfig(e3_months)`: `<new>` -> `6`
 - `nig_timenet_torch.jobs.gates.GatesConfig(e3_n_coins)`: `<new>` -> `20`
 - `nig_timenet_torch.jobs.gates.GatesConfig(e3_source)`: `<new>` -> `''`
@@ -98,7 +102,7 @@ until now they were a manual check (B-040).
 - `nig_timenet_torch.workflow.gate_run.GateSettings(e1_epochs)`: `<new>` -> `3`
 - `nig_timenet_torch.workflow.gate_run.GateSettings(e2_epochs)`: `<new>` -> `3`
 - `nig_timenet_torch.workflow.gate_run.GateSettings(e2_permutation_seed)`: `<new>` -> `0`
-- `nig_timenet_torch.workflow.gate_run.GateSettings(e3_epochs)`: `<new>` -> `1`
+- `nig_timenet_torch.workflow.gate_run.GateSettings(e3_epochs)`: `<new>` -> `3`
 - `nig_timenet_torch.workflow.gate_run.GateSettings(e3_months)`: `<new>` -> `6`
 - `nig_timenet_torch.workflow.gate_run.GateSettings(e3_n_coins)`: `<new>` -> `20`
 - `nig_timenet_torch.workflow.gate_run.GateSettings(e3_source)`: `<new>` -> `''`

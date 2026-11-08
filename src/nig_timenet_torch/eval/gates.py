@@ -254,10 +254,12 @@ def stage_rows(stage: GateStage) -> list[dict]:
 
 
 def gate_a_rows(env: str, seed: int, phase: str, report: dict) -> list[dict]:
-    """Rows of one ``trainer.grad_report`` measurement (``phase``: "start" / "end")."""
+    """Rows of one ``trainer.grad_report`` measurement (``phase``: "start" / "end"); the check's other fields (dead
+    tensors, per-layer values) go to ``reference``."""
     return [{"env": env, "seed": int(seed), "gate": "A", "check": k, "head": phase, "value": _jsonable(c["value"]),
-             "threshold": c["rule"], "verdict": c["verdict"], "blocking": True, "reference": None, "mode": phase,
-             "note": ""} for k, c in report["checks"].items()]
+             "threshold": c["rule"], "verdict": c["verdict"], "blocking": True,
+             "reference": _jsonable({f: v for f, v in c.items() if f not in ("verdict", "value", "rule")}) or None,
+             "mode": phase, "note": ""} for k, c in report["checks"].items()]
 
 
 def _jsonable(v):

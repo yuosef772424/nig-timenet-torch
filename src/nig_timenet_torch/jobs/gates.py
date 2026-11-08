@@ -45,7 +45,7 @@ class GatesConfig:
     e3_train_end: str = ""
     e3_n_coins: int = 20
     e3_months: int = 6
-    e3_epochs: int = 1
+    e3_epochs: int = 3
 
     def __post_init__(self):
         if self.device not in DEVICES:

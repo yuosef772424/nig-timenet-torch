@@ -1,5 +1,5 @@
 {
- "fingerprint": "0c881318711ab30d",
+ "fingerprint": "812ae8fcfdb66996",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -393,7 +393,7 @@
   "nig_timenet_torch.jobs.gates.GatesConfig(e1_epochs)": "3",
   "nig_timenet_torch.jobs.gates.GatesConfig(e2_epochs)": "3",
   "nig_timenet_torch.jobs.gates.GatesConfig(e2_permutation_seed)": "0",
-  "nig_timenet_torch.jobs.gates.GatesConfig(e3_epochs)": "1",
+  "nig_timenet_torch.jobs.gates.GatesConfig(e3_epochs)": "3",
   "nig_timenet_torch.jobs.gates.GatesConfig(e3_months)": "6",
   "nig_timenet_torch.jobs.gates.GatesConfig(e3_n_coins)": "20",
   "nig_timenet_torch.jobs.gates.GatesConfig(e3_source)": "''",
@@ -637,7 +637,7 @@
   "nig_timenet_torch.workflow.gate_run.GateSettings(e1_epochs)": "3",
   "nig_timenet_torch.workflow.gate_run.GateSettings(e2_epochs)": "3",
   "nig_timenet_torch.workflow.gate_run.GateSettings(e2_permutation_seed)": "0",
-  "nig_timenet_torch.workflow.gate_run.GateSettings(e3_epochs)": "1",
+  "nig_timenet_torch.workflow.gate_run.GateSettings(e3_epochs)": "3",
   "nig_timenet_torch.workflow.gate_run.GateSettings(e3_months)": "6",
   "nig_timenet_torch.workflow.gate_run.GateSettings(e3_n_coins)": "20",
   "nig_timenet_torch.workflow.gate_run.GateSettings(e3_source)": "''",
