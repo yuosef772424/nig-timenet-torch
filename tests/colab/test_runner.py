@@ -175,6 +175,60 @@ def test_large_outputs_stay_on_drive_and_are_listed(world, tmp_path):
     assert "big.bin" not in results_files(world["base"], world["url"], "smoke-001")
 
 
+def test_the_publish_keeps_the_run_folder_that_lives_inside_the_bundle_folder(world):
+    """B-050: docs/jobs put run_dir at <drive_runs>/<job_id>/train, inside the bundle folder; the publish used to
+    replace the whole bundle folder, so every run's checkpoints went to the Drive trash at the end of the job."""
+    from nig_timenet_torch.colab import contract
+
+    drive_root = world["base"] / "drive"
+    train = drive_root / "nig_timenet_runs" / "smoke-001" / "train"  # what the job's trainer writes during the run
+    train.mkdir(parents=True)
+    (train / "best.pt").write_bytes(b"best")
+    (train / "checkpoint.pt").write_bytes(b"c" * (contract.GIT_MAX_BYTES + 1))
+    queue(world)
+    r = runner(world, drive_root=str(drive_root), drive_runs=str(drive_root / "nig_timenet_runs")).run_all()
+    assert r["status"] == "OK" and r["bundle"] == str(train.parent), world["echo"][-15:]
+    assert (train / "best.pt").read_bytes() == b"best" and (train / "checkpoint.pt").stat().st_size > 1
+    assert "smoke.json" in results_files(world["base"], world["url"], "smoke-001")
+    assert "train" not in results_files(world["base"], world["url"], "smoke-001")  # not the bundle's file
+    assert "checkpoint.pt" not in (train.parent / "bundle_summary.md").read_text()
+
+
+def test_a_rebuilt_bundle_replaces_only_its_own_files(world, tmp_path):
+    bundle, log = tmp_path / "bundle", tmp_path / "l.log"
+    log.write_text("log")
+    (bundle / "train").mkdir(parents=True)
+    (bundle / "train" / "best.pt").write_bytes(b"w")
+    job = make_job(world["sha"])
+    for i, name in enumerate(("first.txt", "sub/second.txt")):
+        out = tmp_path / f"out{i}"
+        (out / name).parent.mkdir(parents=True, exist_ok=True)
+        (out / name).write_text(name)
+        names = publish.build_bundle(bundle, job, out, log, {}, "OK", [])
+    assert not (bundle / "first.txt").exists() and (bundle / "sub" / "second.txt").is_file()
+    assert (bundle / "train" / "best.pt").read_bytes() == b"w"
+    assert publish.bundle_files(bundle) == names and "train/best.pt" not in names and "publish.json" not in names
+    publish.write_publish_state(bundle, status="OK", pushed=False)
+    assert publish.bundle_files(bundle) == names  # the runner's state update keeps the record
+    publish.push_results(world["url"], "colab-results", bundle, job, "OK", str(tmp_path / "w"),
+                         lambda: bootstrap.git_env(TOKEN, str(tmp_path / "w" / "ask")))
+    pushed = results_files(world["base"], world["url"], "smoke-001")
+    assert {"sub", "job.json", "bundle_summary.md"} <= pushed and not pushed & {"train", "first.txt", "publish.json"}
+
+
+def test_a_bundle_without_the_files_record_is_pushed_whole(world, tmp_path):
+    """A bundle folder written before the record (an old Drive bundle given to republish) keeps the old behaviour."""
+    bundle = tmp_path / "old_bundle"
+    bundle.mkdir()
+    for name in ("job.json", "env.json", "run_log.txt", "bundle_summary.md", "result.json"):
+        (bundle / name).write_text("{}")
+    (bundle / "publish.json").write_text(json.dumps({"status": "OK", "pushed": False}))
+    assert publish.bundle_files(bundle) is None
+    publish.push_results(world["url"], "colab-results", bundle, make_job(world["sha"]), "OK", str(tmp_path / "w"),
+                         lambda: bootstrap.git_env(TOKEN, str(tmp_path / "w" / "ask")))
+    assert "result.json" in results_files(world["base"], world["url"], "smoke-001")
+
+
 def test_the_wall_clock_guard_kills_a_runaway_job(tmp_path):
     t0 = time.time()
     log = tmp_path / "l.log"

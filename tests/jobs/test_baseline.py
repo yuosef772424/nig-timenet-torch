@@ -30,8 +30,10 @@ def test_baseline_runs_and_resumes(tmp_path, art, monkeypatch):  # noqa: F811
     assert s1["epochs_done"] == 1 and s1["seed"] == 0 and s1["n_windows"]["train"] > 0
     assert s1["step_seconds_per_batch"] > 0 and len(s1["data_fingerprint"]) > 8 and s1["identity_fingerprint"]
     for name in ("health_report.json", "health_report.md", "test_report.json", "device.json", "manifest.json",
-                 "battery_report.txt", "battery_profit.json"):
+                 "battery_report.txt", "battery_profit.json", "best.pt", "best_meta.json"):
         assert (out1 / name).is_file()
+    assert (out1 / "best.pt").read_bytes() == (run_dir / "best.pt").read_bytes()  # published with the results (B-050)
+    assert (run_dir / "checkpoint.pt").is_file()  # the resume state stays in the run folder
     profit = json.loads((out1 / "battery_profit.json").read_text())
     assert profit["cost_per_side"] == 0.0008 and {"profit_close", "verdict"} <= set(profit)
     test_rep = json.loads((out1 / "test_report.json").read_text())
@@ -89,6 +91,17 @@ def test_job_ids_and_run_dirs_are_unique():
     assert len({j["config"]["run_dir"] for j in jobs}) == len(jobs)
     for p, j in zip(files, jobs, strict=True):
         assert p.stem == j["job_id"] and j["config"]["run_dir"].endswith(f"/{j['job_id']}/train")
+
+
+def test_every_run_dir_is_on_drive_and_outside_what_the_runner_deletes():
+    """B-050 class guard: the runner deletes its work dir's ``out/<job_id>`` before a run and owns only its bundle
+    files; a run_dir under the work dir (or off Drive) would lose the checkpoints when the VM ends."""
+    from nig_timenet_torch.colab.runner import DEFAULT_DRIVE_ROOT, DEFAULT_WORKDIR
+
+    for p in sorted((ROOT / "docs" / "jobs").glob("*.json")):
+        run_dir = pathlib.PurePosixPath(parse_job(p.read_text())["config"]["run_dir"])
+        assert run_dir.is_relative_to(DEFAULT_DRIVE_ROOT), f"{p.name}: run_dir {run_dir} is not on Drive"
+        assert not run_dir.is_relative_to(DEFAULT_WORKDIR), f"{p.name}: run_dir {run_dir} is in the runner work dir"
 
 
 @pytest.mark.parametrize("smoke", ["baseline-smoke-001", "baseline-smoke-002"])
