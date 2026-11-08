@@ -32,8 +32,9 @@ from nig_timenet_torch.data_io.loading import LoadedData
 from nig_timenet_torch.eval.target_report import target_report
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.model.heads import head_spec
+from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
-from nig_timenet_torch.trainer.identity import RunIdentity
+from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
 from nig_timenet_torch.trainer.trainer import FitResult, FitSettings, Trainer
 from nig_timenet_torch.workflow import flat_run, run_common
 from nig_timenet_torch.workflow.battery_run import battery_step
@@ -41,7 +42,7 @@ from nig_timenet_torch.workflow.health_report import REPORT_JSON, REPORT_MD, Hea
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
 from nig_timenet_torch.workflow.settings import RunSettings
 
-__all__ = ["Run", "prepare", "build", "train", "health_step", "test_step", "battery_step", "write_summary",
+__all__ = ["Run", "prepare", "build", "train", "restore", "health_step", "test_step", "battery_step", "write_summary",
            "run_all", "test_lines", "SUMMARY", "TEST_REPORT"]
 
 SUMMARY = "baseline_summary.json"
@@ -127,6 +128,27 @@ def train(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
                                  run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline,
                                  on_epoch=on_epoch)
     _copy_best_weights(run)
+    return run
+
+
+def restore(run: Run, *, allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:
+    """Instead of ``train``: read a FINISHED run folder (``settings.run_dir``) and put its best-epoch weights in the
+    model, so the evaluation steps re-read a trained model without training (T5r). The saved RunIdentity must equal
+    this run's except for ``allow_changes`` (default: the commit; settings, seed and data must be the same)."""
+    _need(run, "trainer", "build")
+    run_dir = Path(run.settings.run_dir)
+    ckpt = checkpoint.load_checkpoint(run_dir)
+    if ckpt is None:
+        raise FileNotFoundError(f"{run_dir} holds no {checkpoint.CHECKPOINT}: nothing to restore")
+    check_resume(RunIdentity.from_json(json.loads(ckpt["identity"])), run.ident,
+                 allow_changes=("epochs", *allow_changes))
+    tracker = ckpt["tracker"]
+    if tracker.get("best_epoch") is None:
+        raise ValueError(f"{run_dir}: the checkpoint records no best epoch")
+    run.trainer.model.load_state_dict(checkpoint.load_best(run_dir))
+    history = list(ckpt["history"])
+    run.result = FitResult(history, int(ckpt["epochs_done"]), tracker["best_epoch"], tracker["best"],
+                           len(history) < run.fit_settings.epochs, True)
     return run
 
 

@@ -65,3 +65,21 @@ def test_battery_reruns_from_the_finished_folder_alone(art, tmp_path):  # noqa: 
     assert r.settings.evaluation.battery.cost_per_side == 0.0008
     with pytest.raises(FileNotFoundError, match="battery tables"):
         battery_from_folder(tmp_path)
+
+
+def test_restore_rereads_a_finished_run_folder_without_training(art, tmp_path):  # noqa: F811
+    """T5r: restore() puts the best weights of a finished run folder in a freshly built model; its test report equals
+    the trained run's; a changed seed (another identity) is refused."""
+    s = settings(art, tmp_path)
+    trained = steps.run_all(s, tmp_path / "out1")
+    rep1 = json.loads((tmp_path / "out1" / "test_report.json").read_text())
+    r = steps.restore(steps.build(steps.prepare(s, tmp_path / "out2")))
+    assert r.result.best_epoch == trained.result.best_epoch and r.result.restored_best
+    rep2 = json.loads(json.dumps(steps.test_step(r), default=float))
+    assert rep2 == rep1  # the same weights on the same rows (CPU, deterministic)
+    other = steps.build(steps.prepare(updated(s, {"train.seed": 7})))
+    with pytest.raises(ValueError, match="identity changed"):
+        steps.restore(other)
+    empty = steps.build(steps.prepare(updated(s, {"run_dir": str(tmp_path / "none")})))
+    with pytest.raises(FileNotFoundError, match="nothing to restore"):
+        steps.restore(empty)
