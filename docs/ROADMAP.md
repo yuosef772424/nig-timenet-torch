@@ -81,7 +81,8 @@ Then I1 ... H6 per `docs/hardening/PLAN.md`.
 ### T5r — read the baseline (`docs`/`exp`, S-M, researcher: the stronger model, because it decides what to try next)
 - Inputs that already exist on `colab-results` (read with `git show origin/colab-results:<path>`, do not copy): `runs/baseline-001-s0-r2/`
   (`baseline_summary.json`, `health_report.md`, `test_report.json`; 2026-11-07 @44f6e71, 5 epochs, T4, 972 s; its
-  `reg_target_mode` is `return`, scale 1.0, so the decodes are right: HF-13 settled for this run). Older: `baseline-001-s0`
+  `reg_target_mode` is `return`, scale 1.0, but `price_norm_mode` `logret_std`: the labels are log(future / last_close),
+  so the high / low decodes were WRONG until T5r (B-051, fixed with the `logret_close` codec; HF-13 was right)). Older: `baseline-001-s0`
   (@55e2db4, pre-T4b, history only), `trial-002`, smoke `baseline-smoke-001`. Known so far: best epoch 1 of 5 (val
   -5.062 -> -4.947 while train -5.75 -> -6.12: overfit after epoch 1, B-038); test rank IC high 0.393 / low 0.436 /
   close 0.057 (shuffled ~0); T-sharp share 0.84 / 0.89 but 80 % coverage 0.89 / 0.93 / 0.88 (> 0.85: intervals too

@@ -18,7 +18,6 @@ STATE_WORDS = {"todo", "in progress", "PR open", "merged", "closed (rejected)"}
 #: quoted paths that are legitimately absent today -> the reason (remove the entry the day the file exists; the
 #: test below fails on a stale entry)
 ABSENT_ON_PURPOSE = {
-    "docs/results/baseline-001.md": "written by step T5r",
     "reference/README": "RULES.md V1 incident: that is the TF project's file, quoted as history",
     "docs/research/failure_registry.csv": "lives in the TF project (ROADMAP: Using the TF project for follow-up)",
     "docs/research/hardening/bottlenecks.csv": "lives in the TF project (ROADMAP: Using the TF project for follow-up)",

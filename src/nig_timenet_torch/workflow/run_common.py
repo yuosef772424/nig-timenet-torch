@@ -2,7 +2,8 @@
     identity. Small functions of the settings so a notebook can call them one by one.
 TAGS: run steps, load data, split plan, run identity, device, artifact facts, smoke mode
 PITFALLS: every data fact (price targets, codec, timeframe, split dates) is read from the artifact, never assumed; the
-    split uses the artifact's split_dates unless the settings give both instants (the baseline's split_bounds).
+    split uses the artifact's split_dates unless the settings give both instants (the baseline's split_bounds);
+    check_decode refuses an artifact whose labels the codec does not decode to the real future prices (B-051).
 SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run_common.py); changes: strict split settings without
     retargeting, smoke stride (max_rows), artifact facts moved here, run identity from the manifest.
 """
@@ -18,12 +19,13 @@ from nig_timenet_torch.colab.identity import identity_for_run
 from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io.loading import LoadedData, load_dataset
 from nig_timenet_torch.data_io.split_plan import purge_embargo_split, sample_times
-from nig_timenet_torch.data_io.target_codec import TARGET_CODECS
+from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, codec_name
+from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings
 
-__all__ = ["load_data", "price_targets", "codec_state", "input_key", "split_bounds", "make_plan", "stride_rows",
-           "pick_device", "code_sha", "run_identity"]
+__all__ = ["load_data", "price_targets", "codec_state", "check_decode", "input_key", "split_bounds", "make_plan",
+           "stride_rows", "pick_device", "code_sha", "run_identity"]
 
 
 def load_data(settings: RunSettings) -> LoadedData:
@@ -47,7 +49,26 @@ def codec_state(dataset: dict) -> dict:
     UnknownNameError; a missing ``reg_target_scale`` raises ValueError)."""
     if "reg_target_mode" not in dataset:
         raise ValueError("the artifact lacks 'reg_target_mode' (a DATA_ARTIFACT_CONTRACT key)")
-    return TARGET_CODECS[dataset["reg_target_mode"]]().fit(dataset)
+    return TARGET_CODECS[codec_name(dataset)]().fit(dataset)
+
+
+def check_decode(dataset: dict, targets, n: int = 2000, rtol: float = 1e-4) -> None:
+    """Rule B3 guard (B-051): the codec of ``dataset`` must decode its stored regression labels back to the REAL
+    future prices of last_candles (evenly strided ``n`` rows, unclipped labels only); raises with the worst head."""
+    state = codec_state(dataset)
+    codec = TARGET_CODECS[state["mode"]]()
+    lc = np.asarray(dataset["last_candles"])
+    rows = stride_rows(np.arange(lc.shape[0]), n)
+    for t in targets:
+        y = np.asarray(dataset[head_spec("nig_regression", t).label_key])[rows].astype(np.float64)
+        raw = anchor_and_future(lc[rows], t, state)
+        ok = np.abs(y / state["scale"]) < 0.999
+        dec = codec.decode(y[ok], state, raw[ok, 0])
+        err = float(np.max(np.abs(dec / raw[ok, 1] - 1.0))) if ok.any() else 0.0
+        if err > rtol:
+            raise ValueError(f"codec {state['mode']!r} does not decode the {t!r} labels to the future prices of "
+                             f"last_candles (max relative error {err:.2e} > {rtol:g}); the artifact's target "
+                             f"definition (reg_target_mode / price_norm_mode) is not the codec's")
 
 
 def input_key(dataset: dict) -> str:

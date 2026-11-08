@@ -30,11 +30,11 @@ CAMPAIGN DONE (all rows merged). Outcome per package: `docs/hardening/PLAN.md` "
 ## Roadmap (`docs/ROADMAP.md`, rules `docs/RULES.md`, protocol `docs/MODEL_DEV_PROTOCOL.md`)
 PRs since last R-REVIEW: 1 (H6 itself; third review 2026-11-07 in H6, `docs/reviews.md`, covered #33-#39; the next is due after 5 more merged PRs).
 Done: R0 [#14](https://github.com/yuosef772424/nig-timenet-torch/pull/14), T1 [#16](https://github.com/yuosef772424/nig-timenet-torch/pull/16), T2 [#17](https://github.com/yuosef772424/nig-timenet-torch/pull/17), T3 [#18](https://github.com/yuosef772424/nig-timenet-torch/pull/18), T4 [#19](https://github.com/yuosef772424/nig-timenet-torch/pull/19), T4b [#29](https://github.com/yuosef772424/nig-timenet-torch/pull/29), the T5r job ([#20](https://github.com/yuosef772424/nig-timenet-torch/pull/20), fixes #21-#24). Data: artifact `c572b1b36960` (2,520,913 windows, 535 coins, sealed 183/183 excluded; B-020, B-022 open).
-GPU results (branch `colab-results`): `baseline-001-s0-r2` (2026-11-07, @44f6e71, 5 epochs, T4, 972 s): best epoch 1 (val overfits, train loss keeps falling); test rank IC high 0.393 / low 0.436 / close 0.057; T-sharp share 0.84 / 0.89 but coverage 0.89 / 0.93 / 0.88 (intervals too wide); no battery yet (predates I3). Smoke `baseline-smoke-001` OK.
+GPU results (branch `colab-results`): `baseline-002-s0` (2026-11-08, @8451a62, equals r2): read in T5r (`docs/results/baseline-001.md`): high/low rank IC 0.39/0.44 tie the HAR volatility baseline; T-sharp 0.012/0.272 (the recorded 0.84/0.89 was the B-051 misdecode); no use of the outputs profitable after cost on VAL and TEST.
 
 | Step | Title | State | PR / job | Note |
 |---|---|---|---|---|
-| T5r | Read the baseline (`docs/results/baseline-001.md`) | in progress | phase 1 PR (B-050 fix) | `baseline-002-s0` done (@8451a62, equals r2); its weights were deleted by the publish (B-050, fixed in phase 1; r2 weights in the Drive trash); phase 2 = the reading |
+| T5r | Read the baseline (`docs/results/baseline-001.md`) | PR open | phase 1 [#44](https://github.com/yuosef772424/nig-timenet-torch/pull/44) merged; phase 2 PR | weights recovered, no re-training; B-051 decode fix (D-017); C1, strategy book, diagnosis, error map; verdict: no T-profit signal |
 | T3b | Interactive notebook section + Drive cached env | merged | [#43](https://github.com/yuosef772424/nig-timenet-torch/pull/43) (c026624) | Arabic `main.ipynb` (34 cells), Drive sync both ways, env tar; D-016; not run on real Colab (B-048) |
 | G1 / G2 | Test environments E1-E3 / gate tooling + gate job | todo | | protocol sections 2-3 |
 | TR1 | Trainer switches (clip, wd groups, EMA, init, timing, train gap) | todo | | B-018, B-007, HF-37 |

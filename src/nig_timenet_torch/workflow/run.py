@@ -32,8 +32,9 @@ from nig_timenet_torch.data_io.loading import LoadedData
 from nig_timenet_torch.eval.target_report import target_report
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.model.heads import head_spec
+from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
-from nig_timenet_torch.trainer.identity import RunIdentity
+from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
 from nig_timenet_torch.trainer.trainer import FitResult, FitSettings, Trainer
 from nig_timenet_torch.workflow import flat_run, run_common
 from nig_timenet_torch.workflow.battery_run import battery_step
@@ -41,8 +42,8 @@ from nig_timenet_torch.workflow.health_report import REPORT_JSON, REPORT_MD, Hea
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
 from nig_timenet_torch.workflow.settings import RunSettings
 
-__all__ = ["Run", "prepare", "build", "train", "health_step", "test_step", "battery_step", "write_summary", "run_all",
-           "test_lines", "SUMMARY", "TEST_REPORT"]
+__all__ = ["Run", "prepare", "build", "train", "restore", "health_step", "test_step", "battery_step", "write_summary",
+           "run_all", "test_lines", "SUMMARY", "TEST_REPORT"]
 
 SUMMARY = "baseline_summary.json"
 TEST_REPORT = "test_report.json"
@@ -93,7 +94,7 @@ def prepare(settings: RunSettings, out=None) -> Run:
     art = run_common.load_data(settings)
     ds = art.dataset
     targets = run_common.price_targets(ds)
-    run_common.codec_state(ds)
+    run_common.check_decode(ds, targets)
     run_common.input_key(ds)
     (tr, va, te), bounds = run_common.make_plan(ds, settings.split)
     run = Run(settings, art, targets, {"train": tr, "val": va, "test": te}, bounds, run_common.pick_device(settings),
@@ -130,6 +131,27 @@ def train(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
     return run
 
 
+def restore(run: Run, *, allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:
+    """Instead of ``train``: read a FINISHED run folder (``settings.run_dir``) and put its best-epoch weights in the
+    model, so the evaluation steps re-read a trained model without training (T5r). The saved RunIdentity must equal
+    this run's except for ``allow_changes`` (default: the commit; settings, seed and data must be the same)."""
+    _need(run, "trainer", "build")
+    run_dir = Path(run.settings.run_dir)
+    ckpt = checkpoint.load_checkpoint(run_dir)
+    if ckpt is None:
+        raise FileNotFoundError(f"{run_dir} holds no {checkpoint.CHECKPOINT}: nothing to restore")
+    check_resume(RunIdentity.from_json(json.loads(ckpt["identity"])), run.ident,
+                 allow_changes=("epochs", *allow_changes))
+    tracker = ckpt["tracker"]
+    if tracker.get("best_epoch") is None:
+        raise ValueError(f"{run_dir}: the checkpoint records no best epoch")
+    run.trainer.model.load_state_dict(checkpoint.load_best(run_dir))
+    history = list(ckpt["history"])
+    run.result = FitResult(history, int(ckpt["epochs_done"]), tracker["best_epoch"], tracker["best"],
+                           len(history) < run.fit_settings.epochs, True)
+    return run
+
+
 def _copy_best_weights(run: Run) -> None:
     """``best.pt`` + ``best_meta.json`` of the run folder into ``out``, so a job publishes the weights with its
     results (B-050); skipped without ``out`` or before any best epoch, never copied onto itself."""
@@ -152,12 +174,12 @@ def health_step(run: Run) -> Run:
     xs = run.x["val"][torch.as_tensor(pick)].to(dev)
     meta = table_meta(ds, idx, stage="val", fold=0, train_end=run.bounds[0])
     table = predict_table(run.trainer.model, xs, meta, run.ident)
-    lc = np.asarray(ds["last_candles"])
+    lc, codec = np.asarray(ds["last_candles"]), run_common.codec_state(ds)
     probe_target = "close" if "close" in run.targets else run.targets[0]
     labels = {k: v[torch.as_tensor(pick)].numpy() for k, v in run.y["val"].items()}
     hr = HealthRun(run_dir=Path(run.settings.run_dir), model=run.trainer.model, x=xs, predictions=table,
-                   labels=labels, anchors=flat_run.anchors_by_name(lc, idx, run.targets),
-                   last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]], codec_state=run_common.codec_state(ds),
+                   labels=labels, anchors=flat_run.anchors_by_name(lc, idx, run.targets, codec),
+                   last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]], codec_state=codec,
                    probe_labels=tuple(head_spec(k, probe_target).label_key
                                       for k in ("nig_regression", "binary_classification")))
     health_report(hr)
@@ -169,12 +191,11 @@ def health_step(run: Run) -> Run:
 
 
 def stage_report(run: Run, stage: str, table: pd.DataFrame) -> dict:
-    lc = np.asarray(run.dataset["last_candles"])
+    lc, codec = np.asarray(run.dataset["last_candles"]), run_common.codec_state(run.dataset)
     idx = run.idx[stage]
     return target_report(table, {k: v.numpy() for k, v in run.y[stage].items()},
-                         anchors=flat_run.anchors_by_name(lc, idx, run.targets),
-                         last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]],
-                         codec_state=run_common.codec_state(run.dataset))
+                         anchors=flat_run.anchors_by_name(lc, idx, run.targets, codec),
+                         last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]], codec_state=codec)
 
 
 def test_step(run: Run) -> dict:

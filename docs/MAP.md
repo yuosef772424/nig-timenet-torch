@@ -71,7 +71,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `data_io/loading.py` | One way to load a prepared dataset by base name, latest name or full name, memory-mapped or copied to local disk, with the rule D1 artifact checks applied by default. | dataset loading, latest name, mmap, local copy, artifact checks, rule d1 |
 | `data_io/npy_dir.py` | Reader of the npy_dir dataset format (manifest.json + one .npy per array + meta.pkl), optionally memory- mapped, and a local-disk copy helper. | npy dir, dataset reader, mmap, localize, data format, manifest |
 | `data_io/split_plan.py` | One global train/val/test split with purge by label end and embargo, plus the per-row times it needs (feature start, feature end, label end) derived from last_candles. | split plan, purge embargo, label end, sample times, leakage check |
-| `data_io/target_codec.py` | TARGET_CODECS, the one place a regression target is encoded from last_candles and decoded back to a price (only "return" is registered). | target codec, return target, reg target scale, decode to price, own anchor |
+| `data_io/target_codec.py` | TARGET_CODECS, the one place a regression target is encoded from last_candles and decoded back to a price: "return" (own-anchor simple return) and "logret_close" (log return vs the last close, TF logret_* artifacts). | target codec, return target, log return, reg target scale, decode to price, own anchor, anchor column |
 
 ### eval
 
@@ -83,8 +83,12 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `eval/battery_lib.py` | Shared private helpers of the battery: trade stats, row masks, top-\|x\| selection, section shaping. | battery helpers, trade stats, sharpe, profit factor, section |
 | `eval/battery_profit.py` | The T-profit sections of the battery: per-side-cost profit with trivial baselines and a block-bootstrap CI that is widened for the number of variants tried; limit orders at the predicted high / low; sigma as position size. | t-profit, profit after cost, limit order, position size, block bootstrap, trivial baselines, battery |
 | `eval/calibrator.py` | P29: role-checked learned-state calibrator (C6). Isotonic regression only, mirroring the TF side's |  |
+| `eval/error_map.py` | Where the model itself errs: per head, error (\|mu - y\|, NIG NLL), rank IC, bias, coverage, interval width and value over the HAR baseline, split by liquidity proxy, coin age, volatility regime, month, market day and hour. | error analysis, error map, buckets, bias, coverage, interval width, har baseline, worst cases, model improvement |
 | `eval/nig_floor.py` | T4 NIG floor-hit shares: how often each NIG parameter of each head sits on its floor; floors are read from the model's own ``head_modules()`` (architecture-neutral). | nig floor, floor hit, t4 diagnostics, head modules, nu alpha beta, health report |
+| `eval/strategy_book.py` | Every use of the model outputs as a trade rule over a battery table (direction, top-\|mu\| grid, limit at mu, limit at the predicted extreme, take-profit), each with trivial controls, on VAL and TEST with a day-block CI. | t-profit, strategy book, trade rules, trivial controls, volatility baseline, day block bootstrap, val and test |
+| `eval/strategy_diagnosis.py` | Deep diagnosis of one strategy's trades: payoff vs break-even win rate, hits vs misses, tail losses, adverse excursion, worst trades, day concentration, link to the market day, calibration of the predicted move. | strategy diagnosis, break even win rate, payoff, tail losses, adverse excursion, day concentration, market beta, calibration |
 | `eval/target_report.py` | T4/T4b target report for one stage of one run: T-skill, T-conf, T-sharp (per head, std vs the head's own predicted move from the last close) and 80 % coverage. | target report, t-sharp, coverage, uncertainty, evaluation, nig head |
+| `eval/vol_baseline.py` | Rule C1 for the high / low heads: volatility baselines from the model's own input window (last-bar range, HAR means, ATR-type true range), the model's rank IC net of them, a HAR OLS table and 80 % intervals at matched calibration. | volatility baseline, rule c1, high low heads, har, atr, partial rank ic, interval sharpness, range forecast |
 
 ### jobs
 
@@ -112,8 +116,8 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
-| `stats/metrics.py` | Every metric of the project in one module (AUC, rank IC, R^2, calibration, interval and sharpness shares, confidence-error gap, block-bootstrap CI), each with its trivial baseline stated and tested (rule C1). | metrics, auc, rank ic, calibration, coverage, bootstrap, trivial baseline |
-| `stats/nig.py` | NIG predictive distribution in numpy (T4): the predictive std and central interval of a Normal-Inverse-Gamma head, |  |
+| `stats/metrics.py` | Every metric of the project in one module (AUC, rank IC and partial rank IC, R^2, calibration, intervals, sharpness, confidence-error gap, block-bootstrap CI), each with its trivial baseline stated and tested (rule C1). | metrics, auc, rank ic, calibration, coverage, bootstrap, trivial baseline |
+| `stats/nig.py` | The NIG predictive distribution in numpy: predictive std, central interval halfwidth and per-row NLL of a Normal-Inverse-Gamma head from its saved nu / alpha / beta columns. | nig, student t, predictive std, interval halfwidth, nll, uncertainty, numpy |
 
 ### trainer
 
@@ -138,6 +142,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `workflow/flat_run.py` | The flat model (one row per coin window, NIG regression + binary class head per price target) as run steps: inputs, anchors, model settings, trainer, fit settings, one chunked predict per stage. | flat run, run steps, trainer config, stage inputs, anchors by name, head kinds, predict stage |
 | `workflow/health_report.py` | T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer trace) as JSON and markdown next to the checkpoint. | health report, diagnostics, t-sharp, probe, trainer trace, markdown report |
 | `workflow/prediction_table.py` | The one batched predict that turns a model and its inputs into the canonical PredictionTable, with one writer and one validating reader. | prediction table, batched predict, table meta, table writer, table reader |
+| `workflow/reading.py` | The T5r reading of a finished run: volatility baselines of the high / low heads (rule C1), every use of the outputs with controls on VAL and TEST, deep diagnosis of profitable-looking rules, the evidence check. | t5r reading, rule c1, volatility baseline, strategy book, strategy diagnosis, evidence check, run reading |
 | `workflow/rolling.py` | P37: rolling-retrain loop — SEAM ONLY (the shape of the loop; no experiment is run through it in this repo). |  |
 | `workflow/run.py` | The run steps of one flat single-split run (prepare, build, train, health report, test report, summary) and run_all() that calls them in order. Jobs and notebooks call the steps; nobody copies them. | run steps, single split, flat run, train step, health step, test report step, run summary, notebook steps |
 | `workflow/run_common.py` | Steps every run shares: load the artifact, read its facts, split by time, pick the device, build the run identity. Small functions of the settings so a notebook can call them one by one. | run steps, load data, split plan, run identity, device, artifact facts, smoke mode |
@@ -156,7 +161,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | input_skip | `INPUT_SKIP_VARIANTS` | `model/parts.py` | `concat_each_block`, `dense_skip`, `late_raw`, `no_proj`, `none` |
 | selection_metric | `SELECTION_METRICS` | `trainer/selection_metric.py` | `val_auc_close_class`, `val_auc_high_class`, `val_auc_low_class`, `val_pinball_close_reg`, `val_pinball_high_reg`, `val_pinball_low_reg`, `val_raw_loss` |
 | source | `SOURCES` | `data/sources.py` | `files`, `synthetic` |
-| target_codec | `TARGET_CODECS` | `data_io/target_codec.py` | `return` |
+| target_codec | `TARGET_CODECS` | `data_io/target_codec.py` | `logret_close`, `return` |
 | target_raw | `TARGET_RAW` | `data/targets.py` | `entry_range`, `magnitude`, `return`, `return_close`, `scaled`, `volnorm`, `window_scale` |
 | task | `TASK_REGISTRY` | `trainer/tasks.py` | `classification`, `evidential`, `regression` |
 

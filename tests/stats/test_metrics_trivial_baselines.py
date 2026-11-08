@@ -174,3 +174,18 @@ def test_trivial_baseline_r2(rng):
     assert metrics.r2(y, rng.permutation(y)) < 0
     assert metrics.r2(y, y) == 1.0
     assert np.isnan(metrics.r2(np.ones(5), np.zeros(5))), "constant y: undefined, not 0"
+
+
+def test_trivial_baseline_partial_rank_ic(rng):
+    groups = np.repeat(np.arange(N // 40), 40)
+    vol = rng.lognormal(size=N)
+    y = vol * rng.normal(size=N) ** 2  # the truth scales with the baseline (a volatility-like target)
+    assert metrics.rank_ic(y, vol, groups) > 0.3, "the baseline alone has a large rank IC"
+    assert np.isnan(metrics.partial_rank_ic(y, 2 * vol + 1, vol, groups)), \
+        "a prediction with the baseline's ranks has nothing beyond it (undefined, not 0)"
+    assert abs(metrics.partial_rank_ic(y, vol * rng.lognormal(0, 0.1, N), vol, groups)) < 0.05, \
+        "the baseline plus noise has ~0 skill net of it"
+    extra = rng.normal(size=N)
+    y2 = vol + extra
+    assert metrics.partial_rank_ic(y2, vol + extra, vol, groups) > 0.5, "information beyond the baseline counts"
+    assert np.isnan(metrics.partial_rank_ic(y, vol, vol, np.arange(N))), "groups of 1 row: undefined"
