@@ -31,17 +31,20 @@ piecewise; keep it as `archive/feat-ar-stream` when closed).
 - Data: artifact `MyDrive/crypto_model/torch_artifacts/preprocessing_output_1` (TF main data, 4h): 2,520,913 windows, 535
   coins, sealed 183/183 removed, max_bar_time 2026-09-26T20:00Z, fingerprint `c572b1b36960`. `split_dates = None`: the job
   splits 80/10/10 by time quantiles. All 183 sealed coins were inside the TF main data, so TF results are not a clean
-  holdout (B-022). B-020 (bar OPEN time) is unproven.
+  holdout (B-022). B-020 (bar OPEN time): settled internally by T5r (2026-11-08), not checked against raw klines.
 - GPU results on branch `colab-results` (read with `git show origin/colab-results:<path>`):
   - `runs/baseline-001-s0/` (2026-11-03, @55e2db4, 5 epochs): pre-T4b, history only. `runs/trial-002/` (2 epochs, owner trial).
   - `runs/baseline-smoke-001/` (@44f6e71): smoke OK (rule E5).
   - `runs/baseline-001-s0-r2/` (@44f6e71, 5 epochs, T4, 972 s, ~169 s/epoch; windows 2,015,804 / 239,297 / 239,772): val best
     at epoch 1 (-5.062 -> -4.947 by epoch 5) while train loss keeps falling (-5.75 -> -6.12): overfit after epoch 1. Test
     at the best epoch: rank IC high 0.393 / low 0.436 / close 0.057 (shuffled ~0); class AUC high 0.757 / low 0.765 (information
-    only) / close 0.512; confidence decile Spearman -0.81 / -1.00 / -0.99 (meets T-conf); T-sharp share high 0.837 / low 0.889
+    only) / close 0.512; confidence decile Spearman -0.81 / -1.00 / -0.99 (meets T-conf); T-sharp share high 0.837 / low 0.889 [B-051 misdecode; 0.012 / 0.272 decoded right, `docs/results/baseline-001.md`]
     (>= 0.80 met) but 80 % coverage 0.892 / 0.932 / 0.875 (> 0.85: intervals too wide); close std / move 24.5 (informational,
     O-1). NOT known: whether high/low IC beats the last-bar-range volatility baseline (rule C1), and any profit number: the
     battery was wired in I3, after this run.
+- [2026-11-08] `runs/baseline-smoke-002/` and `runs/baseline-002-s0/` (@8451a62, 5 epochs, T4): read by T5r (#44, #45),
+  `docs/results/baseline-001.md` (numbers live there): no use of the outputs profitable after cost; high ties the HAR
+  baseline, low adds nothing beyond volatility; NIG beta at its floor (B-052). Its recorded reports use the old decode (B-051).
 - Open PRs/branches that matter: PR #25 (reference). TF #64 (settings catalog) parked.
 
 ## Owner decisions (2026-11-07)
@@ -63,7 +66,7 @@ piecewise; keep it as `archive/feat-ar-stream` when closed).
    entry without CONFIG, or a job/config device mismatch is refused).
 3. SMOKE FIRST (rule E5): any job with `max_minutes` > 30 on a commit that has not run on the GPU is preceded by
    a smoke job file of that entry whose `job_id` and `run_dir` were never used (`runs/<job_id>/` absent on
-   `colab-results`; next free: `docs/jobs/baseline-smoke-002.json`; a used id is refused by `check_rerun`, a used run_dir
+   `colab-results`; `baseline-smoke-001` and `baseline-smoke-002` are both used (2026-11-08), so the next commit needs a new file, e.g. `baseline-smoke-003`; a used id is refused by `check_rerun`, a used run_dir
    resumes another commit's checkpoint and is refused) (same entry, `max_rows` 20000, 1 epoch, a few minutes) on that commit. Read its
    `baseline_summary.json` before queueing the long job.
 4. A code change means a NEW `run_dir` (resume across a code change is refused: `RunIdentity` holds `code_sha`); the long job's
@@ -72,6 +75,8 @@ piecewise; keep it as `archive/feat-ar-stream` when closed).
    `runs/<job_id>/` (`bundle_summary.md` first). A failed publish: `python -m nig_timenet_torch.colab republish <bundle_dir>`.
 
 ## Next
+[2026-11-08, fourth R-REVIEW: items 1 and 2 are done; T3b #43 and G1 #46 merged; the order after G2 and the open owner
+questions are in `docs/reviews.md`, section 2026-11-08.]
 1. Queue (when the owner says so): smoke job `baseline-smoke-002`, then a FRESH baseline at current `main`: `baseline-002-s0` (config of
    `docs/jobs/baseline-001-s0.json`, new run_dir). It is the first run with the battery. (No recompute-from-checkpoint entry
    exists; building one costs more than the ~16 minutes of a fresh run.)

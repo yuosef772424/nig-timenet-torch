@@ -109,7 +109,7 @@ interval is within [0.75, 0.85]. Owner example: the model predicts the high +5 %
 |---|---|
 | E1 synthetic | within-coin Spearman(pred std, planted noise sd) >= 0.8; mean(pred std) / mean(planted sd) in [0.8, 1.25]; coverage in [0.75, 0.85]; per head, the T-sharp share within 0.10 of the ORACLE share on the same data (the generator knows the true conditional distribution) |
 | E2 shuffled labels | coverage in [0.75, 0.85] and mean(pred std) / sd(label) in [0.8, 1.25] (an honest model widens to the unconditional spread) |
-| E3 small real | coverage in [0.75, 0.85] per head (after the interval-scale switch if on, fitted on a separate calibration slice); T-sharp share >= 0.80 for every head |
+| E3 small real | coverage in [0.75, 0.85] per head (after the interval-scale switch if on, fitted on a separate calibration slice); T-sharp share >= 0.80 for the high and low heads (close: informational, O-1) |
 
 **Known answer and a warning for the close head (scratch probe, H0c, re-built as the T4b synthetic test).** With the
 TRUE conditional distribution (random walk, 4h bars of 48 sub-steps, horizon 2, heteroscedastic vol, planted drift

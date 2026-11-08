@@ -25,7 +25,7 @@ Arabic.
   "torch==2.15.0+cpu" && pip install -e ".[dev,data]"`, run from the clone.
 - Work clone: `git clone <origin url> /home/user/work/nig-timenet-torch`. Every agent starts with
   `git fetch origin main && git checkout -B <session branch> origin/main`.
-- Baseline at handoff: `ruff check src tests` clean; `pytest -q` 749 passed, 1 skipped (~65 s);
+- Baseline at handoff: `ruff check src tests` clean; `pytest -q` 749 passed, 1 skipped (~65 s) (839 passed / 2 skipped on 2026-11-08, c411008);
   `python -m tests.build_map --check` clean.
 
 ## Agent prompt template (fill the step; keep it self-contained)
@@ -39,7 +39,7 @@ Arabic.
    - update the STATUS row;
    - append to `friction_log.csv`, `bottlenecks.csv`, and `suggestions.csv` (rule F5);
    - add cards on touched modules (rule B7) and run `python -m tests.build_map`;
-   - for any new default: a decision file with the next free D number (D-015 is the latest; D-006 is reserved for PR #25)
+   - for any new default: a decision file with the next free D number (D-015 was the latest at this handoff, D-018 on 2026-11-08; D-006 is reserved for PR #25)
      plus `python -m tests.defaults_pin --add`.
 7. Commit trailer lines, push, draft PR, unsubscribe at once, wait for CI with a background `sleep 120`, mark ready, merge.
 8. Final report: detailed (PR, what changed, behaviour changes, checks with output, not verified, unclear/stale, open
@@ -62,11 +62,15 @@ Arabic.
 - GPU: `baseline-001-s0-r2` (@44f6e71) is the reference run (numbers in `docs/STATUS.md`).
   - Validation is best at epoch 1 and worsens after it, while train loss keeps falling (memorization evidence).
   - Confidence works (decile Spearman ≤ -0.81 on all heads).
-  - High/low T-sharp share is ≥ 0.80, but intervals are too wide (coverage 0.89 to 0.93).
+  - High/low T-sharp share is ≥ 0.80, but intervals are too wide (coverage 0.89 to 0.93). [2026-11-08: the share was a B-051
+    misdecode; decoded right it is 0.012 / 0.272 on `baseline-002-s0`.]
   - Close rank IC is 0.057.
-  - Profit is not measured yet: that run predates the battery.
+  - Profit is not measured yet: that run predates the battery. [2026-11-08: measured on `baseline-002-s0` by T5r: no use of
+    the outputs is profitable after cost on VAL and TEST, `docs/results/baseline-001.md`.]
 
 ## Next (in this order)
+[2026-11-08, fourth R-REVIEW: items 1 and 2 are done (smoke-002 and baseline-002-s0 ran @8451a62; T5r #44 / #45),
+T3b #43 and G1 #46 merged. The order after G2 and the owner questions: `docs/reviews.md`, section 2026-11-08.]
 1. If the owner agrees, queue `baseline-smoke-002` with `repo_ref` = current main, then `baseline-002-s0`
    (both job files exist in `docs/jobs/`; `baseline-smoke-001` cannot be reused: its results and run_dir exist).
    - `baseline-002-s0` (`docs/jobs/baseline-002-s0.json`): config of `baseline-001-s0` with a NEW run_dir, 5 epochs,
