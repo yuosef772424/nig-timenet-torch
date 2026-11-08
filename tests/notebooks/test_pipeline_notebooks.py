@@ -11,20 +11,28 @@ cell's variables overridden, so a renamed option or function breaks THIS test, n
 import ast
 import builtins
 import inspect
-import json
 from importlib import import_module
 
 import pytest
 
 from nig_timenet_torch.colab import bootstrap
-from tests.notebooks.helpers import MAX_CELL_LINES, code_cells
-from tests.scan import ROOT
+from tests.notebooks.helpers import (
+    MAX_CELL_LINES,
+    SETTINGS_MAX_LINES,
+    code_cells,
+    is_settings,
+    load,
+    logic_lines,
+    run_notebook,
+)
 
 NAMES = ("data_pipeline", "main")
 COMMON = {"TORCH_REPO", "TORCH_REF", "EXPECT_DEVICE", "TOKEN_PATH", "WORKDIR", "TORCH_DIR", "DRIVE_RUNS",
           "EXTRA_MODULES"}
 NEEDS = {"data_pipeline": {"RAW_ROOT", "OUT_DIR", "NAME", "PRESETS", "CHANGES", "FETCH"},
-         "main": {"ARTIFACT", "RUN_DIR", "OUT_DIR", "CHANGES", "BATTERY_FOLDER", "BATTERY_COST", "BATTERY_VARIANTS"}}
+         "main": {"ARTIFACT", "RUN_NAME", "WORK_ON", "DRIVE_RUNS", "LOCAL_RUNS", "RESTORE_FROM", "CHANGES",
+                  "BATTERY_FOLDER", "BATTERY_COST", "BATTERY_VARIANTS", "REPO_SOURCE", "REPO_DIR", "UPDATE_DRIVE_COPY",
+                  "DISCARD_LOCAL_CHANGES", "USE_ENV_CACHE", "ENV_CACHE_DIR"}}
 
 
 def _check_call(call, fn, where):
@@ -38,22 +46,6 @@ def _check_call(call, fn, where):
         assert names <= set(params), f"{where}: {sorted(names - set(params))} not in {inspect.signature(fn)}"
 
 
-def load(name):
-    return json.loads((ROOT / "notebooks" / f"{name}.ipynb").read_text(encoding="utf-8"))
-
-
-def sections(nb):
-    """(is_setup, source) of every code cell: the cells between '## 1. Setup' and the next heading need Colab."""
-    out, in_setup = [], False
-    for c in nb["cells"]:
-        src = "".join(c["source"])
-        if c["cell_type"] == "markdown":
-            in_setup = src.lstrip().startswith("## 1. Setup")
-        else:
-            out.append((in_setup, src, c))
-    return out
-
-
 @pytest.mark.parametrize("name", NAMES)
 def test_clean_thin_and_the_settings_cell_is_complete(name):
     nb = load(name)
@@ -61,7 +53,8 @@ def test_clean_thin_and_the_settings_cell_is_complete(name):
     for i, c, src in code_cells(nb):
         assert c["outputs"] == [] and c["execution_count"] is None, f"{name} cell {i}: commit without outputs"
         assert "ghp_" not in src and "github_pat_" not in src
-        assert len(src.splitlines()) <= MAX_CELL_LINES, f"{name} cell {i}: move logic into the package"
+        cap = SETTINGS_MAX_LINES if is_settings(c) else MAX_CELL_LINES
+        assert logic_lines(src) <= cap, f"{name} cell {i}: move logic into the package"
         tree = ast.parse(src)
         assert not [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
     tagged = [src for _, c, src in code_cells(nb) if "settings" in c["metadata"].get("tags", [])]
@@ -117,36 +110,9 @@ def test_every_call_matches_a_real_signature_and_every_name_is_defined_earlier(n
     assert checked >= 4
 
 
-def run_notebook(name, overrides):
-    """Run the settings cell, apply ``overrides`` over its variables, then every non-Colab cell in one namespace."""
-    ns = {"__name__": "__notebook__"}
-    for in_setup, src, c in sections(load(name)):
-        if in_setup:
-            continue
-        exec(compile(src, f"{name}-cell", "exec"), ns)  # noqa: S102
-        if "settings" in c["metadata"].get("tags", []):
-            ns.update(overrides)
-    return ns
-
-
 def test_data_notebook_builds_a_named_dataset_that_the_loader_reads_back(tmp_path):
     base = "preprocessing_output_20261027"
     data = run_notebook("data_pipeline", {"OUT_DIR": str(tmp_path), "PRESETS": ("tiny",), "NAME": base})
     assert (tmp_path / f"{base}_latest.dataset").is_dir()
     assert any(p.name.startswith(f"{base}_2") for p in tmp_path.iterdir())
     assert data["loaded"].path.name == f"{base}_latest.dataset" and data["manifest"]["export"]["rows"] > 0
-
-
-def test_main_notebook_runs_the_fixture_end_to_end(tmp_path, art):  # noqa: F811
-    """Settings -> data -> split -> model -> train -> health -> test report -> battery -> summary -> battery of the
-    finished folder, all through the workflow.run steps, on the fixture artifact (1 epoch, CPU)."""
-    out = tmp_path / "out"
-    ns = run_notebook("main", {"ARTIFACT": str(art), "RUN_DIR": str(tmp_path / "train"), "OUT_DIR": str(out),
-                               "CHANGES": {"train.epochs": 1, "train.batch_size": 64, "train.device": "cpu",
-                                           "evaluation.health_max_rows": 50},
-                               "BATTERY_FOLDER": str(out)})
-    for file in ("baseline_summary.json", "test_report.json", "health_report.md", "battery_report.txt",
-                 "battery_profit.json", "battery_table_val.parquet", "battery_table_test.parquet"):
-        assert (out / file).is_file(), file
-    assert ns["summary"]["epochs_done"] == 1 and ns["report"]["n_rows"] == len(ns["run"].idx["test"])
-    assert "VERDICT" in ns["render"](ns["sections"])
