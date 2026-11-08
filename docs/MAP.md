@@ -11,9 +11,11 @@ line range). A module without a card shows its first docstring line; it gets a c
 | module | what it is for | tags |
 |---|---|---|
 | `colab/__main__.py` | Command line of the Colab runner: ``python -m nig_timenet_torch.colab <command>``. |  |
-| `colab/bootstrap.py` | Stdlib-only git and token kit of the Colab notebook: secrets masking, a Drive-kept GitHub token, clean clones and the --no-deps install that leaves Colab's torch alone. | colab bootstrap, git clone, github token, pip install, purge package, stdlib only |
+| `colab/bootstrap.py` | Stdlib-only git and token kit of the Colab notebook: secrets masking, a Drive-kept GitHub token, clean clones, the code-source choice (GitHub / Drive copy) and the --no-deps install that leaves Colab's torch alone. | colab bootstrap, git clone, github token, code source, drive copy, pip install, purge package, stdlib only |
 | `colab/contract.py` | The run contract between the runner and a job entry (ROADMAP T3), both sides in one place. |  |
 | `colab/device.py` | The device a Colab job runs on: report it, assert it, record it (rule E1). |  |
+| `colab/drive_sync.py` | Run folders between the VM disk and Drive for the main notebook: where a run works, push its folder (reports, checkpoints) to Drive, restore an earlier run folder from Drive. Plain file copies, no network, no git. | drive sync, run folder, push to drive, restore from drive, checkpoint copy, notebook paths, resume run |
+| `colab/env_cache.py` | A cached Python environment on Drive for the notebook: a venv (--system-site-packages, so Colab's CUDA torch stays) with the project's requirements, as ONE tar keyed by Python + torch + requirements; new key = rebuild. | env cache, venv tar, cache key, requirements hash, drive cache, restore environment, activate venv |
 | `colab/identity.py` | The ONE place a real run's ``RunIdentity`` is built (T2 review, deferred to T3). |  |
 | `colab/job.py` | The job a Colab run executes: ``job.json`` on the ``colab-queue`` branch, parsed and validated, including the entry's own strict config. | colab job, job validation, queue branch, job config, expected outputs |
 | `colab/prepare.py` | Section 2 of the notebook (ROADMAP T3): turn the TF project's training data into a contract artifact, once. |  |
