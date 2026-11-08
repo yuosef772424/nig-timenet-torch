@@ -17,7 +17,7 @@ from importlib import import_module
 import pytest
 
 from nig_timenet_torch.colab import bootstrap
-from tests.notebooks.helpers import MAX_CELL_LINES, code_cells
+from tests.notebooks.helpers import MAX_CELL_LINES, code_cells, logic_lines
 from tests.scan import ROOT
 
 NB = ROOT / "notebooks" / "colab_nig_timenet_torch.ipynb"
@@ -36,7 +36,7 @@ def test_notebook_is_clean_and_thin(nb):
     for i, c, src in code_cells(nb):
         assert c["outputs"] == [] and c["execution_count"] is None, f"cell {i}: commit the notebook without outputs"
         assert "ghp_" not in src and "github_pat_" not in src, "no tokens in the notebook"
-        n_lines = len(src.splitlines())
+        n_lines = logic_lines(src)
         assert n_lines <= MAX_CELL_LINES, f"cell {i} is {n_lines} lines: move logic into colab/"
         tree = ast.parse(src)  # plain Python: no ! or % magics at all
         defs = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]

@@ -1,4 +1,26 @@
-# Notebooks
+# الدفاتر (Notebooks)
+
+> القسم العربي أدناه هو الدليل؛ بعده المرجع التفصيلي بالإنجليزية (يبقى كما هو).
+
+## دليل الدفاتر الثلاثة
+
+| الدفتر | لمن؟ | ما يفعل | فتح في Colab |
+|---|---|---|---|
+| [`main.ipynb`](main.ipynb) | **التجريب اليومي** | تشغيل كامل تفاعلي من الإعدادات إلى الربح بعد التكلفة، خطوة بخطوة، مع شرح عربي لكل قسم، ومزامنة Drive في الاتجاهين وبيئة بايثون مخزّنة | [افتح](https://colab.research.google.com/github/yuosef772424/nig-timenet-torch/blob/main/notebooks/main.ipynb) |
+| [`colab_nig_timenet_torch.ipynb`](colab_nig_timenet_torch.ipynb) | التشغيلات الطويلة المسجَّلة | مُشغِّل مؤتمت: طابور وظائف على GitHub ← تشغيل ← دفع النتائج إلى فرع `colab-results` | [افتح](https://colab.research.google.com/github/yuosef772424/nig-timenet-torch/blob/main/notebooks/colab_nig_timenet_torch.ipynb) |
+| [`data_pipeline.ipynb`](data_pipeline.ipynb) | قبل أي تدريب | يبني ملف البيانات (عقد artifact) من الشموع الخام | [افتح](https://colab.research.google.com/github/yuosef772424/nig-timenet-torch/blob/main/notebooks/data_pipeline.ipynb) |
+
+### `main.ipynb` في سطور
+* **خلية إعدادات واحدة** (الثالثة): مصدر الكود، المسارات، وكل حقل من `RunSettings` بقيمته الافتراضية وتعليق عربي (المعنى، القيم المسموحة، الأثر). اختبار يقارن القيم بالكود فلا تبقى قيمة قديمة.
+* **الكود:** `REPO_SOURCE = "auto" | "github" | "drive"`؛ نسخة المشروع الدائمة على Drive (`REPO_DIR`) تُحدَّث من GitHub عند `UPDATE_DRIVE_COPY = True` وتَرفض الكتابة فوق تعديلاتك (`DISCARD_LOCAL_CHANGES`).
+  التوكن للقراءة فقط: سرّ Colab `GITHUB_TOKEN` ← ملف على Drive ← سؤال مخفي؛ لا يُطبع ولا يدخل `.git/config`. **لا `git push` من Colab.**
+* **البيئة:** `python -m venv --system-site-packages` على Drive كملف tar واحد مفتاحه (بايثون + torch + المتطلبات)؛ يُعاد بناؤه عند تغيّر المفتاح (`colab/env_cache.py`).
+* **المزامنة:** `WORK_ON = "drive"` (الافتراضي، يعمل على Drive مباشرة) أو `"local"` (قرص الجهاز ثم `push_run`)؛ `RESTORE_FROM` يستعيد تشغيلاً سابقاً من Drive (`colab/drive_sync.py`).
+* **الأقسام:** البيانات والتقسيم ← النموذج ← التدريب ← تقرير الصحة ← تقرير الاختبار ← بطارية T-profit ← الملخّص ← بطارية مجلد منتهٍ، ثم جدول بأقسام الدفتر القديم (TensorFlow) التي ليس لها مقابل بعد وخطوة ROADMAP التي ستأتي بها.
+* **لا منطق في الدفاتر (القاعدة G6):** كل دالة في وحدة بالحزمة ولها بطاقة واختبار؛ `tests/notebooks/test_main_notebook.py` يشغّل الدفتر على بيانات الاختبار من أوله لآخره مع Drive مزيّف (مجلد مؤقت).
+* **ما لم يُجرَّب على Colab حقيقي:** مزامنة Drive الفعلية، بناء البيئة بـ pip حقيقي، وتشغيل GPU — الاختبارات تغطي المنطق بمجلدات مؤقتة ومستودع git محلي.
+
+# Notebooks (reference, English)
 
 [`colab_nig_timenet_torch.ipynb`](colab_nig_timenet_torch.ipynb) is the ONE notebook every Colab run starts from
 (ROADMAP T3; owner, 2026-11-03: no cells pasted by hand). It is a thin caller of `src/nig_timenet_torch/colab/`; the
@@ -23,12 +45,15 @@ candle files on Drive and writes `<NAME>_<stamp>.dataset` plus `<NAME>_latest.da
 
 ## The main notebook
 
-[`main.ipynb`](main.ipynb) is one run from settings to profit: one settings cell (`ARTIFACT`, `RUN_DIR`, `OUT_DIR`, dotted
-`RunSettings` keys in `CHANGES`), then the steps of `src/nig_timenet_torch/workflow/run.py` one cell each: `prepare`
+[`main.ipynb`](main.ipynb) is one run from settings to profit, in Arabic (T3b): one settings cell (code source and Drive paths, then
+`CHANGES` = every `RunSettings` field with its default and an Arabic comment, compared with the code by a test), then the Colab-only cells
+(tagged `colab-only`: code source `colab/bootstrap.py::load_code`, cached env `colab/env_cache.py`, device check), the Drive folders
+(`colab/drive_sync.py`: `run_paths`, `restore_run`, `push_run`), then the steps of `src/nig_timenet_torch/workflow/run.py` one cell each: `prepare`
 (load, split) -> `build` -> `train` -> `health_step` -> `test_step` -> `battery_step` -> `write_summary`; the same steps
 `jobs/baseline.py` calls. The last section reads a finished run folder and runs the battery again (`BATTERY_FOLDER`,
-another cost per side or more variants, no model needed). `tests/notebooks/test_pipeline_notebooks.py` checks it statically
-and runs it headless on the fixture artifact.
+another cost per side or more variants, no model needed), and a last table of the TF `main.ipynb` sections that have no torch
+equivalent yet. `tests/notebooks/test_main_notebook.py` checks it (every field in the settings cell, Arabic text, no `git push`, ROADMAP steps
+exist) and runs it headless on the fixture artifact with a fake Drive.
 
 ## The runner
 
