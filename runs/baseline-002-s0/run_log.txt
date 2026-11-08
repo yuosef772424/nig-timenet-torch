@@ -1,0 +1,60 @@
+# run log of baseline-002-s0 started 2026-11-08T15:09:05.764362+00:00
+== checkout ok: 8451a62938697a5eab3d0999c2e466422072f601
+== run: /usr/bin/python3 -m nig_timenet_torch.jobs.baseline --config /content/nig_runner/tmp/baseline-002-s0.config.json --out /content/nig_runner/out/baseline-002-s0 --max-minutes 60
+data: 2015804 train / 239297 val / 239772 test windows (max_rows None), split train_end 2026-02-24 04:00:00+00:00 val_end 2026-06-15 08:00:00+00:00; 3938 batches per epoch on cuda
+epoch 1/5  train_loss -5.7504  val_loss -6.1488  val_selection -5.0623  lr 1.00e-03  173s
+epoch 2/5  train_loss -5.9944  val_loss -6.1108  val_selection -5.0240  lr 1.00e-03  171s
+epoch 3/5  train_loss -6.0514  val_loss -6.0866  val_selection -4.9994  lr 1.00e-03  177s
+epoch 4/5  train_loss -6.0907  val_loss -6.0715  val_selection -4.9844  lr 1.00e-03  175s
+epoch 5/5  train_loss -6.1154  val_loss -6.0344  val_selection -4.9467  lr 1.00e-03  174s
+test evaluation (239772 rows, best-epoch weights):
+  n_rows: 239772
+  targets.high.skill.rank_ic_by_timestamp: 0.3927
+  targets.high.skill.rank_ic_by_timestamp_shuffled_baseline: 0.0004
+  targets.high.skill.class.auc: 0.7574
+  targets.high.skill.class.auc_constant_baseline: 0.5000
+  targets.high.skill.class.auc_shuffled_baseline: 0.4985
+  targets.high.skill.class.base_rate: 0.5818
+  targets.high.conf.decile_error_spearman: -0.8061
+  targets.high.conf.top_minus_bottom_error_gap: 0.0684
+  targets.high.conf.constant_confidence_baseline: 0.0000
+  targets.high.sharp.coverage: 0.8922
+  targets.high.sharp.level: 0.8000
+  targets.high.sharp.mean_interval_halfwidth: 0.0291
+  targets.high.sharp.share_std_below_move: 0.8372
+  targets.high.sharp.share_target: 0.8000
+  targets.high.sharp.zero_std_baseline_share: 1.0000
+  targets.high.sharp.median_std_over_move: 0.7212
+  targets.low.skill.rank_ic_by_timestamp: 0.4363
+  targets.low.skill.rank_ic_by_timestamp_shuffled_baseline: -0.0041
+  targets.low.skill.class.auc: 0.7650
+  targets.low.skill.class.auc_constant_baseline: 0.5000
+  targets.low.skill.class.auc_shuffled_baseline: 0.5005
+  targets.low.skill.class.base_rate: 0.4097
+  targets.low.conf.decile_error_spearman: -1.0000
+  targets.low.conf.top_minus_bottom_error_gap: 0.7081
+  targets.low.conf.constant_confidence_baseline: 0.0000
+  targets.low.sharp.coverage: 0.9319
+  targets.low.sharp.level: 0.8000
+  targets.low.sharp.mean_interval_halfwidth: 0.0294
+  targets.low.sharp.share_std_below_move: 0.8885
+  targets.low.sharp.share_target: 0.8000
+  targets.low.sharp.zero_std_baseline_share: 1.0000
+  targets.low.sharp.median_std_over_move: 0.7057
+  targets.close.skill.rank_ic_by_timestamp: 0.0574
+  targets.close.skill.rank_ic_by_timestamp_shuffled_baseline: -0.0034
+  targets.close.skill.class.auc: 0.5117
+  targets.close.skill.class.auc_constant_baseline: 0.5000
+  targets.close.skill.class.auc_shuffled_baseline: 0.4989
+  targets.close.skill.class.base_rate: 0.4875
+  targets.close.conf.decile_error_spearman: -0.9879
+  targets.close.conf.top_minus_bottom_error_gap: 0.6460
+  targets.close.conf.constant_confidence_baseline: 0.0000
+  targets.close.sharp.coverage: 0.8751
+  targets.close.sharp.level: 0.8000
+  targets.close.sharp.mean_interval_halfwidth: 0.0383
+  targets.close.sharp.share_std_below_move: 0.0000
+  targets.close.sharp.share_target: 0.8000
+  targets.close.sharp.zero_std_baseline_share: 1.0000
+  targets.close.sharp.median_std_over_move: 24.5477
+baseline OK: seed 0, epochs 5/5

@@ -1,0 +1,30 @@
+{
+ "config": {
+  "batch_size": 512,
+  "device": "cuda",
+  "epochs": 5,
+  "run_dir": "/content/drive/MyDrive/nig_timenet_runs/baseline-002-s0/train",
+  "seed": 0
+ },
+ "device": {
+  "expected": "cuda",
+  "gpu_name": "Tesla T4",
+  "torch_cuda_build": "13.0",
+  "torch_version": "2.14.1+cu130",
+  "used": "cuda"
+ },
+ "git_sha": "8451a62938697a5eab3d0999c2e466422072f601",
+ "input_fingerprint": "c572b1b36960f7b026d969af18f83f8d502b2fcef3c66eeeec146fdaf590eea2",
+ "outputs": {
+  "baseline_summary.json": "bf4bf941e9004cf140270976b43f49286f9d3ece7fa08ebf3d5e43a166b950d7",
+  "battery_profit.json": "ef926664052e1a7a621b70347c1e467dc3d0ca8ec3afc7214a88fca33d6d6109",
+  "battery_report.txt": "f68a838fa37508ac534f97937a330899f03c9c178bed26793cd3801db0e66e0f",
+  "battery_table_test.parquet": "95c4da7f19007eb8762262f279052b441a87e4a4073addc77863766d6716e2ac",
+  "battery_table_val.parquet": "62984426d69272be2d41e01fcfb7e38a9490d8d65d5538ded37a6b01134802d1",
+  "device.json": "4b248ceedb61614c15d3e65730c70c9a2438527adba5880792e534465da92a84",
+  "health_report.json": "7930b4648abeadb9852549d1930e5c7a2abb0f87257b94e05ef832fac14a330f",
+  "health_report.md": "d9bc4ed0d58f89c4e98029ddd0eec2a11eff0b19cd5bd8e18ed6a7ca7034323d",
+  "test_report.json": "5534ab3b23eeda8a96ae155ca503c16734310a517e23fe318a2baa7543b93593"
+ },
+ "runtime_seconds": 1054.4
+}

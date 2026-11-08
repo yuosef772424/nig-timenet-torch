@@ -1,0 +1,26 @@
+{
+ "args": [],
+ "config": {
+  "batch_size": 512,
+  "device": "cuda",
+  "epochs": 5,
+  "run_dir": "/content/drive/MyDrive/nig_timenet_runs/baseline-002-s0/train",
+  "seed": 0
+ },
+ "device": "cuda",
+ "entry": "baseline",
+ "expected_outputs": [
+  "baseline_summary.json",
+  "health_report.json",
+  "health_report.md",
+  "test_report.json",
+  "battery_report.txt",
+  "battery_profit.json"
+ ],
+ "job_id": "baseline-002-s0",
+ "max_minutes": 60,
+ "needs_drive": true,
+ "note": "T5r baseline-002 seed 0: config of baseline-001-s0 with 5 epochs (as baseline-001-s0-r2, owner), at current main, first run with the evaluation battery (first profit numbers). New run_dir (resume across a code change is refused). r2 took 972 s on a T4; 60 minutes is the cut. Queue only after baseline-smoke-002 passed on the same commit (rule E5). repo_ref is a placeholder: the planner fills the merge sha at queue time.",
+ "repo_ref": "8451a62938697a5eab3d0999c2e466422072f601",
+ "rerun": false
+}
