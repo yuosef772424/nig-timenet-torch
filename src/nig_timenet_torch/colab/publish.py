@@ -1,4 +1,11 @@
-"""Results of a Colab run: bundle, Drive copy, push to ``colab-results``, and ``republish`` (rules E1/E2, ROADMAP T3).
+"""PURPOSE: Results of a Colab run: the bundle folder on Drive (its own files listed in publish.json), the push of
+    those files to colab-results and republish from the bundle alone (rules E1/E2, ROADMAP T3).
+TAGS: colab publish, bundle, results branch, drive copy, republish, git size limit, run folder, checkpoints
+PITFALLS: the job's run_dir (checkpoints) lives inside the bundle folder (<drive_runs>/<job_id>/train), so the bundle
+    never deletes or pushes a file it did not write (B-050); outputs above GIT_MAX_BYTES stay on Drive only; a bundle
+    written before the files record is pushed whole (every file in the folder).
+
+Results of a Colab run: bundle, Drive copy, push to ``colab-results``, and ``republish`` (rules E1/E2, ROADMAP T3).
 
 Order matters and is the fix for TF profile-005 (results stuck on Drive when ``/tmp/askpass.sh`` vanished during a long
 job): the bundle is written FIRST, to Drive when it is mounted (else under the work dir), with a ``publish.json`` that
@@ -9,6 +16,11 @@ the work dir's clones or the runner object are gone.
 Layout on the results branch: ``runs/<job_id>/`` (job.json, env.json, run_log.txt, bundle_summary.md, manifest.json,
 device.json and the outputs). An output above ``contract.GIT_MAX_BYTES`` stays on Drive only and is listed in the
 summary.
+
+The bundle folder on Drive is ``<drive_runs>/<job_id>``, and a job's ``run_dir`` is ``<drive_runs>/<job_id>/train``
+(``docs/jobs``): the run folder lives INSIDE the bundle folder. A bundle therefore owns only the files it wrote, listed
+in ``publish.json`` (``files``): a rebuild removes exactly those, and the push sends only those. Until 2026-11-08 the
+rebuild removed the whole folder, which sent every run's checkpoints to the Drive trash at publish time (B-050).
 """
 
 import json
@@ -43,24 +55,53 @@ def tail_text(path, max_bytes: int = MAX_LOG_BYTES) -> str:
     return ("[... earlier output cut ...]\n" if cut else "") + text
 
 
+def bundle_files(bundle_dir) -> list[str] | None:
+    """The files the last ``build_bundle`` wrote into ``bundle_dir`` (relative posix paths, from ``publish.json``);
+    None for a folder without that record (no bundle yet, or a bundle written before the record existed)."""
+    try:
+        files = json.loads((Path(bundle_dir) / "publish.json").read_text(encoding="utf-8")).get("files")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if not isinstance(files, list):
+        return None
+    return [f for f in files if isinstance(f, str) and f and not Path(f).is_absolute() and ".." not in Path(f).parts]
+
+
+def _clear_bundle(dest: Path) -> None:
+    """Remove the files of the previous bundle in ``dest`` (and the folders they leave empty), nothing else: the job's
+    run folder (checkpoints) may live inside ``dest``."""
+    for name in bundle_files(dest) or ():
+        p = dest / name
+        if p.is_file():
+            p.unlink()
+            for parent in p.parents:
+                if parent == dest or not parent.is_relative_to(dest) or any(parent.iterdir()):
+                    break
+                parent.rmdir()
+    (dest / "publish.json").unlink(missing_ok=True)
+
+
 def build_bundle(dest, job: dict, out_dir, log_path, env_info: dict, status: str, problems: list[str],
                  secrets: Secrets | None = None) -> list[str]:
-    """Write the bundle folder ``dest`` (replacing it); every text is masked. Returns the file names."""
+    """Write the bundle folder ``dest`` (replacing the previous bundle's files, keeping every other file there, e.g. the
+    job's run folder); every text is masked. Records the file names in ``publish.json`` and returns them."""
     secrets = secrets or Secrets()
     dest = Path(dest)
-    shutil.rmtree(dest, ignore_errors=True)
-    dest.mkdir(parents=True)
+    dest.mkdir(parents=True, exist_ok=True)
+    _clear_bundle(dest)
+    written: list[Path] = []
     if out_dir and Path(out_dir).is_dir():
         for p in Path(out_dir).rglob("*"):
             if p.is_file() and p.name not in BUNDLE_NAMES:
                 target = dest / p.relative_to(out_dir)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(p, target)
+                written.append(target)
     (dest / "job.json").write_text(json.dumps(job, indent=1, sort_keys=True), encoding="utf-8")
     (dest / "env.json").write_text(secrets.mask(json.dumps(env_info, indent=1, sort_keys=True)), encoding="utf-8")
     (dest / "run_log.txt").write_text(secrets.mask(tail_text(log_path)), encoding="utf-8")
-    large = sorted(p.relative_to(dest).as_posix() for p in dest.rglob("*")
-                   if p.is_file() and p.stat().st_size > GIT_MAX_BYTES)
+    written += [dest / "job.json", dest / "env.json", dest / "run_log.txt"]
+    large = sorted(p.relative_to(dest).as_posix() for p in written if p.stat().st_size > GIT_MAX_BYTES)
     dev = env_info.get("device") or {}
     lines = [f"# {job['job_id']}: {status}", "", f"- repo_ref: `{job['repo_ref']}`",
              f"- device: {job['device']} (used {dev.get('used')}, {dev.get('gpu_name')})",
@@ -68,7 +109,9 @@ def build_bundle(dest, job: dict, out_dir, log_path, env_info: dict, status: str
     if large:
         lines += ["", "Kept on Drive only (above the git size limit): " + ", ".join(large)]
     (dest / "bundle_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return sorted(p.relative_to(dest).as_posix() for p in dest.rglob("*") if p.is_file())
+    names = sorted({p.relative_to(dest).as_posix() for p in [*written, dest / "bundle_summary.md"]})
+    write_publish_state(dest, files=names)
+    return names
 
 
 def write_publish_state(bundle_dir, **fields) -> dict:
@@ -117,8 +160,12 @@ def results_has_job(url: str, branch: str, job_id: str, workdir: str, env=None, 
 
 
 def _copy_pushable(bundle_dir: Path, target: Path) -> None:
+    """The bundle's own files (its ``publish.json`` record; every file for a bundle written before the record) up to
+    the git size limit; ``target`` is the job's folder in a clone of the results branch."""
     shutil.rmtree(target, ignore_errors=True)
-    for p in bundle_dir.rglob("*"):
+    names = bundle_files(bundle_dir)
+    paths = (bundle_dir.rglob("*") if names is None else (bundle_dir / n for n in names))
+    for p in paths:
         if p.is_file() and p.name not in NOT_PUSHED and p.stat().st_size <= GIT_MAX_BYTES:
             (target / p.relative_to(bundle_dir)).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(p, target / p.relative_to(bundle_dir))

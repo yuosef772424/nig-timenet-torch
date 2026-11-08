@@ -10,8 +10,9 @@ SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run.py); changes: single sp
 
 Every step is a function of a ``Run`` (the settings plus what the earlier steps produced).
 ``run_all(settings, out=...)`` is: prepare -> build -> train -> health_step -> test_step -> battery_step. Outputs in
-``out``: ``test_report.json``, ``battery_report.txt``, ``battery_profit.json`` and a copy of ``health_report.json`` /
-``.md``; ``write_summary`` adds ``baseline_summary.json``.
+``out``: ``test_report.json``, ``battery_report.txt``, ``battery_profit.json``, a copy of ``health_report.json`` /
+``.md`` and a copy of the best weights (``best.pt`` + ``best_meta.json``, so a job publishes them with its results);
+``write_summary`` adds ``baseline_summary.json``. The run folder keeps the originals and the resume checkpoint.
 """
 
 import json
@@ -31,6 +32,7 @@ from nig_timenet_torch.data_io.loading import LoadedData
 from nig_timenet_torch.eval.target_report import target_report
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.model.heads import head_spec
+from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
 from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.trainer.trainer import FitResult, FitSettings, Trainer
 from nig_timenet_torch.workflow import flat_run, run_common
@@ -124,7 +126,19 @@ def train(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
     run.result = run.trainer.fit(run.x["train"], run.y["train"], run.x["val"], run.y["val"], run.fit_settings,
                                  run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline,
                                  on_epoch=on_epoch)
+    _copy_best_weights(run)
     return run
+
+
+def _copy_best_weights(run: Run) -> None:
+    """``best.pt`` + ``best_meta.json`` of the run folder into ``out``, so a job publishes the weights with its
+    results (B-050); skipped without ``out`` or before any best epoch, never copied onto itself."""
+    if run.out is None:
+        return
+    for name in (BEST, BEST_META):
+        src, dst = Path(run.settings.run_dir) / name, run.out / name
+        if src.is_file() and not (dst.exists() and dst.samefile(src)):
+            shutil.copyfile(src, dst)
 
 
 def health_step(run: Run) -> Run:
