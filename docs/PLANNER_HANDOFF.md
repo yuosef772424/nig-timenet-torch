@@ -62,7 +62,9 @@ piecewise; keep it as `archive/feat-ar-stream` when closed).
    `python -m nig_timenet_torch.colab check-job job.json` (prints `OK: job ... @ <sha> entry ... device ...`; a bad ref, an
    entry without CONFIG, or a job/config device mismatch is refused).
 3. SMOKE FIRST (rule E5): any job with `max_minutes` > 30 on a commit that has not run on the GPU is preceded by
-   `docs/jobs/baseline-smoke-001.json` (same entry, `max_rows` 20000, 1 epoch, a few minutes) on that commit. Read its
+   a smoke job file of that entry whose `job_id` and `run_dir` were never used (`runs/<job_id>/` absent on
+   `colab-results`; next free: `docs/jobs/baseline-smoke-002.json`; a used id is refused by `check_rerun`, a used run_dir
+   resumes another commit's checkpoint and is refused) (same entry, `max_rows` 20000, 1 epoch, a few minutes) on that commit. Read its
    `baseline_summary.json` before queueing the long job.
 4. A code change means a NEW `run_dir` (resume across a code change is refused: `RunIdentity` holds `code_sha`); the long job's
    `run_dir` and `job_id` change together, e.g. `baseline-002-s0`.
@@ -70,7 +72,7 @@ piecewise; keep it as `archive/feat-ar-stream` when closed).
    `runs/<job_id>/` (`bundle_summary.md` first). A failed publish: `python -m nig_timenet_torch.colab republish <bundle_dir>`.
 
 ## Next
-1. Queue (when the owner says so): smoke job, then a FRESH baseline at current `main`: `baseline-002-s0` (config of
+1. Queue (when the owner says so): smoke job `baseline-smoke-002`, then a FRESH baseline at current `main`: `baseline-002-s0` (config of
    `docs/jobs/baseline-001-s0.json`, new run_dir). It is the first run with the battery. (No recompute-from-checkpoint entry
    exists; building one costs more than the ~16 minutes of a fresh run.)
 2. Step T5r (reading, stronger model): `docs/ROADMAP.md` T5r computes the volatility baseline for high/low, reads the battery

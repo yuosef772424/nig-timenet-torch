@@ -92,8 +92,8 @@ Then I1 ... H6 per `docs/hardening/PLAN.md`.
   volatility baseline inputs are not in its folder, and its checkpoint lives only on Drive (`.../baseline-001-s0-r2/train`).
   No entry recomputes a report from a checkpoint (`jobs/` has `baseline` and `device_smoke` only). DECISION: do NOT build a
   recompute entry; queue a FRESH baseline at current main (about 16 minutes on a T4): new run_dir `baseline-002-s0`, same
-  config as `docs/jobs/baseline-001-s0.json` (5 epochs, seed 0), preceded by `baseline-smoke-001` on the same commit (rule
-  E5, the commit has not run on the GPU). The planner queues it; the reading session starts when its folder is on
+  config as `docs/jobs/baseline-001-s0.json` (5 epochs, seed 0; job file `docs/jobs/baseline-002-s0.json`), preceded by a
+  fresh smoke job (`baseline-smoke-002`) on the same commit (rule E5, the commit has not run on the GPU). The planner queues it; the reading session starts when its folder is on
   `colab-results`. Compare it with r2 (same seed, same data; differences are code changes I2-I3 and nondeterminism).
 - Compute in the reading: (1) the volatility baseline for high/low (rank IC of the last bar's range vs the truth, same
   rows) and report only the excess as skill; (2) the battery from the run folder (profit per use of the outputs with

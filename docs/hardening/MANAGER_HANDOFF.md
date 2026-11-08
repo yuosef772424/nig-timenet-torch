@@ -67,9 +67,10 @@ Arabic.
   - Profit is not measured yet: that run predates the battery.
 
 ## Next (in this order)
-1. If the owner agrees, queue `baseline-smoke-001` with `repo_ref` = current main, then `baseline-002-s0`.
-   - `baseline-002-s0` uses the config of `docs/jobs/baseline-001-s0.json` with a NEW run_dir, 5 epochs, about 16 minutes
-     on a T4.
+1. If the owner agrees, queue `baseline-smoke-002` with `repo_ref` = current main, then `baseline-002-s0`
+   (both job files exist in `docs/jobs/`; `baseline-smoke-001` cannot be reused: its results and run_dir exist).
+   - `baseline-002-s0` (`docs/jobs/baseline-002-s0.json`): config of `baseline-001-s0` with a NEW run_dir, 5 epochs,
+     about 16 minutes on a T4.
    - This gives the first real profit numbers.
 2. Launch ROADMAP T5r (reading, stronger model) on those outputs.
    - Compute the volatility baseline for the high/low heads (rule D).
