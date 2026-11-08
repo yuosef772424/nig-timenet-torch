@@ -28,7 +28,7 @@ CAMPAIGN DONE (all rows merged). Outcome per package: `docs/hardening/PLAN.md` "
 | H6 | Facts refresh + third R-REVIEW | merged | [#40](https://github.com/yuosef772424/nig-timenet-torch/pull/40) | STATUS, handoff, ROADMAP T5r, PLAN/AUDIT outcomes, NOTES re-triage |
 
 ## Roadmap (`docs/ROADMAP.md`, rules `docs/RULES.md`, protocol `docs/MODEL_DEV_PROTOCOL.md`)
-PRs since last R-REVIEW: 1 (this review's PR; fourth review 2026-11-08, `docs/reviews.md`, covered #41-#46; the next is due after 5 more merged PRs; the counter is hand-kept until H7 derives it).
+PRs since last R-REVIEW: 2 (#47 the review itself, #48 G2; fourth review 2026-11-08, `docs/reviews.md`, covered #41-#46; the next is due after 5 more merged PRs; the counter is hand-kept until H7 derives it).
 Done: R0 [#14](https://github.com/yuosef772424/nig-timenet-torch/pull/14), T1 [#16](https://github.com/yuosef772424/nig-timenet-torch/pull/16), T2 [#17](https://github.com/yuosef772424/nig-timenet-torch/pull/17), T3 [#18](https://github.com/yuosef772424/nig-timenet-torch/pull/18), T4 [#19](https://github.com/yuosef772424/nig-timenet-torch/pull/19), T4b [#29](https://github.com/yuosef772424/nig-timenet-torch/pull/29), the T5r job ([#20](https://github.com/yuosef772424/nig-timenet-torch/pull/20), fixes #21-#24). Data: artifact `c572b1b36960` (2,520,913 windows, 535 coins, sealed 183/183 excluded; B-020, B-022 open).
 GPU results (branch `colab-results`): `baseline-002-s0` (2026-11-08, @8451a62, equals r2): read in T5r (`docs/results/baseline-001.md`): high/low rank IC 0.39/0.44 tie the HAR volatility baseline; T-sharp 0.012/0.272 (the recorded 0.84/0.89 was the B-051 misdecode); no use of the outputs profitable after cost on VAL and TEST.
 
@@ -37,7 +37,7 @@ GPU results (branch `colab-results`): `baseline-002-s0` (2026-11-08, @8451a62, e
 | T5r | Read the baseline (`docs/results/baseline-001.md`) | merged | phase 1 [#44](https://github.com/yuosef772424/nig-timenet-torch/pull/44), phase 2 [#45](https://github.com/yuosef772424/nig-timenet-torch/pull/45) | weights recovered, no re-training; B-051 decode fix (D-017); C1, strategy book, diagnosis, error map; verdict: no T-profit signal |
 | T3b | Interactive notebook section + Drive cached env | merged | [#43](https://github.com/yuosef772424/nig-timenet-torch/pull/43) (c026624) | Arabic `main.ipynb` (34 cells), Drive sync both ways, env tar; D-016; not run on real Colab (B-048) |
 | G1 | Test environments E1-E3 | merged | [#46](https://github.com/yuosef772424/nig-timenet-torch/pull/46) | `data_io/synthetic.py` (E1, exact oracle moments, `data_io/walk_max.py`), `data_io/environments.py` (E2, E3), `nig-envs`; D-018; oracle T-sharp 1 / 1 / 0; a symmetric head with the TRUE mean / sd covers 0.88 on high / low (B-056) |
-| G2 | Gate tooling + gate job | todo | | protocol section 2; E1 Gate C high / low relative to the oracle (B-056, manager decision) |
+| G2 | Gate tooling + gate job | PR open | [#48](https://github.com/yuosef772424/nig-timenet-torch/pull/48) | `trainer/grad_report.py` (A1-A7), `eval/gates.py`, `workflow/gate_run.py`, entry `gates`, `gate_check` in the baseline job; D-019 (E1 high / low coverage relative to the oracle, day-block gap CI) |
 | H7 | Register and review tooling (fourth R-REVIEW) | todo | | counter derived, CSV columns, check-job vs colab-results, rmtree ratchet |
 | TR1 | Trainer switches (clip, wd groups, EMA, init, timing, train gap) | todo | | B-018, B-007, HF-37 |
 | G3r | Gates on the baseline configuration | todo | | 3 seeds |

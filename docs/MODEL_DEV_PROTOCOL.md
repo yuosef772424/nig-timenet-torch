@@ -49,7 +49,9 @@ selection metric is a T6a candidate (not built yet; selection stays `val_raw_los
 A configuration may start a full training only when `gate_report.json` for its settings hash shows gates A, B and C
 passed on environments E1, E2 and E3 for every seed. Exception: the **baseline arm** (today's default) is trained as
 the reference even when it fails a gate; its failures are recorded in the result file. Until ROADMAP step G2 builds
-the job-side refusal, the job card names the gate report (manual check at review).
+the job-side refusal, the job card names the gate report (manual check at review). Since G2 a training job calls
+`workflow.gate_run.gate_check` after building the model: it records the gate status in the run summary and refuses a
+full training of a non-baseline configuration without a passing report of the same configuration key (D-019).
 
 ### Gate A — gradient health
 
@@ -111,6 +113,12 @@ interval is within [0.75, 0.85]. Owner example: the model predicts the high +5 %
 | E2 shuffled labels | coverage in [0.75, 0.85] and mean(pred std) / sd(label) in [0.8, 1.25] (an honest model widens to the unconditional spread) |
 | E3 small real | coverage in [0.75, 0.85] per head (after the interval-scale switch if on, fitted on a separate calibration slice); T-sharp share >= 0.80 for the high and low heads (close: informational, O-1) |
 
+As built (G2, `docs/decisions/D-019-gates.md`): on E1 a band the ORACLE itself fails on the same rows is judged
+relative to the oracle (high / low coverage: the true mean / sd with a symmetric interval covers ~0.88, B-056; tolerance
+half the band width, 0.05); high / low coverage on E2 / E3 is information until the owner decides B-056; every gate B
+gap CI is a day-block bootstrap (B-025). Tools: `trainer/grad_report.py`, `eval/gates.py`, `workflow/gate_run.py`, job
+entry `gates`.
+
 **Known answer and a warning for the close head (scratch probe, H0c, re-built as the T4b synthetic test).** With the
 TRUE conditional distribution (random walk, 4h bars of 48 sub-steps, horizon 2, heteroscedastic vol, planted drift
 with IC 0.05 or 0.10), the oracle's T-sharp share is 1.00 for high and low (median std / move = 0.81) and 0.00 for
@@ -141,7 +149,7 @@ failure means a leak (labels, time or coin identity reaching the prediction): st
 
 | Env | What | Why | Cost |
 |---|---|---|---|
-| E1 synthetic, known answer | generator `data_io/synthetic.py` (ROADMAP G1) writes a contract artifact: >= 32 coins x >= 2,000 bars, intrabar random-walk paths so high / low / close are consistent, a planted close-return drift `b * feature_k` with known IC (0.05 and 0.10 variants), heteroscedastic noise whose sd is a known function of another feature and of a per-coin scale, the exact conditional mean and sd per row stored next to the labels | the model must recover the planted signal (rank IC >= 0.7 x the oracle IC), its uncertainty must recover the noise level and its confidence must rank the planted error | CPU minutes |
+| E1 synthetic, known answer | generator `data_io/synthetic.py` (ROADMAP G1) writes a contract artifact: >= 32 coins x >= 2,000 bars (rows at stride = horizon, one row per horizon block, so 2,000 bars give 1,000 rows per coin; D-018), intrabar random-walk paths so high / low / close are consistent, a planted close-return drift `b * feature_k` with known IC (0.05 and 0.10 variants), heteroscedastic noise whose sd is a known function of another feature and of a per-coin scale, the exact conditional mean and sd per row stored next to the labels | the model must recover the planted signal (rank IC >= 0.7 x the oracle IC), its uncertainty must recover the noise level and its confidence must rank the planted error | CPU minutes |
 | E2 shuffled labels | the real small sample (E3) with all label rows permuted globally (across coins and time), inputs untouched | skill and confidence must be ~0: the leakage canary; also measures how fast the model memorises pure noise | CPU / GPU minutes |
 | E3 small real sample | a slice of the real artifact: 20 coins x 6 months from the TRAINING era only, its own time split inside (70 / 15 / 15, purged); never touches the full run's val / test or any sealed data | the mechanism works on real data before paying for a full run | GPU minutes |
 

@@ -87,6 +87,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `eval/battery_profit.py` | The T-profit sections of the battery: per-side-cost profit with trivial baselines and a block-bootstrap CI that is widened for the number of variants tried; limit orders at the predicted high / low; sigma as position size. | t-profit, profit after cost, limit order, position size, block bootstrap, trivial baselines, battery |
 | `eval/calibrator.py` | P29: role-checked learned-state calibrator (C6). Isotonic regression only, mirroring the TF side's |  |
 | `eval/error_map.py` | Where the model itself errs: per head, error (\|mu - y\|, NIG NLL), rank IC, bias, coverage, interval width and value over the HAR baseline, split by liquidity proxy, coin age, volatility regime, month, market day and hour. | error analysis, error map, buckets, bias, coverage, interval width, har baseline, worst cases, model improvement |
+| `eval/gates.py` | Gates B (confidence), C (uncertainty), rule D (information) and the leakage canary of MODEL_DEV_PROTOCOL section 2 as check rows per env x seed from a stage's table and target_report; per gate the AND over seeds. | gates, gate report, gate b, gate c, rule d, leakage canary, oracle relative, day block ci, verdicts, e1 e2 e3 |
 | `eval/nig_floor.py` | T4 NIG floor-hit shares: how often each NIG parameter of each head sits on its floor; floors are read from the model's own ``head_modules()`` (architecture-neutral). | nig floor, floor hit, t4 diagnostics, head modules, nu alpha beta, health report |
 | `eval/strategy_book.py` | Every use of the model outputs as a trade rule over a battery table (direction, top-\|mu\| grid, limit at mu, limit at the predicted extreme, take-profit), each with trivial controls, on VAL and TEST with a day-block CI. | t-profit, strategy book, trade rules, trivial controls, volatility baseline, day block bootstrap, val and test |
 | `eval/strategy_diagnosis.py` | Deep diagnosis of one strategy's trades: payoff vs break-even win rate, hits vs misses, tail losses, adverse excursion, worst trades, day concentration, link to the market day, calibration of the predicted move. | strategy diagnosis, break even win rate, payoff, tail losses, adverse excursion, day concentration, market beta, calibration |
@@ -99,6 +100,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 |---|---|---|
 | `jobs/baseline.py` | Entry ``baseline``: trains one seed of the default NIG-TimeNet model on the contract artifact, then writes the summary, health report and test report (ROADMAP T5r); a thin entry over workflow.run. | baseline job, colab entry, training run, test report, health report, resume, smoke job |
 | `jobs/device_smoke.py` | Entry ``device_smoke``: proves that the runner, the device assertion and the output contract work on this VM. | device smoke, colab entry, device assertion, runner proof, rule e1 |
+| `jobs/gates.py` | Entry ``gates``: runs the MODEL_DEV_PROTOCOL gates (E1 -> E2 -> E3 x seeds) on one configuration and writes gate_report.json / .md keyed by its configuration hash (ROADMAP G2); a thin entry over workflow.gate_run. | gates job, colab entry, gate report, configuration hash, e1 e2 e3, seeds, rule c6 |
 
 ### model
 
@@ -126,14 +128,16 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
+| `trainer/batch_set.py` | The representative batch set of MODEL_DEV_PROTOCOL section 1: R batches of the training split drawn with a fixed seed, each holding rows of >= 32 coins (all if fewer) spread over the whole training time range. | representative batch set, gradient gate, trainer trace, stratified batches, coins, time range, fixed seed |
 | `trainer/checkpoint.py` | Checkpoint files of a run folder (ROADMAP T1; TF source: trainer/checkpoints.py, simplified). |  |
+| `trainer/grad_report.py` | Gate A of MODEL_DEV_PROTOCOL section 2 (gradient health, checks A1-A7) on the representative batch set, with the planned optimizer and learning rate; one call = one measurement (step 0 or the end of a short run). | gate a, gradient health, grad report, dead parameters, update weight ratio, head gradient share, head conflict, dead units, representative batch set |
 | `trainer/identity.py` | RunIdentity: the persisted, immutable fingerprint of a run (settings hash incl. the WHOLE trainer config, seed, data fingerprint, code sha); ``check_resume`` refuses a resume whose identity changed. | run identity, fingerprint, resume, settings hash, checkpoint, ResumeMismatchError |
 | `trainer/schedules.py` | Lambda / learning-rate schedules (ROADMAP T1; source: crypto-signal-prediction trainer/schedules.py, identical at |  |
 | `trainer/selection_metric.py` | SELECTION_METRICS registry: named, fixed validation metrics for checkpoint / early-stopping selection (val_raw_loss, per-head AUC and pinball). | selection metric, early stopping, checkpoint selection, validation, auc, pinball |
 | `trainer/targets.py` | The trainer config schema: ``validate_trainer_config`` (unknown keys raise), ``resolve_targets`` / ``resolve_loss`` (defaults filled once) and ``targets_config``, the ONE builder of the targets (from HeadSpec). | trainer config, strict config, validate, targets_config, HeadSpec, task config_keys, loss defaults, did you mean |
 | `trainer/task_weighting.py` | Kendall et al. uncertainty task weighting (source: crypto-signal-prediction trainer/task_weighting.py @ aeafc564). |  |
 | `trainer/tasks.py` | TASK_REGISTRY: the task losses (evidential NIG, regression, classification) with, per task, the registered ``config_keys`` (the options a target config may carry) and ``default_options`` (their values when left out). | task loss, task registry, evidential, classification, regression, config_keys, default_options, calibration |
-| `trainer/trace.py` | T4 trainer trace: what the loss weighting and the schedules did, one row of numbers per epoch (log-only). |  |
+| `trainer/trace.py` | T4 trainer trace: what the loss weighting and the schedules did, one row of numbers per epoch (log-only), and the per-head gradients on the shared parameters that the trace and gate A5 / A6 read. | trainer trace, gradient share, kendall weights, schedules, head gradients, shared trunk, log only |
 | `trainer/tracker.py` | Best epoch + early stopping in one resumable object (ROADMAP T1; source: crypto-signal-prediction |  |
 | `trainer/trainer.py` | Trainer: loss weighting (loss_weight, Kendall for the non-excluded task types), train / eval steps and the ``fit`` epoch loop; its config is validated by ``trainer.targets`` first and its schedules are parsed once. | trainer, fit, compute_losses, kendall uncertainty weighting, scheduled vars, selection metric, resume, config |
 
@@ -143,6 +147,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 |---|---|---|
 | `workflow/battery_run.py` | Adapts the VAL and TEST stage (table, labels, anchors, last_close, codec state) to battery tables and runs the full battery with the T-profit sections; battery_step does it for a finished Run and writes the reports. | battery run, stage inputs, t-profit, battery report, adapter entry point, battery step, profit json |
 | `workflow/flat_run.py` | The flat model (one row per coin window, NIG regression + binary class head per price target) as run steps: inputs, anchors, model settings, trainer, fit settings, one chunked predict per stage. | flat run, run steps, trainer config, stage inputs, anchors by name, head kinds, predict stage |
+| `workflow/gate_run.py` | The gate run: E1 -> E2 -> E3 x seeds through the run steps, gate A before / after each short run, gates B / C / canary on the test split, one report keyed by the configuration hash; gate_check refuses an ungated run. | gate run, gate report, gate job, e1 e2 e3, seeds, configuration hash, job-side check, baseline arm, refusal |
 | `workflow/health_report.py` | T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer trace) as JSON and markdown next to the checkpoint. | health report, diagnostics, t-sharp, probe, trainer trace, markdown report |
 | `workflow/prediction_table.py` | The one batched predict that turns a model and its inputs into the canonical PredictionTable, with one writer and one validating reader. | prediction table, batched predict, table meta, table writer, table reader |
 | `workflow/reading.py` | The T5r reading of a finished run: volatility baselines of the high / low heads (rule C1), every use of the outputs with controls on VAL and TEST, deep diagnosis of profitable-looking rules, the evidence check. | t5r reading, rule c1, volatility baseline, strategy book, strategy diagnosis, evidence check, run reading |
@@ -176,6 +181,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `data_io/environments.py`: runnable (`python -m nig_timenet_torch.data_io.environments`)
 - `jobs/baseline.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/device_smoke.py`: job entry (`docs/jobs/*.json` name it)
+- `jobs/gates.py`: job entry (`docs/jobs/*.json` name it)
 - `notebooks/colab_nig_timenet_torch.ipynb`: notebook runner
 - `notebooks/data_pipeline.ipynb`: notebook runner
 - `notebooks/main.ipynb`: notebook runner
