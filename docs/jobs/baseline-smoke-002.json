@@ -1,0 +1,6 @@
+{"job_id": "baseline-smoke-002", "repo_ref": "0000000000000000000000000000000000000000", "entry": "baseline", "args": [],
+ "config": {"device": "cuda", "seed": 0, "epochs": 1, "batch_size": 512, "max_rows": 20000,
+            "run_dir": "/content/drive/MyDrive/nig_timenet_runs/baseline-smoke-002/train"},
+ "max_minutes": 15, "device": "cuda", "needs_drive": true,
+ "expected_outputs": ["baseline_summary.json", "health_report.json", "health_report.md", "test_report.json", "battery_report.txt", "battery_profit.json"],
+ "note": "Rule E5 smoke job of baseline-002-s0 (same config as baseline-smoke-001, new job_id and run_dir: runs/baseline-smoke-001/ already exists on colab-results and its Drive run_dir holds a checkpoint of another commit, so reusing it is refused twice). repo_ref is a placeholder: the planner fills the merge sha at queue time."}

@@ -72,8 +72,28 @@ def test_every_long_job_has_a_smoke_job():
     assert not long_without, f"rule E5: no smoke job for the entry of {long_without}"
 
 
-def test_smoke_job_file_is_valid():
-    job = parse_job((ROOT / "docs" / "jobs" / "baseline-smoke-001.json").read_text())
+def test_baseline_002_job_file_is_valid():
+    """First run with the battery: baseline-001-s0 config, 5 epochs, own run_dir (resume across commits refused)."""
+    job = parse_job((ROOT / "docs" / "jobs" / "baseline-002-s0.json").read_text())
+    assert job["entry"] == "baseline" and job["device"] == "cuda" and job["needs_drive"]
+    assert job["config"]["seed"] == 0 and job["config"]["epochs"] == 5
+    assert job["config"]["run_dir"].endswith("baseline-002-s0/train")
+    assert {"test_report.json", "battery_report.txt", "battery_profit.json"} <= set(job["expected_outputs"])
+
+
+def test_job_ids_and_run_dirs_are_unique():
+    """A reused job_id is refused by check_rerun, a reused run_dir resumes another commit's checkpoint (refused)."""
+    files = sorted((ROOT / "docs" / "jobs").glob("*.json"))
+    jobs = [parse_job(p.read_text()) for p in files]
+    assert len({j["job_id"] for j in jobs}) == len(jobs)
+    assert len({j["config"]["run_dir"] for j in jobs}) == len(jobs)
+    for p, j in zip(files, jobs, strict=True):
+        assert p.stem == j["job_id"] and j["config"]["run_dir"].endswith(f"/{j['job_id']}/train")
+
+
+@pytest.mark.parametrize("smoke", ["baseline-smoke-001", "baseline-smoke-002"])
+def test_smoke_job_file_is_valid(smoke):
+    job = parse_job((ROOT / "docs" / "jobs" / f"{smoke}.json").read_text())
     assert job["entry"] == "baseline" and job["device"] == "cuda" and job["config"]["max_rows"] == 20000
     assert job["config"]["epochs"] == 1 and job["max_minutes"] == 15
     assert {"test_report.json", "battery_report.txt", "battery_profit.json"} <= set(job["expected_outputs"])
