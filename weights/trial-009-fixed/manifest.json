@@ -1,0 +1,16 @@
+{
+ "job_id": "trial-009-fixed",
+ "source": "/content/drive/MyDrive/nig_timenet_runs/trial-009-fixed",
+ "files": [
+  {
+   "file": "train/best.pt",
+   "size": 430612,
+   "sha256": "5dd6b642f841a4ea57291ec27cd0d10fb482bedd4e6a8ffafab63b8991daeee2"
+  },
+  {
+   "file": "train/checkpoint.pt",
+   "size": 1316507,
+   "sha256": "b8bad2e6ba600922e3279e56996b68dfe97e61c301f4da385b53703d19744dba"
+  }
+ ]
+}

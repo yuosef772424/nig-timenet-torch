@@ -1,0 +1,16 @@
+{
+ "job_id": "cross_asset28",
+ "source": "/content/drive/MyDrive/nig_timenet_runs/cross_asset28",
+ "files": [
+  {
+   "file": "best.pt",
+   "size": 111819,
+   "sha256": "5b05aa45ff62ed1337ceebe5296805400d4ba82b0e997df4df3328df11d881d1"
+  },
+  {
+   "file": "checkpoint.pt",
+   "size": 365587,
+   "sha256": "981e9a4195a9b474abc72c5ea9c3549bb85505a980ae76cd55a5c3f19acd0fcf"
+  }
+ ]
+}

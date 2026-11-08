@@ -1,0 +1,16 @@
+{
+ "job_id": "main",
+ "source": "/content/drive/MyDrive/nig_timenet_runs/main",
+ "files": [
+  {
+   "file": "best.pt",
+   "size": 111819,
+   "sha256": "66f799351eed89202a837e8d0bdeca629630d2aba032cebc7a8f2f748c329dd5"
+  },
+  {
+   "file": "checkpoint.pt",
+   "size": 413203,
+   "sha256": "0411c8f33892f937f9d489b9d182319860ca89699724d0d32690f79a064bede1"
+  }
+ ]
+}

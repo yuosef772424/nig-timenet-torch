@@ -1,0 +1,21 @@
+{
+ "job_id": "trial-005",
+ "source": "/content/drive/MyDrive/nig_timenet_runs/trial-005",
+ "files": [
+  {
+   "file": "train/best.pt",
+   "size": 430612,
+   "sha256": "c652ed97ca80bab0dd028546d86cae13151886ab11ddbde0b46b458e9d888c7f"
+  },
+  {
+   "file": "train/checkpoint.pt",
+   "size": 1316507,
+   "sha256": "23fe4cf05312450029b995ba45c37d8951aca8ac378778e379a09204d8a8e543"
+  },
+  {
+   "file": "train/final_state.pt",
+   "size": 432058,
+   "sha256": "d85a03a4ae9467e58f5473569f3a79594ecdfcdfedd72b70a7e3e1a6c5b2bbc3"
+  }
+ ]
+}
