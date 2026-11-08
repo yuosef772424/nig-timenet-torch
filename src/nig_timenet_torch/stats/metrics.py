@@ -178,10 +178,10 @@ def r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def _confidence_bins(abs_error, confidence, groups, n_bins: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """(bin, normalised error, original row index) per kept row. Within each group (coin) the confidence is cut into ``n_bins`` equal-count
-    bins by average rank (bin 0 = least confident; a constant confidence puts the whole group in ONE middle bin) and
-    |error| is divided by the group's mean |error|, so a coin's own error scale cannot fake a pattern. Groups with
-    fewer than ``n_bins`` rows or a zero mean error are skipped."""
+    """(bin, normalised error, original row index) per kept row. Within each group (coin) the confidence is cut into
+    ``n_bins`` equal-count bins by average rank (bin 0 = least confident; a constant confidence puts the whole group
+    in ONE middle bin) and |error| is divided by the group's mean |error|, so a coin's own error scale cannot fake a
+    pattern. Groups with fewer than ``n_bins`` rows or a zero mean error are skipped."""
     e, c = _clean(abs_error, confidence)
     g = np.asarray(groups).reshape(-1)
     if g.shape[0] != np.asarray(abs_error).reshape(-1).shape[0]:
