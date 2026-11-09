@@ -32,6 +32,7 @@ import torch
 from nig_timenet_torch.eval.nig_floor import nig_floor_hit_report, nig_floors
 from nig_timenet_torch.eval.target_report import target_report
 from nig_timenet_torch.model.probe import layer_probe_report
+from nig_timenet_torch.model.taps import record_taps, tap_points, tap_summary
 from nig_timenet_torch.trainer import checkpoint
 
 __all__ = ["HealthRun", "health_report", "REPORT_JSON", "REPORT_MD"]
@@ -85,6 +86,23 @@ def _probe_section(run: HealthRun) -> dict:
     return out
 
 
+@torch.no_grad()
+def _layers_section(run: HealthRun, max_rows: int = 512) -> list[dict]:
+    """D-021: per-layer summary of every leaf module (inspection-only taps, model/taps.py) on an evenly strided
+    subsample in eval mode: dead / constant / zero shares point at layers that waste or erase the signal."""
+    n = run.x.shape[0]
+    ix = torch.as_tensor(np.unique(np.linspace(0, n - 1, min(n, max_rows)).astype(np.int64)))
+    was_training = run.model.training
+    run.model.eval()
+    dev = next(run.model.parameters()).device
+    try:
+        with record_taps(run.model, tap_points(run.model, leaves_only=True)) as taps:
+            run.model(run.x[ix].to(dev))
+    finally:
+        run.model.train(was_training)
+    return tap_summary(taps).drop(columns=["shape"]).to_dict("records")
+
+
 def build_report(run: HealthRun) -> dict:
     n = len(run.predictions)
     if run.x.shape[0] != n:
@@ -93,7 +111,7 @@ def build_report(run: HealthRun) -> dict:
             "targets": target_report(run.predictions, run.labels, anchors=run.anchors, last_close=run.last_close,
                                      codec_state=run.codec_state),
             "nig_floor": nig_floor_hit_report(run.predictions, nig_floors(run.model)),
-            "probe": _probe_section(run), "trace": _trace_section(Path(run.run_dir))}
+            "probe": _probe_section(run), "trace": _trace_section(Path(run.run_dir)), "layers": _layers_section(run)}
 
 
 def _clean(o):
@@ -146,6 +164,12 @@ def render_markdown(rep: dict) -> str:
           f"{'yes' if tr['trace_enabled'] else 'NO (fit without FitSettings.trace)'}", ""]
     last = {k: v[-1] for k, v in tr["series"].items() if v}
     L += [f"- {k}: {_f(v, 4)}" for k, v in last.items() if k.startswith(("trace_", "val_", "train_")) and v is not None]
+    flagged = [r for r in rep.get("layers", []) if (r["dead_share"] or 0) > 0.2 or (r["constant_share"] or 0) > 0.2]
+    worst = sorted(flagged, key=lambda r: -max(r["dead_share"] or 0, r["constant_share"] or 0))[:3]
+    L += [f"- layers (taps, eval mode): {len(rep.get('layers', []))} leaf layers, {len(flagged)} with > 20 % dead or "
+          "constant features; worst (layer: dead / constant share): "
+          + ("; ".join(f"{r['tap']}: {_f(r['dead_share'], 2)} / {_f(r['constant_share'], 2)}" for r in worst)
+             or "none") + " (all rows: health_report.json 'layers')."]
     return "\n".join(L) + "\n"
 
 

@@ -51,7 +51,7 @@ def test_health_report_writes_json_and_markdown(run):
     rep = health_report(hrun)
     data = json.loads((run_dir / REPORT_JSON).read_text(encoding="utf-8"))
     assert data == json.loads(json.dumps(rep))
-    assert set(data) == {"run_dir", "targets", "nig_floor", "probe", "trace"}
+    assert set(data) == {"run_dir", "targets", "nig_floor", "probe", "trace", "layers"}
     assert set(data["targets"]["targets"]) == {"high", "low", "close"}
     assert set(data["nig_floor"]["close"]) == {"nu", "alpha", "beta"}
     assert set(data["probe"]) == {"y_close_reg", "y_close_class"}
