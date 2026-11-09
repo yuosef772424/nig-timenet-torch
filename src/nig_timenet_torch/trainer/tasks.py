@@ -10,8 +10,9 @@ TASK_REGISTRY and the task losses, ported from crypto-signal-prediction trainer/
 
 Every task fn is ``(y_true, outputs, target_cfg, scheduled_vars, sample_weight=None) -> (loss, stats)``; stats
 always carry the registered ``stat_keys``. Losses are float32. Not ported (off in the oracle's config; add when a
-step's test needs them): ``beta_nll``, ``huber_weight``, ``normalize_reg``, ``alpha_floor_straight_through`` —
-each raises NotImplementedError when requested instead of being silently ignored.
+step's test needs them): ``huber_weight``, ``normalize_reg``, ``alpha_floor_straight_through`` — each raises
+NotImplementedError when requested instead of being silently ignored. ``beta_nll`` is ported (FX1, TF semantics:
+NLL x stop_grad(w_St^2)^beta_nll) with the torch-only ``beta_nll_normalize`` (weights / their batch mean).
 """
 
 import inspect
@@ -23,7 +24,7 @@ import torch.nn.functional as F
 from nig_timenet_torch.core.registry import Contract, Registry
 
 __all__ = ["TASK_REGISTRY", "register_task_type", "with_defaults", "evidential_task_loss", "regression_task_loss",
-           "classification_task_loss", "nig_regularizer", "compute_confidence_calibration_loss"]
+           "classification_task_loss", "nig_regularizer", "nig_w_st", "compute_confidence_calibration_loss"]
 
 KERAS_EPSILON = 1e-7  # keras.backend.epsilon(): probability clip of binary_crossentropy
 
@@ -114,8 +115,26 @@ def nig_regularizer(error, nu, alpha, beta, normalize=False, stop_grad=True) -> 
     return error.abs() * (2.0 * nu + alpha)
 
 
+def nig_w_st(nu, alpha, beta) -> torch.Tensor:
+    """Width of the NIG's Student-t predictive: sqrt(beta (1 + nu) / (nu alpha)) (Meinert et al. 2023, eq. 9)."""
+    return torch.sqrt(beta * (1.0 + nu) / (nu * alpha))
+
+
+def _beta_nll_weighted(nig_base, nu, alpha, beta, target_cfg) -> torch.Tensor:
+    """beta-NLL (Seitzer et al. 2022, TF ``beta_nll``): per-sample NLL x stop_grad(w_St^2)^beta_nll, so calm rows no
+    longer dominate the mu gradient (it scales as 1 / w_St^2); ``beta_nll_normalize`` divides the weights by their
+    batch mean (the loss keeps its scale next to the other tasks; TF does not). beta_nll = 0 returns ``nig_base``."""
+    b = float(target_cfg["beta_nll"])
+    if b == 0.0:
+        return nig_base
+    weight = nig_w_st(nu, alpha, beta).square().detach().pow(b)
+    if target_cfg["beta_nll_normalize"]:
+        weight = weight / weight.mean()
+    return nig_base * weight
+
+
 def evidential_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_weight=None):
-    _unported(target_cfg, ("normalize_reg", "beta_nll", "huber_weight", "alpha_floor_straight_through"))
+    _unported(target_cfg, ("normalize_reg", "huber_weight", "alpha_floor_straight_through"))
     keys = target_cfg["output_keys"]
     w = None if sample_weight is None else _flat(sample_weight)
     y_true = _flat(y_true)
@@ -130,7 +149,8 @@ def evidential_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_wei
                 + torch.lgamma(alpha) - torch.lgamma(alpha + 0.5))
     nig_pen = nig_regularizer(error, nu, alpha, beta)
     lambda_reg = float(scheduled_vars[target_cfg["lambda_reg_var"]])
-    total = _wmean(nig_base + torch.tensor(lambda_reg, dtype=torch.float32) * nig_pen, w)
+    total = _wmean(_beta_nll_weighted(nig_base, nu, alpha, beta, target_cfg)
+                   + torch.tensor(lambda_reg, dtype=torch.float32) * nig_pen, w)
 
     aleatoric = beta / (alpha - 1.0 + 1e-6)
     epistemic = beta / (nu * (alpha - 1.0) + 1e-6)
@@ -149,9 +169,9 @@ register_task_type(
     "evidential", evidential_task_loss,
     ["nig_base", "nig_pen", "mae", "aleatoric", "epistemic", "confidence", "calib_loss"], supports_sample_weight=True,
     config_keys=("use_calibration_loss", "lambda_reg_var", "lambda_calib_var", "normalize_reg",
-                 "beta_nll", "huber_weight", "alpha_floor_straight_through"),
+                 "beta_nll", "beta_nll_normalize", "huber_weight", "alpha_floor_straight_through"),
     default_options={"use_calibration_loss": False, "lambda_reg_var": "lambda_reg", "lambda_calib_var": "lambda_calib",
-                     "normalize_reg": False, "beta_nll": 0.0, "huber_weight": 0.0,
+                     "normalize_reg": False, "beta_nll": 0.0, "beta_nll_normalize": False, "huber_weight": 0.0,
                      "alpha_floor_straight_through": False})
 
 

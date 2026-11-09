@@ -87,6 +87,8 @@ def trainer_config(targets, label_smoothing: float, train: TrainSettings | None 
                "binary_classification": {"binary": True, "label_smoothing": label_smoothing}}
     if t.class_loss_weight != TrainSettings.class_loss_weight:
         options["binary_classification"]["loss_weight"] = t.class_loss_weight
+    if t.beta_nll != TrainSettings.beta_nll or t.beta_nll_normalize != TrainSettings.beta_nll_normalize:
+        options["nig_regression"].update(beta_nll=t.beta_nll, beta_nll_normalize=t.beta_nll_normalize)
     schedules = copy.deepcopy(LAMBDA_SCHEDULES)
     schedules["lambda_reg"]["end"] = t.lambda_reg_end
     schedules["lambda_calib"]["end"] = t.lambda_calib_end

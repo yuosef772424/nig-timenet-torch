@@ -52,7 +52,7 @@ def test_regression_task_loss_kinds():
 
 
 def test_unported_options_raise():
-    cfg = dict(targets_cfg()["close_reg"], beta_nll=0.5)
+    cfg = dict(targets_cfg()["close_reg"], huber_weight=0.5)
     with pytest.raises(NotImplementedError):
         fn = TASK_REGISTRY["evidential"]["fn"]
         fn(ol.load_labels()["y_close_reg"], ol.load_outputs(), with_defaults("evidential", cfg), {})

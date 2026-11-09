@@ -91,6 +91,8 @@ class TrainSettings:
     class_loss_weight: float = 1.0                         # B-060: loss_weight of every classification head
     lambda_reg_end: float = 0.05                           # B-062: end value of the NIG evidence regulariser
     lambda_calib_end: float = 0.1                          # end value of the NIG calibration term
+    beta_nll: float = 0.0                                  # FX1 / B-062: NIG NLL x stop_grad(w_St^2)^beta_nll
+    beta_nll_normalize: bool = False                       # FX1: beta-NLL weights / their batch mean
 
     def __post_init__(self):
         for name in ("epochs", "batch_size"):
@@ -99,8 +101,8 @@ class TrainSettings:
                 raise ValueError(f"TrainSettings.{name} must be an integer >= 1, got {v!r}")
         if self.lr <= 0 or self.weight_decay < 0 or not 0.0 <= self.label_smoothing < 1.0:
             raise ValueError("lr > 0, weight_decay >= 0, 0 <= label_smoothing < 1")
-        if self.class_loss_weight < 0 or self.lambda_reg_end < 0 or self.lambda_calib_end < 0:
-            raise ValueError("class_loss_weight, lambda_reg_end and lambda_calib_end must be >= 0")
+        if min(self.class_loss_weight, self.lambda_reg_end, self.lambda_calib_end, self.beta_nll) < 0:
+            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end and beta_nll must be >= 0")
 
 
 @dataclass(frozen=True)
