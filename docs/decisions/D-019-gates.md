@@ -39,8 +39,9 @@ until now they were a manual check (B-040).
   [1e-4, 1e-2] (fail outside [1e-5, 1e-1]), every weight matrix in [1e-6, 1e-1], A2's dead tensors left out (state
   restored exactly); A5 every judged head (loss weight > 0) >= 0.02, the largest <= 0.60, shares of the gradient norm on
   the shared TRUNK (parameters at least two heads reach, minus the parameters of `head_modules()`: the ordered means make
-  the close NIG head reachable from the high / low losses, and with it the high / low cosine is -0.999, on the trunk
-  alone +0.79 on E1; the T4 trace keeps its own definition); A6 mean pairwise cosine >= -0.10 (< 0 warn), a fail
+  the close NIG head reachable from the high / low losses: with it the high / low cosine is -0.999 at the end of E1
+  seed 0, on the trunk alone +0.79 there, but still -0.75 to -0.88 at step 0 on every env and seed and -0.15 to -0.81 at
+  the end of most runs (local run 2 below); the T4 trace keeps its own definition); A6 mean pairwise cosine >= -0.10 (< 0 warn), a fail
   blocks only when it fails on every seed; A7 share of never-active units per layer <= 0.20 (> 0.50 fail), a unit is
   never active when its pre-activation (the model's `activation_points`, Linear layers feeding ReLU / GELU / SiLU) is
   <= 0 on every row of the batch set.
@@ -69,6 +70,33 @@ until now they were a manual check (B-040).
   artifact and read back; each env x seed run folder is rebuilt (gate runs never resume). `gate_report.json` / `.md`
   carry the key `trainer.identity.configuration_hash` (the run identity's settings hash without the seed, the data and
   the commit). `passed` needs every env with >= 3 seeds and every blocking check passing on every seed.
+
+## Local gate runs (CPU, this commit's code; not committed outputs, /home/user/work/gates_runs)
+Baseline configuration (default model and training settings, batch 512), seeds 0-2, E1 = D-018 generator (64,000 rows),
+E3 = `real_slice` of the real artifact `c572b1b36960` (20 coins x 6 months, 21,382 rows), E2 = E3 permuted. Run 2
+(trunk-only A5 / A6, E3 3 epochs): 487 s in all (per seed E1 77-80 s, E2 40-41 s, E3 41-43 s). Verdict: not passed.
+
+| env | A | B | C | canary |
+|---|---|---|---|---|
+| E1 | fail | pass | fail | - |
+| E2 | fail | fail | fail | pass |
+| E3 | fail | fail | fail | - |
+
+- E1 gate B passes on every seed (decile Spearman -0.98..-1.0, gap CI lower 0.62-0.97, confidence vs planted noise
+  0.88-0.93). Gate C: std vs planted noise 0.90-0.93 and std scale 0.98-1.21 pass (so B-052 does not break E1's std
+  checks after 3 epochs); coverage relative to the oracle fails on 1 of 3 seeds for high (0.833 vs 0.888) and low (0.816
+  vs 0.886); T-sharp vs the oracle fails (0.01-0.22 vs 1.0, one high seed 0.96): mu shrinks to ~0.55 x the oracle mean
+  (B-062, B-058). Close signal recovery (information) 0.01 vs the oracle's 0.04.
+- Gate A on every env: A5 the close class head (often all class heads) gets < 0.02 of the trunk gradient, high_reg up
+  to 0.64 (B-060); A6 high_reg vs low_reg below -0.10 at step 0 on every seed and at the end of most (blocks: fails on
+  every seed); A7 0.47-0.75 never-active units at the end (class / NIG hidden layers; stats_proj 0.22-0.52 at step 0,
+  B-061); A3 flags nig_close on 2 of 3 seeds; A1, A2 (end), A4 pass.
+- E2: canary passes (no leak: |IC| <= 0.04, val loss = the constant's); gate B fails on 1 of 9 (seed 2 high gap CI
+  [-0.34, -0.05]); coverage 0.91-0.94 (too wide; high / low information) and close std / label sd 1.22-1.32 fail.
+- E3 (3 epochs): gate B fails on most seeds (decile Spearman high -0.15..-0.66, low +0.59..-0.82; close passes
+  -0.70..-0.84), coverage 0.85-0.94 (close blocking fail, high / low information), T-sharp share 0.0 for every head.
+- Run 1 (E3 at 1 epoch, A5 / A6 on all shared parameters): E3 gate B and C meaningless (confidence heads untrained,
+  coverage 0.999, B-064), hence `e3_epochs` 3.
 
 ## New defaults
 - `nig_timenet_torch.eval.gates.GateStage(last_move)`: `<new>` -> `None`
