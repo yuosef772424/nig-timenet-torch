@@ -93,6 +93,9 @@ class TrainSettings:
     lambda_calib_end: float = 0.1                          # end value of the NIG calibration term
     beta_nll: float = 0.0                                  # FX1 / B-062: NIG NLL x stop_grad(w_St^2)^beta_nll
     beta_nll_normalize: bool = False                       # FX1: beta-NLL weights / their batch mean
+    # D-023 switches (FX2, B-060 / gate A5); defaults reproduce the run before D-023
+    loss_balance: str = "none"                             # trainer.loss_balance.LOSS_BALANCERS
+    kendall_init_logvar: float = 0.0                       # start value of the Kendall log-variances
 
     def __post_init__(self):
         for name in ("epochs", "batch_size"):

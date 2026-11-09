@@ -2,6 +2,8 @@
 
 total = sum_t 0.5 * exp(-log_var_t) * L_t + 0.5 * log_var_t. Only valid for POSITIVE task losses: the trainer keeps
 evidential tasks (NIG NLL can go negative) out of it (``uncertainty_weighting_exclude_task_types``).
+``init_log_var`` (FX2, default 0.0 = as before): the start value of every log-variance (B-060 candidate: a negative
+value starts the Kendall tasks with a larger weight 0.5 exp(-init_log_var)).
 """
 
 import torch
@@ -11,11 +13,11 @@ __all__ = ["UncertaintyWeightedLoss"]
 
 
 class UncertaintyWeightedLoss(nn.Module):
-    def __init__(self, task_names: list[str]):
+    def __init__(self, task_names: list[str], init_log_var: float = 0.0):
         super().__init__()
         self.task_names = list(task_names)
         for t in self.task_names:
-            setattr(self, f"log_var_{t}", nn.Parameter(torch.zeros(())))
+            setattr(self, f"log_var_{t}", nn.Parameter(torch.full((), float(init_log_var))))
 
     def log_var(self, t: str) -> nn.Parameter:
         return getattr(self, f"log_var_{t}")

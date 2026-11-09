@@ -32,6 +32,7 @@ from nig_timenet_torch.data_io.loading import LoadedData
 from nig_timenet_torch.eval.target_report import target_report
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.model.heads import head_spec
+from nig_timenet_torch.model.label_scale import fit_label_scale
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
 from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
@@ -112,6 +113,7 @@ def build(run: Run) -> Run:
     run.ms = flat_run.model_settings(s.model, run.targets)
     run.trainer = flat_run.make_trainer(s, run.ms, run.targets, run.x["train"].shape[1], run.x["train"].shape[2],
                                         run.device)
+    fit_label_scale(run.trainer.model, run.y["train"])   # FX2: a fitted NIG label scale learns from TRAIN only
     run.fit_settings = flat_run.fit_settings_of(s)
     run.ident = run_common.run_identity(run.trainer, run.fit_settings, run.ms, run.art, s)
     return run
