@@ -9,7 +9,6 @@ core/prediction_schema.py
 core/roles.py
 core/seeds.py
 eval/calibrator.py
-model/nig_layers.py
 model/panel.py
 trainer/checkpoint.py
 trainer/schedules.py

@@ -86,7 +86,8 @@ class NigTimeNetV2(nn.Module):
                  head_types, enforce_order, head_hidden, nu_min, alpha_min, beta_min, unc_max, class_head_hidden,
                  norm_eps, linear_path_l2, encoder="transformer", input_clip=None, stats_mode="full",
                  input_noise_std=0.0, feature_dropout=0.0, level_passthrough=False, level_norm=None,
-                 input_skip="none", n_classes=3):
+                 input_skip="none", n_classes=3, order_detach_close=False, nig_scale=None,
+                 bn_warmup=False):
         super().__init__()
         self.price_targets = tuple(price_targets)
         self.head_types = {t: list(head_types.get(t, [])) for t in self.price_targets}
@@ -123,7 +124,7 @@ class NigTimeNetV2(nn.Module):
         for sfx, T, nf in branches:
             self._build_branch(sfx, T, nf, dims, kernel_sizes=kernel_sizes, norm_eps=norm_eps, input_clip=input_clip,
                                stats_mode=stats_mode, input_noise_std=input_noise_std,
-                               feature_dropout=feature_dropout, level_norm=level_norm)
+                               feature_dropout=feature_dropout, level_norm=level_norm, bn_warmup=bn_warmup)
         h_dim = d_model * len(branches)
         self.trunk_norm = RMSNorm(h_dim)
         self.trunk_drop = nn.Dropout(dropout)
@@ -134,12 +135,13 @@ class NigTimeNetV2(nn.Module):
         self.head_specs = {t: head_spec(k, t) for t in self.nig_targets
                            for k in kinds_with_task(self.head_types[t], "evidential")}
         for t in self.nig_targets:
-            setattr(self, f"nig_{t}", NIGHead(h_dim, head_hidden, dropout, nu_min, alpha_min, beta_min))
+            setattr(self, f"nig_{t}", NIGHead(h_dim, head_hidden, dropout, nu_min, alpha_min, beta_min,
+                                              scale=nig_scale))
             setattr(self, f"unc_{t}", NIGUncertainty(unc_max))
             setattr(self, f"conf_{t}", ConfidenceHead(h_dim))
         self.apply_order = enforce_order and set(TARGET_COLUMNS) <= set(self.nig_targets)
         if self.apply_order:
-            self.ordered_means = OrderedMeans()
+            self.ordered_means = OrderedMeans(nig_scale, order_detach_close)
         self.class_targets = list(self.class_kind)
         self.class_specs = {t: head_spec(kind, t) for t, kind in self.class_kind.items()}
         for t, kind in self.class_kind.items():
@@ -149,7 +151,7 @@ class NigTimeNetV2(nn.Module):
             setattr(self, self.class_specs[t].output_keys["logits"], nn.Linear(class_head_hidden, k))
 
     def _build_branch(self, sfx, T, nf, dims, *, kernel_sizes, norm_eps, input_clip, stats_mode, input_noise_std,
-                      feature_dropout, level_norm):
+                      feature_dropout, level_norm, bn_warmup):
         def add(name, module):
             setattr(self, name + sfx, module)
 
@@ -163,14 +165,14 @@ class NigTimeNetV2(nn.Module):
         if self.level_passthrough:  # anti-memorization: SymLog(raw level) re-enters the token path (P33b)
             add("level_symlog", SymLog())
             if level_norm == "batch":
-                add("level_bn", BatchNormChannelsLast(nf))
+                add("level_bn", BatchNormChannelsLast(nf, warmup=bn_warmup))
             if feature_dropout > 0:
                 add("level_feature_dropout", SpatialDropout1D(feature_dropout))
             if input_noise_std > 0:
                 add("level_noise", GaussianNoise(input_noise_std))
             tok_width += nf
         if self.use_stats and level_norm == "batch":
-            add("stats_bn", BatchNormChannelsLast(2 * nf))
+            add("stats_bn", BatchNormChannelsLast(2 * nf, warmup=bn_warmup))
         d_model = dims.d_model
         seq_width = ENCODERS.get(self.encoder).build(self, add, sfx, seq_len=T, tok_width=tok_width, dims=dims)
         add("final_norm", RMSNorm(seq_width))
@@ -336,10 +338,12 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          nu_min=0.1, alpha_min=2.0, beta_min=0.01, unc_max=20.0, class_head_hidden=64,
                          encoder: str = "transformer", input_skip: str = "none", n_classes=3, norm_eps=1e-4,
                          linear_path_l2=1e-4, input_clip=None, stats_mode="full", input_noise_std=0.0,
-                         feature_dropout=0.0, level_passthrough=False, level_norm=None, **options) -> NigTimeNetV2:
+                         feature_dropout=0.0, level_passthrough=False, level_norm=None, order_detach_close=False,
+                         nig_scale=None, bn_warmup=False, **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
-    feature_dropout, level_passthrough, level_norm; P33b) are opt-in: their defaults reproduce the P15 graph."""
+    feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
+    nig_layers; bn_warmup: layers.BatchNormChannelsLast) are opt-in: their defaults reproduce the P15 graph."""
     ENCODERS.entry(encoder)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
     if skip_variant(input_skip).adds_modules and not ENCODERS.entry(encoder).meta["supports_input_skip"]:
@@ -365,4 +369,6 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         head_hidden=head_hidden, nu_min=nu_min, alpha_min=alpha_min, beta_min=beta_min, unc_max=unc_max,
         class_head_hidden=class_head_hidden, norm_eps=norm_eps, linear_path_l2=linear_path_l2, encoder=encoder,
         input_clip=input_clip, stats_mode=stats_mode, input_noise_std=input_noise_std, feature_dropout=feature_dropout,
-        level_passthrough=level_passthrough, level_norm=level_norm, input_skip=input_skip, n_classes=n_classes)
+        level_passthrough=level_passthrough, level_norm=level_norm, input_skip=input_skip, n_classes=n_classes,
+        order_detach_close=order_detach_close, nig_scale=nig_scale,
+        bn_warmup=bn_warmup)
