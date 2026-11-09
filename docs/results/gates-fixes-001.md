@@ -83,8 +83,11 @@ because A6 blocks only on every seed) and T-sharp high (3 seeds) / low (2 seeds)
 
 ## 4. Gates, 10 epochs
 
-- Gate run (`run_gates`, E1 + E2, 3 seeds, no e3_source; **E3 NOT run**: no real artifact here) of the new default:
-  see section 6 (it was still running when the owner stopped the step; result recorded there only if it finished).
+- Gate run (`run_gates`, E1 + E2, 3 seeds, batch 512, no e3_source; **E3 NOT run**: no real artifact here) of the
+  new default: E1 A pass / B pass / C fail (T-sharp high and low); E2 A fail (A7 end) / **B fail** / C pass /
+  **canary pass**. E2 gate B `gap_ci_contains_0` fails on 2 of 9 head x seed rows: close seed 1 CI [0.012, 0.174],
+  low seed 2 [-0.222, -0.042] — the same alarm as FX1's `nig_scale 0.01` (2 of 9 rows, CIs just off 0): on permuted
+  labels the confidence gap should be 0. Read it before relying on the confidence outputs of the new default.
 - The 3- and 10-epoch confirmation round against the baseline (C4) was **not run**: the owner stopped new work
   (usage limit). The baseline 3-epoch comparison is FX1's (same code path at the defaults, reproduced by the bundle).
 
@@ -104,7 +107,6 @@ because A6 blocks only on every seed) and T-sharp high (3 seeds) / low (2 seeds)
 ## 6. Not verified
 
 - No GPU, no real data, no E3; 3-epoch runs only; the 10-epoch and baseline-paired confirmation round was not run.
-- The E2 gate result of the new default (the FX1 `nig_scale 0.01` alarm on E2 gate B) — see the PR description for
-  the outcome if the run finished before the push.
+- The cause of the E2 gate-B alarm with a scaled NIG head (section 4); A6 / A5 protocol changes are proposals only.
 - The residual high / low slope 1.27 with nig_scale_fit (FX1 cause 3, dropout dilution, is the main suspect).
 - Real-data effect of the new defaults: earlier checkpoints were trained without them.

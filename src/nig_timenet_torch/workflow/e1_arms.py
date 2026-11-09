@@ -36,7 +36,7 @@ from nig_timenet_torch.trainer.grad_report import a5_a6, grad_report
 from nig_timenet_torch.workflow import flat_run, gate_run, run
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, default_model_settings
 
-__all__ = ["mu_calibration", "readout_gap", "a6_label_probe", "class_auc", "arm_settings", "run_arm", "summary_line",
+__all__ = ["mu_calibration", "readout_gap", "a6_label_probe", "class_scores", "arm_settings", "run_arm", "summary_line",
            "main"]
 
 ARM_KEYS = ("train", "model", "architecture", "no_preset")
@@ -101,7 +101,7 @@ def a6_label_probe(r: run.Run, batches) -> dict:
     turns positive when centred comes from the heads' common mean error (init offsets, mean bias), which the heads'
     own biases absorb, not from the heads wanting different trunk features."""
     tr, x, y = r.trainer, r.x["train"], r.y["train"]
-    regs = [t for t in tr.target_names if tr.targets_cfg[t]["task_type"] == "evidential"]
+    regs = [t for t in tr.target_names if "mu" in tr.targets_cfg[t]["output_keys"]]   # the NIG heads
     keys = {t: tr.targets_cfg[t]["true_key"] for t in regs}
     tr.model.eval()
     with torch.no_grad():
@@ -117,7 +117,7 @@ def a6_label_probe(r: run.Run, batches) -> dict:
     return {"raw": pairs(y), "centred": pairs(centred)}
 
 
-def class_auc(st: gates.GateStage, targets) -> dict:
+def class_scores(st: gates.GateStage, targets) -> dict:
     """{target: AUC of the binary class head on the stage rows} (``stats.metrics.auc``)."""
     out = {}
     for t in targets:
@@ -158,7 +158,7 @@ def run_arm(name: str, arm: dict, seed: int, env: Path, root: Path, *, epochs: i
             "readout": readout_gap(r), "best_epoch": r.result.best_epoch, "history": r.result.history,
             "a5": [a0["checks"]["A5"]["value"], a1["checks"]["A5"]["value"]],
             "a6": [a0["checks"]["A6"]["value"], a1["checks"]["A6"]["value"]],
-            "a6_probe_end": a6_label_probe(r, batches), "class_auc": class_auc(st, r.targets),
+            "a6_probe_end": a6_label_probe(r, batches), "class_auc": class_scores(st, r.targets),
             "seconds": round(time.monotonic() - t0)}
 
 

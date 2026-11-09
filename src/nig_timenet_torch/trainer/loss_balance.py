@@ -66,8 +66,9 @@ class EqualGradNorm(NoBalance):
         norms = {}
         for t in self.targets:
             loss = per_target[t]
-            g = (torch.autograd.grad(loss, shared, retain_graph=True, allow_unused=True)[0]
-                 if loss.requires_grad else None)
+            with torch.backends.cudnn.flags(enabled=False):   # the #23 class (guard test); heads only, no RNN
+                g = (torch.autograd.grad(loss, shared, retain_graph=True, allow_unused=True)[0]
+                     if loss.requires_grad else None)
             raw = 0.0 if g is None else float(g.detach().double().norm())
             norms[t] = raw / mult[t]
         for t, v in norms.items():
