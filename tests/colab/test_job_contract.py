@@ -156,3 +156,24 @@ def test_every_jobs_entry_exposes_a_strict_frozen_config():
         cfg = getattr(importlib.import_module(f"nig_timenet_torch.jobs.{name}"), "CONFIG", None)
         assert cfg is not None and dataclasses.is_dataclass(cfg), f"jobs/{name}.py must expose CONFIG (a dataclass)"
         assert cfg.__dataclass_params__.frozen, f"jobs/{name}.py CONFIG must be frozen"
+
+
+def _vjob(**over):
+    return job(entry="no_entry_module", **over)
+
+
+def test_versioned_renames_the_job_and_its_run_dir_segment_only():
+    from nig_timenet_torch.colab.job import version_id, versioned
+    j = validate_job(_vjob(job_id="base-smoke", on_existing="new_version",
+                           config={"run_dir": "/d/runs/base-smoke/train"}))
+    v2 = versioned(j, version_id("base-smoke", 2))
+    assert v2["job_id"] == "base-smoke-v2" and v2["base_job_id"] == "base-smoke"
+    assert v2["config"]["run_dir"] == "/d/runs/base-smoke-v2/train" and j["config"]["run_dir"].endswith("smoke/train")
+    assert versioned(v2, version_id("base-smoke", 3))["base_job_id"] == "base-smoke"
+    with pytest.raises(JobError, match="run_dir"):           # a run_dir without the id: versions would share it
+        validate_job(_vjob(on_existing="new_version", config={"run_dir": "/d/runs/other/train"}))
+    with pytest.raises(JobError, match="exclude"):
+        validate_job(_vjob(on_existing="new_version", rerun=True))
+    with pytest.raises(JobError, match="on_existing"):
+        validate_job(_vjob(on_existing="overwrite"))
+    assert validate_job(_vjob())["on_existing"] == "refuse"  # default: the behaviour before D-021

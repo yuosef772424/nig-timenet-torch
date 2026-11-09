@@ -33,7 +33,7 @@ from pathlib import Path
 
 from nig_timenet_torch.colab.bootstrap import BootstrapError, Secrets, git_env, run_git
 from nig_timenet_torch.colab.contract import GIT_MAX_BYTES
-from nig_timenet_torch.colab.job import BUNDLE_NAMES
+from nig_timenet_torch.colab.job import BUNDLE_NAMES, version_id
 
 QUEUE_BRANCH = "colab-queue"
 RESULTS_BRANCH = "colab-results"
@@ -150,13 +150,32 @@ def fetch_queue(url: str, branch: str, workdir: str, env=None, secrets: Secrets 
         shutil.rmtree(dest, ignore_errors=True)
 
 
-def results_has_job(url: str, branch: str, job_id: str, workdir: str, env=None, secrets: Secrets | None = None) -> bool:
+def _published_runs(url: str, branch: str, workdir: str, env=None, secrets: Secrets | None = None) -> set[str]:
+    """The job ids that have ``runs/<id>/env.json`` on ``branch`` (empty when the branch does not exist)."""
     dest = os.path.join(workdir, "results_probe")
     try:
-        return clone_branch(url, branch, dest, env=env, secrets=secrets) and \
-            os.path.isfile(os.path.join(dest, "runs", job_id, "env.json"))
+        if not clone_branch(url, branch, dest, env=env, secrets=secrets):
+            return set()
+        runs = Path(dest) / "runs"
+        return {p.parent.name for p in runs.glob("*/env.json")} if runs.is_dir() else set()
     finally:
         shutil.rmtree(dest, ignore_errors=True)
+
+
+def results_has_job(url: str, branch: str, job_id: str, workdir: str, env=None, secrets: Secrets | None = None) -> bool:
+    return job_id in _published_runs(url, branch, workdir, env=env, secrets=secrets)
+
+
+def free_job_id(url: str, branch: str, job_id: str, workdir: str, env=None, secrets: Secrets | None = None,
+                max_versions: int = 999) -> str:
+    """The first of ``job_id``, ``<job_id>-v2``, ``-v3``, ... that has no ``runs/<id>/env.json`` on ``branch`` (one
+    clone for the whole search; D-021)."""
+    used = _published_runs(url, branch, workdir, env=env, secrets=secrets)
+    for n in range(1, max_versions + 1):
+        candidate = job_id if n == 1 else version_id(job_id, n)
+        if candidate not in used:
+            return candidate
+    raise BootstrapError(f"{job_id}: versions 2..{max_versions} are all used on {branch}")
 
 
 def _copy_pushable(bundle_dir: Path, target: Path) -> None:

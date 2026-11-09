@@ -12,7 +12,8 @@
     "G8_orphan_modules_in_registry_folders": 1,
     "C2_metric_definitions_outside_stats": 0,
     "G1_price_target_literals_outside_schema": 2,
-    "H4_config_get_defaults_in_trainer_and_jobs": 0
+    "H4_config_get_defaults_in_trainer_and_jobs": 0,
+    "E2_rmtree_calls_in_colab": 9
   },
   "G3_size_exceptions": {}
 }

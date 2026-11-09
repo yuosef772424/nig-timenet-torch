@@ -1,4 +1,11 @@
-"""One Colab job from queue to results (ROADMAP T3): ``fetch`` job.json from ``colab-queue`` -> ``check_rerun`` ->
+"""PURPOSE: One Colab job from queue to results: fetch job.json, refuse / repeat / version a finished job_id, check
+    out the pinned commit, run the entry under a wall-clock guard, publish the bundle to Drive and colab-results.
+TAGS: colab runner, job queue, check rerun, job versions, wall clock guard, publish, rule e1, rule e2
+PITFALLS: steps never raise (a failure is recorded, later steps skip); with ``on_existing`` new_version the job is
+    REPLACED by its next free version in ``check_rerun`` (job_id, bundle folder, config.run_dir), so everything after
+    it sees the versioned id; the log file keeps the queued id's name.
+
+One Colab job from queue to results (ROADMAP T3): ``fetch`` job.json from ``colab-queue`` -> ``check_rerun`` ->
 ``checkout`` the pinned commit -> ``execute`` it under a wall-clock guard -> ``publish`` to ``colab-results`` and Drive.
 
 Design copied from the TF runner (``tools/colab_runner.py`` there), with the two T3 fixes:
@@ -32,7 +39,7 @@ from nig_timenet_torch.colab import device as device_mod
 from nig_timenet_torch.colab import publish
 from nig_timenet_torch.colab.bootstrap import BootstrapError, Secrets, clean_clone, git_env
 from nig_timenet_torch.colab.contract import validate_outputs
-from nig_timenet_torch.colab.job import JobError, parse_job
+from nig_timenet_torch.colab.job import JobError, parse_job, versioned
 
 DEFAULT_WORKDIR = "/content/nig_runner"
 DEFAULT_DRIVE_ROOT = "/content/drive/MyDrive"
@@ -168,7 +175,16 @@ class Runner:
         return self.job
 
     def check_rerun(self) -> None:
+        """A finished job_id is refused (default), repeated (``rerun``) or run as its next free version
+        (``on_existing`` new_version: ``<job_id>-v2``, ... with its own bundle and run_dir, D-021)."""
         def go():
+            if self.job["on_existing"] == "new_version":
+                free = publish.free_job_id(self.repo_url, self.results_branch, self.job["job_id"], self.workdir,
+                                           self.git(), self.secrets)
+                if free != self.job["job_id"]:
+                    self._say(f"job {self.job['job_id']} is already on {self.results_branch}: running it as {free}")
+                    self.job = versioned(self.job, free)
+                return
             if not self.job["rerun"] and publish.results_has_job(self.repo_url, self.results_branch,
                                                                  self.job["job_id"], self.workdir, self.git(),
                                                                  self.secrets):

@@ -10,10 +10,14 @@ Same idea as the TF runner (queue branch -> run -> results branch), with the two
 ``device`` is required (rule E1: the run asserts and records it) and the entry is a module of
 ``nig_timenet_torch.jobs`` run by name, so nothing is looked up under a temporary directory (rule E2).
 
-job.json (every key required except ``rerun``):
+job.json (every key required except ``rerun`` and ``on_existing``):
     {"job_id": "smoke-001", "repo_ref": "<40-hex commit>", "entry": "device_smoke", "args": [], "config": {},
      "max_minutes": 5, "device": "cuda", "needs_drive": false, "expected_outputs": ["smoke.json"], "note": "free text",
-     "rerun": false}
+     "rerun": false, "on_existing": "refuse"}
+``on_existing`` says what happens when ``runs/<job_id>/`` already exists on the results branch: ``"refuse"`` (default,
+the behaviour before D-021) or ``"new_version"``: the job runs as ``<job_id>-v2`` (then -v3, ...), the next free id,
+with its own bundle folder and its own ``config.run_dir`` (the ``/<job_id>/`` segment of the path is renamed), so a
+new version never resumes or overwrites an old one. ``versioned`` builds that job; it records ``base_job_id``.
 The entry runs as ``python -m nig_timenet_torch.jobs.<entry> --config <json> --out <dir> --max-minutes <n> <args...>``
 with ``PYTHONPATH=<checkout>/src`` and must write the files named in ``expected_outputs`` plus ``device.json`` and
 ``manifest.json`` (``colab/contract.py``).
@@ -26,11 +30,13 @@ import re
 from nig_timenet_torch.colab.device import EXPECTED
 from nig_timenet_torch.core.config import from_dict
 
-__all__ = ["JobError", "parse_job", "validate_job", "check_entry_config", "REQUIRED", "OPTIONAL", "MAX_MINUTES_CAP"]
+__all__ = ["JobError", "parse_job", "validate_job", "check_entry_config", "versioned", "version_id", "REQUIRED",
+           "OPTIONAL", "ON_EXISTING", "MAX_MINUTES_CAP"]
 
 REQUIRED = ("job_id", "repo_ref", "entry", "args", "config", "max_minutes", "device", "needs_drive",
             "expected_outputs", "note")
-OPTIONAL = ("rerun",)
+OPTIONAL = ("rerun", "on_existing", "base_job_id")
+ON_EXISTING = ("refuse", "new_version")
 RESERVED_FLAGS = ("--config", "--out", "--max-minutes")
 BUNDLE_NAMES = ("run_log.txt", "env.json", "bundle_summary.md", "publish.json", "job.json")
 RESERVED_NAMES = (*BUNDLE_NAMES, "manifest.json", "device.json")
@@ -62,7 +68,7 @@ def parse_job(text: str) -> dict:
 
 
 def validate_job(obj) -> dict:
-    """Returns the job with ``rerun`` defaulted; raises JobError naming the first problem."""
+    """Returns the job with ``rerun`` / ``on_existing`` defaulted; raises JobError naming the first problem."""
     if not isinstance(obj, dict):
         raise JobError("job.json must be a JSON object")
     missing = [k for k in REQUIRED if k not in obj]
@@ -71,6 +77,7 @@ def validate_job(obj) -> dict:
         raise JobError(f"job.json keys: missing {missing}, unknown {extra}")
     job = dict(obj)
     job.setdefault("rerun", False)
+    job.setdefault("on_existing", "refuse")
     checks = [
         (isinstance(job["job_id"], str) and JOB_ID.fullmatch(job["job_id"]) and ".." not in job["job_id"],
          "job_id must be 3-64 chars of A-Za-z0-9._- and start with a letter or digit"),
@@ -86,7 +93,14 @@ def validate_job(obj) -> dict:
         (job["device"] in EXPECTED, f"device must be one of {EXPECTED} (rule E1)"),
         (isinstance(job["needs_drive"], bool), "needs_drive must be true or false"),
         (isinstance(job["rerun"], bool), "rerun must be true or false"),
+        (job["on_existing"] in ON_EXISTING, f"on_existing must be one of {ON_EXISTING}"),
+        (not (job["rerun"] and job["on_existing"] == "new_version"),
+         "rerun (repeat the same job_id) and on_existing new_version (a new id) exclude each other"),
+        (job["on_existing"] == "refuse" or _run_dir_segment_ok(job),
+         "on_existing new_version needs config.run_dir (when set) to contain the folder /<job_id>/, so every version "
+         "gets its own checkpoint folder"),
         (isinstance(job["note"], str), "note must be a string"),
+        (isinstance(job.get("base_job_id", ""), str), "base_job_id must be a string"),
         (isinstance(job["expected_outputs"], list) and job["expected_outputs"]
          and all(isinstance(n, str) and OUTPUT_NAME.fullmatch(n) and n not in RESERVED_NAMES
                  for n in job["expected_outputs"])
@@ -101,6 +115,29 @@ def validate_job(obj) -> dict:
         raise JobError(f"args may not set {bad}: the runner passes {RESERVED_FLAGS}")
     check_entry_config(job["entry"], job["config"], job["device"])
     return job
+
+
+def _run_dir_segment_ok(job: dict) -> bool:
+    run_dir = job["config"].get("run_dir") if isinstance(job["config"], dict) else None  # job file, not a setting
+    return run_dir is None or f"/{job['job_id']}/" in f"{run_dir}/"
+
+
+def version_id(job_id: str, n: int) -> str:
+    """The id of version ``n`` (>= 2) of ``job_id``: ``<job_id>-v<n>``."""
+    if n < 2:
+        raise ValueError("a version number is >= 2 (version 1 is the job_id itself)")
+    return f"{job_id}-v{n}"
+
+
+def versioned(job: dict, new_id: str) -> dict:
+    """The job as version ``new_id``: job_id renamed, the ``/<job_id>/`` segment of ``config.run_dir`` renamed (a fresh
+    checkpoint folder), ``base_job_id`` recorded. The result is validated again."""
+    old = job["job_id"]
+    out = {**job, "job_id": new_id, "base_job_id": job.get("base_job_id", old), "config": dict(job["config"])}
+    run_dir = out["config"].get("run_dir")
+    if run_dir is not None:
+        out["config"]["run_dir"] = f"{run_dir}/".replace(f"/{old}/", f"/{new_id}/", 1)[:-1]
+    return validate_job(out)
 
 
 def check_entry_config(entry: str, config: dict, device: str | None = None) -> None:

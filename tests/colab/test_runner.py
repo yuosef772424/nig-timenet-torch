@@ -67,6 +67,20 @@ def test_a_finished_job_is_refused_unless_it_sets_rerun(world):
     assert runner(world).run_all()["status"] == "OK"
 
 
+def test_on_existing_new_version_runs_a_finished_job_as_its_next_free_version(world):
+    queue(world, on_existing="new_version")
+    assert runner(world).run_all()["status"] == "OK"                     # first run keeps its id
+    second = runner(world).run_all()
+    assert second["status"] == "OK" and second["job_id"] == "smoke-001-v2", world["echo"][-15:]
+    assert second["bundle"].endswith(os.path.join("bundle", "smoke-001-v2"))
+    third = runner(world).run_all()
+    assert third["job_id"] == "smoke-001-v3"
+    for jid in ("smoke-001", "smoke-001-v2", "smoke-001-v3"):            # every version kept side by side
+        assert "env.json" in results_files(world["base"], world["url"], jid)
+    job = json.loads((world["base"] / "work" / "bundle" / "smoke-001-v3" / "job.json").read_text())
+    assert job["job_id"] == "smoke-001-v3" and job["base_job_id"] == "smoke-001"
+
+
 def test_a_gpu_job_on_a_cpu_vm_fails_before_anything_runs_and_the_failure_is_published(world):
     queue(world, device="cuda", config={"device": "cuda"})
     r = runner(world).run_all()  # the default device check is the real one: this sandbox has no GPU
