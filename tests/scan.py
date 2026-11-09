@@ -355,3 +355,23 @@ def config_get_defaults() -> list[str]:
                     and len(n.args) + len(n.keywords) >= 2):
                 found.append(f"{rel}:{n.lineno}: .get(..., default)")
     return found
+
+
+# ----------------------------------------------------------------------- E2 (no silent folder deletes on Drive)
+RMTREE_LAYERS = ("colab",)
+
+
+def rmtree_calls() -> list[str]:
+    """``shutil.rmtree`` / ``rmtree`` calls in ``colab/`` (the code that touches Drive run folders): each one can
+    delete a run folder, so a new one is visible in review (B-050 class, fourth R-REVIEW row 145)."""
+    found = []
+    for rel, (_, tree) in sources().items():
+        if layer_of(rel) not in RMTREE_LAYERS:
+            continue
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Call):
+                f = n.func
+                name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", None)
+                if name == "rmtree":
+                    found.append(f"{rel}:{n.lineno}: rmtree")
+    return found

@@ -29,6 +29,7 @@ from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
 from nig_timenet_torch.trainer.schedules import LrSettings, ParamSchedule, apply_schedules, lr_at
 from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS, check_selectable, compute_selection_metric
+from nig_timenet_torch.trainer.switches import INITS, EmaWeights, apply_init
 from nig_timenet_torch.trainer.targets import resolve_loss, resolve_targets, validate_trainer_config
 from nig_timenet_torch.trainer.task_weighting import UncertaintyWeightedLoss
 from nig_timenet_torch.trainer.tasks import TASK_REGISTRY
@@ -48,10 +49,19 @@ class FitSettings:
     early_stop: EarlyStopSettings = field(default_factory=EarlyStopSettings)
     lr: LrSettings | None = None
     trace: bool = False            # T4: add the trainer trace (trainer/trace.py) to every history row; log-only
+    # D-021 switches (TR1); the defaults reproduce the trainer before D-021 and are left out of the run identity
+    grad_clip_norm: float | None = None   # clip the global gradient norm per step (TF used 1.0, B-018)
+    ema_decay: float | None = None        # evaluate / select / keep an EMA copy of the weights (TF use_ema, B-018)
+    init: str = "torch"                   # trainer.switches.INITS, applied at the start of a fresh fit (B-007)
 
     def __post_init__(self):
         if self.epochs < 1 or self.batch_size < 1:
             raise ValueError("epochs and batch_size must be >= 1")
+        if self.grad_clip_norm is not None and not self.grad_clip_norm > 0:
+            raise ValueError("grad_clip_norm must be None or > 0")
+        if self.ema_decay is not None and not 0.0 < self.ema_decay < 1.0:
+            raise ValueError("ema_decay must be None or in (0, 1)")
+        INITS.entry(self.init)  # unknown init names raise now
 
 
 @dataclass
@@ -188,14 +198,17 @@ class Trainer:
         logs.update({k: float(v.detach()) for k, v in stats.items()})
         return logs
 
-    def train_step(self, x, y, sample_weight=None) -> dict[str, float]:
-        """One optimizer step on (x, y) with the model in train() mode; returns scalar logs."""
+    def train_step(self, x, y, sample_weight=None, grad_clip_norm: float | None = None) -> dict[str, float]:
+        """One optimizer step on (x, y) with the model in train() mode; returns scalar logs. ``grad_clip_norm``
+        clips the global norm of every trainer parameter's gradient before the step (None = no clipping)."""
         if self.optimizer is None:
             raise RuntimeError("Trainer has no optimizer")
         self.model.train()
         self.optimizer.zero_grad(set_to_none=True)
         total, raw, per_target, stats, _ = self.compute_losses(x, y, sample_weight=sample_weight, training=True)
         total.backward()
+        if grad_clip_norm is not None:
+            torch.nn.utils.clip_grad_norm_(list(self.parameters()), grad_clip_norm)
         self.optimizer.step()
         return self._logs(total, raw, per_target, stats)
 
@@ -229,12 +242,15 @@ class Trainer:
         first = next(iter(self.model.parameters()), None)
         return torch.device("cpu") if first is None else first.device
 
-    def _train_epoch(self, x, y, batch_size: int) -> dict[str, float]:
-        """One shuffled pass; the mean of every log, weighted by batch size."""
+    def _train_epoch(self, x, y, settings: FitSettings, ema: EmaWeights | None = None) -> dict[str, float]:
+        """One shuffled pass; the mean of every log, weighted by batch size; ``ema`` is updated after every step."""
         sums: defaultdict[str, float] = defaultdict(float)  # a metric accumulator, not a config read
         dev = self._device()
-        for ix in self.batch_indices(len(x), batch_size):
-            logs = self.train_step(x[ix].to(dev), {k: v[ix].to(dev) for k, v in y.items()})
+        for ix in self.batch_indices(len(x), settings.batch_size):
+            logs = self.train_step(x[ix].to(dev), {k: v[ix].to(dev) for k, v in y.items()},
+                                   grad_clip_norm=settings.grad_clip_norm)
+            if ema is not None:
+                ema.update(self.model)
             for k, v in logs.items():
                 sums[k] += v * len(ix)
         return {k: v / len(x) for k, v in sums.items()}
@@ -249,15 +265,22 @@ class Trainer:
         torch.manual_seed(settings.seed * 1_000_003 + epoch)
         return self.optimizer.param_groups[0]["lr"]
 
-    def _state(self, epochs_done: int, tracker: BestTracker, history: list[dict], identity: RunIdentity) -> dict:
-        return {"epochs_done": epochs_done, "model": self.model.state_dict(), "tracker": tracker.get_state(),
-                "optimizer": self.optimizer.state_dict(), "history": history,
-                "kendall": None if self.uncertainty_layer is None else self.uncertainty_layer.state_dict(),
-                "identity": json.dumps(identity.to_json(), sort_keys=True)}
+    def _state(self, epochs_done: int, tracker: BestTracker, history: list[dict], identity: RunIdentity,
+               ema: EmaWeights | None = None) -> dict:
+        state = {"epochs_done": epochs_done, "model": self.model.state_dict(), "tracker": tracker.get_state(),
+                 "optimizer": self.optimizer.state_dict(), "history": history,
+                 "kendall": None if self.uncertainty_layer is None else self.uncertainty_layer.state_dict(),
+                 "identity": json.dumps(identity.to_json(), sort_keys=True)}
+        if ema is not None:  # only with the switch on: a default checkpoint keeps its keys
+            state["ema"] = ema.state_dict()
+        return state
 
-    def _restore(self, ckpt: dict, tracker: BestTracker, identity: RunIdentity) -> list[dict]:
+    def _restore(self, ckpt: dict, tracker: BestTracker, identity: RunIdentity, ema: EmaWeights | None = None
+                 ) -> list[dict]:
         check_resume(RunIdentity.from_json(json.loads(ckpt["identity"])), identity)
         self.model.load_state_dict(ckpt["model"])
+        if ema is not None:
+            ema.load_state_dict(ckpt["ema"])
         if self.uncertainty_layer is not None:
             self.uncertainty_layer.load_state_dict(ckpt["kendall"])
         self.optimizer.load_state_dict(ckpt["optimizer"])
@@ -271,6 +294,17 @@ class Trainer:
             return epoch_trace(self, x[:batch_size].to(dev), {k: v[:batch_size].to(dev) for k, v in y.items()})
         ix = [torch.as_tensor(b, dtype=torch.long) for b in batches]
         return epoch_trace_mean(self, [(x[i].to(dev), {k: v[i].to(dev) for k, v in y.items()}) for i in ix])
+
+    def _evaluate_with(self, weights: dict | None, x, y, batch_size: int) -> dict[str, float]:
+        """``evaluate`` with ``weights`` loaded for the pass (the live weights are put back after); None = live."""
+        if weights is None:
+            return self.evaluate(x, y, batch_size)
+        live = {k: v.detach().clone() for k, v in self.model.state_dict().items()}
+        self.model.load_state_dict(weights)
+        try:
+            return self.evaluate(x, y, batch_size)
+        finally:
+            self.model.load_state_dict(live)
 
     def fit(self, x_train, y_train, x_val, y_val, settings: FitSettings, *, run_dir=None,
             identity: RunIdentity | None = None, resume: bool = True,
@@ -287,7 +321,9 @@ class Trainer:
         (judged by the longest epoch of this call; at least one epoch always runs): the per-epoch checkpoint is the
         resume point of the next call. ``trace_batches`` (with ``settings.trace``): index arrays into the training
         rows (``trainer.batch_set.representative_batches``); the trace is then the mean over them instead of the first
-        ``batch_size`` rows (log-only either way)."""
+        ``batch_size`` rows (log-only either way). D-021 switches: ``settings.init`` re-initialises the model at the
+        start of a fresh fit (not on resume); ``grad_clip_norm`` clips every step; with ``ema_decay`` the EMA copy is
+        what validation, selection, the best weights and the model at the end hold (the checkpoint keeps both)."""
         if self.optimizer is None:
             raise RuntimeError("Trainer has no optimizer")
         if run_dir is not None and identity is None:
@@ -296,6 +332,7 @@ class Trainer:
             raise SeedMismatchError(f"identity.seed ({identity.seed}) != settings.seed ({settings.seed}): the identity "
                                     f"would describe a different run than the one that is trained")
         seed_everything(settings.seed)
+        ema = None
         higher = SELECTION_METRICS.entry(self.selection_metric).meta["higher_is_better"]
         tracker = BestTracker(settings.early_stop, higher)
         history: list[dict] = []
@@ -304,8 +341,12 @@ class Trainer:
         if ckpt is not None:
             if not resume:
                 raise FileExistsError(f"{run_dir} already holds a checkpoint; resume=False refuses to overwrite it")
-            history = self._restore(ckpt, tracker, identity)
+            ema = None if settings.ema_decay is None else EmaWeights(self.model, settings.ema_decay)
+            history = self._restore(ckpt, tracker, identity, ema)
             best_weights = None if tracker.best is None else checkpoint.load_best(run_dir)
+        else:
+            apply_init(settings.init, self.model)       # "torch" (default) changes nothing
+            ema = None if settings.ema_decay is None else EmaWeights(self.model, settings.ema_decay)
         longest = 0.0
         for epoch in range(len(history), settings.epochs):
             if tracker.should_stop():
@@ -315,8 +356,8 @@ class Trainer:
             t0 = time.monotonic()
             lr = self._begin_epoch(epoch, settings, self.schedules)
             row = {"epoch": epoch + 1, "lr": lr}
-            row.update({f"train_{k}": v for k, v in self._train_epoch(x_train, y_train, settings.batch_size).items()})
-            val = self.evaluate(x_val, y_val, settings.batch_size)
+            row.update({f"train_{k}": v for k, v in self._train_epoch(x_train, y_train, settings, ema).items()})
+            val = self._evaluate_with(None if ema is None else ema.shadow, x_val, y_val, settings.batch_size)
             row.update({f"val_{k}": v for k, v in val.items()})
             if settings.trace:
                 row.update(self._trace(x_train, y_train, settings.batch_size, trace_batches))
@@ -327,13 +368,16 @@ class Trainer:
             if on_epoch is not None:  # progress display only (e.g. a print); it cannot change training
                 on_epoch(dict(row))
             if tracker.update(epoch + 1, val["selection_metric"]):
-                best_weights = {k: v.detach().clone() for k, v in self.model.state_dict().items()}
+                best_weights = ({k: v.detach().clone() for k, v in self.model.state_dict().items()} if ema is None
+                                else ema.weights())
                 if run_dir is not None:
                     checkpoint.save_best(run_dir, best_weights, {"best": tracker.best, "best_epoch": tracker.best_epoch,
                                                                  "metric": self.selection_metric})
             if run_dir is not None:
-                checkpoint.save_checkpoint(run_dir, self._state(epoch + 1, tracker, history, identity))
+                checkpoint.save_checkpoint(run_dir, self._state(epoch + 1, tracker, history, identity, ema))
         restored = settings.early_stop.restore_best_weights and best_weights is not None
         if restored:
             self.model.load_state_dict(best_weights)
+        elif ema is not None:
+            self.model.load_state_dict(ema.weights())
         return FitResult(history, len(history), tracker.best_epoch, tracker.best, tracker.should_stop(), restored)

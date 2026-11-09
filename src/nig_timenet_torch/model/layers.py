@@ -5,7 +5,7 @@ PURPOSE:  The layer classes of NIG-TimeNet v2 (instance norm, symlog, decomposit
           attention, transformer block, pooling, FiLM, gated fusion, Keras-style GRU) with TF-identical numerics.
 TAGS:     layers, instance norm, stats mode, symlog, attention, transformer block, gru, film, keras port
 PITFALLS: Attribute names are weights.json attr_paths and checkpoint keys: never rename. InstanceNorm stats modes are
-          the STATS_TRANSFORMS table (None = no statistics, ``returns_stats`` False): a new mode is one table row.
+          the STATS_TRANSFORMS table (None = no statistics, ``returns_stats`` False): one new mode = one row; BN warmup.
 """
 
 import torch
@@ -316,26 +316,34 @@ class GatedFusion(nn.Module):
 
 
 class BatchNormChannelsLast(nn.Module):
-    """Keras BatchNormalization(axis=-1) on (B, F) or (B, T, F): attribute names match Keras (gamma, beta, and the
-    moving_mean / moving_variance BUFFERS), epsilon 1e-3, momentum 0.99 (torch momentum 0.01). Training uses the
-    batch statistics over every axis but the last and updates the moving averages (population-unbiased variance,
-    as Keras); eval uses the moving averages."""
+    """Keras BatchNormalization(axis=-1) on (B, F) / (B, T, F): Keras names (gamma, beta, moving_mean / moving_variance
+    BUFFERS), epsilon 1e-3, momentum 0.99; training uses the batch statistics over every axis but the last and updates
+    the moving averages, eval uses them. ``warmup`` (FX1, B-062; False = Keras): update n uses momentum min(momentum,
+    n / (n + 1)) (adds a ``num_updates`` buffer); without it 300 steps keep 0.99^300 of the init variance 1.0, 200x a
+    level feature's (docs/results/e1-fixes-001.md)."""
 
-    def __init__(self, n_features: int, epsilon: float = 1e-3, momentum: float = 0.99):
+    def __init__(self, n_features: int, epsilon: float = 1e-3, momentum: float = 0.99, warmup: bool = False):
         super().__init__()
-        self.epsilon, self.momentum = epsilon, momentum
+        self.epsilon, self.momentum, self.warmup = epsilon, momentum, bool(warmup)
         self.gamma = nn.Parameter(torch.ones(n_features))
         self.beta = nn.Parameter(torch.zeros(n_features))
         self.register_buffer("moving_mean", torch.zeros(n_features))
         self.register_buffer("moving_variance", torch.ones(n_features))
+        if self.warmup:
+            self.register_buffer("num_updates", torch.zeros((), dtype=torch.long))
+
+    def _momentum(self) -> float:
+        n = int(self.num_updates.add_(1)) - 1 if self.warmup else None
+        return self.momentum if n is None else min(self.momentum, n / (n + 1))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.training:
             dims = tuple(range(x.ndim - 1))
             mean, var = x.mean(dim=dims), x.var(dim=dims, unbiased=False)
             with torch.no_grad():
-                self.moving_mean.mul_(self.momentum).add_((1 - self.momentum) * mean)
-                self.moving_variance.mul_(self.momentum).add_((1 - self.momentum) * var)
+                mom = self._momentum()
+                self.moving_mean.mul_(mom).add_((1 - mom) * mean)
+                self.moving_variance.mul_(mom).add_((1 - mom) * var)
         else:
             mean, var = self.moving_mean, self.moving_variance
         return (x - mean) * torch.rsqrt(var + self.epsilon) * self.gamma + self.beta

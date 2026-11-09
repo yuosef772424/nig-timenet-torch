@@ -96,7 +96,8 @@ class TinyMLP(nn.Module):
     default_probe_points = ("fc2",)  # the last trunk layer
 
     def __init__(self, seq_len: int, n_features: int, price_targets=TARGET_COLUMNS, hidden: int = 32,
-                 head_types: dict[str, list[str]] | None = None, dropout: float = 0.0, enforce_order: bool = True):
+                 head_types: dict[str, list[str]] | None = None, dropout: float = 0.0, enforce_order: bool = True,
+                 order_detach_close: bool = False, nig_scale: float | None = None):
         super().__init__()
         self.price_targets = tuple(price_targets)
         head_types = head_types or {t: ["nig_regression", "binary_classification"] for t in self.price_targets}
@@ -106,11 +107,12 @@ class TinyMLP(nn.Module):
         if any(head_width(k, 1) != 1 for k in self.class_kind.values()):
             raise NotImplementedError("TinyMLP builds single-output (binary) classification heads only")
         self.class_targets = list(self.class_kind)
-        self.nig = nn.ModuleDict({t: NIGHead(hidden, hidden, dropout) for t in self.nig_targets})
+        self.nig = nn.ModuleDict({t: NIGHead(hidden, hidden, dropout, scale=nig_scale) for t in self.nig_targets})
         self.unc = nn.ModuleDict({t: NIGUncertainty() for t in self.nig_targets})
         self.conf = nn.ModuleDict({t: ConfidenceHead(hidden) for t in self.nig_targets})
         self.apply_order = enforce_order and set(TARGET_COLUMNS) <= set(self.nig_targets)
-        self.ordered_means = OrderedMeans() if self.apply_order else None
+        self.ordered_means = (OrderedMeans(nig_scale, order_detach_close) if self.apply_order
+                              else None)
         self.class_fc = nn.ModuleDict({t: nn.Linear(hidden, hidden) for t in self.class_targets})
         self.class_out = nn.ModuleDict({t: nn.Linear(hidden, 1) for t in self.class_targets})
 

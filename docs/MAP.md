@@ -20,7 +20,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `colab/job.py` | The job a Colab run executes: ``job.json`` on the ``colab-queue`` branch, parsed and validated, including the entry's own strict config. | colab job, job validation, queue branch, job config, expected outputs |
 | `colab/prepare.py` | Section 2 of the notebook (ROADMAP T3): turn the TF project's training data into a contract artifact, once. |  |
 | `colab/publish.py` | Results of a Colab run: the bundle folder on Drive (its own files listed in publish.json), the push of those files to colab-results and republish from the bundle alone (rules E1/E2, ROADMAP T3). | colab publish, bundle, results branch, drive copy, republish, git size limit, run folder, checkpoints |
-| `colab/runner.py` | One Colab job from queue to results (ROADMAP T3): ``fetch`` job.json from ``colab-queue`` -> ``check_rerun`` -> |  |
+| `colab/runner.py` | One Colab job from queue to results: fetch job.json, refuse / repeat / version a finished job_id, check out the pinned commit, run the entry under a wall-clock guard, publish the bundle to Drive and colab-results. | colab runner, job queue, check rerun, job versions, wall clock guard, publish, rule e1, rule e2 |
 | `colab/session.py` | Section 1 of the notebook, second half (ROADMAP T3): check the device the run will use and record the whole setup. |  |
 
 ### core
@@ -113,10 +113,11 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `model/encoders.py` | The ENCODERS registry: each encoder builds its modules through the model's ``add(name, module)`` (Keras layer names, so state_dict keys are unchanged) and owns its forward over the token sequence. | encoders, encoder registry, transformer, gru, tcn, causal conv, sequence encoder, plugin |
 | `model/heads.py` | The ONE head vocabulary: HEAD_REGISTRY (a head KIND -> output keys, label key, task type, output width, forward), head_spec, and the nig_outputs / class_outputs helpers that assemble a head's output dict. | heads, head registry, head spec, output keys, nig outputs, class outputs, task type, output width |
 | `model/layers.py` | The layer classes of NIG-TimeNet v2 (instance norm, symlog, decomposition, patch embedding, relative GQA attention, transformer block, pooling, FiLM, gated fusion, Keras-style GRU) with TF-identical numerics. | layers, instance norm, stats mode, symlog, attention, transformer block, gru, film, keras port |
-| `model/nig_layers.py` | NIG (Normal-Inverse-Gamma) head layers, ported from crypto-signal-prediction model/nig_layers.py @ aeafc564 |  |
+| `model/nig_layers.py` | The NIG head layers: NIGHead (mu/nu/alpha/beta with floors; FX1 output scale), OrderedMeans (high >= close >= low; FX1 scale / detach close), NIGUncertainty, ConfidenceHead. | nig head, ordered means, evidential, uncertainty, confidence head, softplus offset, head parametrisation |
 | `model/panel.py` | Cross-asset panel model (source: crypto-signal-prediction cross_asset/model.py @ aeafc564), BUILD_PLAN.md P43. |  |
 | `model/parts.py` | The registered input_skip variants of the transformer encoder (none, concat_each_block, dense_skip, late_raw, no_proj); class flags say what a variant adds, so builders never compare variant names. | input skip, variants, transformer encoder, patch embedding, readout, registry, flags |
 | `model/probe.py` | Per-layer ridge-probe report: forward-hook activations of named modules fitted to a label with time-ordered folds (AUC for binary y, else R^2), the raw input scored next to every layer. | probe, layer probe, ridge, activations, forward hook, health report |
+| `model/taps.py` | Inspection-only taps: record the output of every (or chosen) named module of ANY architecture into a dict during a forward pass, per-layer summaries, and a signal trace (ridge R^2 of a known signal per layer). | taps, layer outputs, inspection, diagnostics, forward hook, signal trace, dead units, model doctor |
 
 ### stats
 
@@ -135,6 +136,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `trainer/identity.py` | RunIdentity: the persisted, immutable fingerprint of a run (settings hash incl. the WHOLE trainer config, seed, data fingerprint, code sha); ``check_resume`` refuses a resume whose identity changed. | run identity, fingerprint, resume, settings hash, checkpoint, ResumeMismatchError |
 | `trainer/schedules.py` | Lambda / learning-rate schedules (ROADMAP T1; source: crypto-signal-prediction trainer/schedules.py, identical at |  |
 | `trainer/selection_metric.py` | SELECTION_METRICS registry: named, fixed validation metrics for checkpoint / early-stopping selection (val_raw_loss, per-head AUC and pinball). | selection metric, early stopping, checkpoint selection, validation, auc, pinball |
+| `trainer/switches.py` | Registered training switches of TR1 / D-021: weight initialisation (INITS: torch, keras), weight-decay parameter groups (WEIGHT_DECAY_GROUPS: all_params, exclude_norm_bias) and the EMA copy of the weights of fit. | training switches, init registry, keras init, glorot, orthogonal, weight decay groups, ema weights, tr1 |
 | `trainer/targets.py` | The trainer config schema: ``validate_trainer_config`` (unknown keys raise), ``resolve_targets`` / ``resolve_loss`` (defaults filled once) and ``targets_config``, the ONE builder of the targets (from HeadSpec). | trainer config, strict config, validate, targets_config, HeadSpec, task config_keys, loss defaults, did you mean |
 | `trainer/task_weighting.py` | Kendall et al. uncertainty task weighting (source: crypto-signal-prediction trainer/task_weighting.py @ aeafc564). |  |
 | `trainer/tasks.py` | TASK_REGISTRY: the task losses (evidential NIG, regression, classification) with, per task, the registered ``config_keys`` (the options a target config may carry) and ``default_options`` (their values when left out). | task loss, task registry, evidential, classification, regression, config_keys, default_options, calibration |
@@ -148,6 +150,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 |---|---|---|
 | `workflow/battery_run.py` | Adapts the VAL and TEST stage (table, labels, anchors, last_close, codec state) to battery tables and runs the full battery with the T-profit sections; battery_step does it for a finished Run and writes the reports. | battery run, stage inputs, t-profit, battery report, adapter entry point, battery step, profit json |
 | `workflow/deep_side_run.py` | Runs the deep-side check (eval/deep_side.py) on the VAL and TEST stages of a finished run (model holding its best weights, e.g. after workflow.run.restore) and writes deep_side_report.txt and deep_side.json. | deep side, run reading, derived target, val and test, report writer |
+| `workflow/e1_arms.py` | E1 arm runner: train configuration arms on the synthetic E1 env, gate A start / end + gate B / C rows, and per-head mu calibration against the known E1 conditional mean (mean ratio, spread ratio, corr, slope). | e1, arms, synthetic, mu calibration, slope, oracle, readout gap, model doctor, exploration |
 | `workflow/flat_run.py` | The flat model (one row per coin window, NIG regression + binary class head per price target) as run steps: inputs, anchors, model settings, trainer, fit settings, one chunked predict per stage. | flat run, run steps, trainer config, stage inputs, anchors by name, head kinds, predict stage |
 | `workflow/gate_run.py` | The gate run: E1 -> E2 -> E3 x seeds through the run steps, gate A before / after each short run, gates B / C / canary on the test split, one report keyed by the configuration hash; gate_check refuses an ungated run. | gate run, gate report, gate job, e1 e2 e3, seeds, configuration hash, job-side check, baseline arm, refusal |
 | `workflow/health_report.py` | T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer trace) as JSON and markdown next to the checkpoint. | health report, diagnostics, t-sharp, probe, trainer trace, markdown report |
@@ -168,12 +171,14 @@ line range). A module without a card shows its first docstring line; it gets a c
 | custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` | `ath_distance`, `calendar`, `crash_rebound`, `direction_consistency`, `fisher`, `fractal`, `jump`, `mean_reversion`, `position_in_range`, `psar`, `range_rel`, `returns`, `risk_adj_momentum`, `rsi_divergence`, `rvi`, `supertrend`, `trend_age`, `vol_asymmetry`, `vol_estimators`, `vol_ratio`, `vol_term_structure`, `volume_z` |
 | encoder | `ENCODERS` | `model/encoders.py` | `gru`, `tcn`, `transformer` |
 | head | `HEAD_REGISTRY` | `model/heads.py` | `binary_classification`, `multiclass_classification`, `nig_regression` |
+| init | `INITS` | `trainer/switches.py` | `keras`, `torch` |
 | input_skip | `INPUT_SKIP_VARIANTS` | `model/parts.py` | `concat_each_block`, `dense_skip`, `late_raw`, `no_proj`, `none` |
 | selection_metric | `SELECTION_METRICS` | `trainer/selection_metric.py` | `val_auc_close_class`, `val_auc_high_class`, `val_auc_low_class`, `val_pinball_close_reg`, `val_pinball_high_reg`, `val_pinball_low_reg`, `val_raw_loss` |
 | source | `SOURCES` | `data/sources.py` | `files`, `synthetic` |
 | target_codec | `TARGET_CODECS` | `data_io/target_codec.py` | `logret_close`, `return` |
 | target_raw | `TARGET_RAW` | `data/targets.py` | `entry_range`, `magnitude`, `return`, `return_close`, `scaled`, `volnorm`, `window_scale` |
 | task | `TASK_REGISTRY` | `trainer/tasks.py` | `classification`, `evidential`, `regression` |
+| weight_decay_groups | `WEIGHT_DECAY_GROUPS` | `trainer/switches.py` | `all_params`, `exclude_norm_bias` |
 
 ## Entry points
 
@@ -184,6 +189,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `jobs/baseline.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/device_smoke.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/gates.py`: job entry (`docs/jobs/*.json` name it)
+- `workflow/e1_arms.py`: runnable (`python -m nig_timenet_torch.workflow.e1_arms`)
 - `notebooks/colab_nig_timenet_torch.ipynb`: notebook runner
 - `notebooks/data_pipeline.ipynb`: notebook runner
 - `notebooks/main.ipynb`: notebook runner

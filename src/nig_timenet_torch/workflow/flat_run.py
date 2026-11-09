@@ -20,11 +20,12 @@ from nig_timenet_torch.model.architectures import ModelSettings, build_model
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer.batch_set import representative_batches
 from nig_timenet_torch.trainer.identity import RunIdentity
+from nig_timenet_torch.trainer.switches import param_groups
 from nig_timenet_torch.trainer.targets import targets_config
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
 from nig_timenet_torch.workflow.run_common import input_key, price_targets
-from nig_timenet_torch.workflow.settings import RunSettings
+from nig_timenet_torch.workflow.settings import RunSettings, TrainSettings
 
 __all__ = ["HEAD_KINDS", "LAMBDA_SCHEDULES", "anchors_by_name", "flat_inputs", "model_settings", "trainer_config",
            "make_trainer", "fit_settings_of", "predict_stage", "epoch_line", "row_coins", "batch_set"]
@@ -76,30 +77,43 @@ def model_settings(base: ModelSettings, targets: tuple[str, ...]) -> ModelSettin
     return ModelSettings(base.architecture, overrides)
 
 
-def trainer_config(targets, label_smoothing: float) -> dict:
+def trainer_config(targets, label_smoothing: float, train: TrainSettings | None = None) -> dict:
     """The oracle's trainer config (reference/data_default/config.json) with the run's label smoothing; the per-target
-    part comes from ``trainer.targets.targets_config`` (HeadSpec), only the options are the run's."""
+    part comes from ``trainer.targets.targets_config`` (HeadSpec), only the options are the run's. ``train`` carries
+    the D-021 loss switches; a switch at its default leaves the config byte-equal to the baseline's (pinned)."""
+    t = train or TrainSettings()
     options = {"nig_regression": {"use_calibration_loss": True, "lambda_reg_var": "lambda_reg",
                                   "lambda_calib_var": "lambda_calib"},
                "binary_classification": {"binary": True, "label_smoothing": label_smoothing}}
-    return {"targets": targets_config({t: list(HEAD_KINDS) for t in targets}, options_by_kind=options),
-            "loss": {"use_uncertainty_weighting": True, "uncertainty_weighting_exclude_task_types": ["evidential"],
-                     "schedules": copy.deepcopy(LAMBDA_SCHEDULES)},
+    if t.class_loss_weight != TrainSettings.class_loss_weight:
+        options["binary_classification"]["loss_weight"] = t.class_loss_weight
+    if t.beta_nll != TrainSettings.beta_nll or t.beta_nll_normalize != TrainSettings.beta_nll_normalize:
+        options["nig_regression"].update(beta_nll=t.beta_nll, beta_nll_normalize=t.beta_nll_normalize)
+    schedules = copy.deepcopy(LAMBDA_SCHEDULES)
+    schedules["lambda_reg"]["end"] = t.lambda_reg_end
+    schedules["lambda_calib"]["end"] = t.lambda_calib_end
+    return {"targets": targets_config({t_: list(HEAD_KINDS) for t_ in targets}, options_by_kind=options),
+            "loss": {"use_uncertainty_weighting": t.uncertainty_weighting,
+                     "uncertainty_weighting_exclude_task_types": ["evidential"], "schedules": schedules},
             "constraints": []}
 
 
 def make_trainer(settings: RunSettings, ms: ModelSettings, targets, seq_len: int, n_features: int,
                  device: torch.device) -> Trainer:
-    """A new model and Trainer (seed the RNG before calling for a reproducible init)."""
+    """A new model and Trainer (seed the RNG before calling for a reproducible init). The optimizer's parameter groups
+    come from ``trainer.switches.param_groups`` (``all_params`` = one group, as before D-021)."""
     t = settings.train
     model = build_model(ms, seq_len, n_features).to(device)
-    return Trainer(model, trainer_config(targets, t.label_smoothing), selection_metric=t.selection_metric,
-                   optimizer=lambda ps: torch.optim.AdamW(ps, lr=t.lr, weight_decay=t.weight_decay))
+    return Trainer(model, trainer_config(targets, t.label_smoothing, t), selection_metric=t.selection_metric,
+                   optimizer=lambda ps: torch.optim.AdamW(
+                       param_groups(t.weight_decay_groups, model, ps, t.weight_decay), lr=t.lr,
+                       weight_decay=t.weight_decay))
 
 
 def fit_settings_of(settings: RunSettings) -> FitSettings:
     t = settings.train
-    return FitSettings(epochs=t.epochs, batch_size=t.batch_size, seed=t.seed, early_stop=t.early_stop, trace=True)
+    return FitSettings(epochs=t.epochs, batch_size=t.batch_size, seed=t.seed, early_stop=t.early_stop, trace=True,
+                       grad_clip_norm=t.grad_clip_norm, ema_decay=t.ema_decay, init=t.init)
 
 
 @torch.no_grad()
