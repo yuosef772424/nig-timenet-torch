@@ -3,7 +3,9 @@
 TAGS: e1, arms, synthetic, mu calibration, slope, oracle, readout gap, model doctor, exploration
 PITFALLS: exploratory (rule C5): an arm is judged on >= 2 seeds at equal epochs (rule C4; training length alone
     moves the slope, FX1); ``readout_gap`` refits a ridge readout of the LABEL from each NIG head's hidden layer on
-    train rows, so "readout slope 1, model slope 1.5" means the head's own last step loses the scale, not the trunk.
+    train rows, so "readout slope 1, model slope 1.5" means the head's own last step loses the scale, not the trunk;
+    every arm x seed also records gate A5 / A6 values (start, end), the A6 centred-label probe and class-head AUCs
+    (FX2).
 
 ``slope_oracle_on_mu`` is the regression slope of the true conditional mean on the model's mu: 1.0 for a calibrated
 mean, > 1 when mu is compressed towards its average (E1 baseline 1.5-1.7). CLI:
@@ -29,12 +31,13 @@ from nig_timenet_torch.eval import gates
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.model.taps import record_taps
-from nig_timenet_torch.stats.metrics import pearson
-from nig_timenet_torch.trainer.grad_report import grad_report
+from nig_timenet_torch.stats.metrics import auc, pearson
+from nig_timenet_torch.trainer.grad_report import a5_a6, grad_report
 from nig_timenet_torch.workflow import flat_run, gate_run, run
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, default_model_settings
 
-__all__ = ["mu_calibration", "readout_gap", "arm_settings", "run_arm", "summary_line", "main"]
+__all__ = ["mu_calibration", "readout_gap", "a6_label_probe", "class_auc", "arm_settings", "run_arm", "summary_line",
+           "main"]
 
 ARM_KEYS = ("train", "model", "architecture", "no_preset")
 
@@ -92,6 +95,37 @@ def readout_gap(r: run.Run, *, n_train: int = 20000, ridge: float = 1.0) -> dict
     return out
 
 
+def a6_label_probe(r: run.Run, batches) -> dict:
+    """{labels: {pair: A6 cosine}} of the regression heads on the training ``batches`` with the raw labels and with
+    labels shifted per batch so that each head's batch-mean error is 0 ("centred"; FX2): a negative raw cosine that
+    turns positive when centred comes from the heads' common mean error (init offsets, mean bias), which the heads'
+    own biases absorb, not from the heads wanting different trunk features."""
+    tr, x, y = r.trainer, r.x["train"], r.y["train"]
+    regs = [t for t in tr.target_names if tr.targets_cfg[t]["task_type"] == "evidential"]
+    keys = {t: tr.targets_cfg[t]["true_key"] for t in regs}
+    tr.model.eval()
+    with torch.no_grad():
+        mu = {t: torch.cat([tr.model(x[i:i + 4096].to(r.device))[tr.targets_cfg[t]["output_keys"]["mu"]].reshape(-1)
+                            .cpu() for i in range(0, len(x), 4096)]) for t in regs}
+    centred = {k: v.clone() for k, v in y.items()}
+    for b in batches:
+        ix = torch.as_tensor(np.asarray(b), dtype=torch.long)
+        for t in regs:
+            centred[keys[t]][ix] = y[keys[t]][ix] - (y[keys[t]][ix] - mu[t][ix]).mean()
+    pairs = lambda yy: {k: v for k, v in a5_a6(tr, x, yy, batches)["A6"]["value"].items()  # noqa: E731
+                        if all(p in regs for p in k.split("|"))}
+    return {"raw": pairs(y), "centred": pairs(centred)}
+
+
+def class_auc(st: gates.GateStage, targets) -> dict:
+    """{target: AUC of the binary class head on the stage rows} (``stats.metrics.auc``)."""
+    out = {}
+    for t in targets:
+        spec = head_spec("binary_classification", t)
+        out[t] = auc(st.labels[spec.label_key], st.table[spec.output_keys["logits"]].to_numpy())
+    return out
+
+
 def arm_settings(arm: dict, run_dir: Path, env: Path, seed: int, epochs: int) -> RunSettings:
     """The RunSettings of one arm (unknown arm keys raise): model overrides merge over the default preset unless the
     arm names another architecture or ``no_preset``; batch 512 on CPU, ``epochs`` unless the arm's train sets it."""
@@ -122,6 +156,9 @@ def run_arm(name: str, arm: dict, seed: int, env: Path, root: Path, *, epochs: i
             + gates.stage_rows(st))
     return {"seed": seed, "rows": rows, "mu": mu_calibration(r.dataset, r.idx["test"], st.table, r.targets),
             "readout": readout_gap(r), "best_epoch": r.result.best_epoch, "history": r.result.history,
+            "a5": [a0["checks"]["A5"]["value"], a1["checks"]["A5"]["value"]],
+            "a6": [a0["checks"]["A6"]["value"], a1["checks"]["A6"]["value"]],
+            "a6_probe_end": a6_label_probe(r, batches), "class_auc": class_auc(st, r.targets),
             "seconds": round(time.monotonic() - t0)}
 
 
