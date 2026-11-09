@@ -89,3 +89,17 @@ def test_model_nig_scale_scales_every_mean_and_the_ordered_offsets(arch):
     base = _mu(arch, {}, x)
     scaled = _mu(arch, {"nig_scale": 0.01}, x)
     assert all(torch.allclose(scaled[t], 0.01 * base[t], atol=1e-8) for t in base)
+
+
+def test_readout_dropout_sets_only_trunk_drop_and_the_nig_head_dropout():
+    from nig_timenet_torch.workflow.settings import default_model_settings
+    base = default_model_settings()
+    plain = build_model(base, 32, 3)
+    same = build_model(ModelSettings(base.architecture, {**base.overrides, "readout_dropout": None}), 32, 3)
+    rd0 = build_model(ModelSettings(base.architecture, {**base.overrides, "readout_dropout": 0.0}), 32, 3)
+    rates = {n: m.p for n, m in plain.named_modules() if isinstance(m, torch.nn.Dropout)}
+    assert rates == {n: m.p for n, m in same.named_modules() if isinstance(m, torch.nn.Dropout)}
+    got = {n: m.p for n, m in rd0.named_modules() if isinstance(m, torch.nn.Dropout)}
+    changed = {n for n in rates if got[n] != rates[n]}
+    assert changed == {"trunk_drop", "nig_high.drop", "nig_low.drop", "nig_close.drop"}
+    assert all(got[n] == 0.0 for n in changed) and got["class_drop_high"] == rates["class_drop_high"] == 0.25

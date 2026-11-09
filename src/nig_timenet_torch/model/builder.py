@@ -87,7 +87,7 @@ class NigTimeNetV2(nn.Module):
                  norm_eps, linear_path_l2, encoder="transformer", input_clip=None, stats_mode="full",
                  input_noise_std=0.0, feature_dropout=0.0, level_passthrough=False, level_norm=None,
                  input_skip="none", n_classes=3, order_detach_close=False, nig_scale=None,
-                 bn_warmup=False):
+                 bn_warmup=False, readout_dropout=None):
         super().__init__()
         self.price_targets = tuple(price_targets)
         self.head_types = {t: list(head_types.get(t, [])) for t in self.price_targets}
@@ -127,7 +127,8 @@ class NigTimeNetV2(nn.Module):
                                feature_dropout=feature_dropout, level_norm=level_norm, bn_warmup=bn_warmup)
         h_dim = d_model * len(branches)
         self.trunk_norm = RMSNorm(h_dim)
-        self.trunk_drop = nn.Dropout(dropout)
+        readout_p = dropout if readout_dropout is None else readout_dropout  # FX1: trunk_drop + NIG head dropout
+        self.trunk_drop = nn.Dropout(readout_p)
         self.trunk_dim = h_dim
 
         self.nig_targets = [t for t in self.price_targets
@@ -135,7 +136,7 @@ class NigTimeNetV2(nn.Module):
         self.head_specs = {t: head_spec(k, t) for t in self.nig_targets
                            for k in kinds_with_task(self.head_types[t], "evidential")}
         for t in self.nig_targets:
-            setattr(self, f"nig_{t}", NIGHead(h_dim, head_hidden, dropout, nu_min, alpha_min, beta_min,
+            setattr(self, f"nig_{t}", NIGHead(h_dim, head_hidden, readout_p, nu_min, alpha_min, beta_min,
                                               scale=nig_scale))
             setattr(self, f"unc_{t}", NIGUncertainty(unc_max))
             setattr(self, f"conf_{t}", ConfidenceHead(h_dim))
@@ -339,11 +340,12 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          encoder: str = "transformer", input_skip: str = "none", n_classes=3, norm_eps=1e-4,
                          linear_path_l2=1e-4, input_clip=None, stats_mode="full", input_noise_std=0.0,
                          feature_dropout=0.0, level_passthrough=False, level_norm=None, order_detach_close=False,
-                         nig_scale=None, bn_warmup=False, **options) -> NigTimeNetV2:
+                         nig_scale=None, bn_warmup=False, readout_dropout=None, **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
-    nig_layers; bn_warmup: layers.BatchNormChannelsLast) are opt-in: their defaults reproduce the P15 graph."""
+    nig_layers; bn_warmup: layers.BatchNormChannelsLast; readout_dropout: the rate of trunk_drop and of the NIG
+    heads' dropout, None = ``dropout``) are opt-in: their defaults reproduce the P15 graph."""
     ENCODERS.entry(encoder)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
     if skip_variant(input_skip).adds_modules and not ENCODERS.entry(encoder).meta["supports_input_skip"]:
@@ -371,4 +373,4 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         input_clip=input_clip, stats_mode=stats_mode, input_noise_std=input_noise_std, feature_dropout=feature_dropout,
         level_passthrough=level_passthrough, level_norm=level_norm, input_skip=input_skip, n_classes=n_classes,
         order_detach_close=order_detach_close, nig_scale=nig_scale,
-        bn_warmup=bn_warmup)
+        bn_warmup=bn_warmup, readout_dropout=readout_dropout)
