@@ -1,5 +1,5 @@
 {
- "fingerprint": "964fdc8313001e14",
+ "fingerprint": "3f6f4c189efecf99",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -741,6 +741,10 @@
   "nig_timenet_torch.workflow.settings.EvalSettings(battery)": "BatterySettings(enabled=True, cost_per_side=0.0008, n_variants=1)",
   "nig_timenet_torch.workflow.settings.EvalSettings(chunk)": "20000",
   "nig_timenet_torch.workflow.settings.EvalSettings(health_max_rows)": "100000",
+  "nig_timenet_torch.workflow.settings.RUN_DEFAULT_SWITCHES.bn_warmup": "True",
+  "nig_timenet_torch.workflow.settings.RUN_DEFAULT_SWITCHES.nig_scale_fit": "'train_std'",
+  "nig_timenet_torch.workflow.settings.RUN_DEFAULT_SWITCHES.nig_trunk_grad": "0.3",
+  "nig_timenet_torch.workflow.settings.RUN_DEFAULT_SWITCHES.order_detach_close": "True",
   "nig_timenet_torch.workflow.settings.RollingSettings(max_folds)": "None",
   "nig_timenet_torch.workflow.settings.RollingSettings(mode)": "'expanding'",
   "nig_timenet_torch.workflow.settings.RollingSettings(retrain_every_k)": "1",

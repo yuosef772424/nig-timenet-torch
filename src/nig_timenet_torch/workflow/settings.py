@@ -131,10 +131,16 @@ class EvalSettings:
             raise ValueError("chunk and health_max_rows must be >= 1")
 
 
+#: D-023 (owner 2026-11-09): the FX1 / FX2 switches the E1 evidence showed useful are ON in the run default; the
+#: builder's own defaults (and the TF-parity preset ANTI_MEMORIZATION_CONFIG) are unchanged
+RUN_DEFAULT_SWITCHES = {"bn_warmup": True, "order_detach_close": True, "nig_scale_fit": "train_std",
+                        "nig_trunk_grad": 0.3}
+
+
 def default_model_settings() -> ModelSettings:
     """The model every run builds unless told otherwise: ``nig_timenet_v2`` with the anti-memorization preset (the TF
-    ``main.ipynb`` model, BUILD_PLAN.md V1)."""
-    return ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))
+    ``main.ipynb`` model, BUILD_PLAN.md V1) plus ``RUN_DEFAULT_SWITCHES`` (D-023)."""
+    return ModelSettings("nig_timenet_v2", {**ANTI_MEMORIZATION_CONFIG, **RUN_DEFAULT_SWITCHES})
 
 
 @dataclass(frozen=True)
