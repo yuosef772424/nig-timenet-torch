@@ -226,3 +226,50 @@ def test_confidence_error_gap_day_blocks(rng):
     assert metrics.confidence_error_gap(err, np.zeros(len(err)), groups, blocks=days) == (0.0, 0.0, 0.0)
     _, lo, hi = metrics.confidence_error_gap(err, rng.random(len(err)), groups, blocks=days)
     assert lo <= 0.0 <= hi
+
+
+def test_trivial_baseline_group_rank_ics(rng):
+    groups = np.repeat(np.arange(N // 40), 40)
+    y = rng.normal(size=N)
+    p = y + rng.normal(size=N)
+    keys, vals = metrics.group_rank_ics(y, rng.permutation(y), groups)
+    assert len(keys) == N // 40 and abs(vals.mean()) < 0.04, "a shuffled prediction: terms centred on 0"
+    keys, vals = metrics.group_rank_ics(y, p, groups)
+    assert vals.mean() == pytest.approx(metrics.rank_ic(y, p, groups)), "the mean is rank_ic"
+    k2, v2 = metrics.group_rank_ics(y, p, groups)
+    assert (keys == k2).all() and np.abs(vals - v2).max() == 0.0, "the same prediction twice: zero paired difference"
+    b = rng.normal(size=N)
+    assert metrics.group_rank_ics(y, p, groups, b)[1].mean() == pytest.approx(metrics.partial_rank_ic(y, p, b, groups))
+    assert len(metrics.group_rank_ics(y, np.zeros(N), groups)[0]) == 0, "a constant: no group is defined"
+
+
+def test_partial_rank_ic_with_several_baselines(rng):
+    groups = np.repeat(np.arange(N // 40), 40)
+    b1, b2, extra = rng.normal(size=N), rng.normal(size=N), rng.normal(size=N)
+    y = b1 + b2 + extra
+    one = metrics.partial_rank_ic(y, b1 + b2, b1, groups)
+    assert one > 0.3, "net of one baseline the other still counts"
+    both = np.column_stack([b1, b2])
+    assert abs(metrics.partial_rank_ic(y, b2 * rng.lognormal(0, 0.05, N), both, groups)) < 0.05, \
+        "net of both baselines, either one plus noise has ~0 skill"
+    assert metrics.partial_rank_ic(y, b1 + b2, b1[:, None], groups) == pytest.approx(one), "(n, 1) = 1-D"
+    assert metrics.partial_rank_ic(y, extra, np.column_stack([b1, b2]), groups) > 0.5
+
+
+def test_trivial_baseline_auc_block_ci(rng):
+    days = np.repeat(np.arange(N // 20), 20)
+    y = (rng.random(N) < 0.4).astype(float)
+    a, lo, hi = metrics.auc_block_ci(y, rng.random(N), days)
+    assert lo < 0.5 < hi, "a shuffled score: the CI contains 0.5"
+    assert metrics.auc_block_ci(y, np.zeros(N), days) == (0.5, 0.5, 0.5), "a constant: exactly chance, no width"
+    s = y + rng.normal(size=N)
+    a, lo, hi = metrics.auc_block_ci(y, s, days)
+    assert a == metrics.auc(y, s) and 0.5 < lo < a < hi
+    # one resample equals the plain AUC of the explicitly resampled rows (same block draw)
+    _, inv = np.unique(days, return_inverse=True)
+    draw = np.random.default_rng(3).integers(0, N // 20, (1, N // 20))[0]
+    rows = np.concatenate([np.where(inv == k)[0] for k in draw])
+    one = metrics.auc_block_ci(y, s, days, n_boot=1, seed=3, level=0.5)
+    assert one[1] == pytest.approx(metrics.auc(y[rows], s[rows]), abs=1e-12)
+    assert np.isnan(metrics.auc_block_ci(y, s, np.zeros(N))[1]), "one block: no interval"
+    assert np.isnan(metrics.auc_block_ci(np.ones(N), s, days)[0]), "one class: undefined"
