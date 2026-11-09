@@ -29,6 +29,7 @@ from nig_timenet_torch.eval import gates
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.model.taps import record_taps
+from nig_timenet_torch.stats.metrics import pearson
 from nig_timenet_torch.trainer.grad_report import grad_report
 from nig_timenet_torch.workflow import flat_run, gate_run, run
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, default_model_settings
@@ -41,7 +42,7 @@ ARM_KEYS = ("train", "model", "architecture", "no_preset")
 def _calib(oracle: np.ndarray, mu: np.ndarray) -> dict:
     c = np.cov(oracle, mu)
     return {"mean_ratio": float(mu.mean() / oracle.mean()) if abs(oracle.mean()) > 1e-12 else None,
-            "sd_ratio": float(mu.std() / oracle.std()), "corr": float(np.corrcoef(oracle, mu)[0, 1]),
+            "sd_ratio": float(mu.std() / oracle.std()), "corr": pearson(oracle, mu),
             "slope_oracle_on_mu": float(c[0, 1] / c[1, 1]) if c[1, 1] > 0 else None}
 
 
@@ -133,19 +134,18 @@ def _fails(res: dict) -> int:
 
 
 def summary_line(name: str, runs: list[dict]) -> str:
-    """One line per arm, means over seeds: high / low mu mean ratio, slope, corr; close corr; T-sharp; gate fails."""
+    """One line per arm, means over seeds: per head mu mean ratio, slope, corr and T-sharp; blocking gate fails."""
     def g(fn):
         vals = [v for v in (fn(r) for r in runs) if v is not None]
         return float(np.mean(vals)) if vals else float("nan")
 
     parts = [f"{name:18s} n={len(runs)}"]
-    for t in ("high", "low"):
+    for t in runs[0]["mu"]:
+        tsharp = g(lambda r, t=t: (_row(r, "C", "t_sharp_vs_oracle", t) or {}).get("value"))
         parts.append(f"{t} ratio {g(lambda r, t=t: r['mu'][t]['mean_ratio']):.2f} "
                      f"slope {g(lambda r, t=t: r['mu'][t]['slope_oracle_on_mu']):.2f} "
-                     f"corr {g(lambda r, t=t: r['mu'][t]['corr']):.3f}")
-    ts = {t: g(lambda r, t=t: (_row(r, "C", "t_sharp_vs_oracle", t) or {}).get("value")) for t in ("high", "low")}
-    parts.append(f"close corr {g(lambda r: r['mu']['close']['corr']):+.3f} | "
-                 f"Tsharp h/l {ts['high']:.2f}/{ts['low']:.2f} | fails {g(_fails):.1f}")
+                     f"corr {g(lambda r, t=t: r['mu'][t]['corr']):+.3f} Tsharp {tsharp:.2f}")
+    parts.append(f"fails {g(_fails):.1f}")
     return " | ".join(parts)
 
 
