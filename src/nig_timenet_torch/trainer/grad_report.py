@@ -25,8 +25,8 @@ import torch
 
 from nig_timenet_torch.trainer.trace import head_gradients
 
-__all__ = ["grad_report", "A2_MIN_NORM", "A3_BAND", "A3_SPIKE", "A4_PASS", "A4_FAIL", "A4_MATRIX", "A5_MIN_SHARE",
-           "A5_MAX_SHARE", "A6_FAIL", "A7_WARN", "A7_FAIL", "worst"]
+__all__ = ["grad_report", "a5_a6", "A2_MIN_NORM", "A3_BAND", "A3_SPIKE", "A4_PASS", "A4_FAIL", "A4_MATRIX",
+           "A5_MIN_SHARE", "A5_MAX_SHARE", "A6_FAIL", "A7_WARN", "A7_FAIL", "worst"]
 
 A2_MIN_NORM = 1e-12                 # a tensor is dead when its grad norm is <= this on every batch
 A3_BAND = (1e-3, 1e3)               # per-layer RMS gradient / median layer
@@ -196,6 +196,12 @@ def _a5_a6(trainer, x, y, batches, dev) -> dict:
             "A6": {"verdict": a6, "value": pair, "min_pair": low,
                    "rule": f"mean pairwise cosine >= {A6_FAIL} for every pair (between it and 0 = warn); a fail "
                            f"blocks only on every seed"}}
+
+
+def a5_a6(trainer, x, y, batches) -> dict:
+    """Only checks A5 / A6 (head gradient shares and pairwise cosines on the shared trunk) of ``batches``; probes such
+    as ``workflow.e1_arms.a6_label_probe`` call it with altered labels (no optimizer step, state unchanged)."""
+    return _a5_a6(trainer, x, y, batches, _device(trainer))
 
 
 def _shared_vector(g: tuple, grads: dict, shared: list[int], dev) -> torch.Tensor:

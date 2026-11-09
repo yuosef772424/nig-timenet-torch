@@ -20,6 +20,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
+from nig_timenet_torch.model import label_scale
 from nig_timenet_torch.model.encoders import ENCODERS, CausalConv1D, EncoderDims, tcn_n_blocks
 from nig_timenet_torch.model.heads import (
     HEAD_REGISTRY,
@@ -44,7 +45,7 @@ from nig_timenet_torch.model.layers import (
     keras_conv1d_weight_to_torch,
     keras_dense_weight_to_torch,
 )
-from nig_timenet_torch.model.nig_layers import ConfidenceHead, NIGHead, NIGUncertainty, OrderedMeans
+from nig_timenet_torch.model.nig_layers import ConfidenceHead, NIGHead, NIGUncertainty, OrderedMeans, grad_scale
 from nig_timenet_torch.model.parts import INPUT_SKIP_VARIANTS, skip_variant
 
 __all__ = ["DEFAULT_HEAD_TYPES", "NigTimeNetV2", "build_nig_timenet_v2", "torch_param_name", "CausalConv1D",
@@ -87,8 +88,10 @@ class NigTimeNetV2(nn.Module):
                  norm_eps, linear_path_l2, encoder="transformer", input_clip=None, stats_mode="full",
                  input_noise_std=0.0, feature_dropout=0.0, level_passthrough=False, level_norm=None,
                  input_skip="none", n_classes=3, order_detach_close=False, nig_scale=None,
-                 bn_warmup=False, readout_dropout=None):
+                 bn_warmup=False, readout_dropout=None, nig_trunk_grad=1.0, nig_scale_fit="fixed"):
         super().__init__()
+        self.nig_trunk_grad = float(nig_trunk_grad)
+        self.label_scale_name, fit_s = nig_scale_fit, label_scale.fitted(nig_scale_fit)   # FX2 (B-052)
         self.price_targets = tuple(price_targets)
         self.head_types = {t: list(head_types.get(t, [])) for t in self.price_targets}
         for t, kinds in self.head_types.items():
@@ -137,12 +140,12 @@ class NigTimeNetV2(nn.Module):
                            for k in kinds_with_task(self.head_types[t], "evidential")}
         for t in self.nig_targets:
             setattr(self, f"nig_{t}", NIGHead(h_dim, head_hidden, readout_p, nu_min, alpha_min, beta_min,
-                                              scale=nig_scale))
+                                              scale=nig_scale, fitted_scale=fit_s))
             setattr(self, f"unc_{t}", NIGUncertainty(unc_max))
             setattr(self, f"conf_{t}", ConfidenceHead(h_dim))
         self.apply_order = enforce_order and set(TARGET_COLUMNS) <= set(self.nig_targets)
         if self.apply_order:
-            self.ordered_means = OrderedMeans(nig_scale, order_detach_close)
+            self.ordered_means = OrderedMeans(nig_scale, order_detach_close, fitted_scale=fit_s)
         self.class_targets = list(self.class_kind)
         self.class_specs = {t: head_spec(kind, t) for t, kind in self.class_kind.items()}
         for t, kind in self.class_kind.items():
@@ -249,7 +252,8 @@ class NigTimeNetV2(nn.Module):
 
     def forward(self, x) -> dict[str, torch.Tensor]:
         h = self.trunk(x)
-        raw = {t: getattr(self, f"nig_{t}")(h) for t in self.nig_targets}
+        h_nig = grad_scale(h, self.nig_trunk_grad)   # FX2: 1.0 = h itself
+        raw = {t: getattr(self, f"nig_{t}")(h_nig) for t in self.nig_targets}
         if self.apply_order:
             mu_h, mu_c, mu_l = self.ordered_means(raw["close"][0], raw["high"][0], raw["low"][0])
             mus = {"high": mu_h, "close": mu_c, "low": mu_l}
@@ -270,6 +274,7 @@ class NigTimeNetV2(nn.Module):
         return out
 
     default_probe_points = ("trunk_norm",)  # layer-probe points of the health report (module names)
+    balance_point = "trunk_drop"            # the shared representation h a loss balancer measures (FX2)
 
     @property
     def activation_points(self) -> tuple[str, ...]:
@@ -340,12 +345,15 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          encoder: str = "transformer", input_skip: str = "none", n_classes=3, norm_eps=1e-4,
                          linear_path_l2=1e-4, input_clip=None, stats_mode="full", input_noise_std=0.0,
                          feature_dropout=0.0, level_passthrough=False, level_norm=None, order_detach_close=False,
-                         nig_scale=None, bn_warmup=False, readout_dropout=None, **options) -> NigTimeNetV2:
+                         nig_scale=None, bn_warmup=False, readout_dropout=None, nig_trunk_grad=1.0,
+                         nig_scale_fit="fixed", **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
     nig_layers; bn_warmup: layers.BatchNormChannelsLast; readout_dropout: the rate of trunk_drop and of the NIG
-    heads' dropout, None = ``dropout``) are opt-in: their defaults reproduce the P15 graph."""
+    heads' dropout, None = ``dropout``; FX2: nig_trunk_grad (nig_layers.grad_scale), nig_scale_fit (model.label_scale))
+    are opt-in: their defaults
+    reproduce the P15 graph."""
     ENCODERS.entry(encoder)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
     if skip_variant(input_skip).adds_modules and not ENCODERS.entry(encoder).meta["supports_input_skip"]:
@@ -373,4 +381,5 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         input_clip=input_clip, stats_mode=stats_mode, input_noise_std=input_noise_std, feature_dropout=feature_dropout,
         level_passthrough=level_passthrough, level_norm=level_norm, input_skip=input_skip, n_classes=n_classes,
         order_detach_close=order_detach_close, nig_scale=nig_scale,
-        bn_warmup=bn_warmup, readout_dropout=readout_dropout)
+        bn_warmup=bn_warmup, readout_dropout=readout_dropout, nig_trunk_grad=nig_trunk_grad,
+        nig_scale_fit=nig_scale_fit)
