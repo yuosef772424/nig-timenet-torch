@@ -28,8 +28,8 @@ from nig_timenet_torch.stats.nig import nig_interval_halfwidth, nig_nll, nig_pre
 from nig_timenet_torch.workflow import run_common
 from nig_timenet_torch.workflow.battery_run import stage_inputs
 
-__all__ = ["extended_table", "c1_section", "evidence", "reading_step", "row_coins", "error_frame", "coin_info",
-           "REPORT", "JSON", "ERROR_REPORT"]
+__all__ = ["extended_table", "stage_data", "c1_section", "evidence", "reading_step", "row_coins", "error_frame",
+           "coin_info", "REPORT", "JSON", "ERROR_REPORT"]
 
 REPORT, JSON, ERROR_REPORT = "reading_report.txt", "reading.json", "error_map_report.txt"
 HAR = ("bar1", "mean6", "mean32")
@@ -48,14 +48,17 @@ def extended_table(battery: pd.DataFrame, table: pd.DataFrame, ranges: dict, x_l
     return out
 
 
-def _stage(run, stage: str) -> dict:
+def stage_data(run, stage: str) -> dict:
+    """One stage of ``run``: the extended battery table, the window ranges, the artifact rows, the prediction table
+    and the labels (keys ``battery``, ``ranges``, ``idx``, ``table``, ``labels``, ``x_last``: the last input bar)."""
     si = stage_inputs(run, stage)
     ds, idx = run.dataset, run.idx[stage]
     x = np.asarray(ds[run_common.input_key(ds)])[idx]
     fo = list(ds["feature_order"])
     ranges = vb.window_ranges(x, fo)
     bt = extended_table(si.battery_table(), si.table, ranges, x[:, -1, fo.index("close")])
-    return {"battery": bt, "ranges": ranges, "idx": idx, "table": si.table, "labels": si.labels}
+    return {"battery": bt, "ranges": ranges, "idx": idx, "table": si.table, "labels": si.labels,
+            "x_last": dict(zip(fo, x[:, -1, :].T, strict=True))}
 
 
 def _realised_log_range(lc: np.ndarray, idx: np.ndarray) -> np.ndarray:
@@ -196,7 +199,7 @@ def reading_step(run, out_dir, cost: float = 0.0008) -> dict:
     """The whole reading of ``run`` (model holding the best weights) into ``out_dir``; returns the JSON dict."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    val, test = _stage(run, "val"), _stage(run, "test")
+    val, test = stage_data(run, "val"), stage_data(run, "test")
     c1 = c1_section(run, val, test)
     rows = book(val["battery"], test["battery"], cost)
     ev = evidence(rows)

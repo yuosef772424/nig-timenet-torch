@@ -16,7 +16,8 @@ import numpy as np
 
 __all__ = ["auc", "rank_ic", "pearson", "spearman", "wilson_interval", "pinball_loss", "ece", "ece_bins", "mae",
            "average_ranks", "r2", "confidence_error_spearman", "confidence_error_gap", "width_below_share",
-           "interval_coverage", "block_bootstrap_ci", "partial_rank_ic", "rank_ic_se", "within_group_spearman"]
+           "interval_coverage", "block_bootstrap_ci", "partial_rank_ic", "rank_ic_se", "within_group_spearman",
+           "group_rank_ics", "auc_block_ci"]
 
 
 def _clean(*arrays: np.ndarray) -> list[np.ndarray]:
@@ -78,21 +79,37 @@ def rank_ic(y_true: np.ndarray, y_pred: np.ndarray, groups: np.ndarray | None = 
     groups where it is NaN (< 2 rows or constant) are skipped; NaN if no group is defined. Without: plain Spearman."""
     if groups is None:
         return spearman(y_true, y_pred)
-    ics = _group_spearmans(y_true, y_pred, groups)
+    ics = _group_spearman_items(y_true, y_pred, groups)[1]
     return float(np.mean(ics)) if ics else float("nan")
 
 
-def _group_spearmans(a, b, groups) -> list[float]:
-    """The defined (non-NaN) Spearman of ``a`` vs ``b`` inside each group."""
+def _group_split(g: np.ndarray) -> tuple[np.ndarray, list[np.ndarray]]:
+    """(group ids, row indices of each group): one sort instead of a boolean mask per group (O(n) vs O(n * groups))."""
+    order = np.argsort(g, kind="stable")
+    keys, starts = np.unique(g[order], return_index=True)
+    return keys, (np.split(order, starts[1:]) if order.shape[0] else [])
+
+
+def _group_spearman_items(a, b, groups) -> tuple[list, list[float]]:
+    """(group ids, values) of the defined (non-NaN) Spearman of ``a`` vs ``b`` inside each group."""
     y = np.asarray(a, dtype=np.float64).reshape(-1)
     p = np.asarray(b, dtype=np.float64).reshape(-1)
     g = np.asarray(groups).reshape(-1)
     if not (y.shape == p.shape == g.shape):
         raise ValueError("y_true, y_pred and groups must have the same length")
-    order = np.argsort(g, kind="stable")  # one sort instead of a boolean mask per group (O(n) vs O(n * groups))
-    _, starts = np.unique(g[order], return_index=True)
-    ics = [spearman(y[ix], p[ix]) for ix in np.split(order, starts[1:])]
-    return [v for v in ics if not math.isnan(v)]
+    items = [(k, spearman(y[ix], p[ix])) for k, ix in zip(*_group_split(g), strict=True)]
+    return [k for k, v in items if not math.isnan(v)], [v for _, v in items if not math.isnan(v)]
+
+
+def group_rank_ics(y_true: np.ndarray, y_pred: np.ndarray, groups: np.ndarray,
+                   baseline: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """(group ids, values): the per-group terms whose mean is ``rank_ic`` (``baseline`` None) or ``partial_rank_ic``
+    (net of ``baseline``), for pairing two predictions by group or a block CI over groups. TRIVIAL: a shuffled
+    prediction gives terms centred on 0; the same prediction twice a paired difference of exactly 0. NaN policy: as
+    ``rank_ic`` / ``partial_rank_ic`` (undefined groups left out; none defined -> two empty arrays)."""
+    keys, vals = (_group_spearman_items(y_true, y_pred, groups) if baseline is None
+                  else _partial_items(y_true, y_pred, baseline, groups))
+    return np.asarray(keys), np.asarray(vals, dtype=np.float64)
 
 
 def rank_ic_se(y_true: np.ndarray, y_pred: np.ndarray, groups: np.ndarray) -> tuple[float, float, int]:
@@ -100,7 +117,7 @@ def rank_ic_se(y_true: np.ndarray, y_pred: np.ndarray, groups: np.ndarray) -> tu
     ``rank_ic``) and sd / sqrt(n) of those per-group values (groups treated as independent). TRIVIAL: a shuffled
     prediction scores ~0 with |IC| < 3 se at the usual rate (the leakage canary of MODEL_DEV_PROTOCOL section 2).
     (nan, nan, 0) if no group is defined; se is nan with one group."""
-    ics = _group_spearmans(y_true, y_pred, groups)
+    ics = _group_spearman_items(y_true, y_pred, groups)[1]
     if not ics:
         return float("nan"), float("nan"), 0
     v = np.asarray(ics)
@@ -112,7 +129,7 @@ def within_group_spearman(a: np.ndarray, b: np.ndarray, groups: np.ndarray) -> f
     """Mean over groups (e.g. coins) of the Spearman of ``a`` vs ``b`` inside the group: the ordering a coin's own
     rows share, so a coin's scale cannot fake it. TRIVIAL: an unrelated ``b`` scores ~0, a constant ``b`` is
     undefined in every group (NaN). Groups where it is NaN are skipped; NaN if none is defined."""
-    vals = _group_spearmans(a, b, groups)
+    vals = _group_spearman_items(a, b, groups)[1]
     return float(np.mean(vals)) if vals else float("nan")
 
 
@@ -313,32 +330,71 @@ def block_bootstrap_ci(values: np.ndarray, blocks: np.ndarray, level: float = 0.
 
 
 def _residual(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """``a`` minus its least-squares line on ``b`` (both centred)."""
+    """``a`` minus its least-squares fit on ``b`` (both centred): a line for 1-D ``b``, a plane for 2-D (n, k)."""
+    if b.ndim == 2:
+        a, b = a - a.mean(), b - b.mean(axis=0)
+        r = a - b @ np.linalg.lstsq(b, a, rcond=None)[0]
+        return r if float(r @ r) > 1e-18 * float(a @ a) else np.zeros_like(r)  # exact fit -> undefined, as 1-D
     a, b = a - a.mean(), b - b.mean()
     bb = float(b @ b)
     return a - (float(a @ b) / bb) * b if bb > 0 else a
 
 
+def _partial_items(y_true, y_pred, baseline, groups) -> tuple[list, list[float]]:
+    """(group ids, values) of the per-group partial Spearman of ``partial_rank_ic`` (groups with >= 4 rows)."""
+    y, p, g = np.asarray(y_true, np.float64).ravel(), np.asarray(y_pred, np.float64).ravel(), np.ravel(groups)
+    b = b if (b := np.asarray(baseline, dtype=np.float64)).ndim == 2 else b.ravel()
+    if not (y.shape[0] == p.shape[0] == b.shape[0] == g.shape[0] and y.ndim == p.ndim == 1):
+        raise ValueError("y_true, y_pred, baseline and groups must have the same length")
+    keep = ~(np.isnan(y) | np.isnan(p) | (np.isnan(b) if b.ndim == 1 else np.isnan(b).any(axis=1)))
+    y, p, b, g = y[keep], p[keep], b[keep], g[keep]
+    keys, vals = [], []
+    for k, ix in zip(*_group_split(g), strict=True):
+        if ix.shape[0] < 4:
+            continue
+        rb = average_ranks(b[ix]) if b.ndim == 1 else np.column_stack([average_ranks(c) for c in b[ix].T])
+        v = pearson(_residual(average_ranks(y[ix]), rb), _residual(average_ranks(p[ix]), rb))
+        if not math.isnan(v):
+            keys.append(k)
+            vals.append(v)
+    return keys, vals
+
+
 def partial_rank_ic(y_true: np.ndarray, y_pred: np.ndarray, baseline: np.ndarray, groups: np.ndarray) -> float:
     """Rank IC of ``y_pred`` NET of ``baseline``: per group (e.g. timestamp) the Pearson correlation of the ranks of
     ``y_true`` and of ``y_pred``, each with its linear dependence on the ranks of ``baseline`` removed (a partial
-    Spearman); the mean over groups with >= 4 rows. TRIVIAL: the baseline plus noise scores ~0 and a prediction with
-    the baseline's own ranks is undefined (NaN), so only information beyond the baseline counts (rule C1: the
-    volatility baseline of the high / low heads). NaN rows dropped; NaN if no group is defined."""
-    y, p, b = (np.asarray(a, dtype=np.float64).reshape(-1) for a in (y_true, y_pred, baseline))
-    g = np.asarray(groups).reshape(-1)
-    if not (y.shape == p.shape == b.shape == g.shape):
-        raise ValueError("y_true, y_pred, baseline and groups must have the same length")
-    keep = ~(np.isnan(y) | np.isnan(p) | np.isnan(b))
-    y, p, b, g = y[keep], p[keep], b[keep], g[keep]
-    order = np.argsort(g, kind="stable")
-    _, starts = np.unique(g[order], return_index=True)
-    vals = []
-    for ix in np.split(order, starts[1:]):
-        if ix.shape[0] < 4:
-            continue
-        rb = average_ranks(b[ix])
-        v = pearson(_residual(average_ranks(y[ix]), rb), _residual(average_ranks(p[ix]), rb))
-        if not math.isnan(v):
-            vals.append(v)
+    Spearman); the mean over groups with >= 4 rows. ``baseline`` is 1-D, or 2-D (n, k) to remove several baselines at
+    once (least squares on their ranks). TRIVIAL: the baseline plus noise scores ~0 and a prediction with the
+    baseline's own ranks is undefined (NaN), so only information beyond the baseline counts (rule C1: the volatility
+    baseline of the high / low heads). NaN rows dropped; NaN if no group is defined."""
+    vals = _partial_items(y_true, y_pred, baseline, groups)[1]
     return float(np.mean(vals)) if vals else float("nan")
+
+
+def auc_block_ci(y_true: np.ndarray, y_score: np.ndarray, blocks: np.ndarray, level: float = 0.95,
+                 n_boot: int = 500, seed: int = 0) -> tuple[float, float, float]:
+    """(auc, lo, hi): ``auc`` with a percentile CI from resampling whole BLOCKS (e.g. days) with replacement; each
+    resample is the exact weighted Mann-Whitney AUC (ties count 1/2). TRIVIAL: a shuffled score has AUC ~0.5 with a
+    CI that contains 0.5; a constant score is exactly 0.5 with a zero-width CI. NaN rows dropped; fewer than 2
+    blocks -> (auc, nan, nan); one class empty -> all nan."""
+    y, s, b = np.asarray(y_true, np.float64).ravel(), np.asarray(y_score, np.float64).ravel(), np.ravel(blocks)
+    if not (y.shape == s.shape == b.shape and 0.0 < level < 1.0):
+        raise ValueError("y_true, y_score and blocks must have the same length and level must be in (0, 1)")
+    keep = ~(np.isnan(y) | np.isnan(s))
+    y, s, b = y[keep], s[keep], b[keep]
+    point, nan = auc(y, s), float("nan")
+    n_blocks = int((inv := np.unique(b, return_inverse=True)[1]).max()) + 1 if b.shape[0] else 0
+    if math.isnan(point) or n_blocks < 2:
+        return point, nan, nan
+    order = np.argsort(s, kind="mergesort")
+    tie = np.concatenate([[0], np.cumsum(np.diff(s[order]) != 0)])
+    pos, inv = (y[order] > 0.5).astype(np.float64), inv[order]
+    ix = np.random.default_rng(seed).integers(0, n_blocks, (n_boot, n_blocks))
+    boots = np.empty(n_boot)
+    for i in range(n_boot):
+        w = np.bincount(ix[i], minlength=n_blocks).astype(np.float64)[inv]
+        gp, gn = np.bincount(tie, w * pos), np.bincount(tie, w * (1.0 - pos))
+        den = gp.sum() * gn.sum()
+        boots[i] = float((gp * (np.cumsum(gn) - 0.5 * gn)).sum() / den) if den > 0 else np.nan
+    tail = 100.0 * (1.0 - level) / 2.0
+    return point, float(np.nanpercentile(boots, tail)), float(np.nanpercentile(boots, 100.0 - tail))
