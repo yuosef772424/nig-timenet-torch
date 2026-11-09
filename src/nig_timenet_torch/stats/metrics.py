@@ -16,7 +16,7 @@ import numpy as np
 
 __all__ = ["auc", "rank_ic", "pearson", "spearman", "wilson_interval", "pinball_loss", "ece", "ece_bins", "mae",
            "average_ranks", "r2", "confidence_error_spearman", "confidence_error_gap", "width_below_share",
-           "interval_coverage", "block_bootstrap_ci", "partial_rank_ic"]
+           "interval_coverage", "block_bootstrap_ci", "partial_rank_ic", "rank_ic_se", "within_group_spearman"]
 
 
 def _clean(*arrays: np.ndarray) -> list[np.ndarray]:
@@ -78,16 +78,42 @@ def rank_ic(y_true: np.ndarray, y_pred: np.ndarray, groups: np.ndarray | None = 
     groups where it is NaN (< 2 rows or constant) are skipped; NaN if no group is defined. Without: plain Spearman."""
     if groups is None:
         return spearman(y_true, y_pred)
-    y = np.asarray(y_true, dtype=np.float64).reshape(-1)
-    p = np.asarray(y_pred, dtype=np.float64).reshape(-1)
+    ics = _group_spearmans(y_true, y_pred, groups)
+    return float(np.mean(ics)) if ics else float("nan")
+
+
+def _group_spearmans(a, b, groups) -> list[float]:
+    """The defined (non-NaN) Spearman of ``a`` vs ``b`` inside each group."""
+    y = np.asarray(a, dtype=np.float64).reshape(-1)
+    p = np.asarray(b, dtype=np.float64).reshape(-1)
     g = np.asarray(groups).reshape(-1)
     if not (y.shape == p.shape == g.shape):
         raise ValueError("y_true, y_pred and groups must have the same length")
     order = np.argsort(g, kind="stable")  # one sort instead of a boolean mask per group (O(n) vs O(n * groups))
     _, starts = np.unique(g[order], return_index=True)
     ics = [spearman(y[ix], p[ix]) for ix in np.split(order, starts[1:])]
-    ics = [v for v in ics if not math.isnan(v)]
-    return float(np.mean(ics)) if ics else float("nan")
+    return [v for v in ics if not math.isnan(v)]
+
+
+def rank_ic_se(y_true: np.ndarray, y_pred: np.ndarray, groups: np.ndarray) -> tuple[float, float, int]:
+    """(rank IC by group, its standard error, number of groups): the mean of the within-group Spearmans (as
+    ``rank_ic``) and sd / sqrt(n) of those per-group values (groups treated as independent). TRIVIAL: a shuffled
+    prediction scores ~0 with |IC| < 3 se at the usual rate (the leakage canary of MODEL_DEV_PROTOCOL section 2).
+    (nan, nan, 0) if no group is defined; se is nan with one group."""
+    ics = _group_spearmans(y_true, y_pred, groups)
+    if not ics:
+        return float("nan"), float("nan"), 0
+    v = np.asarray(ics)
+    se = float(v.std(ddof=1) / math.sqrt(v.shape[0])) if v.shape[0] > 1 else float("nan")
+    return float(v.mean()), se, int(v.shape[0])
+
+
+def within_group_spearman(a: np.ndarray, b: np.ndarray, groups: np.ndarray) -> float:
+    """Mean over groups (e.g. coins) of the Spearman of ``a`` vs ``b`` inside the group: the ordering a coin's own
+    rows share, so a coin's scale cannot fake it. TRIVIAL: an unrelated ``b`` scores ~0, a constant ``b`` is
+    undefined in every group (NaN). Groups where it is NaN are skipped; NaN if none is defined."""
+    vals = _group_spearmans(a, b, groups)
+    return float(np.mean(vals)) if vals else float("nan")
 
 
 def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -151,19 +177,19 @@ def r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return 1.0 - float(((y - p) ** 2).sum()) / ss if ss > 0 else float("nan")
 
 
-def _confidence_bins(abs_error, confidence, groups, n_bins: int) -> tuple[np.ndarray, np.ndarray]:
-    """(bin, normalised error) per row. Within each group (coin) the confidence is cut into ``n_bins`` equal-count
-    bins by average rank (bin 0 = least confident; a constant confidence puts the whole group in ONE middle bin) and
-    |error| is divided by the group's mean |error|, so a coin's own error scale cannot fake a pattern. Groups with
-    fewer than ``n_bins`` rows or a zero mean error are skipped."""
+def _confidence_bins(abs_error, confidence, groups, n_bins: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(bin, normalised error, original row index) per kept row. Within each group (coin) the confidence is cut into
+    ``n_bins`` equal-count bins by average rank (bin 0 = least confident; a constant confidence puts the whole group
+    in ONE middle bin) and |error| is divided by the group's mean |error|, so a coin's own error scale cannot fake a
+    pattern. Groups with fewer than ``n_bins`` rows or a zero mean error are skipped."""
     e, c = _clean(abs_error, confidence)
     g = np.asarray(groups).reshape(-1)
     if g.shape[0] != np.asarray(abs_error).reshape(-1).shape[0]:
         raise ValueError("abs_error, confidence and groups must have the same length")
     keep = ~(np.isnan(np.asarray(abs_error, dtype=np.float64).reshape(-1))
              | np.isnan(np.asarray(confidence, dtype=np.float64).reshape(-1)))
-    g = g[keep]
-    bins, norm = [], []
+    g, rows = g[keep], np.flatnonzero(keep)
+    bins, norm, kept = [], [], []
     for k in np.unique(g):
         m = g == k
         if m.sum() < n_bins or e[m].mean() <= 0:
@@ -171,9 +197,10 @@ def _confidence_bins(abs_error, confidence, groups, n_bins: int) -> tuple[np.nda
         r = average_ranks(c[m])
         bins.append(np.minimum(((r - 0.5) / m.sum() * n_bins).astype(np.int64), n_bins - 1))
         norm.append(e[m] / e[m].mean())
+        kept.append(rows[m])
     if not bins:
-        return np.empty(0, dtype=np.int64), np.empty(0)
-    return np.concatenate(bins), np.concatenate(norm)
+        return np.empty(0, dtype=np.int64), np.empty(0), np.empty(0, dtype=np.int64)
+    return np.concatenate(bins), np.concatenate(norm), np.concatenate(kept)
 
 
 def _bin_means(bins: np.ndarray, norm: np.ndarray, n_bins: int) -> tuple[np.ndarray, np.ndarray]:
@@ -190,7 +217,7 @@ def confidence_error_spearman(abs_error: np.ndarray, confidence: np.ndarray, gro
     (constant), a result with fewer than 2 non-empty bins, or equal error in every bin scores exactly 0.0 (no
     evidence), not NaN. NaN if no
     group is usable."""
-    bins, norm = _confidence_bins(abs_error, confidence, groups, n_bins)
+    bins, norm, _ = _confidence_bins(abs_error, confidence, groups, n_bins)
     if bins.shape[0] == 0:
         return float("nan")
     x, y = _bin_means(bins, norm, n_bins)
@@ -198,13 +225,18 @@ def confidence_error_spearman(abs_error: np.ndarray, confidence: np.ndarray, gro
 
 
 def confidence_error_gap(abs_error: np.ndarray, confidence: np.ndarray, groups: np.ndarray, n_bins: int = 10,
-                         n_boot: int = 200, seed: int = 0) -> tuple[float, float, float]:
+                         n_boot: int = 200, seed: int = 0, blocks: np.ndarray | None = None
+                         ) -> tuple[float, float, float]:
     """(gap, lo, hi): mean normalised |error| of the least-confident bin minus that of the most-confident bin
-    (positive = confidence helps), with a 95 % percentile bootstrap interval over rows (iid: it ignores time
-    dependence, so it is optimistic). (nan, nan, nan) if no group is usable; a constant confidence gives (0, 0, 0)."""
-    bins, norm = _confidence_bins(abs_error, confidence, groups, n_bins)
+    (positive = confidence helps), with a 95 % percentile bootstrap interval. ``blocks`` None: over rows (iid: it
+    ignores time dependence, so it is optimistic, B-025); ``blocks`` (one id per row, e.g. the calendar day): whole
+    blocks are resampled, so rows that move together are not counted as independent. (nan, nan, nan) if no group is
+    usable; a constant confidence gives (0, 0, 0)."""
+    bins, norm, rows = _confidence_bins(abs_error, confidence, groups, n_bins)
     if bins.shape[0] == 0:
         return float("nan"), float("nan"), float("nan")
+    if blocks is not None:
+        return _block_gap(bins, norm, np.asarray(blocks).reshape(-1)[rows], n_bins, n_boot, seed)
 
     def gap(b, v):
         lo_m, hi_m = (v[b == 0], v[b == n_bins - 1])
@@ -217,6 +249,26 @@ def confidence_error_gap(abs_error: np.ndarray, confidence: np.ndarray, groups: 
         ix = rng.integers(0, n, n)
         boots.append(gap(bins[ix], norm[ix]))
     return gap(bins, norm), float(np.percentile(boots, 2.5)), float(np.percentile(boots, 97.5))
+
+
+def _block_gap(bins, norm, blocks, n_bins: int, n_boot: int, seed: int) -> tuple[float, float, float]:
+    """The confidence-error gap with a block percentile bootstrap: per block the sums and counts of the bottom and top
+    bins, blocks resampled with replacement (a constant confidence has empty end bins: (0, 0, 0))."""
+    _, inv = np.unique(blocks, return_inverse=True)
+    nb = int(inv.max()) + 1
+    (s0, c0), (s1, c1) = [(np.bincount(inv, weights=np.where(bins == b, norm, 0.0), minlength=nb),
+                           np.bincount(inv, weights=(bins == b).astype(np.float64), minlength=nb))
+                          for b in (0, n_bins - 1)]
+    if c0.sum() == 0 or c1.sum() == 0:
+        return 0.0, 0.0, 0.0
+    gap = float(s0.sum() / c0.sum() - s1.sum() / c1.sum())
+    ix = np.random.default_rng(seed).integers(0, nb, (n_boot, nb))
+    with np.errstate(invalid="ignore", divide="ignore"):
+        boots = s0[ix].sum(axis=1) / c0[ix].sum(axis=1) - s1[ix].sum(axis=1) / c1[ix].sum(axis=1)
+    boots = boots[np.isfinite(boots)]
+    if boots.shape[0] == 0:
+        return gap, float("nan"), float("nan")
+    return gap, float(np.percentile(boots, 2.5)), float(np.percentile(boots, 97.5))
 
 
 def width_below_share(width: np.ndarray, range_: np.ndarray) -> float:

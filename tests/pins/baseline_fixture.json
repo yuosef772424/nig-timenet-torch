@@ -8,6 +8,12 @@
   "epochs_done": 2,
   "epochs_requested": 2,
   "finished": true,
+  "gate_check": {
+   "baseline_arm": true,
+   "full_training": true,
+   "report": null,
+   "result": "baseline arm: exempt (MODEL_DEV_PROTOCOL section 2), failures recorded in its result file"
+  },
   "health_rows": 50,
   "history": [
    {

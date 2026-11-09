@@ -1,7 +1,9 @@
 """PURPOSE: Entry ``baseline``: trains one seed of the default NIG-TimeNet model on the contract artifact, then writes
     the summary, health report and test report (ROADMAP T5r); a thin entry over workflow.run.
 TAGS: baseline job, colab entry, training run, test report, health report, resume, smoke job
-PITFALLS: every data fact (price targets, codec mode and scale, timeframe, split dates) is read from the artifact, never
+PITFALLS: rule C6: after build the job runs workflow.gate_run.gate_check (this entry always trains the baseline arm,
+    so it is exempt; the record lands in baseline_summary.json, a given ``gate_report`` is read and recorded);
+    every data fact (price targets, codec mode and scale, timeframe, split dates) is read from the artifact, never
     assumed; a job config key not in BaselineConfig raises; max_rows (smoke mode) strides each split down, everything
     else is the same code path; the run steps live in workflow/run.py, not here.
 
@@ -16,7 +18,8 @@ by running the same job again), optional ``artifact`` (default ``DEFAULT_ARTIFAC
 split already purges by label end), ``health_max_rows``, ``split_dates`` (``{"train_end", "val_end"}``; default: the
 artifact's, else the 80/10/10 time quantiles), ``max_rows`` (smoke mode: at most this many rows per split, evenly
 strided; default off), ``base_tf`` (the bar interval the job expects, e.g. "4h": another artifact is refused;
-default: accept the artifact's). Stops cleanly before ``--max-minutes`` (the per-epoch checkpoint is the resume point).
+default: accept the artifact's), ``gate_report`` (path of a ``gate_report.json`` of this configuration; recorded,
+default none). Stops cleanly before ``--max-minutes`` (the per-epoch checkpoint is the resume point).
 """
 
 import os
@@ -29,6 +32,7 @@ from nig_timenet_torch.colab import contract
 from nig_timenet_torch.colab.device import EXPECTED as DEVICES
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.data_io.loading import LoaderSettings
+from nig_timenet_torch.workflow import gate_run
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.flat_run import epoch_line
 from nig_timenet_torch.workflow.settings import EvalSettings, RunSettings, SplitSettings, TrainSettings
@@ -57,6 +61,7 @@ class BaselineConfig:
     split_dates: dict | None = None
     max_rows: int | None = None
     base_tf: str | None = None  # the bar interval the job expects ("4h"); a different artifact is refused at load
+    gate_report: str | None = None  # rule C6: the gate report of this configuration (the baseline arm is exempt)
 
     def __post_init__(self):
         if self.device not in DEVICES:
@@ -95,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     deadline = t_mono + budget - min(600.0, 0.2 * budget)  # the rest is for the health report and the outputs
     r = steps.prepare(run_settings(cfg, _code_sha()), out)
     steps.build(r)
+    print(f"gate check: {gate_run.gate_check(r, cfg.gate_report)['result']}", flush=True)
     steps.train(r, deadline=deadline, on_epoch=lambda row: print(epoch_line(row, cfg.epochs), flush=True))
     steps.health_step(r)
     rep = steps.test_step(r)

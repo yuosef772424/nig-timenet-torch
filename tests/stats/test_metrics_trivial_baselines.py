@@ -189,3 +189,40 @@ def test_trivial_baseline_partial_rank_ic(rng):
     y2 = vol + extra
     assert metrics.partial_rank_ic(y2, vol + extra, vol, groups) > 0.5, "information beyond the baseline counts"
     assert np.isnan(metrics.partial_rank_ic(y, vol, vol, np.arange(N))), "groups of 1 row: undefined"
+
+
+def test_trivial_baseline_rank_ic_se(rng):
+    groups = np.repeat(np.arange(N // 40), 40)
+    y = rng.normal(size=N)
+    ic, se, n = metrics.rank_ic_se(y, rng.permutation(y), groups)
+    assert n == N // 40 and se > 0 and abs(ic) < 3 * se, "a shuffled prediction is within 3 se of 0"
+    p = rng.permutation(y)
+    assert metrics.rank_ic_se(y, p, groups)[0] == pytest.approx(metrics.rank_ic(y, p, groups)), "the mean is rank_ic"
+    assert metrics.rank_ic_se(y, y + rng.normal(size=N), groups)[0] > 10 * se, "a real signal is far outside"
+    assert metrics.rank_ic_se([], [], [])[2] == 0 and np.isnan(metrics.rank_ic_se(y[:40], y[:40], groups[:40])[1])
+
+
+def test_trivial_baseline_within_group_spearman(rng):
+    groups = np.repeat(np.arange(N // 100), 100)
+    scale = np.repeat(rng.lognormal(0, 1, N // 100), 100)
+    a = scale * rng.random(N)
+    assert metrics.spearman(a, scale) > 0.5, "pooled, the coin scale alone ranks the rows"
+    assert abs(metrics.within_group_spearman(a, scale + 1e-9 * rng.random(N), groups)) < 0.1, \
+        "within a coin the scale carries no order"
+    assert np.isnan(metrics.within_group_spearman(a, np.ones(N), groups)), "a constant is undefined"
+    assert metrics.within_group_spearman(a, 2 * a, groups) == pytest.approx(1.0)
+
+
+def test_confidence_error_gap_day_blocks(rng):
+    """B-025: the block bootstrap is wider than the iid one when the error moves together inside a block."""
+    groups, conf, err = _coin_errors(rng)
+    days = np.arange(len(err)) % 20                       # 20 blocks across the coins
+    shock = rng.lognormal(0, 1.0, 20)[days]
+    e = err * shock
+    g_iid, lo_iid, hi_iid = metrics.confidence_error_gap(e, conf, groups)
+    g_blk, lo_blk, hi_blk = metrics.confidence_error_gap(e, conf, groups, blocks=days)
+    assert g_blk == pytest.approx(g_iid)
+    assert hi_blk - lo_blk > hi_iid - lo_iid
+    assert metrics.confidence_error_gap(err, np.zeros(len(err)), groups, blocks=days) == (0.0, 0.0, 0.0)
+    _, lo, hi = metrics.confidence_error_gap(err, rng.random(len(err)), groups, blocks=days)
+    assert lo <= 0.0 <= hi

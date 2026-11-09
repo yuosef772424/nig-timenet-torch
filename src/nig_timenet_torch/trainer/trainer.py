@@ -32,7 +32,7 @@ from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS, check_
 from nig_timenet_torch.trainer.targets import resolve_loss, resolve_targets, validate_trainer_config
 from nig_timenet_torch.trainer.task_weighting import UncertaintyWeightedLoss
 from nig_timenet_torch.trainer.tasks import TASK_REGISTRY
-from nig_timenet_torch.trainer.trace import epoch_trace
+from nig_timenet_torch.trainer.trace import epoch_trace, epoch_trace_mean
 from nig_timenet_torch.trainer.tracker import BestTracker, EarlyStopSettings
 
 __all__ = ["Trainer", "compute_losses", "weight_for_target", "FitSettings", "FitResult"]
@@ -264,9 +264,17 @@ class Trainer:
         tracker.load_state(ckpt["tracker"])
         return list(ckpt["history"])
 
+    def _trace(self, x, y, batch_size: int, batches) -> dict[str, float]:
+        """The trace row of the epoch: on the first ``batch_size`` training rows, or the mean over ``batches``."""
+        dev = self._device()
+        if batches is None:
+            return epoch_trace(self, x[:batch_size].to(dev), {k: v[:batch_size].to(dev) for k, v in y.items()})
+        ix = [torch.as_tensor(b, dtype=torch.long) for b in batches]
+        return epoch_trace_mean(self, [(x[i].to(dev), {k: v[i].to(dev) for k, v in y.items()}) for i in ix])
+
     def fit(self, x_train, y_train, x_val, y_val, settings: FitSettings, *, run_dir=None,
             identity: RunIdentity | None = None, resume: bool = True,
-            deadline: float | None = None, on_epoch=None) -> FitResult:
+            deadline: float | None = None, on_epoch=None, trace_batches=None) -> FitResult:
         """Epoch loop with lambda / LR schedules, early stopping and best weights chosen by ``selection_metric``.
 
         With ``run_dir`` the state is saved after every epoch (checkpoint.py) and a run folder that already holds a
@@ -277,7 +285,9 @@ class Trainer:
         ``early_stop.restore_best_weights``; the checkpoint keeps the LAST epoch's training state. ``deadline`` (a
         ``time.monotonic()`` value, default None = none) stops the loop before an epoch that would not finish by then
         (judged by the longest epoch of this call; at least one epoch always runs): the per-epoch checkpoint is the
-        resume point of the next call."""
+        resume point of the next call. ``trace_batches`` (with ``settings.trace``): index arrays into the training
+        rows (``trainer.batch_set.representative_batches``); the trace is then the mean over them instead of the first
+        ``batch_size`` rows (log-only either way)."""
         if self.optimizer is None:
             raise RuntimeError("Trainer has no optimizer")
         if run_dir is not None and identity is None:
@@ -309,8 +319,7 @@ class Trainer:
             val = self.evaluate(x_val, y_val, settings.batch_size)
             row.update({f"val_{k}": v for k, v in val.items()})
             if settings.trace:
-                row.update(epoch_trace(self, x_train[:settings.batch_size].to(self._device()),
-                                       {k: v[:settings.batch_size].to(self._device()) for k, v in y_train.items()}))
+                row.update(self._trace(x_train, y_train, settings.batch_size, trace_batches))
             longest = max(longest, time.monotonic() - t0)
             if settings.trace:
                 row["trace_epoch_seconds"] = time.monotonic() - t0
