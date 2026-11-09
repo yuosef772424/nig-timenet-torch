@@ -82,6 +82,15 @@ class TrainSettings:
     early_stop: EarlyStopSettings = field(default_factory=EarlyStopSettings)
     device: str = "auto"                                   # "auto" = cuda when available, else cpu
     trace_representative: bool = False                     # trainer trace on the representative batch set (D-019)
+    # D-021 switches (TR1 + the B-060 / B-062 candidates); every default reproduces the run before D-021
+    grad_clip_norm: float | None = None                    # B-018 (TF 1.0)
+    ema_decay: float | None = None                         # B-018 (TF use_ema)
+    init: str = "torch"                                    # B-007: trainer.switches.INITS ("keras")
+    weight_decay_groups: str = "all_params"                # B-018: trainer.switches.WEIGHT_DECAY_GROUPS
+    uncertainty_weighting: bool = True                     # B-060: Kendall weights of the class heads
+    class_loss_weight: float = 1.0                         # B-060: loss_weight of every classification head
+    lambda_reg_end: float = 0.05                           # B-062: end value of the NIG evidence regulariser
+    lambda_calib_end: float = 0.1                          # end value of the NIG calibration term
 
     def __post_init__(self):
         for name in ("epochs", "batch_size"):
@@ -90,6 +99,8 @@ class TrainSettings:
                 raise ValueError(f"TrainSettings.{name} must be an integer >= 1, got {v!r}")
         if self.lr <= 0 or self.weight_decay < 0 or not 0.0 <= self.label_smoothing < 1.0:
             raise ValueError("lr > 0, weight_decay >= 0, 0 <= label_smoothing < 1")
+        if self.class_loss_weight < 0 or self.lambda_reg_end < 0 or self.lambda_calib_end < 0:
+            raise ValueError("class_loss_weight, lambda_reg_end and lambda_calib_end must be >= 0")
 
 
 @dataclass(frozen=True)
