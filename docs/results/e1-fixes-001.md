@@ -61,7 +61,7 @@ units / s; s = 0.01 = TF's reg_target_scale 100 inside the model).
 | baseline | 3 | 1.79 / 0.81 / 0.92 | 1.73 / 0.65 / 0.92 | +0.41 | 7.7 | reference |
 | **bundle** = bn_warmup + order_detach_close | 3 | **1.06 / 1.01 / 0.96** | **0.92 / 0.70 / 0.97** | +0.65 | 7.3 | slope fixed (every seed) |
 | **bundle + nig_scale 0.01** | 3 | 1.22 / 0.89 / 0.96 | 1.32 / 0.85 / 0.97 | **+0.83** | **5.7** | best close, sd, coverage, gates |
-| bundle + readout_dropout 0 | 3 | see section 3 | | | | |
+| bundle + readout_dropout 0 | 3 | 0.77 / 0.92 / 0.82 | 0.91 / 1.00 / 0.85 | +0.31 | 10.7 | rejected (corr falls) |
 | bnw (bn_warmup) | 1 | 0.91 / 0.71 / 0.97 | 0.93 / 0.99 / 0.97 | -0.12 | 7 | cause 1 |
 | detach (order_detach_close) | 1 | 1.48 / 0.70 / 0.92 | 1.28 / 0.68 / 0.92 | +0.72 | 5 | cause 2 |
 | no_order (enforce_order false) | 1 | 2.26 / 1.02 / 0.91 | 1.65 / 0.77 / 0.91 | +0.59 | 8 | cause 2 (loses order) |
@@ -91,13 +91,19 @@ close corr +0.24 [-0.19, +0.92]. Bundle + nig_scale: slope -0.57 / -0.41 (every 
 |---|---|---|---|---|
 | baseline | 1.31 / 0.93 / 0.96 | 1.18 / 0.91 / 0.96 | +0.11 | 7.3 |
 | bundle | 1.23 / 0.97 / 0.96 | 1.15 / 0.85 / 0.96 | **+0.67** | 6.3 |
+| bundle + nig_scale 0.01 | 1.22 / 0.90 / **0.97** | 1.32 / 0.85 / **0.97** | **+0.86** | **4.3** |
+| bundle + readout_dropout 0 | 0.96 / 1.11 / 0.92 | 1.25 / 0.80 / 0.91 | +0.44 | 5.7 |
 
 Paired: slope -0.08 [-0.34, +0.09] / -0.01 [-0.13, +0.13] (no longer different: 1000 steps let the Keras moving
 stats converge), close corr **+0.56 [+0.15, +0.83] (every seed)**. So bn_warmup matters for short runs (gates, smokes,
 fractional arms) and changes nothing once the moving statistics converged; order_detach_close helps at both lengths.
 The residual slope 1.15-1.3 at 10 epochs is cause 3 (dropout dilution).
 
-Bundle + nig_scale and bundle + readout_dropout 0: runs in progress at the time of this commit (added below when done).
+Bundle + nig_scale vs baseline, 10 epochs, paired: high / low corr +0.01 / +0.01 (every seed), close corr +0.75
+[+0.45, +1.02] (every seed), T-sharp high / low 0.88 / 0.90 (baseline 0.62 / 0.54), slope high -0.08, low +0.14
+(worse on every seed: 1.32 vs 1.18). Bundle + readout_dropout 0 vs baseline: high / low corr -0.04 / -0.05 (every
+seed; at 3 epochs -0.10 / -0.07): removing the dropout removes the dilution but lets the readout overfit; the switch
+is rejected as a fix (it stays available, off).
 
 ## 4. Gates (3 seeds, E1 + E2; E3 NOT run: no real artifact on this machine)
 
@@ -123,7 +129,7 @@ level path is no longer shrunk, which widens the predicted sd against the beta f
 | beta floor (B-052) | verified: over-wide intervals; beta_min 1e-5 fixes the mean only |
 | BatchNorm moving stats at short runs (B-062) | **verified** (population probe, bnw arm, 3 seeds paired) |
 | ordered means coupling (B-063) | **verified** (detach / no_order, 3 seeds paired at 3 and 10 epochs) |
-| dropout regression dilution (residual slope) | verified by the readout probe; switch effect: section 3 |
+| dropout regression dilution (residual slope) | verified by the readout probe; `readout_dropout 0` rejected (corr falls at both lengths) |
 | training length | confounder: 10 epochs fixes cause 1 by itself |
 | TR1 switches (clip, keras init, EMA) | no gain on E1; grad clip 1.0 harmful at label scale 1 (TF clipped labels x 100) |
 
@@ -131,8 +137,10 @@ level path is no longer shrunk, which widens the predicted sd against the beta f
 
 `model_overrides: {"bn_warmup": true, "order_detach_close": true}` — no gate regression except std_scale (cause 4),
 slope fixed at short runs, close signal recovered at every length. Add `nig_scale: 0.01` when intervals / coverage
-matter (best close corr, mean ratio, sd scale, fewest fails) but read its E2 gate-B alarm first. `readout_dropout`:
-section 3. Defaults stay off (D-022); making any of them the default is an owner decision.
+matter (best close corr, mean ratio, sd scale, fewest fails) but read its E2 gate-B alarm first. `readout_dropout 0`:
+rejected (section 3). At 10 epochs bundle + nig_scale is the best arm on corr, close signal, T-sharp and gate fails
+(4.3 vs 7.3), with a residual low slope of 1.3. Defaults stay off (D-022); making any of them the default is an owner
+decision.
 
 ## 7. Not verified
 
