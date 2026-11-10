@@ -143,3 +143,29 @@ def test_main_notebook_runs_the_fixture_end_to_end_on_a_fake_drive(tmp_path, art
                                 "DRIVE_RUNS": str(drive), "LOCAL_RUNS": str(local2), "RESTORE_FROM": "t3b",
                                 "CHANGES": small, "BATTERY_FOLDER": ""})
     assert ns2["restored"]["copied"] > 0 and ns2["restored"]["restored_from"] == str(drive / "t3b")
+
+
+def test_experiment_switches_reach_the_settings_and_a_finished_run_is_read_with_its_last_weights(tmp_path, art):
+    """FX1_BUNDLE / FX1_NIG_SCALE land in model.overrides, KEEP_LAST_WEIGHTS in the early-stop section, and
+    LOAD_WEIGHTS reads a finished run (best or last epoch) without training; bad combinations raise."""
+    drive, local = tmp_path / "drive", tmp_path / "local"
+    small = {"train.epochs": 2, "train.batch_size": 64, "train.device": "cpu", "evaluation.health_max_rows": 50,
+             "train.early_stop.patience": 5}
+    base = {"ARTIFACT": str(art), "WORK_ON": "local", "DRIVE_RUNS": str(drive), "LOCAL_RUNS": str(local),
+            "CHANGES": small, "BATTERY_FOLDER": "", "FX1_BUNDLE": True, "FX1_NIG_SCALE": 0.01}
+    ns = run_notebook("main", {**base, "RUN_NAME": "fx1", "KEEP_LAST_WEIGHTS": True})
+    s = ns["settings"]
+    assert s.model.overrides["bn_warmup"] and s.model.overrides["order_detach_close"]
+    assert s.model.overrides["nig_scale"] == 0.01 and s.model.overrides["encoder"] == "gru"
+    assert s.train.early_stop.restore_best_weights is False and ns["run"].result.restored_best is False
+    # the same configuration, KEEP_LAST_WEIGHTS off (it is part of the identity), read back without training
+    first = run_notebook("main", {**base, "RUN_NAME": "fx1b"})
+    assert first["run"].result.restored_best is True
+    for which in ("last", "best"):
+        again = run_notebook("main", {**base, "RUN_NAME": f"fx1-{which}", "RESTORE_FROM": "fx1b",
+                                      "LOAD_WEIGHTS": which, "LOCAL_RUNS": str(tmp_path / f"l-{which}")})
+        assert again["run"].result.restored_best is (which == "best") and again["run"].result.epochs_done == 2
+    with pytest.raises(ValueError, match="KEEP_LAST_WEIGHTS"):
+        run_notebook("main", {**base, "RUN_NAME": "x1", "LOAD_WEIGHTS": "last", "KEEP_LAST_WEIGHTS": True})
+    with pytest.raises(ValueError, match="LOAD_WEIGHTS must be"):
+        run_notebook("main", {**base, "RUN_NAME": "x2", "LOAD_WEIGHTS": "newest"})

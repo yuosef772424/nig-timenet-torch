@@ -41,7 +41,7 @@ GPU results (branch `colab-results`): `baseline-002-s0` (2026-11-08, @8451a62, e
 | DS1 | Deep side check (owner task 2026-11-08, read-only) | PR open | [#49](https://github.com/yuosef772424/nig-timenet-torch/pull/49) | `eval/deep_side.py`, `docs/results/deep-side-001.md`; D-020; verdict no: IC 0.016 / 0.015, AUC CI has 0.5, the last-bar asymmetry beats it, net of close mu ~0; B-065 closed |
 | FX1 | Training switches + taps + E1 fix switches + bundle (owner 2026-11-09) | PR open | [#50](https://github.com/yuosef772424/nig-timenet-torch/pull/50) | D-021, D-022; `docs/results/e1-fixes-001.md`: BN moving stats (B-062) and ordered-means coupling (B-063) verified on E1, switches off by default |
 | RW1 | `restore(weights="last")`: read the last finished epoch, not the best (owner 2026-11-10) | PR open | | D-023; default `best` unchanged; new run: `train.early_stop.restore_best_weights=False`; not run on real data |
-| EX1 | `split.exclude_coins`: drop named coins from train / val / test (owner 2026-11-10) | PR open | | D-024; default `()` unchanged; after the time split; not run on real data |
+| EX1 | `split.exclude_coins` + main.ipynb experiment switches (FX1_BUNDLE, FX1_NIG_SCALE, KEEP_LAST_WEIGHTS, LOAD_WEIGHTS) (owner 2026-11-10) | PR open | | D-024; defaults unchanged; after the time split; not run on real data / Colab |
 | H7 | Register and review tooling (fourth R-REVIEW) | todo | | counter derived, CSV columns, check-job vs colab-results, rmtree ratchet |
 | TR1 | Trainer switches (clip, wd groups, EMA, init, timing, train gap) | todo | | B-018, B-007, HF-37 |
 | G3r | Gates on the baseline configuration | todo | | 3 seeds |
