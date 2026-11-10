@@ -45,12 +45,19 @@ from nig_timenet_torch.data_io.synthetic import SyntheticSettings, oracle_keys, 
 from nig_timenet_torch.eval import gates
 from nig_timenet_torch.eval.vol_baseline import window_ranges
 from nig_timenet_torch.model.architectures import ModelSettings
+from nig_timenet_torch.model.encoders import ENCODERS
+from nig_timenet_torch.trainer.schedules import LrSettings
 from nig_timenet_torch.workflow import battery_run, flat_run, run, run_common
 from nig_timenet_torch.workflow.grad_net import GRAD_OUTPUTS, build_grad_net_run
+from nig_timenet_torch.workflow.grad_stack_report import (  # grad_stack_battery: re-exported for the notebook
+    VARIANTS,
+    grad_stack_battery,  # noqa: F401
+    learning_curves,
+    write_report,
+)
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, default_model_settings
 
 STATS = ("norm", "mean", "std", "maxabs")
-VARIANTS = ("A", "data_h2", "grad", "grad_data", "grad_full", "full")
 NEEDS_A = ("grad", "grad_data", "grad_full")     # the variants built on model A
 SINGLE = ("full",)          # one model on all train rows: the quick test of an architecture
 
@@ -141,7 +148,7 @@ def assemble(x: torch.Tensor, g: np.ndarray, mode: str) -> torch.Tensor:
 
 # ------------------------------------------------------------------------------------------------ one variant
 def fit_variant(base: run.Run, name: str, train_idx: np.ndarray, x: dict, y: dict, root: Path,
-                build=run.build) -> run.Run:
+                build=run.build, lr: LrSettings | None = None) -> run.Run:
     """Train one model through the project's run steps on the given rows / inputs (val is the common selection
     split, test is never used for training or selection)."""
     rd = root / name
@@ -149,7 +156,10 @@ def fit_variant(base: run.Run, name: str, train_idx: np.ndarray, x: dict, y: dic
     r = replace(base, settings=replace(base.settings, run_dir=str(rd)), idx={**base.idx, "train": train_idx},
                 x=dict(x), y=dict(y), ms=None, trainer=None, fit_settings=None, ident=None, result=None, extra={})
     t0 = time.monotonic()
-    run.train(build(r))
+    build(r)
+    if lr is not None:                          # the schedule (FitSettings.lr) over the optimizer's lr
+        r.fit_settings = replace(r.fit_settings, lr=lr)
+    run.train(r)
     print(f"[{name}] trained on {len(train_idx)} rows, F={x['train'].shape[2]}, best epoch {r.result.best_epoch}, "
           f"{time.monotonic() - t0:.0f} s", flush=True)
     return r
@@ -180,17 +190,6 @@ def evaluate(r: run.Run, name: str, x_raw_test: torch.Tensor, oracle: bool) -> t
     return rep, rows
 
 
-def _flat(d, prefix=""):
-    out = {}
-    for k, v in (d.items() if isinstance(d, dict) else []):
-        key = f"{prefix}{k}"
-        if isinstance(v, dict):
-            out.update(_flat(v, key + "."))
-        elif isinstance(v, (int, float, np.floating, np.integer)) and not isinstance(v, bool):
-            out[key] = float(v)
-    return out
-
-
 # ------------------------------------------------------------------------------------------------ main
 def model_a_features(model_a: run.Run, base: run.Run, h2_xy: tuple, h2: np.ndarray, a: "GradStackConfig",
                      out: Path) -> tuple[dict, list[str]]:
@@ -214,48 +213,6 @@ def model_a_features(model_a: run.Run, base: run.Run, h2_xy: tuple, h2: np.ndarr
     return {k: sc.transform(v) for k, v in G.items()}, names
 
 
-def learning_curves(models: dict, out: Path) -> pd.DataFrame:
-    """Where memorization starts: per variant and epoch the train / val raw loss (``learning_curves.csv``) and a
-    digest: best epoch, val at best / last, ``overfit`` = val_last - val_best (> 0: val got worse after the best
-    epoch), ``gap`` = val_last - train_last (train much lower than val: the model fits rows it cannot generalise)."""
-    rows = [{"variant": n, "epoch": h["epoch"], "train": h.get("train_raw_loss"), "val": h.get("val_raw_loss")}
-            for n, r in models.items() for h in r.result.history]
-    curves = pd.DataFrame(rows)
-    curves.to_csv(out / "learning_curves.csv", index=False)
-    digest = {}
-    for n, c in curves.groupby("variant", sort=False):
-        best = int(models[n].result.best_epoch or c["epoch"].iloc[-1])
-        vb = float(c.loc[c["epoch"] == best, "val"].iloc[0])
-        digest[n] = {"epochs": len(c), "best_epoch": best, "train_first": c["train"].iloc[0],
-                     "train_last": c["train"].iloc[-1], "val_best": vb, "val_last": c["val"].iloc[-1],
-                     "overfit": c["val"].iloc[-1] - vb, "gap": c["val"].iloc[-1] - c["train"].iloc[-1]}
-    dg = pd.DataFrame(digest).T
-    print("\n== learning curves (raw loss; lower = better) ==\n", dg.round(4).to_string(), flush=True)
-    return dg
-
-
-def write_report(results: dict, rows: list[dict], out: Path, meta: dict) -> dict:
-    """The comparison files (test report per variant, gate rows / verdicts, summary.json) and a printed digest."""
-    summary = pd.DataFrame({n: _flat(r) for n, r in results.items()})
-    summary.to_csv(out / "test_report_by_variant.csv")
-    gdf = pd.DataFrame(rows)
-    gdf.to_csv(out / "gate_rows.csv", index=False)
-    blocking = gdf[gdf["blocking"].astype(bool)]
-    verdicts = blocking.groupby(["variant", "verdict"]).size().unstack(fill_value=0).reindex(list(results))
-    verdicts.to_csv(out / "gate_verdicts.csv")
-    failed = blocking[blocking.verdict == "fail"]
-    meta["gate_fails"] = {v: sorted(f"{r.gate}|{r.check}|{r.head}" for r in failed[failed.variant == v].itertuples())
-                          for v in results}
-    (out / "summary.json").write_text(json.dumps(meta, indent=1, default=str), encoding="utf-8")
-    key_rows = [k for k in summary.index if k.endswith(("rank_ic_by_timestamp", "spearman_per_coin.mean",
-                                                         "class.auc", "decile_error_spearman", "sharp.coverage"))]
-    print("\n== gate verdicts (blocking rows) ==\n", verdicts)
-    print("\n== key test metrics ==\n", summary.loc[key_rows].round(4).to_string())
-    print("\nfailed blocking checks per variant:", {v: len(f) for v, f in meta["gate_fails"].items()},
-          "(list: summary.json)")
-    return meta
-
-
 @dataclass(frozen=True)
 class GradStackConfig:
     """Every setting of the experiment (strict: an unknown key raises in ``from_dict``)."""
@@ -263,6 +220,8 @@ class GradStackConfig:
     e1: dict = field(default_factory=lambda: {"n_coins": 32, "n_bars": 2000})   # SyntheticSettings fields
     architecture: str = "tiny_mlp"      # ARCHITECTURES key; "" = the project default model
     model_overrides: dict = field(default_factory=dict)   # over the model's overrides, e.g. {"encoder": "timesnet"}
+    lr: float = 1e-3                    # learning rate (the TrainSettings default)
+    lr_min: float | None = None         # None = constant lr; a value = cosine decay from lr to lr_min over the epochs
     epochs: int = 5
     batch_size: int = 256
     seed: int = 0
@@ -276,6 +235,11 @@ class GradStackConfig:
 
     def __post_init__(self):
         object.__setattr__(self, "variants", tuple(self.variants))
+        if self.architecture in ENCODERS.names():   # an encoder name: the default model with that encoder
+            object.__setattr__(self, "model_overrides", {**self.model_overrides, "encoder": self.architecture})
+            object.__setattr__(self, "architecture", "")
+        if not self.lr > 0 or (self.lr_min is not None and not 0 <= self.lr_min <= self.lr):
+            raise ValueError(f"need lr > 0 and 0 <= lr_min <= lr, got lr={self.lr}, lr_min={self.lr_min}")
         if self.full_grad_outputs not in GRAD_OUTPUTS or self.full_grad_dim < 1:
             raise ValueError(f"full_grad_outputs must be one of {GRAD_OUTPUTS} and full_grad_dim >= 1")
         if self.grad_target not in ("output", "loss"):
@@ -302,7 +266,8 @@ def run_grad_stack(cfg: GradStackConfig, out) -> dict:
     s = RunSettings(run_dir=str(out / "runs"), code_sha="grad_stack", data=LoaderSettings(name=data, local_dir="",
                                                                                          mmap=False),
                     split=SplitSettings(max_rows=a.max_rows),
-                    train=TrainSettings(epochs=a.epochs, batch_size=a.batch_size, seed=a.seed, device=a.device))
+                    train=TrainSettings(epochs=a.epochs, batch_size=a.batch_size, seed=a.seed, device=a.device,
+                                        lr=a.lr))
     base_ms = ModelSettings(a.architecture) if a.architecture else default_model_settings()
     s = replace(s, model=ModelSettings(base_ms.architecture, {**base_ms.overrides, **a.model_overrides}))
     base = run.prepare(s)
@@ -318,6 +283,8 @@ def run_grad_stack(cfg: GradStackConfig, out) -> dict:
     halves = {} if set(a.variants) <= set(SINGLE) else {"H1": h1, "H2": h2}   # one model: no halves loaded
     xs = {k: flat_run.flat_inputs(ds, v) for k, v in halves.items()}
     want = list(a.variants)
+    sched = (None if a.lr_min is None else
+             LrSettings(lr_initial=a.lr, lr_min=a.lr_min, kind="cosine", total_epochs=max(a.epochs - 1, 1)))
     root = out / "runs"
     results, rows, models = {}, [], {}
 
@@ -329,27 +296,27 @@ def run_grad_stack(cfg: GradStackConfig, out) -> dict:
     names = []
     if "A" in want:          # model A on H1 (and its gradients when a gradient variant needs them)
         x_, y_ = common(*xs["H1"])
-        models["A"] = fit_variant(base, "A", h1, x_, y_, root)
+        models["A"] = fit_variant(base, "A", h1, x_, y_, root, lr=sched)
     if set(want) & set(NEEDS_A):
         Gs, names = model_a_features(models["A"], base, xs["H2"], h2, a, out)
 
     if "data_h2" in want:
         x_, y_ = common(*xs["H2"])
-        models["data_h2"] = fit_variant(base, "data_h2", h2, x_, y_, root)
+        models["data_h2"] = fit_variant(base, "data_h2", h2, x_, y_, root, lr=sched)
     for mode in ("grad", "grad_data"):
         if mode in want:
             x_, y_ = common(assemble(xs["H2"][0], Gs["train"], mode), xs["H2"][1],
                             assemble(base.x["val"], Gs["val"], mode), assemble(base.x["test"], Gs["test"], mode))
-            models[mode] = fit_variant(base, mode, h2, x_, y_, root)
+            models[mode] = fit_variant(base, mode, h2, x_, y_, root, lr=sched)
     if "grad_full" in want:   # B sees ONLY A's full per-layer gradients, computed inside each step
         x_, y_ = common(*xs["H2"])
         models["grad_full"] = fit_variant(
             base, "grad_full", h2, x_, y_, root,
             build=lambda r: build_grad_net_run(r, models["A"].trainer.model, dim=a.full_grad_dim,
-                                               outputs=a.full_grad_outputs))
+                                               outputs=a.full_grad_outputs), lr=sched)
     if "full" in want:
         x_, y_ = common(base.x["train"], base.y["train"])
-        models["full"] = fit_variant(base, "full", base.idx["train"], x_, y_, root)
+        models["full"] = fit_variant(base, "full", base.idx["train"], x_, y_, root, lr=sched)
 
     for name in [v for v in want if v in models]:
         rep, rr = evaluate(models[name], name, base.x["test"], oracle)
@@ -363,22 +330,6 @@ def run_grad_stack(cfg: GradStackConfig, out) -> dict:
     meta = {"config": asdict(a), "split": split_info, "grad_features": names, "oracle": bool(oracle),
             "learning": curves.to_dict(orient="index"), "seconds": round(time.monotonic() - t_all, 1)}
     return write_report(results, rows, out, meta)
-
-
-def grad_stack_battery(out, *, cost: float = 0.0008, show: bool = True) -> dict:
-    """The evaluation battery (T-profit after ``cost`` per side) of every variant of a finished ``run_grad_stack``
-    folder; ``n_variants`` = the number of variants (the battery's multiple-testing correction). Writes
-    ``battery_report.txt`` / ``battery_profit.json`` into each variant folder; -> {variant: battery sections}."""
-    runs = Path(out) / "runs"
-    names = [v for v in VARIANTS if battery_run.table_path(runs / v, "test").is_file()]
-    if not names:
-        raise FileNotFoundError(f"no battery tables under {runs}: run run_grad_stack again with this code version")
-    res = {}
-    for v in names:
-        res[v] = battery_run.battery_from_folder(runs / v, cost=cost, n_variants=len(names), out_dir=runs / v)
-        if show:
-            print(f"\n{'=' * 30} battery: {v} {'=' * 30}\n{battery_run.render(res[v])}", flush=True)
-    return res
 
 
 def main(argv=None) -> dict:

@@ -106,3 +106,18 @@ def test_single_model_mode_trains_one_model(tmp_path):
     assert set(grad_stack_battery(tmp_path, show=False)) == {"full"}
     with pytest.raises(ValueError):
         GradStackConfig(variants=("grad",))
+
+
+def test_encoder_name_as_architecture_and_lr_decay(tmp_path):
+    """architecture="itransformer" means the default model with that encoder; lr / lr_min decay by cosine from lr
+    at the first epoch to lr_min at the last."""
+    cfg = GradStackConfig(**{**TINY, "architecture": "itransformer", "variants": ("full",), "epochs": 3,
+                             "lr": 1e-5, "lr_min": 1e-7})
+    assert cfg.architecture == "" and cfg.model_overrides["encoder"] == "itransformer"
+    run_grad_stack(cfg, tmp_path)
+    import torch as _t
+    hist = _t.load(tmp_path / "runs" / "full" / "checkpoint.pt", weights_only=False)["history"]
+    lrs = [h["lr"] for h in hist]
+    assert lrs[0] == pytest.approx(1e-5) and lrs[-1] == pytest.approx(1e-7) and lrs[0] > lrs[1] > lrs[2]
+    with pytest.raises(ValueError):
+        GradStackConfig(lr=1e-5, lr_min=1e-3)

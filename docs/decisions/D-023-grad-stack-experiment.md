@@ -35,6 +35,14 @@ anywhere, to find where memorization starts and where learning breaks")
   and `gap` (val_last - train_last). GradNet pools a layer whose gradient size varies per row (TimesNet) to its probe
   size.
 
+## Learning rate and encoder names (owner 2026-11-10: "fix the errors and make the learning rate e5 to e7")
+- `GradStackConfig.lr` (default 1e-3 = TrainSettings) and `lr_min` (None = constant; a value = cosine decay from lr at
+  the first epoch to lr_min at the last, `FitSettings.lr`); the notebook uses 1e-5 -> 1e-7 over 10 epochs.
+- `architecture` may be an encoder name (gru / transformer / tcn / itransformer / timesnet): the default model with
+  that encoder (the owner's run passed "itransformer" as an architecture and got UnknownNameError).
+- chart_cnn pools with `grid_pool` (deterministic CUDA backward; AdaptiveAvgPool2d failed under
+  use_deterministic_algorithms on the owner's GPU).
+
 ## New defaults
 - `nig_timenet_torch.jobs.grad_stack.CONFIG`: `<new>` -> `<class 'nig_timenet_torch.workflow.grad_stack.GradStackConfig'>`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(architecture)`: `<new>` -> `'tiny_mlp'`
@@ -48,8 +56,6 @@ anywhere, to find where memorization starts and where learning breaks")
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(seed)`: `<new>` -> `0`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(variants)`: `<new>` -> `('A', 'data_h2', 'grad', 'grad_data', 'grad_full', 'full')`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(with_preds)`: `<new>` -> `False`
-- `nig_timenet_torch.workflow.grad_stack.grad_stack_battery(cost)`: `<new>` -> `0.0008`
-- `nig_timenet_torch.workflow.grad_stack.grad_stack_battery(show)`: `<new>` -> `True`
 - `nig_timenet_torch.workflow.grad_net.GradNet(dim)`: `<new>` -> `32`
 - `nig_timenet_torch.workflow.grad_net.GradNet(outputs)`: `<new>` -> `'per_head'`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(full_grad_dim)`: `<new>` -> `32`
@@ -109,3 +115,8 @@ anywhere, to find where memorization starts and where learning breaks")
 - `registry:architecture:no_dense_net.default_config.n_blocks`: `<new>` -> `4`
 - `registry:architecture:no_dense_net.default_config.out_scale`: `<new>` -> `0.01`
 - `registry:architecture:no_dense_net.default_config.price_targets`: `<new>` -> `['high', 'low', 'close']`
+- `nig_timenet_torch.workflow.grad_stack.GradStackConfig(lr)`: `<new>` -> `0.001`
+- `nig_timenet_torch.workflow.grad_stack.GradStackConfig(lr_min)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.grad_stack.fit_variant(lr)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.grad_stack_report.grad_stack_battery(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.workflow.grad_stack_report.grad_stack_battery(show)`: `<new>` -> `True`
