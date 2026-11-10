@@ -2,11 +2,14 @@
 outputs the jobs and notebooks rely on."""
 
 import json
+from pathlib import Path
 
 import pytest
+import torch
 
 from nig_timenet_torch.core.config import from_dict, updated
 from nig_timenet_torch.data_io.loading import LoaderSettings
+from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.settings import RunSettings
 
@@ -83,3 +86,35 @@ def test_restore_rereads_a_finished_run_folder_without_training(art, tmp_path): 
     empty = steps.build(steps.prepare(updated(s, {"run_dir": str(tmp_path / "none")})))
     with pytest.raises(FileNotFoundError, match="nothing to restore"):
         steps.restore(empty)
+
+
+def test_restore_last_loads_the_last_epoch_weights_not_the_best(art, tmp_path):  # noqa: F811
+    """weights="last" puts the weights after the LAST finished epoch (checkpoint.pt) in the model, weights="best"
+    (the default) best.pt; an unknown name raises."""
+    s = settings(art, tmp_path)
+    steps.run_all(s, tmp_path / "out1")
+    ckpt = checkpoint.load_checkpoint(Path(s.run_dir))
+
+    def weights_after(**kw):
+        r = steps.restore(steps.build(steps.prepare(s, tmp_path / "out2")), **kw)
+        return r, r.trainer.model.state_dict()
+
+    r_last, w_last = weights_after(weights="last")
+    assert not r_last.result.restored_best
+    assert all(torch.equal(w_last[k], v) for k, v in ckpt["model"].items())
+    best = checkpoint.load_best(Path(s.run_dir))
+    _, w_default = weights_after()
+    assert all(torch.equal(w_default[k], v) for k, v in best.items())
+    with pytest.raises(ValueError, match="weights must be one of"):
+        steps.restore(steps.build(steps.prepare(s, tmp_path / "out3")), weights="newest")
+
+
+def test_fit_without_restore_best_weights_leaves_the_last_epoch_in_the_model(art, tmp_path):  # noqa: F811
+    """train.early_stop.restore_best_weights=False: after fit the model holds the weights of the last finished epoch
+    (the ones checkpoint.pt keeps), so every report step reads them."""
+    s = updated(settings(art, tmp_path), {"train.early_stop.restore_best_weights": False})
+    r = steps.run_all(s, tmp_path / "out")
+    ckpt = checkpoint.load_checkpoint(Path(s.run_dir))
+    w = r.trainer.model.state_dict()
+    assert not r.result.restored_best
+    assert all(torch.equal(w[k], v) for k, v in ckpt["model"].items())

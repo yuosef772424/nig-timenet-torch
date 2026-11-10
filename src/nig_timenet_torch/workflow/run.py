@@ -45,6 +45,7 @@ from nig_timenet_torch.workflow.settings import RunSettings
 __all__ = ["Run", "prepare", "build", "train", "restore", "health_step", "test_step", "battery_step", "write_summary",
            "run_all", "test_lines", "SUMMARY", "TEST_REPORT"]
 
+RESTORE_WEIGHTS = ("best", "last")  # restore(weights=...): best-epoch weights (default) or the last finished epoch
 SUMMARY = "baseline_summary.json"
 TEST_REPORT = "test_report.json"
 
@@ -134,10 +135,15 @@ def train(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
     return run
 
 
-def restore(run: Run, *, allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:
-    """Instead of ``train``: read a FINISHED run folder (``settings.run_dir``) and put its best-epoch weights in the
-    model, so the evaluation steps re-read a trained model without training (T5r). The saved RunIdentity must equal
-    this run's except for ``allow_changes`` (default: the commit; settings, seed and data must be the same)."""
+def restore(run: Run, *, weights: str = "best", allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:
+    """Instead of ``train``: read a FINISHED run folder (``settings.run_dir``) and put its weights in the model, so the
+    evaluation steps re-read a trained model without training (T5r). ``weights``: ``"best"`` (default) = the
+    best-epoch weights (``best.pt``); ``"last"`` = the weights after the last finished epoch (``checkpoint.pt``; the EMA
+    copy when the run trained with ``ema_decay``, exactly what ``fit`` leaves in the model without
+    ``restore_best_weights``). The saved RunIdentity must equal this run's except for ``allow_changes`` (default: the
+    commit; settings, seed and data must be the same)."""
+    if weights not in RESTORE_WEIGHTS:
+        raise ValueError(f"restore: weights must be one of {RESTORE_WEIGHTS}, got {weights!r}")
     _need(run, "trainer", "build")
     run_dir = Path(run.settings.run_dir)
     ckpt = checkpoint.load_checkpoint(run_dir)
@@ -146,12 +152,15 @@ def restore(run: Run, *, allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:
     check_resume(RunIdentity.from_json(json.loads(ckpt["identity"])), run.ident,
                  allow_changes=("epochs", *allow_changes))
     tracker = ckpt["tracker"]
-    if tracker.get("best_epoch") is None:
-        raise ValueError(f"{run_dir}: the checkpoint records no best epoch")
-    run.trainer.model.load_state_dict(checkpoint.load_best(run_dir))
+    if weights == "best":
+        if tracker.get("best_epoch") is None:
+            raise ValueError(f"{run_dir}: the checkpoint records no best epoch")
+        run.trainer.model.load_state_dict(checkpoint.load_best(run_dir))
+    else:
+        run.trainer.model.load_state_dict(ckpt["ema"]["shadow"] if "ema" in ckpt else ckpt["model"])
     history = list(ckpt["history"])
     run.result = FitResult(history, int(ckpt["epochs_done"]), tracker["best_epoch"], tracker["best"],
-                           len(history) < run.fit_settings.epochs, True)
+                           len(history) < run.fit_settings.epochs, weights == "best")
     return run
 
 
