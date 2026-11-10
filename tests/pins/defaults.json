@@ -1,5 +1,5 @@
 {
- "fingerprint": "606cd7dedc96bf9e",
+ "fingerprint": "891030ccbbf585f4",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -523,6 +523,7 @@
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(unc_max)": "20.0",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(window)": "None",
   "nig_timenet_torch.model.contract.contract_of(input_name)": "'x'",
+  "nig_timenet_torch.model.encoders.TimesBlock(top_k)": "2",
   "nig_timenet_torch.model.heads.classification_head_forward(drop)": "None",
   "nig_timenet_torch.model.heads.multiclass_head_forward(drop)": "None",
   "nig_timenet_torch.model.layers.BatchNormChannelsLast(epsilon)": "0.001",
@@ -701,6 +702,7 @@
   "nig_timenet_torch.workflow.grad_stack.GradStackConfig(full_grad_outputs)": "'per_head'",
   "nig_timenet_torch.workflow.grad_stack.GradStackConfig(grad_target)": "'output'",
   "nig_timenet_torch.workflow.grad_stack.GradStackConfig(max_rows)": "None",
+  "nig_timenet_torch.workflow.grad_stack.GradStackConfig(model_overrides)": "{}",
   "nig_timenet_torch.workflow.grad_stack.GradStackConfig(seed)": "0",
   "nig_timenet_torch.workflow.grad_stack.GradStackConfig(variants)": "('A', 'data_h2', 'grad', 'grad_data', 'grad_full', 'full')",
   "nig_timenet_torch.workflow.grad_stack.GradStackConfig(with_preds)": "False",

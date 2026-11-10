@@ -47,7 +47,7 @@ from nig_timenet_torch.eval.vol_baseline import window_ranges
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.workflow import battery_run, flat_run, run, run_common
 from nig_timenet_torch.workflow.grad_net import GRAD_OUTPUTS, build_grad_net_run
-from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings
+from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, default_model_settings
 
 STATS = ("norm", "mean", "std", "maxabs")
 VARIANTS = ("A", "data_h2", "grad", "grad_data", "grad_full", "full")
@@ -240,6 +240,7 @@ class GradStackConfig:
     data: str = ""                      # artifact dir; "" = build synthetic E1 (with the oracle) under the out folder
     e1: dict = field(default_factory=lambda: {"n_coins": 32, "n_bars": 2000})   # SyntheticSettings fields
     architecture: str = "tiny_mlp"      # ARCHITECTURES key; "" = the project default model
+    model_overrides: dict = field(default_factory=dict)   # over the model's overrides, e.g. {"encoder": "timesnet"}
     epochs: int = 5
     batch_size: int = 256
     seed: int = 0
@@ -278,8 +279,8 @@ def run_grad_stack(cfg: GradStackConfig, out) -> dict:
                                                                                          mmap=False),
                     split=SplitSettings(max_rows=a.max_rows),
                     train=TrainSettings(epochs=a.epochs, batch_size=a.batch_size, seed=a.seed, device=a.device))
-    if a.architecture:
-        s = replace(s, model=ModelSettings(a.architecture))
+    base_ms = ModelSettings(a.architecture) if a.architecture else default_model_settings()
+    s = replace(s, model=ModelSettings(base_ms.architecture, {**base_ms.overrides, **a.model_overrides}))
     base = run.prepare(s)
     ds = base.dataset
     oracle = oracle_keys(base.targets[0])[0] in ds

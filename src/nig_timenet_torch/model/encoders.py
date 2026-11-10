@@ -1,8 +1,10 @@
-"""ENCODERS: the registered sequence encoders of NigTimeNetV2 (transformer P15, GRU P33b, TCN P40).
+"""ENCODERS: the registered sequence encoders of NigTimeNetV2 (transformer P15, GRU P33b, TCN P40, iTransformer,
+TimesNet).
 
 PURPOSE:  The ENCODERS registry: each encoder builds its modules through the model's ``add(name, module)`` (Keras
           layer names, so state_dict keys are unchanged) and owns its forward over the token sequence.
-TAGS:     encoders, encoder registry, transformer, gru, tcn, causal conv, sequence encoder, plugin
+TAGS:     encoders, encoder registry, transformer, gru, tcn, itransformer, timesnet, causal conv, sequence encoder,
+          plugin
 PITFALLS: Module names (``patch_embed``, ``step_proj``, ``block_i``, ``gru_i``, ``tcn_conv_i``, ...) are weights.json
           attr_paths and checkpoint keys: never rename. A new encoder = one class + one ``ENCODERS.register`` line;
           ``supports_input_skip`` says whether the input_skip variants apply to it (transformer only today).
@@ -19,7 +21,7 @@ from nig_timenet_torch.core.registry import Contract, Registry
 from nig_timenet_torch.model.layers import KerasGRU, PatchEmbedding, RMSNorm, TransformerBlock
 from nig_timenet_torch.model.parts import build_input_skip, skip_variant
 
-__all__ = ["ENCODERS", "Encoder", "EncoderDims", "CausalConv1D", "tcn_n_blocks"]
+__all__ = ["ENCODERS", "Encoder", "EncoderDims", "CausalConv1D", "TimesBlock", "tcn_n_blocks"]
 
 ENCODERS = Registry("encoder", Contract("encoder", required_meta=("supports_input_skip",)))
 
@@ -146,6 +148,84 @@ class TCNEncoder(Encoder):
         return h
 
 
+class ITransformerEncoder(Encoder):
+    """iTransformer (Liu et al. 2024): every input channel's WHOLE window is one token (Linear(T -> d_model)), the
+    transformer blocks attend across channels (non-causal: the tokens are channels, not time steps). Output
+    (B, W, d_model): the pooling downstream runs over channels."""
+
+    def build(self, model, add, sfx, *, seq_len, tok_width, dims):
+        add("var_embed", nn.Linear(seq_len, dims.d_model))
+        model.branch_blocks[sfx] = self.n_blocks(dims, seq_len)
+        for i in range(model.branch_blocks[sfx]):
+            add(f"iblock_{i + 1}", TransformerBlock(dims.d_model, dims.num_heads, dims.num_kv_heads, dims.max_rel_pos,
+                                                    False, None, dims.dropout, dims.attn_dropout))
+        return dims.d_model
+
+    def encode(self, model, tok, sfx):
+        h = _get(model, "var_embed", sfx)(tok.transpose(1, 2))          # (B, W, d_model): one token per channel
+        for i in range(model.branch_blocks[sfx]):
+            h = _get(model, f"iblock_{i + 1}", sfx)(h)
+        return h
+
+
+class TimesBlock(nn.Module):
+    """TimesNet block (Wu et al. 2023): the top-k FFT periods of each row; per period the sequence is folded into a
+    2D (cycles x period) map, an inception-style 2D conv (kernels 1 / 3, averaged) -> GELU -> 2D conv, unfolded;
+    the k results are mixed with the softmax of each row's amplitude at that period. Channels-last in and out."""
+
+    def __init__(self, d_model: int, d_ff: int, top_k: int = 2):
+        super().__init__()
+        self.top_k = top_k
+        self.conv1 = nn.ModuleList(nn.Conv2d(d_model, d_ff, k, padding=k // 2) for k in (1, 3))
+        self.conv2 = nn.ModuleList(nn.Conv2d(d_ff, d_model, k, padding=k // 2) for k in (1, 3))
+
+    def _inception(self, convs, z):
+        return torch.stack([c(z) for c in convs], dim=-1).mean(-1)
+
+    def forward(self, h: torch.Tensor) -> torch.Tensor:
+        """Periods are chosen PER ROW (the paper picks them from the batch mean, which makes a row's output depend on
+        the other rows of its batch): each distinct chosen frequency is computed once for the batch and enters a
+        row's mix only if that row chose it."""
+        b, t, d = h.shape
+        amp = torch.fft.rfft(h, dim=1).abs().mean(-1)[:, 1:]            # (B, T//2): frequency 0 (the mean) dropped
+        k = min(self.top_k, amp.shape[1])
+        if k < 1:
+            return h
+        top = torch.topk(amp, k, dim=1)
+        w = torch.zeros_like(amp).scatter(1, top.indices, torch.softmax(top.values, dim=1))   # (B, T//2)
+        out = torch.zeros_like(h)
+        for j in torch.unique(top.indices).tolist():
+            p = max(1, t // (j + 1))
+            n = -(-t // p) * p
+            z = F.pad(h, (0, 0, 0, n - t)).reshape(b, n // p, p, d).permute(0, 3, 1, 2)
+            z = self._inception(self.conv2, F.gelu(self._inception(self.conv1, z)))
+            out = out + z.permute(0, 2, 3, 1).reshape(b, n, d)[:, :t] * w[:, j, None, None]
+        return out
+
+
+class TimesNetEncoder(Encoder):
+    """step_proj, then per block RMSNorm -> TimesBlock -> Dropout, residual add (the FFT sees the whole window: a
+    position may depend on later bars of the SAME window, never on bars after it)."""
+
+    def build(self, model, add, sfx, *, seq_len, tok_width, dims):
+        add("step_proj", nn.Linear(tok_width, dims.d_model))
+        model.branch_blocks[sfx] = self.n_blocks(dims, seq_len)
+        for i in range(model.branch_blocks[sfx]):
+            add(f"times_norm_{i + 1}", RMSNorm(dims.d_model))
+            add(f"times_{i + 1}", TimesBlock(dims.d_model, dims.d_model))
+            add(f"times_drop_{i + 1}", nn.Dropout(dims.dropout))
+        return dims.d_model
+
+    def encode(self, model, tok, sfx):
+        h = _get(model, "step_proj", sfx)(tok)
+        for i in range(model.branch_blocks[sfx]):
+            y = _get(model, f"times_{i + 1}", sfx)(_get(model, f"times_norm_{i + 1}", sfx)(h))
+            h = h + _get(model, f"times_drop_{i + 1}", sfx)(y)
+        return h
+
+
 ENCODERS.register("transformer", TransformerEncoder(), version=1, supports_input_skip=True)
 ENCODERS.register("gru", GRUEncoder(), version=1, supports_input_skip=False)
 ENCODERS.register("tcn", TCNEncoder(), version=1, supports_input_skip=False)
+ENCODERS.register("itransformer", ITransformerEncoder(), version=1, supports_input_skip=False)
+ENCODERS.register("timesnet", TimesNetEncoder(), version=1, supports_input_skip=False)
