@@ -38,3 +38,22 @@ high/low/close AUC 0.53/0.49/0.50; gate checks passed 6/9/8. nig_timenet_v2, 3 e
 Reading: on E1 the full gradients are worse than the summarized ones (`grad`) and than `full`; the best epoch was the
 last one (3 of 3), so it may be under-trained; one 12.8k-row E1 is small for ~6k inputs per row. Not run on the real
 artifact yet.
+
+## New architectures on E1 (8 epochs, seed 0, 2026-11-10) vs the default model (nig_timenet_v2, encoder gru, 3 epochs)
+| model | variant | high IC | low IC | close IC | high AUC | gates passed /20 | best ep | overfit | gap |
+|---|---|---|---|---|---|---|---|---|---|
+| default (gru) | A | 0.201 | 0.268 | 0.058 | 0.707 | 9 | 3/3 | - | - |
+| default (gru) | full | 0.304 | 0.354 | 0.064 | 0.758 | 17 | 3/3 | - | - |
+| conv1d_net | A | 0.322 | 0.385 | 0.069 | 0.746 | 18 | 8 | 0.000 | 0.04 |
+| conv1d_net | full | 0.318 | 0.389 | 0.066 | 0.763 | 17 | 7 | 0.140 | 0.15 |
+| conv1d_net | grad_full | 0.312 | 0.378 | 0.059 | 0.741 | 9 | 2 | 0.469 | 1.05 |
+| no_dense_net | A | 0.324 | 0.386 | 0.068 | 0.755 | 9 | 4 | 3.513 | 3.77 |
+| no_dense_net | data_h2 | 0.322 | 0.372 | 0.060 | 0.756 | 19 | 8 | 0.000 | 0.09 |
+| no_dense_net | grad | 0.318 | 0.383 | 0.044 | 0.743 | 19 | 7 | 0.014 | 0.04 |
+| no_dense_net | grad_full | 0.318 | 0.375 | 0.056 | 0.757 | 17 | 3 | 3.064 | 4.08 |
+| no_dense_net | full | 0.303 | 0.379 | 0.060 | 0.665 | 9 | 1 | 0.172 | 0.75 |
+(overfit = val_last - val_best raw loss; gap = val_last - train_last.)
+Reading: both scratch models trained on HALF the data (A) beat the default model trained on ALL of it, and pass far
+more gates (conv1d_net 18 vs 9): the default model's own layers cost skill on E1. grad_full memorizes in both
+(train loss keeps falling, val rises from epoch 2-3). no_dense_net has unstable runs (A and full: val collapses
+after the best epoch). One seed, synthetic data: confirm with seeds and on the real artifact.
