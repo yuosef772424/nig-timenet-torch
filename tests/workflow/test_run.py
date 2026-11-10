@@ -4,6 +4,7 @@ outputs the jobs and notebooks rely on."""
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 
@@ -118,3 +119,28 @@ def test_fit_without_restore_best_weights_leaves_the_last_epoch_in_the_model(art
     w = r.trainer.model.state_dict()
     assert not r.result.restored_best
     assert all(torch.equal(w[k], v) for k, v in ckpt["model"].items())
+
+
+def test_exclude_coins_removes_their_rows_from_every_split_and_keeps_the_cut_dates(art, tmp_path):  # noqa: F811
+    from nig_timenet_torch.workflow.flat_run import row_coins
+    base = steps.prepare(settings(art, tmp_path))
+    names = [b["name"] for b in base.dataset["asset_bounds"]]
+    gone = [names[0], names[1].replace("USDT", "").lower()]  # one exact, one without USDT and in lower case
+    r = steps.prepare(settings(art, tmp_path, **{"split.exclude_coins": gone}))
+    keep = {n for n in names[:2]}
+    for stage in ("train", "val", "test"):
+        assert not keep & set(row_coins(r.dataset, r.idx[stage]).astype(str))
+        want = base.idx[stage][~np.isin(row_coins(base.dataset, base.idx[stage]).astype(str), list(keep))]
+        assert np.array_equal(r.idx[stage], want)  # nothing else moved
+    assert r.bounds == base.bounds
+    assert len(r.x["train"]) < len(base.x["train"])
+
+
+def test_exclude_coins_refuses_unknown_names_and_removing_everything(art, tmp_path):  # noqa: F811
+    with pytest.raises(ValueError, match="not coins of this artifact"):
+        steps.prepare(settings(art, tmp_path, **{"split.exclude_coins": ["NOPEUSDT"]}))
+    names = [b["name"] for b in steps.prepare(settings(art, tmp_path)).dataset["asset_bounds"]]
+    with pytest.raises(ValueError, match="every coin"):
+        steps.prepare(settings(art, tmp_path, **{"split.exclude_coins": names}))
+    with pytest.raises(ValueError, match="coin names"):
+        updated(RunSettings(run_dir="x"), {"split.exclude_coins": [""]})

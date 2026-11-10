@@ -98,6 +98,9 @@ def prepare(settings: RunSettings, out=None) -> Run:
     run_common.check_decode(ds, targets)
     run_common.input_key(ds)
     (tr, va, te), bounds = run_common.make_plan(ds, settings.split)
+    if settings.split.exclude_coins:
+        names = ", ".join(settings.split.exclude_coins)
+        print(f"excluded coins ({len(settings.split.exclude_coins)}): {names}", flush=True)
     run = Run(settings, art, targets, {"train": tr, "val": va, "test": te}, bounds, run_common.pick_device(settings),
               None if out is None else Path(out))
     for stage in ("train", "val"):
