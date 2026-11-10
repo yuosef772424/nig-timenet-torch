@@ -21,7 +21,7 @@ def result(tmp_path_factory):
 
 def test_end_to_end_writes_every_variant(result):
     meta, out = result
-    assert set(meta["gate_fails"]) == {"A", "data_h2", "grad", "grad_data", "full"}
+    assert set(meta["gate_fails"]) == {"A", "data_h2", "grad", "grad_data", "grad_full", "full"}
     s = meta["split"]
     assert s["H1"]["to"] < s["H2"]["from"] < s["val"]["from"], "halves are time ordered, before val"
     z = np.load(out / "modelA_grads_preds.npz")
@@ -59,6 +59,40 @@ def test_config_is_strict():
 def test_battery_runs_on_every_variant(result):
     _, out = result
     res = grad_stack_battery(out, show=False)
-    assert set(res) == {"A", "data_h2", "grad", "grad_data", "full"}
+    assert set(res) == {"A", "data_h2", "grad", "grad_data", "grad_full", "full"}
     assert all("verdict" in sec for sec in res.values())
     assert (out / "runs" / "grad" / "battery_report.txt").is_file()
+
+
+def test_grad_net_sees_every_layer_and_only_gradients(result):
+    """GradNet: one token per A learning layer (+ input); A frozen and in eval mode; B's prediction depends on the
+    window only through A's gradients."""
+    from nig_timenet_torch.data_io.loading import LoaderSettings
+    from nig_timenet_torch.model.architectures import ModelSettings
+    from nig_timenet_torch.workflow import run
+    from nig_timenet_torch.workflow.grad_net import GradNet
+    from nig_timenet_torch.workflow.settings import RunSettings, TrainSettings
+    _, out = result
+    s = RunSettings(run_dir=str(out / "chk_gn"), code_sha="x", model=ModelSettings("tiny_mlp"),
+                    data=LoaderSettings(name=str(out / "E1"), local_dir="", mmap=False),
+                    train=TrainSettings(epochs=1, device="cpu"))
+    r = run.build(run.prepare(s))
+    a = r.trainer.model
+    g = GradNet(a, r.x["train"], ModelSettings("tiny_mlp"))
+    n_layers = sum(1 for m in a.modules() if not list(m.children()) and list(m.parameters(recurse=False)))
+    assert len(g.names) == n_layers + 1 and g.names[0] == "input"
+    assert not any(p.requires_grad for p in g.a.parameters())
+    g.train()
+    assert not g.a.training
+    x = r.x["val"][:8]
+    grads = g.gradients(x)
+    assert len(grads) == len(g.names) and all(torch.isfinite(t).all() for t in grads)
+    with torch.no_grad():                       # prediction path (no_grad) still computes A's gradients
+        y = g(x)
+    assert all(torch.isfinite(v).all() for v in y.values())
+    fixed = g.gradients(x)                       # B's only input: with the gradients held fixed, the window
+    g.gradients = lambda _x: fixed               # itself (and so A's outputs) cannot change B's prediction
+    with torch.no_grad():
+        y2 = g(torch.randn_like(x))
+    for k in y:
+        torch.testing.assert_close(y[k], y2[k])

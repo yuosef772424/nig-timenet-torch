@@ -30,3 +30,11 @@ val 2,656, test 2,688. Gradient target = `output` (label-free).
 - Close head (the direction): gradients make it worse (v2: IC 0.058 -> -0.064).
 - `--grad-target loss` leaks the label (test AUC = 1.00): invalid by construction, upper bound only.
 - Not run: the real artifact (not in this container), more seeds of v2, GPU.
+
+## grad_full (B sees only A's FULL per-layer gradients, per-layer encoders) — synthetic E1, 2026-11-10
+tiny_mlp, 8 epochs, 3 seeds (mean ± sd): high IC 0.095±0.079, low IC 0.025±0.028, close IC -0.003±0.007,
+high/low/close AUC 0.53/0.49/0.50; gate checks passed 6/9/8. nig_timenet_v2, 3 epochs, seed 0: high/low/close IC
+0.089/0.286/0.088, AUC 0.687/0.731/0.481, gate checks 6/20; 100 s vs 17 s for A (~6x cost: 9 gradient passes / step).
+Reading: on E1 the full gradients are worse than the summarized ones (`grad`) and than `full`; the best epoch was the
+last one (3 of 3), so it may be under-trained; one 12.8k-row E1 is small for ~6k inputs per row. Not run on the real
+artifact yet.

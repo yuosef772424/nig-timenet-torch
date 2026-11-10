@@ -46,10 +46,11 @@ from nig_timenet_torch.eval import gates
 from nig_timenet_torch.eval.vol_baseline import window_ranges
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.workflow import battery_run, flat_run, run, run_common
+from nig_timenet_torch.workflow.grad_net import GRAD_OUTPUTS, build_grad_net_run
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings
 
 STATS = ("norm", "mean", "std", "maxabs")
-VARIANTS = ("A", "data_h2", "grad", "grad_data", "full")
+VARIANTS = ("A", "data_h2", "grad", "grad_data", "grad_full", "full")
 
 
 # ------------------------------------------------------------------------------------------------ split
@@ -137,7 +138,8 @@ def assemble(x: torch.Tensor, g: np.ndarray, mode: str) -> torch.Tensor:
 
 
 # ------------------------------------------------------------------------------------------------ one variant
-def fit_variant(base: run.Run, name: str, train_idx: np.ndarray, x: dict, y: dict, root: Path) -> run.Run:
+def fit_variant(base: run.Run, name: str, train_idx: np.ndarray, x: dict, y: dict, root: Path,
+                build=run.build) -> run.Run:
     """Train one model through the project's run steps on the given rows / inputs (val is the common selection
     split, test is never used for training or selection)."""
     rd = root / name
@@ -145,7 +147,7 @@ def fit_variant(base: run.Run, name: str, train_idx: np.ndarray, x: dict, y: dic
     r = replace(base, settings=replace(base.settings, run_dir=str(rd)), idx={**base.idx, "train": train_idx},
                 x=dict(x), y=dict(y), ms=None, trainer=None, fit_settings=None, ident=None, result=None, extra={})
     t0 = time.monotonic()
-    run.train(run.build(r))
+    run.train(build(r))
     print(f"[{name}] trained on {len(train_idx)} rows, F={x['train'].shape[2]}, best epoch {r.result.best_epoch}, "
           f"{time.monotonic() - t0:.0f} s", flush=True)
     return r
@@ -245,10 +247,14 @@ class GradStackConfig:
     max_rows: int | None = None         # smoke stride of the split (None = all rows)
     grad_target: str = "output"         # "output" (label-free) or "loss" (LEAKS the label on val / test)
     with_preds: bool = False            # add model A's raw outputs to the gradient features
+    full_grad_dim: int = 32             # grad_full: token size of each layer's gradient encoder
+    full_grad_outputs: str = "per_head"   # grad_full: one gradient channel per A output ("per_head") or one ("sum")
     variants: tuple = VARIANTS
 
     def __post_init__(self):
         object.__setattr__(self, "variants", tuple(self.variants))
+        if self.full_grad_outputs not in GRAD_OUTPUTS or self.full_grad_dim < 1:
+            raise ValueError(f"full_grad_outputs must be one of {GRAD_OUTPUTS} and full_grad_dim >= 1")
         if self.grad_target not in ("output", "loss"):
             raise ValueError(f"grad_target must be 'output' or 'loss', got {self.grad_target!r}")
         bad = sorted(set(self.variants) - set(VARIANTS))
@@ -307,6 +313,12 @@ def run_grad_stack(cfg: GradStackConfig, out) -> dict:
             x_, y_ = common(assemble(xs["H2"][0], Gs["train"], mode), xs["H2"][1],
                             assemble(base.x["val"], Gs["val"], mode), assemble(base.x["test"], Gs["test"], mode))
             models[mode] = fit_variant(base, mode, h2, x_, y_, root)
+    if "grad_full" in want:   # B sees ONLY A's full per-layer gradients, computed inside each step
+        x_, y_ = common(*xs["H2"])
+        models["grad_full"] = fit_variant(
+            base, "grad_full", h2, x_, y_, root,
+            build=lambda r: build_grad_net_run(r, models["A"].trainer.model, dim=a.full_grad_dim,
+                                               outputs=a.full_grad_outputs))
     if "full" in want:
         x_, y_ = common(base.x["train"], base.y["train"])
         models["full"] = fit_variant(base, "full", base.idx["train"], x_, y_, root)

@@ -22,7 +22,12 @@ Why: a quick experiment outside the roadmap; results in `experiments/grad_stack/
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(grad_target)`: `<new>` -> `'output'`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(max_rows)`: `<new>` -> `None`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(seed)`: `<new>` -> `0`
-- `nig_timenet_torch.workflow.grad_stack.GradStackConfig(variants)`: `<new>` -> `('A', 'data_h2', 'grad', 'grad_data', 'full')`
+- `nig_timenet_torch.workflow.grad_stack.GradStackConfig(variants)`: `<new>` -> `('A', 'data_h2', 'grad', 'grad_data', 'grad_full', 'full')`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(with_preds)`: `<new>` -> `False`
 - `nig_timenet_torch.workflow.grad_stack.grad_stack_battery(cost)`: `<new>` -> `0.0008`
 - `nig_timenet_torch.workflow.grad_stack.grad_stack_battery(show)`: `<new>` -> `True`
+- `nig_timenet_torch.workflow.grad_net.GradNet(dim)`: `<new>` -> `32`
+- `nig_timenet_torch.workflow.grad_net.GradNet(outputs)`: `<new>` -> `'per_head'`
+- `nig_timenet_torch.workflow.grad_stack.GradStackConfig(full_grad_dim)`: `<new>` -> `32`
+- `nig_timenet_torch.workflow.grad_stack.GradStackConfig(full_grad_outputs)`: `<new>` -> `'per_head'`
+- `nig_timenet_torch.workflow.grad_stack.fit_variant(build)`: `<new>` -> `<callable nig_timenet_torch.workflow.run.build>`

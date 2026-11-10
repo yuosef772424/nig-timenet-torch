@@ -9,7 +9,9 @@ Colab job entry `grad_stack` (`jobs/grad_stack.py`); notebook section `2b. Grad 
    learning layer (gradient w.r.t. the layer output; plus the input gradient), summarised as norm/mean/std/max|g|.
    Saved to `<out>/modelA_grads_preds.npz`.
 3. Model B trained on H2 with those gradients as input: `grad` (gradients only) or `grad_data` (gradients + the
-   window). Controls: `data_h2` (same rows, data only) and `full` (all train rows, data only).
+   window). `grad_full` (`workflow/grad_net.py`): B sees ONLY A's full per-layer gradients (every unit, one channel
+   per A output), computed inside every step, one encoder per layer, the project backbone over the layer tokens.
+   Controls: `data_h2` (same rows, data only) and `full` (all train rows, data only).
 4. Every variant is scored with the project's own test: `run.stage_report` (target_report on test) and the gate rows
    `eval.gates.stage_rows` (on synthetic E1 judged against the oracle).
 
