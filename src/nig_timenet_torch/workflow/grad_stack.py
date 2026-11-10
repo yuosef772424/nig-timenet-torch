@@ -45,7 +45,7 @@ from nig_timenet_torch.data_io.synthetic import SyntheticSettings, oracle_keys, 
 from nig_timenet_torch.eval import gates
 from nig_timenet_torch.eval.vol_baseline import window_ranges
 from nig_timenet_torch.model.architectures import ModelSettings
-from nig_timenet_torch.workflow import flat_run, run, run_common
+from nig_timenet_torch.workflow import battery_run, flat_run, run, run_common
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings
 
 STATS = ("norm", "mean", "std", "maxabs")
@@ -315,10 +315,29 @@ def run_grad_stack(cfg: GradStackConfig, out) -> dict:
         rep, rr = evaluate(models[name], name, base.x["test"], oracle)
         results[name] = rep
         rows += rr
+        for st in ("val", "test"):     # the battery's inputs (grad_stack_battery reads them back)
+            battery_run.stage_inputs(models[name], st).battery_table().to_parquet(
+                battery_run.table_path(models[name].settings.run_dir, st), index=False)
 
     meta = {"config": asdict(a), "split": split_info, "grad_features": names, "oracle": bool(oracle),
             "seconds": round(time.monotonic() - t_all, 1)}
     return write_report(results, rows, out, meta)
+
+
+def grad_stack_battery(out, *, cost: float = 0.0008, show: bool = True) -> dict:
+    """The evaluation battery (T-profit after ``cost`` per side) of every variant of a finished ``run_grad_stack``
+    folder; ``n_variants`` = the number of variants (the battery's multiple-testing correction). Writes
+    ``battery_report.txt`` / ``battery_profit.json`` into each variant folder; -> {variant: battery sections}."""
+    runs = Path(out) / "runs"
+    names = [v for v in VARIANTS if battery_run.table_path(runs / v, "test").is_file()]
+    if not names:
+        raise FileNotFoundError(f"no battery tables under {runs}: run run_grad_stack again with this code version")
+    res = {}
+    for v in names:
+        res[v] = battery_run.battery_from_folder(runs / v, cost=cost, n_variants=len(names), out_dir=runs / v)
+        if show:
+            print(f"\n{'=' * 30} battery: {v} {'=' * 30}\n{battery_run.render(res[v])}", flush=True)
+    return res
 
 
 def main(argv=None) -> dict:

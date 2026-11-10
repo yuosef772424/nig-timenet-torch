@@ -8,7 +8,7 @@ import torch
 
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.jobs.grad_stack import CONFIG
-from nig_timenet_torch.workflow.grad_stack import GradStackConfig, grad_features, run_grad_stack
+from nig_timenet_torch.workflow.grad_stack import GradStackConfig, grad_features, grad_stack_battery, run_grad_stack
 
 TINY = {"e1": {"n_coins": 8, "n_bars": 400}, "epochs": 1, "batch_size": 128}
 
@@ -54,3 +54,11 @@ def test_config_is_strict():
         GradStackConfig(grad_target="labels")
     with pytest.raises(ValueError):
         GradStackConfig(variants=("grad",))
+
+
+def test_battery_runs_on_every_variant(result):
+    _, out = result
+    res = grad_stack_battery(out, show=False)
+    assert set(res) == {"A", "data_h2", "grad", "grad_data", "full"}
+    assert all("verdict" in sec for sec in res.values())
+    assert (out / "runs" / "grad" / "battery_report.txt").is_file()

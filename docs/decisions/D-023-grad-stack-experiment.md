@@ -24,3 +24,5 @@ Why: a quick experiment outside the roadmap; results in `experiments/grad_stack/
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(seed)`: `<new>` -> `0`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(variants)`: `<new>` -> `('A', 'data_h2', 'grad', 'grad_data', 'full')`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(with_preds)`: `<new>` -> `False`
+- `nig_timenet_torch.workflow.grad_stack.grad_stack_battery(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.workflow.grad_stack.grad_stack_battery(show)`: `<new>` -> `True`

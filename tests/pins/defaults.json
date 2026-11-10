@@ -1,5 +1,5 @@
 {
- "fingerprint": "891dc8b72b0298a4",
+ "fingerprint": "d1ad313e1c5d41e5",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -700,6 +700,8 @@
   "nig_timenet_torch.workflow.grad_stack.GradStackConfig(seed)": "0",
   "nig_timenet_torch.workflow.grad_stack.GradStackConfig(variants)": "('A', 'data_h2', 'grad', 'grad_data', 'full')",
   "nig_timenet_torch.workflow.grad_stack.GradStackConfig(with_preds)": "False",
+  "nig_timenet_torch.workflow.grad_stack.grad_stack_battery(cost)": "0.0008",
+  "nig_timenet_torch.workflow.grad_stack.grad_stack_battery(show)": "True",
   "nig_timenet_torch.workflow.health_report.HealthRun(probe_max_rows)": "2000",
   "nig_timenet_torch.workflow.health_report.HealthRun(probe_points)": "None",
   "nig_timenet_torch.workflow.prediction_table.predict_table(batch_size)": "512",
