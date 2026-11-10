@@ -82,7 +82,7 @@ def test_anti_memorization_preset_is_the_default_oracle_overrides():
     assert ANTI_MEMORIZATION_CONFIG == ol.load_config(data=D)["overrides"]
     meta = ARCHITECTURES.entry("nig_timenet_v2").meta
     assert meta["anti_memorization_config"] == ANTI_MEMORIZATION_CONFIG
-    assert ARCHITECTURES.names() == ("nig_timenet_v2", "tiny_mlp")  # a preset, not a second entry
+    assert ARCHITECTURES.names() == ("nig_timenet_v2", "tiny_mlp", "chart_cnn")  # a preset, not a second entry
 
 
 def test_default_config_plus_preset_rebuilds_the_default_oracle():

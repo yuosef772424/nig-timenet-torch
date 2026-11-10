@@ -152,3 +152,10 @@ def build_tiny_mlp(seq_len: int, n_features: int, **config) -> TinyMLP:
 
 ARCHITECTURES.register("tiny_mlp", build_tiny_mlp, version=1, build_fn=build_tiny_mlp,
                        default_config={"price_targets": list(TARGET_COLUMNS), "hidden": 32})
+
+
+# chart_cnn (owner 2026-11-10: a structurally different model that uses none of the project's layers)
+from nig_timenet_torch.model.chart_cnn import CHART_CNN_DEFAULT_CONFIG, build_chart_cnn  # noqa: E402
+
+ARCHITECTURES.register("chart_cnn", build_chart_cnn, version=1, build_fn=build_chart_cnn,
+                       default_config=CHART_CNN_DEFAULT_CONFIG)

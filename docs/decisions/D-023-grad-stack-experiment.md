@@ -19,6 +19,12 @@ Why: a quick experiment outside the roadmap; results in `experiments/grad_stack/
 - Both are opt-in (`encoder` override); the default model (encoder "gru") is unchanged.
 - `GradStackConfig.model_overrides` passes e.g. `{"encoder": "timesnet"}` to every variant of the experiment.
 
+## New architecture chart_cnn (owner 2026-11-10: "a big difference, a different structure, preferably none of the
+existing layers, since they may be the cause")
+- `model/chart_cnn.py`: each window drawn as a 2-channel chart image (range bars + close line, min-max per window,
+  so an outlier bar cannot blow up the input), a 2D CNN, one shared head written in the module (no NIGHead /
+  OrderedMeans / ConfidenceHead / instance norm); same 24-key output contract. Opt-in (`architecture="chart_cnn"`).
+
 ## New defaults
 - `nig_timenet_torch.jobs.grad_stack.CONFIG`: `<new>` -> `<class 'nig_timenet_torch.workflow.grad_stack.GradStackConfig'>`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(architecture)`: `<new>` -> `'tiny_mlp'`
@@ -41,3 +47,23 @@ Why: a quick experiment outside the roadmap; results in `experiments/grad_stack/
 - `nig_timenet_torch.workflow.grad_stack.fit_variant(build)`: `<new>` -> `<callable nig_timenet_torch.workflow.run.build>`
 - `nig_timenet_torch.model.encoders.TimesBlock(top_k)`: `<new>` -> `2`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(model_overrides)`: `<new>` -> `{}`
+- `nig_timenet_torch.model.chart_cnn.CHART_CNN_DEFAULT_CONFIG.dropout`: `<new>` -> `0.3`
+- `nig_timenet_torch.model.chart_cnn.CHART_CNN_DEFAULT_CONFIG.height`: `<new>` -> `32`
+- `nig_timenet_torch.model.chart_cnn.CHART_CNN_DEFAULT_CONFIG.hidden`: `<new>` -> `64`
+- `nig_timenet_torch.model.chart_cnn.CHART_CNN_DEFAULT_CONFIG.n_blocks`: `<new>` -> `3`
+- `nig_timenet_torch.model.chart_cnn.CHART_CNN_DEFAULT_CONFIG.out_scale`: `<new>` -> `0.01`
+- `nig_timenet_torch.model.chart_cnn.CHART_CNN_DEFAULT_CONFIG.price_targets`: `<new>` -> `['high', 'low', 'close']`
+- `nig_timenet_torch.model.chart_cnn.ChartCNN(dropout)`: `<new>` -> `0.3`
+- `nig_timenet_torch.model.chart_cnn.ChartCNN(feature_cols)`: `<new>` -> `(0, 1, 2)`
+- `nig_timenet_torch.model.chart_cnn.ChartCNN(head_types)`: `<new>` -> `None`
+- `nig_timenet_torch.model.chart_cnn.ChartCNN(height)`: `<new>` -> `32`
+- `nig_timenet_torch.model.chart_cnn.ChartCNN(hidden)`: `<new>` -> `64`
+- `nig_timenet_torch.model.chart_cnn.ChartCNN(n_blocks)`: `<new>` -> `3`
+- `nig_timenet_torch.model.chart_cnn.ChartCNN(out_scale)`: `<new>` -> `0.01`
+- `nig_timenet_torch.model.chart_cnn.ChartCNN(price_targets)`: `<new>` -> `('high', 'low', 'close')`
+- `registry:architecture:chart_cnn.default_config.dropout`: `<new>` -> `0.3`
+- `registry:architecture:chart_cnn.default_config.height`: `<new>` -> `32`
+- `registry:architecture:chart_cnn.default_config.hidden`: `<new>` -> `64`
+- `registry:architecture:chart_cnn.default_config.n_blocks`: `<new>` -> `3`
+- `registry:architecture:chart_cnn.default_config.out_scale`: `<new>` -> `0.01`
+- `registry:architecture:chart_cnn.default_config.price_targets`: `<new>` -> `['high', 'low', 'close']`

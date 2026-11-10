@@ -110,6 +110,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 |---|---|---|
 | `model/architectures.py` | The ARCHITECTURES registry (build_fn + default_config per architecture), ModelSettings / build_model, the anti-memorization preset and the TinyMLP plug-in proof; every architecture exposes the health-report hooks. | architectures, registry, model settings, default config, tiny mlp, plugin, health report, probe points |
 | `model/builder.py` | NigTimeNetV2 (the fused model: input path, one encoder branch per timeframe, trunk, heads) and build_nig_timenet_v2; encoders come from model.encoders.ENCODERS, head kinds from HEAD_REGISTRY. | builder, nig timenet v2, model assembly, encoder dispatch, head dispatch, oracle weights, state dict |
+| `model/chart_cnn.py` | ChartCNN: a model built from scratch (no project layer): each input window is drawn as a 2-channel chart image (high-low range bars + close line), a 2D CNN reads it, one shared head outputs every target's numbers. | chart image, cnn, candlestick image, robust to outliers, new architecture, chart_cnn, from scratch |
 | `model/contract.py` | The boundary contract of a model (input and output names, shapes, dtypes, head kind), read from any built model by one forward pass and checked with a field-level diff; architectures plug in through it. | model contract, boundary, architecture, plugin, head kind, check_contract |
 | `model/encoders.py` | The ENCODERS registry: each encoder builds its modules through the model's ``add(name, module)`` (Keras layer names, so state_dict keys are unchanged) and owns its forward over the token sequence. | encoders, encoder registry, transformer, gru, tcn, itransformer, timesnet, causal conv, sequence encoder, plugin |
 | `model/heads.py` | The ONE head vocabulary: HEAD_REGISTRY (a head KIND -> output keys, label key, task type, output width, forward), head_spec, and the nig_outputs / class_outputs helpers that assemble a head's output dict. | heads, head registry, head spec, output keys, nig outputs, class outputs, task type, output width |
@@ -169,7 +170,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | kind | variable | module | registered names |
 |---|---|---|---|
-| architecture | `ARCHITECTURES` | `model/architectures.py` | `nig_timenet_v2`, `tiny_mlp` |
+| architecture | `ARCHITECTURES` | `model/architectures.py` | `chart_cnn`, `nig_timenet_v2`, `tiny_mlp` |
 | calibrator | `CALIBRATORS` | `eval/calibrator.py` | `isotonic` |
 | custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` | `ath_distance`, `calendar`, `crash_rebound`, `direction_consistency`, `fisher`, `fractal`, `jump`, `mean_reversion`, `position_in_range`, `psar`, `range_rel`, `returns`, `risk_adj_momentum`, `rsi_divergence`, `rvi`, `supertrend`, `trend_age`, `vol_asymmetry`, `vol_estimators`, `vol_ratio`, `vol_term_structure`, `volume_z` |
 | encoder | `ENCODERS` | `model/encoders.py` | `gru`, `itransformer`, `tcn`, `timesnet`, `transformer` |
