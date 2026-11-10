@@ -119,6 +119,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `model/panel.py` | Cross-asset panel model (source: crypto-signal-prediction cross_asset/model.py @ aeafc564), BUILD_PLAN.md P43. |  |
 | `model/parts.py` | The registered input_skip variants of the transformer encoder (none, concat_each_block, dense_skip, late_raw, no_proj); class flags say what a variant adds, so builders never compare variant names. | input skip, variants, transformer encoder, patch embedding, readout, registry, flags |
 | `model/probe.py` | Per-layer ridge-probe report: forward-hook activations of named modules fitted to a label with time-ordered folds (AUC for binary y, else R^2), the raw input scored next to every layer. | probe, layer probe, ridge, activations, forward hook, health report |
+| `model/scratch_nets.py` | Two models built from scratch (no project layer) to find where memorization starts and learning breaks: conv1d_net (dilated 1D convolutions + a dense head) and no_dense_net (no Linear layer anywhere: convolutions only). | conv1d, dilated convolution, no dense, fully convolutional, global pooling, new architecture, from scratch |
 | `model/taps.py` | Inspection-only taps: record the output of every (or chosen) named module of ANY architecture into a dict during a forward pass, per-layer summaries, and a signal trace (ridge R^2 of a known signal per layer). | taps, layer outputs, inspection, diagnostics, forward hook, signal trace, dead units, model doctor |
 
 ### stats
@@ -170,7 +171,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | kind | variable | module | registered names |
 |---|---|---|---|
-| architecture | `ARCHITECTURES` | `model/architectures.py` | `chart_cnn`, `nig_timenet_v2`, `tiny_mlp` |
+| architecture | `ARCHITECTURES` | `model/architectures.py` | `chart_cnn`, `conv1d_net`, `nig_timenet_v2`, `no_dense_net`, `tiny_mlp` |
 | calibrator | `CALIBRATORS` | `eval/calibrator.py` | `isotonic` |
 | custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` | `ath_distance`, `calendar`, `crash_rebound`, `direction_consistency`, `fisher`, `fractal`, `jump`, `mean_reversion`, `position_in_range`, `psar`, `range_rel`, `returns`, `risk_adj_momentum`, `rsi_divergence`, `rvi`, `supertrend`, `trend_age`, `vol_asymmetry`, `vol_estimators`, `vol_ratio`, `vol_term_structure`, `volume_z` |
 | encoder | `ENCODERS` | `model/encoders.py` | `gru`, `itransformer`, `tcn`, `timesnet`, `transformer` |

@@ -212,6 +212,26 @@ def model_a_features(model_a: run.Run, base: run.Run, h2_xy: tuple, h2: np.ndarr
     return {k: sc.transform(v) for k, v in G.items()}, names
 
 
+def learning_curves(models: dict, out: Path) -> pd.DataFrame:
+    """Where memorization starts: per variant and epoch the train / val raw loss (``learning_curves.csv``) and a
+    digest: best epoch, val at best / last, ``overfit`` = val_last - val_best (> 0: val got worse after the best
+    epoch), ``gap`` = val_last - train_last (train much lower than val: the model fits rows it cannot generalise)."""
+    rows = [{"variant": n, "epoch": h["epoch"], "train": h.get("train_raw_loss"), "val": h.get("val_raw_loss")}
+            for n, r in models.items() for h in r.result.history]
+    curves = pd.DataFrame(rows)
+    curves.to_csv(out / "learning_curves.csv", index=False)
+    digest = {}
+    for n, c in curves.groupby("variant", sort=False):
+        best = int(models[n].result.best_epoch or c["epoch"].iloc[-1])
+        vb = float(c.loc[c["epoch"] == best, "val"].iloc[0])
+        digest[n] = {"epochs": len(c), "best_epoch": best, "train_first": c["train"].iloc[0],
+                     "train_last": c["train"].iloc[-1], "val_best": vb, "val_last": c["val"].iloc[-1],
+                     "overfit": c["val"].iloc[-1] - vb, "gap": c["val"].iloc[-1] - c["train"].iloc[-1]}
+    dg = pd.DataFrame(digest).T
+    print("\n== learning curves (raw loss; lower = better) ==\n", dg.round(4).to_string(), flush=True)
+    return dg
+
+
 def write_report(results: dict, rows: list[dict], out: Path, meta: dict) -> dict:
     """The comparison files (test report per variant, gate rows / verdicts, summary.json) and a printed digest."""
     summary = pd.DataFrame({n: _flat(r) for n, r in results.items()})
@@ -332,8 +352,9 @@ def run_grad_stack(cfg: GradStackConfig, out) -> dict:
             battery_run.stage_inputs(models[name], st).battery_table().to_parquet(
                 battery_run.table_path(models[name].settings.run_dir, st), index=False)
 
+    curves = learning_curves({n: models[n] for n in want if n in models}, out)
     meta = {"config": asdict(a), "split": split_info, "grad_features": names, "oracle": bool(oracle),
-            "seconds": round(time.monotonic() - t_all, 1)}
+            "learning": curves.to_dict(orient="index"), "seconds": round(time.monotonic() - t_all, 1)}
     return write_report(results, rows, out, meta)
 
 

@@ -25,7 +25,8 @@ from nig_timenet_torch.core.constants import NIG_ALPHA_DEN_MIN
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.model.heads import class_outputs, head_spec, nig_outputs
 
-__all__ = ["ChartCNN", "HeadView", "build_chart_cnn", "draw_charts", "CHART_CNN_DEFAULT_CONFIG"]
+__all__ = ["ChartCNN", "HeadView", "build_chart_cnn", "nig_params", "output_dict", "draw_charts",
+           "CHART_CNN_DEFAULT_CONFIG"]
 
 CHART_CNN_DEFAULT_CONFIG = {"price_targets": list(TARGET_COLUMNS), "height": 32, "n_blocks": 3, "hidden": 64,
                             "dropout": 0.3, "out_scale": 0.01}
@@ -48,6 +49,26 @@ def draw_charts(x: torch.Tensor, height: int, cols: tuple[int, int, int]) -> tup
     bars = ((rows >= bot_r) & (rows <= top_r)).to(x.dtype)
     line = (rows == cl_row).to(x.dtype)
     return torch.stack([bars, line], dim=1).flip(2), rng.log()
+
+
+def nig_params(p: torch.Tensor, scale: float) -> tuple[torch.Tensor, ...]:
+    """(mu, nu, alpha, beta), each (B, n_targets), from raw (B, n_targets, 4) in label scale ``scale``."""
+    return (scale * p[..., 0], F.softplus(p[..., 1]) + _NU_MIN, F.softplus(p[..., 2]) + _ALPHA_MIN,
+            scale ** 2 * (F.softplus(p[..., 3]) + _BETA_MIN))
+
+
+def output_dict(targets, mu, nu, alpha, beta, conf, prob) -> dict[str, torch.Tensor]:
+    """The 24-key output contract from (B, n_targets) tensors (the uncertainties follow Amini et al., capped)."""
+    a1 = (alpha - 1.0).clamp_min(NIG_ALPHA_DEN_MIN)
+    ale = torch.sqrt(beta / a1).clamp(max=_UNC_MAX)
+    epi = torch.sqrt(beta / (nu * a1)).clamp(max=_UNC_MAX)
+    out = {}
+    for i, t in enumerate(targets):
+        c = slice(i, i + 1)
+        out.update(nig_outputs(head_spec("nig_regression", t), mu[:, c], nu[:, c], alpha[:, c], beta[:, c],
+                               epi[:, c], ale[:, c], conf[:, c]))
+        out.update(class_outputs(head_spec("binary_classification", t), prob[:, c]))
+    return out
 
 
 class HeadView(nn.Module):
@@ -96,25 +117,10 @@ class ChartCNN(nn.Module):
     def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
         img, log_rng = draw_charts(x, self.height, self.cols)
         h = self.trunk(torch.cat([self.body(img), log_rng], dim=1))
-        p = self.nig_out(h).view(-1, len(self.targets), 4)
-        mu = self.scale * p[..., 0]
-        nu = F.softplus(p[..., 1]) + _NU_MIN
-        alpha = F.softplus(p[..., 2]) + _ALPHA_MIN
-        beta = self.scale ** 2 * (F.softplus(p[..., 3]) + _BETA_MIN)
-        a1 = (alpha - 1.0).clamp_min(NIG_ALPHA_DEN_MIN)
-        ale = torch.sqrt(beta / a1).clamp(max=_UNC_MAX)
-        epi = torch.sqrt(beta / (nu * a1)).clamp(max=_UNC_MAX)
+        mu, nu, alpha, beta = nig_params(self.nig_out(h).view(-1, len(self.targets), 4), self.scale)
         conf_in = torch.cat([h, nu.log(), (alpha - 1.0).log(), beta.log()], dim=1).detach()
         conf = 0.05 + 0.93 * torch.sigmoid(self.conf_out(conf_in))
-        prob = torch.sigmoid(self.dir_out(h))
-        out = {}
-        for i, t in enumerate(self.targets):
-            col = slice(i, i + 1)
-            out.update(nig_outputs(head_spec("nig_regression", t), mu[:, col], nu[:, col], alpha[:, col],
-                                   beta[:, col], epi[:, col], ale[:, col], conf[:, col]))
-            out.update(class_outputs(head_spec("binary_classification", t), prob[:, col]))
-        return out
-
+        return output_dict(self.targets, mu, nu, alpha, beta, conf, torch.sigmoid(self.dir_out(h)))
 
 def build_chart_cnn(seq_len: int, n_features: int, **config) -> ChartCNN:
     return ChartCNN(int(seq_len), int(n_features), **config)

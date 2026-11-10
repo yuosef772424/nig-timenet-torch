@@ -15,6 +15,7 @@ architecture), so the backbone's heads, losses, tables and the battery work unch
 import copy
 
 import torch
+import torch.nn.functional as F
 from torch import nn
 
 from nig_timenet_torch.core.seeds import seed_everything
@@ -56,6 +57,7 @@ class GradNet(nn.Module):
                      [f.format(t=k) for k in sorted(out) if f"{k}_class_logits" in out for f in _PER_HEAD])
         self.names = ["input"] + [n for n, _ in layers if isinstance(self._acts.get(n), torch.Tensor)]
         grads = self.gradients(x_probe[:2].to(dev))
+        self.sizes = [g.shape[2] for g in grads]    # a layer whose output size varies per row is pooled to this
         self.enc = nn.ModuleList(nn.Sequential(nn.Linear(g.shape[1] * (g.shape[2] + 1), dim), nn.GELU(),
                                                nn.LayerNorm(dim)) for g in grads)
         self.backbone = build_model(backbone, len(self.names), dim)
@@ -94,7 +96,9 @@ class GradNet(nn.Module):
 
     def forward(self, x: torch.Tensor) -> dict:
         tokens = []
-        for g, enc in zip(self.gradients(x), self.enc, strict=True):
+        for g, enc, size in zip(self.gradients(x), self.enc, self.sizes, strict=True):
+            if g.shape[2] != size:     # e.g. TimesNet's per-period 2D maps: the size depends on the chosen period
+                g = F.adaptive_avg_pool1d(g, size)
             rms = g.pow(2).mean(dim=2, keepdim=True).sqrt() + 1e-12
             tokens.append(enc(torch.cat([(g / rms).flatten(1), rms.squeeze(2).log()], dim=1)))
         return self.backbone(torch.stack(tokens, dim=1))

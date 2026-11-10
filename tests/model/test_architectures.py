@@ -41,8 +41,9 @@ def test_every_architecture_exposes_the_health_report_hooks():
     for name in ARCHITECTURES.names():
         model = build_model(ModelSettings(name), 8, 4)
         heads = model.head_modules()
-        # chart_cnn writes its own head (no project layer, D-023): a HeadView with the same floors / parameters
-        kinds = (NIGHead, HeadView) if name == "chart_cnn" else (NIGHead,)
+        # chart_cnn / conv1d_net / no_dense_net write their own head (no project layer, D-023): a HeadView
+        # with the same floors / parameters
+        kinds = (NIGHead, HeadView) if name in ("chart_cnn", "conv1d_net", "no_dense_net") else (NIGHead,)
         assert set(heads) == {"high", "low", "close"} and all(isinstance(h, kinds) for h in heads.values()), name
         modules = dict(model.named_modules())
         assert model.default_probe_points and all(p in modules for p in model.default_probe_points), name

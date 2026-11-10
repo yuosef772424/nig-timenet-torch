@@ -25,6 +25,16 @@ existing layers, since they may be the cause")
   so an outlier bar cannot blow up the input), a 2D CNN, one shared head written in the module (no NIGHead /
   OrderedMeans / ConfidenceHead / instance norm); same 24-key output contract. Opt-in (`architecture="chart_cnn"`).
 
+## New architectures conv1d_net / no_dense_net (owner 2026-11-10: "a conv1d structure, and one with no Dense layer
+anywhere, to find where memorization starts and where learning breaks")
+- `model/scratch_nets.py`: conv1d_net (dilated Conv1d blocks, avg + max pooling, dense head) and no_dense_net (no
+  Linear and no 1x1 conv anywhere; the outputs are Conv1d(k=3) maps averaged over time). Inputs squashed with
+  sign(x) log1p|x|. Both opt-in. The head maths (`chart_cnn.nig_params` / `output_dict`) is shared by the three
+  scratch models.
+- grad_stack writes `learning_curves.csv` and prints, per variant, the best epoch, `overfit` (val_last - val_best)
+  and `gap` (val_last - train_last). GradNet pools a layer whose gradient size varies per row (TimesNet) to its probe
+  size.
+
 ## New defaults
 - `nig_timenet_torch.jobs.grad_stack.CONFIG`: `<new>` -> `<class 'nig_timenet_torch.workflow.grad_stack.GradStackConfig'>`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(architecture)`: `<new>` -> `'tiny_mlp'`
@@ -67,3 +77,35 @@ existing layers, since they may be the cause")
 - `registry:architecture:chart_cnn.default_config.n_blocks`: `<new>` -> `3`
 - `registry:architecture:chart_cnn.default_config.out_scale`: `<new>` -> `0.01`
 - `registry:architecture:chart_cnn.default_config.price_targets`: `<new>` -> `['high', 'low', 'close']`
+- `nig_timenet_torch.model.scratch_nets.CONV1D_NET_DEFAULT_CONFIG.channels`: `<new>` -> `64`
+- `nig_timenet_torch.model.scratch_nets.CONV1D_NET_DEFAULT_CONFIG.dropout`: `<new>` -> `0.2`
+- `nig_timenet_torch.model.scratch_nets.CONV1D_NET_DEFAULT_CONFIG.hidden`: `<new>` -> `64`
+- `nig_timenet_torch.model.scratch_nets.CONV1D_NET_DEFAULT_CONFIG.n_blocks`: `<new>` -> `3`
+- `nig_timenet_torch.model.scratch_nets.CONV1D_NET_DEFAULT_CONFIG.out_scale`: `<new>` -> `0.01`
+- `nig_timenet_torch.model.scratch_nets.CONV1D_NET_DEFAULT_CONFIG.price_targets`: `<new>` -> `['high', 'low', 'close']`
+- `nig_timenet_torch.model.scratch_nets.Conv1DNet(channels)`: `<new>` -> `64`
+- `nig_timenet_torch.model.scratch_nets.Conv1DNet(dropout)`: `<new>` -> `0.2`
+- `nig_timenet_torch.model.scratch_nets.Conv1DNet(head_types)`: `<new>` -> `None`
+- `nig_timenet_torch.model.scratch_nets.Conv1DNet(hidden)`: `<new>` -> `64`
+- `nig_timenet_torch.model.scratch_nets.Conv1DNet(n_blocks)`: `<new>` -> `3`
+- `nig_timenet_torch.model.scratch_nets.Conv1DNet(out_scale)`: `<new>` -> `0.01`
+- `nig_timenet_torch.model.scratch_nets.Conv1DNet(price_targets)`: `<new>` -> `('high', 'low', 'close')`
+- `nig_timenet_torch.model.scratch_nets.NO_DENSE_NET_DEFAULT_CONFIG.channels`: `<new>` -> `64`
+- `nig_timenet_torch.model.scratch_nets.NO_DENSE_NET_DEFAULT_CONFIG.n_blocks`: `<new>` -> `4`
+- `nig_timenet_torch.model.scratch_nets.NO_DENSE_NET_DEFAULT_CONFIG.out_scale`: `<new>` -> `0.01`
+- `nig_timenet_torch.model.scratch_nets.NO_DENSE_NET_DEFAULT_CONFIG.price_targets`: `<new>` -> `['high', 'low', 'close']`
+- `nig_timenet_torch.model.scratch_nets.NoDenseNet(channels)`: `<new>` -> `64`
+- `nig_timenet_torch.model.scratch_nets.NoDenseNet(head_types)`: `<new>` -> `None`
+- `nig_timenet_torch.model.scratch_nets.NoDenseNet(n_blocks)`: `<new>` -> `4`
+- `nig_timenet_torch.model.scratch_nets.NoDenseNet(out_scale)`: `<new>` -> `0.01`
+- `nig_timenet_torch.model.scratch_nets.NoDenseNet(price_targets)`: `<new>` -> `('high', 'low', 'close')`
+- `registry:architecture:conv1d_net.default_config.channels`: `<new>` -> `64`
+- `registry:architecture:conv1d_net.default_config.dropout`: `<new>` -> `0.2`
+- `registry:architecture:conv1d_net.default_config.hidden`: `<new>` -> `64`
+- `registry:architecture:conv1d_net.default_config.n_blocks`: `<new>` -> `3`
+- `registry:architecture:conv1d_net.default_config.out_scale`: `<new>` -> `0.01`
+- `registry:architecture:conv1d_net.default_config.price_targets`: `<new>` -> `['high', 'low', 'close']`
+- `registry:architecture:no_dense_net.default_config.channels`: `<new>` -> `64`
+- `registry:architecture:no_dense_net.default_config.n_blocks`: `<new>` -> `4`
+- `registry:architecture:no_dense_net.default_config.out_scale`: `<new>` -> `0.01`
+- `registry:architecture:no_dense_net.default_config.price_targets`: `<new>` -> `['high', 'low', 'close']`
