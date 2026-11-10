@@ -96,3 +96,13 @@ def test_grad_net_sees_every_layer_and_only_gradients(result):
         y2 = g(torch.randn_like(x))
     for k in y:
         torch.testing.assert_close(y[k], y2[k])
+
+
+def test_single_model_mode_trains_one_model(tmp_path):
+    """variants=("full",): one model on all train rows, no model A, no gradients; the test and the battery run."""
+    meta = run_grad_stack(GradStackConfig(**{**TINY, "architecture": "conv1d_net", "variants": ("full",)}), tmp_path)
+    assert set(meta["gate_fails"]) == {"full"} and meta["grad_features"] == []
+    assert not (tmp_path / "modelA_grads_preds.npz").exists()
+    assert set(grad_stack_battery(tmp_path, show=False)) == {"full"}
+    with pytest.raises(ValueError):
+        GradStackConfig(variants=("grad",))

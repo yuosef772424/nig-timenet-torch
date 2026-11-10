@@ -51,6 +51,8 @@ from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, Trai
 
 STATS = ("norm", "mean", "std", "maxabs")
 VARIANTS = ("A", "data_h2", "grad", "grad_data", "grad_full", "full")
+NEEDS_A = ("grad", "grad_data", "grad_full")     # the variants built on model A
+SINGLE = ("full",)          # one model on all train rows: the quick test of an architecture
 
 
 # ------------------------------------------------------------------------------------------------ split
@@ -279,8 +281,10 @@ class GradStackConfig:
         if self.grad_target not in ("output", "loss"):
             raise ValueError(f"grad_target must be 'output' or 'loss', got {self.grad_target!r}")
         bad = sorted(set(self.variants) - set(VARIANTS))
-        if bad or "A" not in self.variants:
-            raise ValueError(f"variants must include 'A' and come from {VARIANTS}, got unknown {bad}")
+        needs_a = bool(set(self.variants) & set(NEEDS_A))
+        if bad or not self.variants or (needs_a and "A" not in self.variants):
+            raise ValueError(f"variants come from {VARIANTS}, are not empty, and include 'A' when they include any "
+                             f"of {NEEDS_A}; got {self.variants} (unknown {bad})")
         SyntheticSettings(**self.e1)
 
 
@@ -311,7 +315,8 @@ def run_grad_stack(cfg: GradStackConfig, out) -> dict:
     split_info = {k: {"rows": int(len(v)), "from": str(pd.Timestamp(fe[v].min())), "to": str(pd.Timestamp(fe[v].max()))}
                   for k, v in {"H1": h1, "H2": h2, "val": base.idx["val"], "test": base.idx["test"]}.items()}
     print("split:", json.dumps(split_info), flush=True)
-    xs = {k: flat_run.flat_inputs(ds, v) for k, v in {"H1": h1, "H2": h2}.items()}
+    halves = {} if set(a.variants) <= set(SINGLE) else {"H1": h1, "H2": h2}   # one model: no halves loaded
+    xs = {k: flat_run.flat_inputs(ds, v) for k, v in halves.items()}
     want = list(a.variants)
     root = out / "runs"
     results, rows, models = {}, [], {}
@@ -321,10 +326,12 @@ def run_grad_stack(cfg: GradStackConfig, out) -> dict:
                  "test": base.x["test"] if xte is None else xte},
                 {"train": ytr, "val": base.y["val"], "test": base.y["test"]})
 
-    # model A on H1
-    x_, y_ = common(*xs["H1"])
-    models["A"] = fit_variant(base, "A", h1, x_, y_, root)
-    Gs, names = model_a_features(models["A"], base, xs["H2"], h2, a, out)
+    names = []
+    if "A" in want:          # model A on H1 (and its gradients when a gradient variant needs them)
+        x_, y_ = common(*xs["H1"])
+        models["A"] = fit_variant(base, "A", h1, x_, y_, root)
+    if set(want) & set(NEEDS_A):
+        Gs, names = model_a_features(models["A"], base, xs["H2"], h2, a, out)
 
     if "data_h2" in want:
         x_, y_ = common(*xs["H2"])
