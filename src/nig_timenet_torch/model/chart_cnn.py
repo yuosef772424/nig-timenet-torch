@@ -10,8 +10,8 @@ returns ``high, low, close`` (log moves vs the previous close, standardised); th
 bar t spans [prev + low_t, prev + high_t] (widened to contain prev and close_t). Channel 0 = the range bar of each
 column, channel 1 = the close pixel. Rows = ``height`` price levels, columns = the window's bars.
 
-Body: ``n_blocks`` x [Conv2d(5x3) -> BatchNorm2d -> LeakyReLU -> MaxPool(2x1)] (channels 32, 64, 128, ...), adaptive
-average pool to (2, 8), Linear -> ``hidden``. Head (written here, not the project's NIG / class head modules): one
+Body: ``n_blocks`` x [Conv2d(5x3) -> BatchNorm2d -> LeakyReLU -> MaxPool(2x1)] (channels 32, 64, 128, ...), the
+mean over a (2, 8) grid (``grid_pool``), Linear -> ``hidden``. Head (written here, not the project's head modules): one
 Linear to [mu, nu, alpha, beta] x targets, one Linear to the direction probability per target, and a confidence from
 the detached features; the NIG parameters use the label scale ``out_scale`` (labels are ~0.02: mu = s * raw, beta =
 s^2 * (softplus + beta_min)). The output dict has the same 24 keys and meanings as every other architecture.
@@ -25,7 +25,7 @@ from nig_timenet_torch.core.constants import NIG_ALPHA_DEN_MIN
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.model.heads import class_outputs, head_spec, nig_outputs
 
-__all__ = ["ChartCNN", "HeadView", "build_chart_cnn", "nig_params", "output_dict", "draw_charts",
+__all__ = ["ChartCNN", "HeadView", "build_chart_cnn", "grid_pool", "nig_params", "output_dict", "draw_charts",
            "CHART_CNN_DEFAULT_CONFIG"]
 
 CHART_CNN_DEFAULT_CONFIG = {"price_targets": list(TARGET_COLUMNS), "height": 32, "n_blocks": 3, "hidden": 64,
@@ -49,6 +49,16 @@ def draw_charts(x: torch.Tensor, height: int, cols: tuple[int, int, int]) -> tup
     bars = ((rows >= bot_r) & (rows <= top_r)).to(x.dtype)
     line = (rows == cl_row).to(x.dtype)
     return torch.stack([bars, line], dim=1).flip(2), rng.log()
+
+
+def grid_pool(h: torch.Tensor, rows: int, cols: int) -> torch.Tensor:
+    """(B, C, H, W) -> (B, C * rows * cols): the mean over a rows x cols grid of equal cells (zero padding to a
+    multiple). Plain reshape + mean, so its CUDA backward is deterministic (AdaptiveAvgPool2d's is not, and the
+    trainer runs with torch.use_deterministic_algorithms)."""
+    b, c, hh, ww = h.shape
+    ph, pw = -(-hh // rows) * rows, -(-ww // cols) * cols
+    h = F.pad(h, (0, pw - ww, 0, ph - hh))
+    return h.view(b, c, rows, ph // rows, cols, pw // cols).mean(dim=(3, 5)).flatten(1)
 
 
 def nig_params(p: torch.Tensor, scale: float) -> tuple[torch.Tensor, ...]:
@@ -104,7 +114,7 @@ class ChartCNN(nn.Module):
             layers += [nn.Conv2d(c_in, c_out, (5, 3), padding=(2, 1)), nn.BatchNorm2d(c_out), nn.LeakyReLU(0.01),
                        nn.MaxPool2d((2, 1))]
             c_in = c_out
-        self.body = nn.Sequential(*layers, nn.AdaptiveAvgPool2d((2, 8)), nn.Flatten())
+        self.body = nn.Sequential(*layers)
         self.trunk = nn.Sequential(nn.Dropout(dropout), nn.Linear(c_in * 16 + 1, hidden), nn.LeakyReLU(0.01))
         n = len(self.targets)
         self.nig_out = nn.Linear(hidden, 4 * n)
@@ -116,7 +126,7 @@ class ChartCNN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
         img, log_rng = draw_charts(x, self.height, self.cols)
-        h = self.trunk(torch.cat([self.body(img), log_rng], dim=1))
+        h = self.trunk(torch.cat([grid_pool(self.body(img), 2, 8), log_rng], dim=1))
         mu, nu, alpha, beta = nig_params(self.nig_out(h).view(-1, len(self.targets), 4), self.scale)
         conf_in = torch.cat([h, nu.log(), (alpha - 1.0).log(), beta.log()], dim=1).detach()
         conf = 0.05 + 0.93 * torch.sigmoid(self.conf_out(conf_in))

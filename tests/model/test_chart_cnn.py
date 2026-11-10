@@ -43,3 +43,18 @@ def test_a_backward_pass_reaches_every_weight():
     sum(v.sum() for k, v in out.items() if not k.endswith("_confidence")).backward()
     missing = [n for n, p in m.named_parameters() if p.grad is None and not n.startswith("conf_out")]
     assert not missing
+
+
+def test_grid_pool_equals_adaptive_pool_when_divisible():
+    from nig_timenet_torch.model.chart_cnn import grid_pool
+    h = torch.randn(2, 3, 4, 32)
+    torch.testing.assert_close(grid_pool(h, 2, 8), torch.nn.functional.adaptive_avg_pool2d(h, (2, 8)).flatten(1))
+
+
+def test_trains_under_deterministic_algorithms():
+    torch.use_deterministic_algorithms(True)
+    try:
+        m = build_model(ModelSettings("chart_cnn"), 32, 3).train()
+        sum(v.sum() for v in m(torch.randn(4, 32, 3) * 0.02).values()).backward()
+    finally:
+        torch.use_deterministic_algorithms(False)
