@@ -102,6 +102,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `jobs/baseline.py` | Entry ``baseline``: trains one seed of the default NIG-TimeNet model on the contract artifact, then writes the summary, health report and test report (ROADMAP T5r); a thin entry over workflow.run. | baseline job, colab entry, training run, test report, health report, resume, smoke job |
 | `jobs/device_smoke.py` | Entry ``device_smoke``: proves that the runner, the device assertion and the output contract work on this VM. | device smoke, colab entry, device assertion, runner proof, rule e1 |
 | `jobs/gates.py` | Entry ``gates``: runs the MODEL_DEV_PROTOCOL gates (E1 -> E2 -> E3 x seeds) on one configuration and writes gate_report.json / .md keyed by its configuration hash (ROADMAP G2); a thin entry over workflow.gate_run. | gates job, colab entry, gate report, configuration hash, e1 e2 e3, seeds, rule c6 |
+| `jobs/grad_stack.py` | Entry ``grad_stack``: the gradient stacking experiment (workflow/grad_stack.py) as a Colab job. | grad stack job, colab entry, gradient features, experiment |
 
 ### model
 
@@ -153,6 +154,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `workflow/e1_arms.py` | E1 arm runner: train configuration arms on the synthetic E1 env, gate A start / end + gate B / C rows, and per-head mu calibration against the known E1 conditional mean (mean ratio, spread ratio, corr, slope). | e1, arms, synthetic, mu calibration, slope, oracle, readout gap, model doctor, exploration |
 | `workflow/flat_run.py` | The flat model (one row per coin window, NIG regression + binary class head per price target) as run steps: inputs, anchors, model settings, trainer, fit settings, one chunked predict per stage. | flat run, run steps, trainer config, stage inputs, anchors by name, head kinds, predict stage |
 | `workflow/gate_run.py` | The gate run: E1 -> E2 -> E3 x seeds through the run steps, gate A before / after each short run, gates B / C / canary on the test split, one report keyed by the configuration hash; gate_check refuses an ungated run. | gate run, gate report, gate job, e1 e2 e3, seeds, configuration hash, job-side check, baseline arm, refusal |
+| `workflow/grad_stack.py` | Gradient stacking experiment (owner request 2026-11-10, quick, outside the roadmap): model A on the earlier half of train, its per-layer gradients feed model B on the later half; all variants through the test. | grad stack, gradient features, stacking, time split halves, per-layer gradients, experiment |
 | `workflow/health_report.py` | T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer trace) as JSON and markdown next to the checkpoint. | health report, diagnostics, t-sharp, probe, trainer trace, markdown report |
 | `workflow/prediction_table.py` | The one batched predict that turns a model and its inputs into the canonical PredictionTable, with one writer and one validating reader. | prediction table, batched predict, table meta, table writer, table reader |
 | `workflow/reading.py` | The T5r reading of a finished run: volatility baselines of the high / low heads (rule C1), every use of the outputs with controls on VAL and TEST, deep diagnosis of profitable-looking rules, the evidence check. | t5r reading, rule c1, volatility baseline, strategy book, strategy diagnosis, evidence check, run reading |
@@ -189,7 +191,9 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `jobs/baseline.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/device_smoke.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/gates.py`: job entry (`docs/jobs/*.json` name it)
+- `jobs/grad_stack.py`: job entry (`docs/jobs/*.json` name it)
 - `workflow/e1_arms.py`: runnable (`python -m nig_timenet_torch.workflow.e1_arms`)
+- `workflow/grad_stack.py`: runnable (`python -m nig_timenet_torch.workflow.grad_stack`)
 - `notebooks/colab_nig_timenet_torch.ipynb`: notebook runner
 - `notebooks/data_pipeline.ipynb`: notebook runner
 - `notebooks/main.ipynb`: notebook runner

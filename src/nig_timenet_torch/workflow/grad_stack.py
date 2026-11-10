@@ -1,4 +1,9 @@
-"""Gradient stacking experiment (owner request 2026-11-10, quick experiment, outside the roadmap).
+"""PURPOSE: Gradient stacking experiment (owner request 2026-11-10, quick, outside the roadmap): model A on the
+    earlier half of train, its per-layer gradients feed model B on the later half; all variants through the test.
+TAGS: grad stack, gradient features, stacking, time split halves, per-layer gradients, experiment
+PITFALLS: grad_target "loss" uses the row's label, so it LEAKS on val / test (upper bound only); the gradient
+    features carry model A's knowledge of H1, so compare B with "full" (all train rows), not only with "data_h2".
+
 
 1. Split the TRAIN rows by time into two halves (H1 = earlier, H2 = later; H1 rows whose label ends after H2 starts
    are purged).
@@ -17,21 +22,22 @@ Gradient target (``--grad-target``):
   loss             = d(model A's loss)/d(layer): needs the label of the row, so on val / test it LEAKS the label
                      (kept only to show the upper bound; never read it as a usable result).
 
-Run (CPU, synthetic E1, ~minutes):  python experiments/grad_stack/grad_stack.py --out /tmp/gs
-Real artifact:                      python experiments/grad_stack/grad_stack.py --data <artifact dir> --out <dir>
+Run: ``run_grad_stack(GradStackConfig(...), out)``; job entry ``jobs/grad_stack.py``; CLI
+``python -m nig_timenet_torch.workflow.grad_stack --out <dir> --config '{"data": "<artifact dir>", "device": "cuda"}'``.
 """
 
 import argparse
 import json
 import shutil
 import time
-from dataclasses import replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import torch
 
+from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.data_io.split_plan import sample_times
@@ -43,6 +49,7 @@ from nig_timenet_torch.workflow import flat_run, run, run_common
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings
 
 STATS = ("norm", "mean", "std", "maxabs")
+VARIANTS = ("A", "data_h2", "grad", "grad_data", "full")
 
 
 # ------------------------------------------------------------------------------------------------ split
@@ -83,7 +90,6 @@ def grad_features(trainer, x: torch.Tensor, y: dict, *, target: str, batch: int,
     def hook(name):
         def f(_m, _i, out):
             if isinstance(out, torch.Tensor) and out.requires_grad:
-                out.retain_grad()
                 acts[name] = out
         return f
 
@@ -92,27 +98,24 @@ def grad_features(trainer, x: torch.Tensor, y: dict, *, target: str, batch: int,
     try:
         for s in range(0, len(x), batch):
             acts.clear()
-            xb = x[s:s + batch].to(device).requires_grad_(True)
-            out = model(xb)
-            if target == "output":
-                scalar = sum(v.sum() for v in out.values())
-            else:   # the loss is a batch MEAN: x n gives each row its own gradient (up to batch-level loss terms)
-                yb = {k: v[s:s + batch].to(device) for k, v in y.items()}
-                scalar = trainer.compute_losses(None, yb, outputs=out)[1] * xb.shape[0]
-            model.zero_grad(set_to_none=True)
-            scalar.backward()
-            cols, nm = [_summ(xb.grad)], ["input"]
-            for n, _ in layers:
-                if n in acts and acts[n].grad is not None:
-                    cols.append(_summ(acts[n].grad))
-                    nm.append(n)
-            names = names or [f"{n}.{st}" for n in nm for st in STATS]
-            feats.append(torch.cat(cols, dim=1).detach().cpu())
+            # autograd.grad (no .backward, no optimizer state touched); cudnn off: an RNN backward in eval mode
+            with torch.enable_grad(), torch.backends.cudnn.flags(enabled=False):
+                xb = x[s:s + batch].to(device).requires_grad_(True)
+                out = model(xb)
+                if target == "output":
+                    scalar = sum(v.sum() for v in out.values())
+                else:   # the loss is a batch MEAN: x n gives each row its own gradient (up to batch-level terms)
+                    yb = {k: v[s:s + batch].to(device) for k, v in y.items()}
+                    scalar = trainer.compute_losses(None, yb, outputs=out)[1] * xb.shape[0]
+                nm = ["input"] + [n for n, _ in layers if n in acts]
+                grads = torch.autograd.grad(scalar, [xb] + [acts[n] for n in nm[1:]], allow_unused=True)
+            keep = [(n, g) for n, g in zip(nm, grads, strict=True) if g is not None]
+            names = names or [f"{n}.{st}" for n, _ in keep for st in STATS]
+            feats.append(torch.cat([_summ(g) for _, g in keep], dim=1).detach().cpu())
             preds.append(torch.cat([v.detach().reshape(v.shape[0], -1).cpu() for v in out.values()], dim=1))
     finally:
         for h in handles:
             h.remove()
-        model.zero_grad(set_to_none=True)
     return torch.cat(feats).numpy(), names, torch.cat(preds).numpy()
 
 
@@ -185,35 +188,92 @@ def _flat(d, prefix=""):
 
 
 # ------------------------------------------------------------------------------------------------ main
-def main(argv=None) -> dict:
-    p = argparse.ArgumentParser()
-    p.add_argument("--out", required=True)
-    p.add_argument("--data", default="", help="artifact dir; empty = build synthetic E1 (with oracle)")
-    p.add_argument("--e1", default='{"n_coins": 32, "n_bars": 2000}', help="SyntheticSettings JSON for E1")
-    p.add_argument("--arch", default="tiny_mlp", help="architecture (ARCHITECTURES key); '' = project default")
-    p.add_argument("--epochs", type=int, default=5)
-    p.add_argument("--batch", type=int, default=256)
-    p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--device", default="cpu")
-    p.add_argument("--max-rows", type=int, default=None)
-    p.add_argument("--grad-target", choices=("output", "loss"), default="output")
-    p.add_argument("--with-preds", action="store_true", help="add model A's raw outputs to the gradient features")
-    p.add_argument("--variants", default="A,data_h2,grad,grad_data,full")
-    a = p.parse_args(argv)
-    out = Path(a.out)
+def model_a_features(model_a: run.Run, base: run.Run, h2_xy: tuple, h2: np.ndarray, a: "GradStackConfig",
+                     out: Path) -> tuple[dict, list[str]]:
+    """Model A's gradient features (+ predictions if asked) on H2 / val / test, scaled on H2; raw values saved to
+    ``modelA_grads_preds.npz``. -> ({"train" | "val" | "test": (n, G) float32}, names)."""
+    t0 = time.monotonic()
+    G, P = {}, {}
+    for k, (xx, yy) in {"train": h2_xy, "val": (base.x["val"], base.y["val"]),
+                        "test": (base.x["test"], base.y["test"])}.items():
+        G[k], names, P[k] = grad_features(model_a.trainer, xx, yy, target=a.grad_target, batch=1024,
+                                          device=base.device)
+    if a.with_preds:
+        names = names + [f"predA.{i}" for i in range(P["train"].shape[1])]
+        G = {k: np.concatenate([G[k], P[k]], axis=1) for k in G}
+    sc = FeatureScaler().fit(G["train"])
+    print(f"gradient features: {len(names)} columns, {time.monotonic() - t0:.0f} s", flush=True)
+    idx = {"train": h2, "val": base.idx["val"], "test": base.idx["test"]}
+    np.savez_compressed(out / "modelA_grads_preds.npz", names=np.array(names),
+                        **{f"grad_{k}": v for k, v in G.items()}, **{f"pred_{k}": v for k, v in P.items()},
+                        **{f"idx_{k}": v for k, v in idx.items()})
+    return {k: sc.transform(v) for k, v in G.items()}, names
+
+
+def write_report(results: dict, rows: list[dict], out: Path, meta: dict) -> dict:
+    """The comparison files (test report per variant, gate rows / verdicts, summary.json) and a printed digest."""
+    summary = pd.DataFrame({n: _flat(r) for n, r in results.items()})
+    summary.to_csv(out / "test_report_by_variant.csv")
+    gdf = pd.DataFrame(rows)
+    gdf.to_csv(out / "gate_rows.csv", index=False)
+    blocking = gdf[gdf["blocking"].astype(bool)]
+    verdicts = blocking.groupby(["variant", "verdict"]).size().unstack(fill_value=0).reindex(list(results))
+    verdicts.to_csv(out / "gate_verdicts.csv")
+    failed = blocking[blocking.verdict == "fail"]
+    meta["gate_fails"] = {v: sorted(f"{r.gate}|{r.check}|{r.head}" for r in failed[failed.variant == v].itertuples())
+                          for v in results}
+    (out / "summary.json").write_text(json.dumps(meta, indent=1, default=str), encoding="utf-8")
+    key_rows = [k for k in summary.index if k.endswith(("rank_ic_by_timestamp", "spearman_per_coin.mean",
+                                                         "class.auc", "decile_error_spearman", "sharp.coverage"))]
+    print("\n== gate verdicts (blocking rows) ==\n", verdicts)
+    print("\n== key test metrics ==\n", summary.loc[key_rows].round(4).to_string())
+    print("\nfailed blocking checks per variant:", {v: len(f) for v, f in meta["gate_fails"].items()},
+          "(list: summary.json)")
+    return meta
+
+
+@dataclass(frozen=True)
+class GradStackConfig:
+    """Every setting of the experiment (strict: an unknown key raises in ``from_dict``)."""
+    data: str = ""                      # artifact dir; "" = build synthetic E1 (with the oracle) under the out folder
+    e1: dict = field(default_factory=lambda: {"n_coins": 32, "n_bars": 2000})   # SyntheticSettings fields
+    architecture: str = "tiny_mlp"      # ARCHITECTURES key; "" = the project default model
+    epochs: int = 5
+    batch_size: int = 256
+    seed: int = 0
+    device: str = "cpu"                 # "cpu" / "cuda" / "auto"
+    max_rows: int | None = None         # smoke stride of the split (None = all rows)
+    grad_target: str = "output"         # "output" (label-free) or "loss" (LEAKS the label on val / test)
+    with_preds: bool = False            # add model A's raw outputs to the gradient features
+    variants: tuple = VARIANTS
+
+    def __post_init__(self):
+        object.__setattr__(self, "variants", tuple(self.variants))
+        if self.grad_target not in ("output", "loss"):
+            raise ValueError(f"grad_target must be 'output' or 'loss', got {self.grad_target!r}")
+        bad = sorted(set(self.variants) - set(VARIANTS))
+        if bad or "A" not in self.variants:
+            raise ValueError(f"variants must include 'A' and come from {VARIANTS}, got unknown {bad}")
+        SyntheticSettings(**self.e1)
+
+
+def run_grad_stack(cfg: GradStackConfig, out) -> dict:
+    """The whole experiment (module docstring); writes its files to ``out`` and returns the summary dict."""
+    a = cfg
+    out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     t_all = time.monotonic()
 
     data = a.data
     if not data:
         data = str(out / "E1")
-        write_synthetic(data, SyntheticSettings(**json.loads(a.e1)), source_commit="0" * 40, overwrite=True)
+        write_synthetic(data, SyntheticSettings(**a.e1), source_commit="0" * 40, overwrite=True)
     s = RunSettings(run_dir=str(out / "runs"), code_sha="grad_stack", data=LoaderSettings(name=data, local_dir="",
                                                                                          mmap=False),
                     split=SplitSettings(max_rows=a.max_rows),
-                    train=TrainSettings(epochs=a.epochs, batch_size=a.batch, seed=a.seed, device=a.device))
-    if a.arch:
-        s = replace(s, model=ModelSettings(a.arch))
+                    train=TrainSettings(epochs=a.epochs, batch_size=a.batch_size, seed=a.seed, device=a.device))
+    if a.architecture:
+        s = replace(s, model=ModelSettings(a.architecture))
     base = run.prepare(s)
     ds = base.dataset
     oracle = oracle_keys(base.targets[0])[0] in ds
@@ -225,7 +285,7 @@ def main(argv=None) -> dict:
                   for k, v in {"H1": h1, "H2": h2, "val": base.idx["val"], "test": base.idx["test"]}.items()}
     print("split:", json.dumps(split_info), flush=True)
     xs = {k: flat_run.flat_inputs(ds, v) for k, v in {"H1": h1, "H2": h2}.items()}
-    want = a.variants.split(",")
+    want = list(a.variants)
     root = out / "runs"
     results, rows, models = {}, [], {}
 
@@ -237,24 +297,7 @@ def main(argv=None) -> dict:
     # model A on H1
     x_, y_ = common(*xs["H1"])
     models["A"] = fit_variant(base, "A", h1, x_, y_, root)
-    # model A's gradients + predictions on H2 / val / test
-    t0 = time.monotonic()
-    G, P = {}, {}
-    for k, (xx, yy) in {"train": xs["H2"], "val": (base.x["val"], base.y["val"]),
-                        "test": (base.x["test"], base.y["test"])}.items():
-        G[k], names, P[k] = grad_features(models["A"].trainer, xx, yy, target=a.grad_target, batch=1024,
-                                          device=base.device)
-    if a.with_preds:
-        names = names + [f"predA.{i}" for i in range(P["train"].shape[1])]
-        G = {k: np.concatenate([G[k], P[k]], axis=1) for k in G}
-    sc = FeatureScaler().fit(G["train"])
-    Gs = {k: sc.transform(v) for k, v in G.items()}
-    print(f"gradient features: {len(names)} columns ({(len(names)) // len(STATS)} layers incl. input), "
-          f"{time.monotonic() - t0:.0f} s", flush=True)
-    np.savez_compressed(out / "modelA_grads_preds.npz", names=np.array(names), **{f"grad_{k}": v for k, v in G.items()},
-                        **{f"pred_{k}": v for k, v in P.items()}, **{f"idx_{k}": v for k, v in
-                                                                     {"train": h2, "val": base.idx["val"],
-                                                                      "test": base.idx["test"]}.items()})
+    Gs, names = model_a_features(models["A"], base, xs["H2"], h2, a, out)
 
     if "data_h2" in want:
         x_, y_ = common(*xs["H2"])
@@ -273,28 +316,18 @@ def main(argv=None) -> dict:
         results[name] = rep
         rows += rr
 
-    # summary tables
-    flat = {n: _flat(r) for n, r in results.items()}
-    summary = pd.DataFrame(flat)
-    summary.to_csv(out / "test_report_by_variant.csv")
-    gdf = pd.DataFrame(rows)
-    gdf.to_csv(out / "gate_rows.csv", index=False)
-    blocking = gdf[gdf["blocking"].astype(bool)]
-    verdicts = blocking.groupby(["variant", "verdict"]).size().unstack(fill_value=0).reindex(list(results))
-    verdicts.to_csv(out / "gate_verdicts.csv")
-    fails = {v: sorted(f"{r.gate}|{r.check}|{r.head}" for r in blocking[(blocking.variant == v) &
-                                                                         (blocking.verdict == "fail")].itertuples())
-             for v in results}
-    key_rows = [k for k in summary.index if k.endswith(("rank_ic_by_timestamp", "spearman_per_coin.mean",
-                                                         "class.auc", "decile_error_spearman", "sharp.coverage"))]
-    meta = {"args": vars(a), "split": split_info, "grad_features": names, "oracle": bool(oracle),
-            "gate_fails": fails, "seconds": round(time.monotonic() - t_all, 1)}
-    (out / "summary.json").write_text(json.dumps(meta, indent=1, default=str), encoding="utf-8")
-    pd.set_option("display.width", 200, "display.max_rows", 200)
-    print("\n== gate verdicts (blocking rows) ==\n", verdicts)
-    print("\n== key test metrics ==\n", summary.loc[key_rows].round(4).to_string())
-    print("\nfailed blocking checks per variant:", {v: len(f) for v, f in fails.items()}, "(list: summary.json)")
-    return meta
+    meta = {"config": asdict(a), "split": split_info, "grad_features": names, "oracle": bool(oracle),
+            "seconds": round(time.monotonic() - t_all, 1)}
+    return write_report(results, rows, out, meta)
+
+
+def main(argv=None) -> dict:
+    """CLI: ``python -m nig_timenet_torch.workflow.grad_stack --out <dir> [--config '<json of GradStackConfig>']``."""
+    p = argparse.ArgumentParser()
+    p.add_argument("--out", required=True)
+    p.add_argument("--config", default="{}", help="JSON of GradStackConfig fields")
+    a = p.parse_args(argv)
+    return run_grad_stack(from_dict(GradStackConfig, json.loads(a.config)), a.out)
 
 
 if __name__ == "__main__":
