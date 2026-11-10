@@ -1,5 +1,5 @@
 {
- "fingerprint": "d98d076252c0e078",
+ "fingerprint": "ddabc0956f832703",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -704,6 +704,7 @@
   "nig_timenet_torch.workflow.run.Run(y)": "{}",
   "nig_timenet_torch.workflow.run.prepare(out)": "None",
   "nig_timenet_torch.workflow.run.restore(allow_changes)": "('code_sha')",
+  "nig_timenet_torch.workflow.run.restore(weights)": "'best'",
   "nig_timenet_torch.workflow.run.run_all(deadline)": "None",
   "nig_timenet_torch.workflow.run.run_all(on_epoch)": "None",
   "nig_timenet_torch.workflow.run.run_all(out)": "None",
@@ -743,6 +744,7 @@
   "nig_timenet_torch.workflow.settings.RunSettings(split)": "SplitSettings(train_end='', val_end='', train_share=0.8, val_share=0.1, embargo_hours=0.0, max_rows=None)",
   "nig_timenet_torch.workflow.settings.RunSettings(train)": "TrainSettings(epochs=5, batch_size=256, seed=0, lr=0.001, weight_decay=0.0001, label_smoothing=0.1, selection_metric='val_raw_loss', early_stop=EarlyStopSettings(patience=15, min_delta=0.0001, smoothing='window', window=3, ema_beta=0.7, restore_best_weights=True), device='auto')",
   "nig_timenet_torch.workflow.settings.SplitSettings(embargo_hours)": "0.0",
+  "nig_timenet_torch.workflow.settings.SplitSettings(exclude_coins)": "()",
   "nig_timenet_torch.workflow.settings.SplitSettings(max_rows)": "None",
   "nig_timenet_torch.workflow.settings.SplitSettings(train_end)": "''",
   "nig_timenet_torch.workflow.settings.SplitSettings(train_share)": "0.8",

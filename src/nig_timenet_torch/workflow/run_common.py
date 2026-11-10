@@ -8,6 +8,7 @@ SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run_common.py); changes: st
     retargeting, smoke stride (max_rows), artifact facts moved here, run identity from the manifest.
 """
 
+import difflib
 import subprocess
 from pathlib import Path
 
@@ -17,6 +18,7 @@ import torch
 
 from nig_timenet_torch.colab.identity import identity_for_run
 from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
+from nig_timenet_torch.data_io.artifact import norm_coin
 from nig_timenet_torch.data_io.loading import LoadedData, load_dataset
 from nig_timenet_torch.data_io.split_plan import purge_embargo_split, sample_times
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, codec_name
@@ -99,6 +101,26 @@ def stride_rows(idx: np.ndarray, max_rows: int | None) -> np.ndarray:
     return idx[np.unique(np.linspace(0, len(idx) - 1, max_rows).astype(np.int64))]
 
 
+def excluded_rows(dataset: dict, coins) -> np.ndarray:
+    """Boolean mask over ALL rows: True for the rows of the coins named in ``coins`` (``split.exclude_coins``). A name
+    that is not a coin of the artifact raises (with a did-you-mean); excluding every coin raises."""
+    if not coins:
+        return np.zeros(np.asarray(dataset["last_candles"]).shape[0], dtype=bool)
+    keys = {norm_coin(b["name"]): b for b in dataset["asset_bounds"]}
+    wanted = {norm_coin(c): c for c in coins}
+    unknown = sorted(c for k, c in wanted.items() if k not in keys)
+    if unknown:
+        close = {c: difflib.get_close_matches(norm_coin(c), list(keys), n=1) for c in unknown}
+        raise ValueError("split.exclude_coins: not coins of this artifact: "
+                         + ", ".join(f"{c!r}" + (f" (did you mean {m[0]!r}?)" if m else "") for c, m in close.items()))
+    if len(wanted) >= len(keys):
+        raise ValueError("split.exclude_coins removes every coin of the artifact")
+    mask = np.zeros(np.asarray(dataset["last_candles"]).shape[0], dtype=bool)
+    for k in wanted:
+        mask[keys[k]["start"]:keys[k]["end"]] = True
+    return mask
+
+
 def make_plan(dataset: dict, split: SplitSettings) -> tuple[tuple[np.ndarray, np.ndarray, np.ndarray], tuple]:
     """((train_idx, val_idx, test_idx) with the smoke stride applied, (train_end, val_end)); the split purges by label
     end plus the embargo."""
@@ -106,7 +128,8 @@ def make_plan(dataset: dict, split: SplitSettings) -> tuple[tuple[np.ndarray, np
     train_end, val_end = split_bounds(dataset, split)
     plan = purge_embargo_split(le, fs, train_end, train_end, val_end, val_end, pd.Timedelta(hours=split.embargo_hours),
                                feature_end=fe)
-    idx = tuple(stride_rows(i, split.max_rows) for i in (plan.train_idx, plan.val_idx, plan.test_idx))
+    drop = excluded_rows(dataset, split.exclude_coins)  # after the time split: the cut dates do not move
+    idx = tuple(stride_rows(i[~drop[i]], split.max_rows) for i in (plan.train_idx, plan.val_idx, plan.test_idx))
     return idx, (train_end, val_end)
 
 
