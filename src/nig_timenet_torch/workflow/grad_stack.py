@@ -148,11 +148,15 @@ def assemble(x: torch.Tensor, g: np.ndarray, mode: str) -> torch.Tensor:
 
 # ------------------------------------------------------------------------------------------------ one variant
 def fit_variant(base: run.Run, name: str, train_idx: np.ndarray, x: dict, y: dict, root: Path,
-                build=run.build, lr: LrSettings | None = None) -> run.Run:
+                build=run.build, lr: LrSettings | None = None, reuse: bool = False) -> run.Run:
     """Train one model through the project's run steps on the given rows / inputs (val is the common selection
-    split, test is never used for training or selection)."""
+    split, test is never used for training or selection). ``reuse``: keep the folder's checkpoint, so the trainer
+    RESUMES it (a finished run trains no epoch and restores its best weights; the identity must match)."""
     rd = root / name
-    shutil.rmtree(rd, ignore_errors=True)     # trainer.fit resumes a folder that holds a checkpoint
+    if reuse and (rd / "checkpoint.pt").is_file():
+        print(f"[{name}] reusing the checkpoint in {rd}", flush=True)
+    else:
+        shutil.rmtree(rd, ignore_errors=True)     # trainer.fit resumes a folder that holds a checkpoint
     r = replace(base, settings=replace(base.settings, run_dir=str(rd)), idx={**base.idx, "train": train_idx},
                 x=dict(x), y=dict(y), ms=None, trainer=None, fit_settings=None, ident=None, result=None, extra={})
     t0 = time.monotonic()
@@ -252,8 +256,10 @@ class GradStackConfig:
         SyntheticSettings(**self.e1)
 
 
-def run_grad_stack(cfg: GradStackConfig, out) -> dict:
-    """The whole experiment (module docstring); writes its files to ``out`` and returns the summary dict."""
+def run_grad_stack(cfg: GradStackConfig, out, *, reuse: bool = False) -> dict:
+    """The whole experiment (module docstring); writes its files to ``out`` and returns the summary dict.
+    ``reuse=True``: every variant whose folder holds a checkpoint resumes it instead of training from scratch
+    (an interrupted or lost run: finished variants are only re-evaluated)."""
     a = cfg
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -296,27 +302,26 @@ def run_grad_stack(cfg: GradStackConfig, out) -> dict:
     names = []
     if "A" in want:          # model A on H1 (and its gradients when a gradient variant needs them)
         x_, y_ = common(*xs["H1"])
-        models["A"] = fit_variant(base, "A", h1, x_, y_, root, lr=sched)
+        models["A"] = fit_variant(base, "A", h1, x_, y_, root, lr=sched, reuse=reuse)
     if set(want) & set(NEEDS_A):
         Gs, names = model_a_features(models["A"], base, xs["H2"], h2, a, out)
 
     if "data_h2" in want:
         x_, y_ = common(*xs["H2"])
-        models["data_h2"] = fit_variant(base, "data_h2", h2, x_, y_, root, lr=sched)
+        models["data_h2"] = fit_variant(base, "data_h2", h2, x_, y_, root, lr=sched, reuse=reuse)
     for mode in ("grad", "grad_data"):
         if mode in want:
             x_, y_ = common(assemble(xs["H2"][0], Gs["train"], mode), xs["H2"][1],
                             assemble(base.x["val"], Gs["val"], mode), assemble(base.x["test"], Gs["test"], mode))
-            models[mode] = fit_variant(base, mode, h2, x_, y_, root, lr=sched)
+            models[mode] = fit_variant(base, mode, h2, x_, y_, root, lr=sched, reuse=reuse)
     if "grad_full" in want:   # B sees ONLY A's full per-layer gradients, computed inside each step
         x_, y_ = common(*xs["H2"])
-        models["grad_full"] = fit_variant(
-            base, "grad_full", h2, x_, y_, root,
+        models["grad_full"] = fit_variant(base, "grad_full", h2, x_, y_, root,
             build=lambda r: build_grad_net_run(r, models["A"].trainer.model, dim=a.full_grad_dim,
-                                               outputs=a.full_grad_outputs), lr=sched)
+                                               outputs=a.full_grad_outputs), lr=sched, reuse=reuse)
     if "full" in want:
         x_, y_ = common(base.x["train"], base.y["train"])
-        models["full"] = fit_variant(base, "full", base.idx["train"], x_, y_, root, lr=sched)
+        models["full"] = fit_variant(base, "full", base.idx["train"], x_, y_, root, lr=sched, reuse=reuse)
 
     for name in [v for v in want if v in models]:
         rep, rr = evaluate(models[name], name, base.x["test"], oracle)

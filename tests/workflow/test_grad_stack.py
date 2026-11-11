@@ -121,3 +121,22 @@ def test_encoder_name_as_architecture_and_lr_decay(tmp_path):
     assert lrs[0] == pytest.approx(1e-5) and lrs[-1] == pytest.approx(1e-7) and lrs[0] > lrs[1] > lrs[2]
     with pytest.raises(ValueError):
         GradStackConfig(lr=1e-5, lr_min=1e-3)
+
+
+def test_reuse_re_evaluates_a_finished_run_without_training(tmp_path):
+    """The owner's case: training finished, the report files were lost; reuse=True resumes the checkpoint (no new
+    epoch), restores the best weights and writes the same test report and battery tables again."""
+    import pandas as pd
+    cfg = GradStackConfig(**{**TINY, "architecture": "conv1d_net", "variants": ("full",), "epochs": 2})
+    run_grad_stack(cfg, tmp_path)
+    before = pd.read_csv(tmp_path / "test_report_by_variant.csv", index_col=0)
+    for p in tmp_path.iterdir():
+        if p.is_file():
+            p.unlink()
+    for p in (tmp_path / "runs" / "full").glob("battery_table_*"):
+        p.unlink()
+    meta = run_grad_stack(cfg, tmp_path, reuse=True)
+    assert meta["learning"]["full"]["epochs"] == 2, "no epoch was added"
+    after = pd.read_csv(tmp_path / "test_report_by_variant.csv", index_col=0)
+    pd.testing.assert_frame_equal(before, after)
+    assert set(grad_stack_battery(tmp_path, show=False)) == {"full"}

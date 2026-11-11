@@ -43,6 +43,10 @@ anywhere, to find where memorization starts and where learning breaks")
 - chart_cnn pools with `grid_pool` (deterministic CUDA backward; AdaptiveAvgPool2d failed under
   use_deterministic_algorithms on the owner's GPU).
 
+## reuse (owner 2026-11-11: training finished but the results were lost on a page refresh)
+- `run_grad_stack(cfg, out, reuse=True)`: a variant whose folder holds a checkpoint is RESUMED instead of deleted (a
+  finished run trains no epoch, restores its best weights and writes the report, curves and battery tables again).
+
 ## New defaults
 - `nig_timenet_torch.jobs.grad_stack.CONFIG`: `<new>` -> `<class 'nig_timenet_torch.workflow.grad_stack.GradStackConfig'>`
 - `nig_timenet_torch.workflow.grad_stack.GradStackConfig(architecture)`: `<new>` -> `'tiny_mlp'`
@@ -120,3 +124,5 @@ anywhere, to find where memorization starts and where learning breaks")
 - `nig_timenet_torch.workflow.grad_stack.fit_variant(lr)`: `<new>` -> `None`
 - `nig_timenet_torch.workflow.grad_stack_report.grad_stack_battery(cost)`: `<new>` -> `0.0008`
 - `nig_timenet_torch.workflow.grad_stack_report.grad_stack_battery(show)`: `<new>` -> `True`
+- `nig_timenet_torch.workflow.grad_stack.fit_variant(reuse)`: `<new>` -> `False`
+- `nig_timenet_torch.workflow.grad_stack.run_grad_stack(reuse)`: `<new>` -> `False`
