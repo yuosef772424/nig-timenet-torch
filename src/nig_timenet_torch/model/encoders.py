@@ -97,9 +97,9 @@ class TransformerEncoder(Encoder):
         blocks = [_get(model, f"block_{i + 1}", sfx) for i in range(model.branch_blocks[sfx])]
         if hasattr(model, "skip"):  # no_proj has no patch_embed: the variant gets None
             return model.skip.encode(tok, getattr(model, "patch_embed" + sfx, None), blocks)
-        h = _get(model, "patch_embed", sfx)(tok)
-        for block in blocks:
-            h = block(h)
+        h = model._tap("enc_in" + sfx, _get(model, "patch_embed", sfx)(tok))
+        for i, block in enumerate(blocks):
+            h = model._tap(f"enc_block_{i + 1}{sfx}", block(h))
         return h
 
 
@@ -116,10 +116,10 @@ class GRUEncoder(Encoder):
         return dims.d_model
 
     def encode(self, model, tok, sfx):
-        h = _get(model, "step_proj", sfx)(tok)
+        h = model._tap("enc_in" + sfx, _get(model, "step_proj", sfx)(tok))
         for i in range(model.branch_blocks[sfx]):
             y = _get(model, f"gru_{i + 1}", sfx)(_get(model, f"gru_norm_{i + 1}", sfx)(h))
-            h = h + _get(model, f"gru_drop_{i + 1}", sfx)(y)
+            h = model._tap(f"enc_block_{i + 1}{sfx}", h + _get(model, f"gru_drop_{i + 1}", sfx)(y))
         return h
 
 
@@ -139,10 +139,10 @@ class TCNEncoder(Encoder):
         return dims.d_model
 
     def encode(self, model, tok, sfx):
-        h = _get(model, "step_proj", sfx)(tok)
+        h = model._tap("enc_in" + sfx, _get(model, "step_proj", sfx)(tok))
         for i in range(model.branch_blocks[sfx]):
             y = F.gelu(_get(model, f"tcn_conv_{i + 1}", sfx)(_get(model, f"tcn_norm_{i + 1}", sfx)(h)))
-            h = h + _get(model, f"tcn_drop_{i + 1}", sfx)(y)
+            h = model._tap(f"enc_block_{i + 1}{sfx}", h + _get(model, f"tcn_drop_{i + 1}", sfx)(y))
         return h
 
 

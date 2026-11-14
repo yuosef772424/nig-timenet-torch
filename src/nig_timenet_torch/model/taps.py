@@ -23,7 +23,7 @@ from torch import nn
 
 from nig_timenet_torch.model.probe import RAW_INPUT, layer_probe_report
 
-__all__ = ["record_taps", "tap_points", "tap_summary", "signal_trace"]
+__all__ = ["record_taps", "stream_taps", "tap_points", "tap_summary", "signal_trace"]
 
 
 def tap_points(model: nn.Module, *, leaves_only: bool = False) -> list[str]:
@@ -55,6 +55,26 @@ def record_taps(model: nn.Module, points: list[str] | None = None):
     finally:
         for h in handles:
             h.remove()
+
+
+@contextmanager
+def stream_taps(model: nn.Module, edit: dict | None = None):
+    """``with stream_taps(model) as taps: model(x)`` -> ``taps`` = {stream name: tensor} in forward ORDER, for a model
+    that taps its own streams (``model._tap``; NigTimeNetV2: input, scaled, inst_norm, stats, level, tokens, enc_in,
+    enc_block_i, enc_out, pooled, readout, linear_path, branch_out, trunk). Unlike module hooks this sees the RESIDUAL
+    stream after each block (a sum, not a module output). A model without ``_tap`` raises TypeError: use
+    ``record_taps`` (module outputs) for it.
+
+    ``edit`` = {stream name: fn(tensor) -> tensor}: the stream is REPLACED by fn's result for the rest of the forward
+    (an ablation, e.g. ``lambda v: v[torch.randperm(len(v))]`` breaks the row <-> value link of one path)."""
+    if not hasattr(model, "_tap"):
+        raise TypeError(f"{type(model).__name__} has no stream taps; use record_taps (module hooks)")
+    taps: dict[str, torch.Tensor] = {}
+    model._stream, model._stream_edit = taps, dict(edit or {})
+    try:
+        yield taps
+    finally:
+        model._stream, model._stream_edit = None, {}
 
 
 def tap_summary(taps: dict[str, torch.Tensor]) -> pd.DataFrame:

@@ -3,9 +3,8 @@ momentum from the 0 / 1 init, state_dict keys unchanged)."""
 
 import torch
 
-from nig_timenet_torch.model.architectures import ModelSettings, build_model
+from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings, build_model
 from nig_timenet_torch.model.layers import BatchNormChannelsLast
-from nig_timenet_torch.workflow.settings import default_model_settings
 
 
 def _batches(n=5):
@@ -41,8 +40,9 @@ def test_warmup_moving_stats_are_the_mean_of_the_batches_seen():
     assert torch.equal(bn.moving_mean, before) and int(bn.num_updates) == len(xs)  # eval never updates
 
 
-def test_model_override_reaches_both_batch_norms_and_default_keeps_the_state_dict():
-    base = default_model_settings()
+def test_model_override_reaches_both_batch_norms_and_the_pre_audit_model_keeps_the_state_dict():
+    # the default has the warm-up since the model-first audit (D-023); the pre-audit model is the preset alone
+    base = ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))
     plain = build_model(base, 32, 3)
     warm = build_model(ModelSettings(base.architecture, {**base.overrides, "bn_warmup": True}), 32, 3)
     bns = [m for m in warm.modules() if isinstance(m, BatchNormChannelsLast)]

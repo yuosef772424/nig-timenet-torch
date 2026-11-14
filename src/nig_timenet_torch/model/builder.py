@@ -46,6 +46,7 @@ from nig_timenet_torch.model.layers import (
 )
 from nig_timenet_torch.model.nig_layers import ConfidenceHead, NIGHead, NIGUncertainty, OrderedMeans
 from nig_timenet_torch.model.parts import INPUT_SKIP_VARIANTS, skip_variant
+from nig_timenet_torch.model.scalers import INPUT_SCALERS
 
 __all__ = ["DEFAULT_HEAD_TYPES", "NigTimeNetV2", "build_nig_timenet_v2", "torch_param_name", "CausalConv1D",
            "tcn_n_blocks"]
@@ -87,8 +88,11 @@ class NigTimeNetV2(nn.Module):
                  norm_eps, linear_path_l2, encoder="transformer", input_clip=None, stats_mode="full",
                  input_noise_std=0.0, feature_dropout=0.0, level_passthrough=False, level_norm=None,
                  input_skip="none", n_classes=3, order_detach_close=False, nig_scale=None,
-                 bn_warmup=False, readout_dropout=None):
+                 bn_warmup=False, readout_dropout=None, input_scaler="none"):
         super().__init__()
+        self.input_scaler_kind = input_scaler
+        self._stream = None  # set by model.taps.stream_taps while recording (a plain attribute, not saved)
+        self._stream_edit = {}  # {stream name: fn(tensor) -> tensor}, read only while recording
         self.price_targets = tuple(price_targets)
         self.head_types = {t: list(head_types.get(t, [])) for t in self.price_targets}
         for t, kinds in self.head_types.items():
@@ -156,6 +160,8 @@ class NigTimeNetV2(nn.Module):
         def add(name, module):
             setattr(self, name + sfx, module)
 
+        if INPUT_SCALERS.entry(self.input_scaler_kind).meta["fitted"]:  # train-fitted standardisation (scalers.py)
+            add("input_scaler", INPUT_SCALERS.get(self.input_scaler_kind)(nf))
         add("instance_norm", InstanceNorm(nf, eps=norm_eps, clip=input_clip, stats_mode=stats_mode))
         if feature_dropout > 0:
             add("feature_dropout", SpatialDropout1D(feature_dropout))
@@ -189,9 +195,24 @@ class NigTimeNetV2(nn.Module):
     def _m(self, name, sfx=""):
         return getattr(self, name + sfx, None)
 
+    def _tap(self, name: str, value):
+        """Record a stream tensor for ``model.taps.stream_taps`` (no-op, no copy, unless a recorder is active)."""
+        if self._stream is not None and value is not None:
+            if name in self._stream_edit:        # taps.edit_stream: an ablation replaces the stream from here on
+                value = self._stream_edit[name](value)
+            self._stream[name] = value
+        return value
+
     def branch(self, x: torch.Tensor, sfx: str = "") -> torch.Tensor:
-        """One timeframe's encoder up to its pooled embedding h (after readout_fc + linear_path)."""
+        """One timeframe's encoder up to its pooled embedding h (after readout_fc + linear_path). Stream taps (in
+        order): input, scaled, inst_norm, stats, level, tokens, enc_in, enc_block_i, enc_out, pooled, readout,
+        linear_path, branch_out (+ the branch suffix)."""
+        tap = lambda name, v: self._tap(name + sfx, v)  # noqa: E731
+        x = tap("input", x)
+        if self._m("input_scaler", sfx) is not None:
+            x = tap("scaled", self._m("input_scaler", sfx)(x))
         z, stats = self._m("instance_norm", sfx)(x)
+        z = tap("inst_norm", z)
         for name in ("feature_dropout", "input_noise"):
             if self._m(name, sfx) is not None:
                 z = self._m(name, sfx)(z)
@@ -202,19 +223,20 @@ class NigTimeNetV2(nn.Module):
             for name in ("level_bn", "level_feature_dropout", "level_noise"):
                 if self._m(name, sfx) is not None:
                     lvl = self._m(name, sfx)(lvl)
-            tok = torch.cat([tok, lvl], dim=-1)
+            tok = torch.cat([tok, tap("level", lvl)], dim=-1)
         if stats is not None and self._m("stats_bn", sfx) is not None:
             stats = self._m("stats_bn", sfx)(stats)
-        h = self.encode_tokens(tok, sfx)
-        h = self._m("final_norm", sfx)(h)
+        stats = tap("stats", stats)
+        h = self.encode_tokens(tap("tokens", tok), sfx)
+        h = tap("enc_out", self._m("final_norm", sfx)(h))
         parts = [self._m("last_token", sfx)(h), self._m("attn_pool", sfx)(h)]
         if stats is not None:
             parts.append(F.gelu(self._m("stats_proj", sfx)(stats)))
         if hasattr(self, "skip") and self.skip.readout_extra_dim:
             parts.append(self.skip.readout_extra(tok))
         lin_in = z if lvl is None else torch.cat([z, lvl], dim=-1)
-        return F.gelu(self._m("readout_fc", sfx)(torch.cat(parts, dim=-1))) + self._m("linear_path", sfx)(
-            lin_in.flatten(1))
+        readout = tap("readout", F.gelu(self._m("readout_fc", sfx)(tap("pooled", torch.cat(parts, dim=-1)))))
+        return tap("branch_out", readout + tap("linear_path", self._m("linear_path", sfx)(lin_in.flatten(1))))
 
     def _branch_inputs(self, x) -> list[torch.Tensor]:
         if self.timeframes is None:
@@ -240,7 +262,7 @@ class NigTimeNetV2(nn.Module):
         xs = [xi.to(torch.float32) for xi in self._branch_inputs(x)]
         hs = [self.branch(xi, sfx) for xi, sfx in zip(xs, self.branch_suffixes, strict=True)]
         h = hs[0] if len(hs) == 1 else torch.cat(hs, dim=-1)  # branch_concat
-        return self.trunk_drop(self.trunk_norm(h))
+        return self.trunk_drop(self._tap("trunk", self.trunk_norm(h)))
 
     def encode_tokens(self, tok: torch.Tensor, sfx: str = "") -> torch.Tensor:
         """The registered encoder on the normalised token input (B, T, W) -> output sequence (for the transformer
@@ -340,12 +362,14 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          encoder: str = "transformer", input_skip: str = "none", n_classes=3, norm_eps=1e-4,
                          linear_path_l2=1e-4, input_clip=None, stats_mode="full", input_noise_std=0.0,
                          feature_dropout=0.0, level_passthrough=False, level_norm=None, order_detach_close=False,
-                         nig_scale=None, bn_warmup=False, readout_dropout=None, **options) -> NigTimeNetV2:
+                         nig_scale=None, bn_warmup=False, readout_dropout=None, input_scaler="none",
+                         **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
     nig_layers; bn_warmup: layers.BatchNormChannelsLast; readout_dropout: the rate of trunk_drop and of the NIG
-    heads' dropout, None = ``dropout``) are opt-in: their defaults reproduce the P15 graph."""
+    heads' dropout, None = ``dropout``) are opt-in: their defaults reproduce the P15 graph. ``input_scaler`` (a name of
+    scalers.INPUT_SCALERS) and ``nig_scale="train_std"`` add train-fitted buffers: call ``scalers.fit_scalers``."""
     ENCODERS.entry(encoder)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
     if skip_variant(input_skip).adds_modules and not ENCODERS.entry(encoder).meta["supports_input_skip"]:
@@ -373,4 +397,4 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         input_clip=input_clip, stats_mode=stats_mode, input_noise_std=input_noise_std, feature_dropout=feature_dropout,
         level_passthrough=level_passthrough, level_norm=level_norm, input_skip=input_skip, n_classes=n_classes,
         order_detach_close=order_detach_close, nig_scale=nig_scale,
-        bn_warmup=bn_warmup, readout_dropout=readout_dropout)
+        bn_warmup=bn_warmup, readout_dropout=readout_dropout, input_scaler=input_scaler)
