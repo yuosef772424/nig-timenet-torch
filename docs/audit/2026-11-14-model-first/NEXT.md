@@ -72,3 +72,21 @@ Not ready for trading. In reading order:
 - O-2: N-09's AUC 0.53 on the close class head: drift of the period or timing? Settle with the same check on test
   and on a second period, next to always-up / always-down.
 - O-3: does `input_scaler` matter on real data on its own? One arm without it on the real slice.
+
+## 6. Known open error: CI is red on PR #55 (not fixed, session budget ran out)
+
+What: the project's self-checks still describe the PRE-audit default model and the module list before this round
+(pinned defaults, model assembly pins, ratchets, MAP, card checks), and some existing tests build the default
+model and call it without fitting its scalers. A pins / ratchets pass was started and is only PARTLY committed
+(`tests/pins/defaults.json`, `tests/ratchets.json`, `docs/MAP.md`, `tests/conftest.py`, `docs/decisions/D-023-*`):
+the full fast suite was NOT run to the end after it. The 65 new tests of this round pass on their own.
+
+How to fix (about one short session):
+1. `python -m pytest -q -x` and take the failures one by one.
+2. A pin / ratchet / map that only records the old state: update it through its own path
+   (`UPDATE_MODEL_PINS=1 python -m pytest tests/model/test_assembly_pins.py`, `python -m tests.build_map`,
+   `tests/pins/*.json` + decision D-023, `tests/ratchets.json` with a reason).
+3. A test that builds the default model and runs a forward: either call
+   `model.scalers.fit_scalers(model, x_train, y_train)` first, or build the pre-audit model
+   `ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))` (TF-parity / oracle tests must use the latter).
+4. `ruff check src tests`, then the whole suite without `-x`; never skip or weaken a test to get green.
