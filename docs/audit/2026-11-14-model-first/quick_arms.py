@@ -25,7 +25,7 @@ def arm_settings(a, encoder: str, lr: float, out: pathlib.Path) -> RunSettings:
         run_dir=str(out / "ckpt"), data=LoaderSettings(name=a.artifact, mmap=True),
         split=SplitSettings(max_rows=a.rows), model=model,
         train=TrainSettings(epochs=a.epochs, batch_size=a.batch_size, seed=a.seed, lr=lr, device=a.device),
-        evaluation=EvalSettings(health_max_rows=2000, battery=BatterySettings(enabled=False)))
+        evaluation=EvalSettings(health_max_rows=2000, battery=BatterySettings(enabled=a.battery, n_variants=a.n_variants)))
 
 
 def main():
@@ -34,6 +34,8 @@ def main():
     p.add_argument("--rows", type=int, default=20000), p.add_argument("--epochs", type=int, default=6)
     p.add_argument("--batch-size", type=int, default=128), p.add_argument("--seed", type=int, default=0)
     p.add_argument("--arms", default="gru:3e-4,transformer:3e-4"), p.add_argument("--device", default="auto")
+    p.add_argument("--battery", action="store_true", help="run the evaluation battery (val + test, T-profit)")
+    p.add_argument("--n-variants", type=int, default=1, help="variants tried so far (widens the battery CIs)")
     a = p.parse_args()
     out = pathlib.Path(a.out)
     rows = []
@@ -45,6 +47,8 @@ def main():
         r = steps.build(steps.prepare(arm_settings(a, enc, float(lr), folder), folder))
         steps.train(r, on_epoch=lambda row: print(epoch_line(row, a.epochs), flush=True))
         rep = steps.test_step(r)
+        if a.battery:
+            steps.battery_step(r)
         summ = steps.write_summary(r)
         flat = dict(steps._flat(rep))
         keep = {k: v for k, v in flat.items() if "per_coin" not in k and ("rank_ic" in k or "auc" in k
