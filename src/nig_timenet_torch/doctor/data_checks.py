@@ -1,7 +1,5 @@
-"""PURPOSE: Card C — is the data sound? Label / window alignment rebuilt from the artifact itself (no future in a
-    window, labels are exactly the next bars), codec round trip and unit scales against the model's constants, split
-    purity and composition, shift between splits, the information the inputs hold about each label (the ceiling a
-    good model can reach), overlap / duplicates / effective sample size, and coverage counts.
+"""PURPOSE: Card C: is the data sound? Label / window alignment, codec round trip, unit scales, split purity and shift,
+    the information ceiling of the inputs, duplicates / effective sample size, coverage counts.
 TAGS: doctor, card c, data checks, leakage, label alignment, codec round trip, split purity, distribution shift,
     input information ceiling, near duplicate windows, effective sample size, flat bars, clipped labels
 PITFALLS: the alignment check needs an artifact whose inputs are the RAW log-move channels (high / low / close vs the
@@ -17,7 +15,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from nig_timenet_torch.core.schema import TS_COL
+from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io.split_plan import sample_times
 from nig_timenet_torch.doctor.common import (
     Check,
@@ -37,7 +35,7 @@ from nig_timenet_torch.workflow import run_common
 __all__ = ["data_checks", "alignment", "ceiling", "overlap", "coverage", "shift", "batch_independence",
            "RAW_CHANNELS"]
 
-RAW_CHANNELS = ("high", "low", "close")
+RAW_CHANNELS = TARGET_COLUMNS
 ALIGN_TOL = 2e-5            # float32 labels and sums of float32 log moves
 SHIFT_BAND = (0.67, 1.5)    # sd ratio of a split against train, either way
 CEILING_ROWS = 60_000       # train rows the simple models are fitted on
@@ -218,13 +216,15 @@ def shift(dataset: dict, idx: dict, targets) -> dict:
         stats[s] = {"x_sd": x.reshape(-1, x.shape[-1]).std(axis=0),
                     "y_sd": {t: float(np.asarray(dataset[reg_key(t)])[r].std()) for t in targets},
                     "y_mean": {t: float(np.asarray(dataset[reg_key(t)])[r].mean()) for t in targets},
-                    "up_share": {t: float(np.asarray(dataset[head_spec("binary_classification", t).label_key])[r].mean())
+                    "up_share": {t: float(np.asarray(
+                        dataset[head_spec("binary_classification", t).label_key])[r].mean())
                                  for t in targets}}
     out = {}
     for s in ("val", "test"):
         out[s] = {"x_sd_ratio": (stats[s]["x_sd"] / stats["train"]["x_sd"]).tolist(),
                   "y_sd_ratio": {t: stats[s]["y_sd"][t] / stats["train"]["y_sd"][t] for t in targets},
-                  "y_mean_shift_sd": {t: (stats[s]["y_mean"][t] - stats["train"]["y_mean"][t]) / stats["train"]["y_sd"][t]
+                  "y_mean_shift_sd": {t: (stats[s]["y_mean"][t] - stats["train"]["y_mean"][t])
+                                      / stats["train"]["y_sd"][t]
                                       for t in targets},
                   "up_share": stats[s]["up_share"]}
     out["train"] = {"y_sd": stats["train"]["y_sd"], "y_mean": stats["train"]["y_mean"],
@@ -292,7 +292,8 @@ def data_checks(ctx: DoctorContext) -> list[Check]:
     # C2 codec and units
     try:
         run_common.check_decode(ds, ctx.targets)
-        checks.append(Check("C", "data/units", "codec decodes the stored labels to the future prices", "ok", "", "pass"))
+        checks.append(Check("C", "data/units", "codec decodes the stored labels to the future prices",
+                            "ok", "", "pass"))
     except ValueError as e:
         checks.append(Check("C", "data/units", "codec decodes the stored labels to the future prices", "FAILS", "",
                             "fail", str(e)[:200]))
@@ -317,7 +318,8 @@ def data_checks(ctx: DoctorContext) -> list[Check]:
     coin = _coin_of(ds, len(fs))
     coins = {s: set(np.unique(coin[i]).tolist()) for s, i in r.idx.items()}
     ts = np.asarray(ds["last_candles"])[:, TS_COL].astype(np.int64)
-    span = {s: (str(pd.Timestamp(int(ts[i].min()), tz="UTC").date()), str(pd.Timestamp(int(ts[i].max()), tz="UTC").date()))
+    span = {s: (str(pd.Timestamp(int(ts[i].min()), tz="UTC").date()),
+                str(pd.Timestamp(int(ts[i].max()), tz="UTC").date()))
             for s, i in r.idx.items() if len(i)}
     checks.append(Check("C", "data/split", "rows train / val / test (coins; coins unseen in train)",
                         " / ".join(str(len(r.idx[s])) for s in ("train", "val", "test")),

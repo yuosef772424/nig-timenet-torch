@@ -1,6 +1,5 @@
-"""PURPOSE: Card D — do the numbers mean what we say? Every reported metric of the trained model next to its trivial
-    baseline (constant predictor, climatology, the strong simple model of card C), the decode path from output to
-    price, profit after cost with its uncertainty and baselines, and the selection metric against the trading goal.
+"""PURPOSE: Card D: do the numbers mean what we say? Every metric next to its trivial baseline, the decode path to
+    price, profit after cost with its uncertainty, and the selection metric against the trading goal.
 TAGS: doctor, card d, metric checks, trivial baseline, climatology, nll, coverage, sharpness, decode round trip,
     profit after cost, block bootstrap, selection metric, trading goal
 PITFALLS: scored on the VALIDATION rows (the test split only when ``include_test``); "profit" is the battery's own
@@ -81,7 +80,8 @@ def profit_rows(sections: dict) -> list[dict]:
                 continue
             label, s = g["model"]
             best = max(g["base"], key=lambda b: b[1]["avg"]) if g["base"] else (None, {"avg": float("nan")})
-            out.append({"family": f"{name}: {fam}", "avg": s["avg"], "ci_lo": s["ci_lo"], "ci_hi": s["ci_hi"],
+            out.append({"family": fam if fam == name else f"{name}: {fam}", "avg": s["avg"], "ci_lo": s["ci_lo"],
+                        "ci_hi": s["ci_hi"],
                         "n": s["n"], "best_baseline": best[0], "best_baseline_avg": best[1]["avg"],
                         "profit": bool(s["ci_lo"] > 0 and (not g["base"] or s["avg"] > best[1]["avg"]))})
     return out
@@ -126,8 +126,8 @@ def metric_checks(ctx: DoctorContext, *, include_test: bool = False) -> list[Che
                                 f"{cov:.3f} / {m['sd_ratio_vs_climatology']:.2f}", "0.80 (0.88 for a skewed high / "
                                 "low label, B-056) / < 1 = sharper than climatology",
                                 judge(cov, fail_below=0.6, warn_below=0.72, warn_above=0.92, fail_above=0.97),
-                                "" if 0.72 <= cov <= 0.92 else "the intervals are too narrow (< 0.8) or too wide: the "
-                                "predictive sd is off (head scale / beta floor, card C units)"))
+                                "" if 0.72 <= cov <= 0.92 else "the intervals are too narrow (coverage < 0.72) or too "
+                                "wide (> 0.92): the predictive sd is off (head scale / beta floor, card C units)"))
             checks.append(Check("D", where, "slope of the label on mu / sd(mu) over sd(label)",
                                 f"{m['slope_y_on_mu']:.2f} / {m['mu_sd_over_label_sd']:.2f}", "1.0 = calibrated mean",
                                 "info" if both_zero else judge(m["slope_y_on_mu"], fail_below=0.5, warn_below=0.75,
@@ -177,7 +177,8 @@ def metric_checks(ctx: DoctorContext, *, include_test: bool = False) -> list[Che
                                 "" if row["profit"] else "not profit: the CI contains 0 or a trivial rule does as well",
                                 row))
         checks.append(Check("D", f"profit/{stage}", "GOAL: any use of the outputs profitable after cost "
-                            f"({cost:.2%} per side)", "yes" if any_profit else "no", "", "pass" if any_profit else "fail",
+                            f"({cost:.2%} per side)", "yes" if any_profit else "no", "",
+                            "pass" if any_profit else "fail",
                             "" if any_profit else "the model is NOT ready for trading on this split: read the failing "
                             "rows above and cards A-C for the stage to work on"))
     # D4 selection metric vs the goal

@@ -1,6 +1,5 @@
-"""PURPOSE: Shared pieces of the model doctor: the Check row every instrument returns, verdict helpers, the report
-    table, the DoctorContext (one prepared / built / trained run through the workflow steps), the purged
-    time-ordered probe (ridge with the penalty chosen on an inner split) and the simple-feature baseline.
+"""PURPOSE: Shared pieces of the model doctor: the Check row, verdict helpers, report table, DoctorContext (one run
+    through the workflow steps), the purged time-ordered ridge probe and the simple-feature baseline.
 TAGS: doctor, check row, readiness table, probe, ridge probe, purged folds, simple baseline, har features, context
 PITFALLS: a probe score is OUT OF FOLD on time-ordered folds with an embargo between train and test rows (rows are
     coin-major in an artifact, so contiguous ROW folds would split by coin, not by time); every number is reported
@@ -83,8 +82,8 @@ def render_table(checks, *, only=None) -> str:
     """Markdown table of ``checks`` (``only``: a set of verdicts to keep)."""
     rows = [c for c in checks if only is None or c.verdict in only]
     lines = ["| card | stage | check | value | baseline | verdict | action |", "|---|---|---|---|---|---|---|"]
-    lines += [f"| {c.card} | {c.stage} | {c.check} | {_cell(c.value)} | {_cell(c.baseline)} | {c.verdict} | "
-              f"{_cell(c.action)} |" for c in rows]
+    lines += [f"| {c.card} | {_cell(c.stage)} | {_cell(c.check)} | {_cell(c.value)} | {_cell(c.baseline)} | "
+              f"{c.verdict} | {_cell(c.action)} |" for c in rows]
     return "\n".join(lines)
 
 

@@ -1,8 +1,5 @@
-"""PURPOSE: Card B — does the trainer guide the model to learn? Measured answers, not a loss curve: one-batch
-    overfit, gradient and update health (gate A), what weight decay / clipping / EMA actually do, loss-term balance,
-    a learning-rate range test, the oracle test on E1, the shuffled-label collapse (E2), the epoch the selection metric
-    picks, resume == uninterrupted, and train mode vs eval mode. Verdict: learns / does not learn / learns the wrong
-    thing, with the failing check named.
+"""PURPOSE: Card B: does the trainer guide the model to learn? One-batch overfit, gradient / update health, loss
+    balance, LR range, E1 oracle, shuffled labels, selection regret, resume, train vs eval mode.
 TAGS: doctor, card b, trainer checks, overfit one batch, lr range test, update ratio, loss balance, shuffled labels,
     resume, train eval gap, batch norm moving statistics, selection regret, oracle
 PITFALLS: every check builds its OWN fresh model (``common.fresh_trainer``) or restores the state it changed, so the
@@ -19,6 +16,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch import nn
 
 from nig_timenet_torch.data.artifact_writer import write_artifact
 from nig_timenet_torch.data_io.environments import permute_labels
@@ -34,7 +32,7 @@ from nig_timenet_torch.doctor.common import (
     stride,
 )
 from nig_timenet_torch.model.heads import head_spec
-from nig_timenet_torch.model.layers import BatchNormChannelsLast
+from nig_timenet_torch.model.layers import BatchNormChannelsLast, GaussianNoise, SpatialDropout1D
 from nig_timenet_torch.stats.metrics import pearson, spearman
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.grad_report import grad_report
@@ -49,6 +47,7 @@ OVERFIT_CORR = 0.9           # corr(mu, label) on that batch after the steps (0.
 MODE_SCALE_BAND = (0.8, 1.25)  # sd(mu in eval mode) / sd(mean mu in train mode); outside = a different function
 BN_VAR_RATIO = 2.0           # moving variance / train batch variance of a BatchNorm, either way
 E1_CORR = {"high": 0.9, "low": 0.9, "close": 0.5}   # corr(mu, oracle mean) the short E1 run must reach
+E1_WARN_ONLY = ("close",)    # the planted close signal has IC 0.05: a short run on a small E1 may miss it by chance
 E1_SLOPE_BAND = (0.75, 1.33)  # slope of the oracle mean on mu (1 = calibrated, > 1 = mu shrunk to its average)
 #: check name prefixes that decide the summary verdict
 NOT_LEARNING = ("overfit one batch (no regularisation)", "gradients finite", "dead parameters",
@@ -113,25 +112,64 @@ def lr_range_test(ctx: DoctorContext, *, lo: float = 1e-6, hi: float = 1.0, step
 
 
 # ------------------------------------------------------------------------------------------ B10 mode gap
+#: train-mode layer groups switched on one at a time to see which one changes the evaluated function
+MODE_COMPONENTS = {"dropout": (nn.Dropout,), "feature dropout": (SpatialDropout1D, nn.Dropout1d),
+                   "input noise": (GaussianNoise,), "batch norm": (BatchNormChannelsLast,)}
+
+
+@torch.no_grad()
+def _mode_passes(model, x: torch.Tensor, types, passes: int) -> list[dict]:
+    """``passes`` forward passes with ONLY the modules of ``types`` in train mode (everything else eval); the model's
+    state (BatchNorm moving statistics) and mode are restored."""
+    was = model.training
+    state = {k: v.clone() for k, v in model.state_dict().items()}
+    model.eval()
+    for mod in model.modules():
+        if isinstance(mod, types):
+            mod.train()
+    try:
+        outs = [{k: v.float().cpu().numpy().reshape(len(x), -1)[:, 0] for k, v in model(x).items()}
+                for _ in range(passes)]
+    finally:
+        model.load_state_dict(state)
+        model.train(was)
+    return outs
+
+
 def mode_gap(ctx: DoctorContext, *, rows: int = 2048, passes: int = 8) -> dict:
-    """Per head: the eval-mode mu against the MEAN train-mode mu over ``passes`` forward passes (dropout / noise /
-    BatchNorm batch statistics on) on validation rows -> corr, sd ratio (eval / train) and mean shift in sd units;
-    plus per BatchNorm layer the worst ratio of its moving variance to the variance of a train batch."""
-    _, x, _ = ctx.xy("val", rows)
-    model = ctx.model
+    """Is the function that is EVALUATED the one that was TRAINED? On strided TRAIN rows (the distribution the
+    BatchNorm moving statistics describe), per head: eval-mode mu against the mean train-mode mu over ``passes``
+    forward passes (dropout / noise / BatchNorm batch statistics on) -> ``sd_ratio`` = sd(eval mu) / sd(the train-mode
+    signal), where the signal's variance is the covariance of the means of two disjoint halves of the passes (so the
+    passes' own noise does not inflate it), ``corr`` and the mean shift in sd units. ``components``: the same sd ratio
+    with ONE group of train-mode layers on at a time (``MODE_COMPONENTS``), which names the layer type that makes the
+    two functions differ. ``batch_norm_var_ratio``: per BatchNorm layer, the worst ratio of its moving variance to the
+    variance of those rows (either way). A ratio below 1 = the evaluated predictions are less spread than the
+    trained ones (the slope of the label on mu rises above 1)."""
+    model, dev = ctx.model, ctx.run.device
+    pick = torch.as_tensor(stride(np.arange(len(ctx.run.x["train"])), rows))
+    x = ctx.run.x["train"][pick].to(dev)
     ev = predict_outputs(model, x)
     torch.manual_seed(ctx.seed)
-    tr = [predict_outputs(model, x, train_mode=True) for _ in range(passes)]
-    out = {}
-    for t in ctx.targets:
-        k = _mu_key(t)
-        m = np.mean([p[k] for p in tr], axis=0)
-        sd = float(m.std())
-        out[t] = {"corr": pearson(ev[k], m), "sd_ratio": float(ev[k].std() / sd) if sd > 0 else float("nan"),
-                  "mean_shift_sd": float((ev[k].mean() - m.mean()) / sd) if sd > 0 else float("nan")}
-    bn = {}
-    xt = ctx.run.x["train"][torch.as_tensor(stride(np.arange(len(ctx.run.x["train"])), rows))].to(ctx.run.device)
-    hooks, seen = [], {}
+
+    def ratios(types):
+        outs = _mode_passes(model, x, types, passes)
+        res = {}
+        for t in ctx.targets:
+            k = _mu_key(t)
+            a, b = np.mean([o[k] for o in outs[::2]], axis=0), np.mean([o[k] for o in outs[1::2]], axis=0)
+            m = np.mean([o[k] for o in outs], axis=0)
+            sig = math.sqrt(max(float(np.cov(a, b)[0, 1]), 1e-300))
+            res[t] = {"corr": pearson(ev[k], m), "sd_ratio": float(ev[k].std() / sig),
+                      "mean_shift_sd": float((ev[k].mean() - m.mean()) / sig)}
+        return res
+
+    every = tuple(tp for types in MODE_COMPONENTS.values() for tp in types)
+    out = {"heads": ratios(every),
+           "components": {name: {t: v["sd_ratio"] for t, v in ratios(types).items()}
+                          for name, types in MODE_COMPONENTS.items()
+                          if any(isinstance(m, types) for m in model.modules())}}
+    bn, hooks, seen = {}, [], {}
     for name, mod in model.named_modules():
         if isinstance(mod, BatchNormChannelsLast):
             hooks.append(mod.register_forward_hook(lambda m, inp, o, name=name: seen.__setitem__(name, inp[0])))
@@ -139,7 +177,7 @@ def mode_gap(ctx: DoctorContext, *, rows: int = 2048, passes: int = 8) -> dict:
     model.eval()
     try:
         with torch.no_grad():
-            model(xt)
+            model(x)
     finally:
         for h in hooks:
             h.remove()
@@ -149,7 +187,8 @@ def mode_gap(ctx: DoctorContext, *, rows: int = 2048, passes: int = 8) -> dict:
         var = inp.reshape(-1, inp.shape[-1]).var(dim=0, unbiased=False)
         ratio = (mod.moving_variance + mod.epsilon) / (var + mod.epsilon)
         bn[name] = float(torch.exp(torch.log(ratio).abs().max()))
-    return {"heads": out, "batch_norm_var_ratio": bn}
+    out["batch_norm_var_ratio"] = bn
+    return out
 
 
 # ------------------------------------------------------------------------------------------ B9 resume
@@ -357,9 +396,16 @@ def trainer_checks(ctx: DoctorContext) -> list[Check]:
                             "pass" if ok else "fail",
                             "" if ok else "the evaluated function differs from the trained one: BatchNorm moving "
                             "statistics (bn_warmup), dropout / noise scale", g))
+    if gap["components"]:
+        low = {name: min(v.values()) for name, v in gap["components"].items()}
+        name = min(low, key=low.get)
+        checks.append(Check("B", "trainer/modes", "train-mode layer that changes the function most (its sd ratio)",
+                            f"{name}: {low[name]:.2f}", "1.00 = that layer changes nothing", "info",
+                            f"lower the rate / strength of `{name}` or recalibrate mu on validation"
+                            if low[name] < MODE_SCALE_BAND[0] else "", gap["components"]))
     for name, ratio in gap["batch_norm_var_ratio"].items():
         ok = ratio <= BN_VAR_RATIO
-        checks.append(Check("B", "trainer/modes", f"batch norm moving variance vs a train batch: {name}", ratio,
+        checks.append(Check("B", "trainer/modes", f"batch norm moving variance vs the train rows: {name}", ratio,
                             f"<= {BN_VAR_RATIO}", "pass" if ok else "fail",
                             "" if ok else "the moving statistics did not reach the data's (short run with momentum "
                             "0.99): model override bn_warmup"))
@@ -382,7 +428,8 @@ def trainer_checks(ctx: DoctorContext) -> list[Check]:
             ok = o["corr"] >= E1_CORR.get(h, 0.9) and E1_SLOPE_BAND[0] <= o["slope"] <= E1_SLOPE_BAND[1]
             checks.append(Check("B", "trainer/known truth", f"E1 oracle, {h}: corr(mu, true mean) / slope",
                                 f"{o['corr']:.2f} / {o['slope']:.2f}",
-                                f">= {E1_CORR.get(h, 0.9)} / {E1_SLOPE_BAND}", "pass" if ok else "fail",
+                                f">= {E1_CORR.get(h, 0.9)} / {E1_SLOPE_BAND}",
+                                "pass" if ok else "warn" if h in E1_WARN_ONLY else "fail",
                                 "" if ok else "on data with a known answer the mean is not recovered: slope > 1 = "
                                 "mu shrunk (mode gap, head scale); low corr = the signal is not learned", o))
         path = _small_e1(ctx, "e2", permute=True)

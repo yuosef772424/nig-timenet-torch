@@ -1,6 +1,5 @@
-"""PURPOSE: The train-fitted scaling state of a model, kept INSIDE the model (buffers, saved with the weights):
-    InputScaler (per-channel standardisation of the raw inputs, the TF ``logret_std`` input step) and the fitted NIG
-    label scale; ``fit_scalers(model, x_train, y_train)`` is the ONE place either is fitted.
+"""PURPOSE: The train-fitted scaling state kept INSIDE the model (buffers): InputScaler (per-channel input
+    standardisation) and the fitted NIG label scale; fit_scalers() is the ONE place either is fitted.
 TAGS: input scaler, train statistics, standardisation, label scale, fitted state, buffers, logret_std, unfitted
 PITFALLS: fitted on the TRAIN rows only (run.build does it); a module that needs a fit and did not get one raises on
     its first forward (never a silent identity); the state lives in the state_dict, so a checkpoint, the best weights

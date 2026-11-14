@@ -1,6 +1,5 @@
-"""PURPOSE: Card A — where is information lost or gained inside the model? Walks the model's streams in forward order
-    and, at every stage, measures how much of each signal (the labels, the E1 oracle means, and tracers that are
-    known functions of the input) a probe can still read, next to the strong simple baseline on the same rows.
+"""PURPOSE: Card A: where is information lost or gained inside the model? Probes each stream stage in forward order for
+    every signal (labels, E1 oracle means, tracers) next to the strong simple baseline.
 TAGS: doctor, card a, information flow, stage probe, tracer, path ablation, readout gap, effective rank, dead units
 PITFALLS: a probe score is what a ridge readout (features + squares) finds, a LOWER bound of the information; the
     judged comparisons are therefore differences between stages measured the same way, and a stage is judged against
@@ -160,12 +159,23 @@ def stage_table(acts: dict, signals: dict, folds, metric: dict) -> pd.DataFrame:
 
 
 def _largest_loss(table: pd.DataFrame, k: str, end: str = "trunk") -> tuple[str, float, float]:
-    """(stage, its drop vs its parents, the score at ``end``) of the most negative ``d_<k>`` on the way to ``end``
-    (head stages are judged by the readout check)."""
-    t = table[~table["stage"].str.startswith("head_")]
-    i = t[f"d_{k}"].idxmin()
-    at_end = float(table.loc[table["stage"] == end, k].iloc[0]) if (table["stage"] == end).any() else float("nan")
-    return str(t.loc[i, "stage"]), float(t.loc[i, f"d_{k}"]), at_end
+    """(stage, its drop vs its best parent, the score at ``end``) of the largest loss ON THE ROUTE the signal takes to
+    ``end``: from ``end`` backwards, always through the parent that holds the most of it (a side path that never held
+    the signal, e.g. ``stats`` for the last bar's move, is not on the route and is not blamed)."""
+    order = list(table["stage"])
+    score = dict(zip(order, table[k], strict=True))
+    delta = dict(zip(order, table[f"d_{k}"], strict=True))
+    if end not in score:
+        return order[-1], 0.0, float("nan")
+    route, stage = [end], end
+    while True:
+        par = [p for p in _parents(stage, order) if p in score]
+        if not par:
+            break
+        stage = max(par, key=lambda p: score[p])
+        route.append(stage)
+    worst_stage = min(route, key=lambda s: delta[s])
+    return worst_stage, float(delta[worst_stage]), float(score[end])
 
 
 def info_flow(ctx: DoctorContext, *, max_rows: int | None = None) -> tuple[list[Check], pd.DataFrame]:

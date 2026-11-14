@@ -1,6 +1,5 @@
-"""PURPOSE: A REAL-data stand-in for the owner's Drive artifact, buildable anywhere: public Binance USDT-perpetual
-    klines (data.binance.vision monthly archives) -> a contract artifact with the real artifact's definition (X = per
-    bar log(high|low|close / previous close), labels log(future / last close), ``price_norm_mode`` logret_std unfitted).
+"""PURPOSE: A REAL-data stand-in for the owner's Drive artifact, buildable anywhere: public Binance USDT-perp 4h klines
+    -> a contract artifact with the real artifact's definition (log-move inputs, log-return labels).
 TAGS: real data, binance vision, klines, logret artifact, contract artifact, doctor, e3 source, cpu readiness run
 PITFALLS: sealed coins (data.lock) are refused and bars at or after the time seal are dropped, so the holdout stays
     clean; this is NOT the owner's artifact (other coins and history, no TF pipeline): numbers measured on it describe
@@ -25,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import LAST_COLUMNS, TARGET_COLUMNS, TS_COL
+from nig_timenet_torch.core.schema import LAST_COLUMNS, OHLCV_COLUMNS, TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, own_anchor_and_future
 from nig_timenet_torch.model.heads import head_spec
 
@@ -37,7 +36,7 @@ DEFAULT_COINS = tuple(f"{c}USDT" for c in (
     "BTC ETH BNB SOL XRP ADA DOGE AVAX LINK DOT LTC BCH TRX ATOM NEAR UNI ETC FIL XLM AAVE ALGO SAND MANA AXS EOS "
     "XTZ THETA VET ICP GRT APT ARB OP SUI INJ RUNE DYDX CRV SNX COMP ZEC DASH ENJ CHZ KAVA GALA IMX LDO FET EGLD "
     "HBAR QNT NEO IOTA ZIL BAT ONE CELO ANKR SUSHI").split())
-_COLS = ("open_time", "open", "high", "low", "close", "volume")
+_COLS = ("open_time", *OHLCV_COLUMNS)
 _LABEL_CLIP = 1.0   # the TF export clips |log(future / last_close)| at 1.0 (B-054)
 
 
@@ -91,7 +90,7 @@ def load_frames(raw: Path, coins, interval: str) -> dict[str, pd.DataFrame]:
         df = pd.concat(parts, ignore_index=True).drop_duplicates("open_time").sort_values("open_time")
         t = df["open_time"].to_numpy()
         df["open_time"] = np.where(t > 10 ** 14, t // 1000, t) * 1_000_000   # ms (or us in 2025+ files) -> ns
-        ok = (df[["open", "high", "low", "close"]] > 0).all(axis=1) & (df["high"] >= df["low"])
+        ok = (df[list(OHLCV_COLUMNS[:4])] > 0).all(axis=1) & (df["high"] >= df["low"])
         out[coin] = df[ok].reset_index(drop=True)
     return out
 
@@ -122,7 +121,7 @@ def build_logret_dataset(frames: dict[str, pd.DataFrame], *, interval: str = "4h
         if time_seal is not None:
             df = df[df["open_time"] + (horizon + 1) * bar_ns <= pd.Timestamp(time_seal).value]
         t = df["open_time"].to_numpy()
-        h, lo, c = (np.log(df[k].to_numpy()) for k in ("high", "low", "close"))
+        h, lo, c = (np.log(df[k].to_numpy()) for k in TARGET_COLUMNS)
         cx, cl, cb = [], [], []
         for a, b in _segments(t, bar_ns):
             # the window's last bar e needs `window` bars + one previous close before it and `horizon` bars after it
