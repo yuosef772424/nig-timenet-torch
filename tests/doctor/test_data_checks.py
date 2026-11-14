@@ -8,6 +8,7 @@ from nig_timenet_torch.doctor.data_checks import (
     batch_independence,
     coverage,
     data_checks,
+    label_clip,
     overlap,
     shift,
 )
@@ -25,6 +26,22 @@ def test_rolling_a_label_by_one_row_is_caught(ctx):
     al = alignment(bad)
     assert al["label_err"]["close"] > 1e-3
     assert al["label_err"]["high"] <= 2e-5 and al["window_err"] <= 2e-5         # only the rolled label is wrong
+
+
+def test_clipped_labels_of_an_artifact_without_a_recorded_clip_are_not_misalignment(ctx):
+    """The Drive artifact records no ``reg_target_clip`` but clips ``return`` labels at 1.0 (B-054): a saturated label
+    cannot be rebuilt from the bars and must not read as a label/row misalignment."""
+    ds = {k: v for k, v in ctx.dataset.items() if k != "reg_target_clip"}
+    ds["reg_target_mode"] = "return"
+    y = np.array(ctx.dataset["y_low_reg"], dtype=np.float64)
+    scale = float(ds["reg_target_scale"])
+    y[100:140] = -1.0 * scale                                    # saturated rows, not the bars' value
+    ds["y_low_reg"] = y
+    assert alignment(ds)["label_err"]["low"] <= 2e-5
+    assert label_clip(ds) == 1.0
+    assert label_clip({**ds, "reg_target_mode": "window_scale"}) == 10.0
+    assert label_clip({**ds, "reg_target_mode": "nope"}) is None
+    assert label_clip({**ds, "reg_target_clip": 10.0}) == 10.0
 
 
 def test_alignment_is_not_applicable_to_fitted_inputs(ctx):

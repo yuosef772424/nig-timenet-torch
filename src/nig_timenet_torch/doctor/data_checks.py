@@ -16,6 +16,7 @@ import pandas as pd
 import torch
 
 from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
+from nig_timenet_torch.data.targets import TARGET_RAW, parse_mode
 from nig_timenet_torch.data_io.split_plan import sample_times
 from nig_timenet_torch.doctor.common import (
     Check,
@@ -32,7 +33,7 @@ from nig_timenet_torch.model.layers import InstanceNorm
 from nig_timenet_torch.stats.metrics import rank_ic, spearman
 from nig_timenet_torch.workflow import run_common
 
-__all__ = ["data_checks", "alignment", "ceiling", "overlap", "coverage", "shift", "batch_independence",
+__all__ = ["data_checks", "alignment", "label_clip", "ceiling", "overlap", "coverage", "shift", "batch_independence",
            "RAW_CHANNELS"]
 
 RAW_CHANNELS = TARGET_COLUMNS
@@ -53,6 +54,19 @@ def _raw_logmoves(dataset: dict) -> bool:
             and dataset.get("price_norm_state") == "unfitted")
 
 
+def label_clip(dataset: dict) -> float | None:
+    """The clip of the stored regression labels: the artifact's ``reg_target_clip``; an artifact that does not record
+    it (the TF export of the Drive artifact) was clipped at its mode's own default (``data.targets`` registry meta,
+    1.0 for ``return``, B-054); None = the mode is not in the registry (no label is treated as clipped)."""
+    clip = dataset.get("reg_target_clip")
+    if clip:
+        return float(clip)
+    try:
+        return float(TARGET_RAW.entry(parse_mode(dataset["reg_target_mode"])[0]).meta["clip"])
+    except (KeyError, ValueError):
+        return None
+
+
 def alignment(dataset: dict, *, max_pairs: int = 20000) -> dict | None:
     """For pairs (row i, a later row j of the same coin, k bars later, horizon <= k <= window): (a) the bars the two
     windows share must be identical (a window is a pure slice of the coin's bars: no per-window state, no future);
@@ -70,7 +84,7 @@ def alignment(dataset: dict, *, max_pairs: int = 20000) -> dict | None:
     coin = _coin_of(dataset, n)
     out = {"pairs": 0, "window_err": 0.0}
     labels = {tg: np.asarray(dataset[reg_key(tg)]) for tg in dataset["price_targets"]}
-    clip = dataset.get("reg_target_clip") or np.inf
+    clip = label_clip(dataset) or np.inf
     scale = float(dataset["reg_target_scale"])
     err = dict.fromkeys(labels, 0.0)
     for gap in range(1, 4):                                      # the next rows of the same coin
@@ -196,7 +210,7 @@ def coverage(dataset: dict, idx: np.ndarray, targets) -> dict:
         res["flat_bar_share"] = float((x[:, :, fo.index("high")] == x[:, :, fo.index("low")]).mean())
     if "close" in fo:
         res["zero_close_move_share"] = float((x[:, :, fo.index("close")] == 0).mean())
-    clip = dataset.get("reg_target_clip")
+    clip = label_clip(dataset)
     scale = float(dataset["reg_target_scale"])
     for t in targets:
         y = np.asarray(dataset[reg_key(t)])[idx].astype(np.float64)
