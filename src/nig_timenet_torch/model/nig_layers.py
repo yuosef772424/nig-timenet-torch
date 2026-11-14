@@ -14,11 +14,32 @@ import torch.nn.functional as F
 from torch import nn
 
 from nig_timenet_torch.core.constants import NIG_ALPHA_DEN_MIN
+from nig_timenet_torch.model.scalers import FITTED_SCALE, FittedScale
 
 __all__ = ["NIGHead", "OrderedMeans", "NIGUncertainty", "ConfidenceHead"]
 
 
-class NIGHead(nn.Module):
+class _Scaled(nn.Module):
+    """Holds the label scale of a head part: None (label units as they are), a float (hand-set) or
+    ``scalers.FITTED_SCALE`` ("train_std": a FittedScale buffer set by ``scalers.fit_scalers`` on the train labels)."""
+
+    def _init_scale(self, scale) -> None:
+        self.fitted_scale = None
+        if scale == FITTED_SCALE:
+            self.scale, self.fitted_scale = FITTED_SCALE, FittedScale()
+        elif scale is None:
+            self.scale = None
+        elif isinstance(scale, str) or not scale > 0:
+            raise ValueError(f"scale must be > 0, None or {FITTED_SCALE!r}, not {scale!r}")
+        else:
+            self.scale = float(scale)
+
+    def _s(self):
+        """The scale as a float / 0-dim tensor (None = no scaling)."""
+        return self.fitted_scale() if self.fitted_scale is not None else self.scale
+
+
+class NIGHead(_Scaled):
     """fc (Dense hidden, swish) -> dropout -> out (Dense 4) = raw [mu, nu, alpha, beta].
     mu is linear (no floor); nu/alpha/beta = softplus(raw) + nu_min/alpha_min/beta_min.
     ``l2`` (upstream default 1e-5) is fc's kernel regulariser: ``regularization_loss() = l2 * sum(fc.weight^2)``.
@@ -26,15 +47,14 @@ class NIGHead(nn.Module):
     ``scale`` s (FX1 switch, None = the formula above): the head works in label units / s, i.e. mu = s * raw_mu and
     beta = s^2 * (softplus + beta_min) (nu, alpha are unit-free). The NIG NLL then differs from the NLL of labels / s
     by a constant, so training equals training on labels scaled by 1 / s, while every output stays in label units.
-    TF trained on labels x 100 (reg_target_scale 100); s = 0.01 restores that on a scale-1 artifact (B-052, B-062)."""
+    TF trained on labels x 100 (reg_target_scale 100); s = 0.01 restores that on a scale-1 artifact (B-052, B-062).
+    ``scale="train_std"``: s is fitted on the train labels (``scalers.fit_scalers``) and saved with the weights."""
 
     def __init__(self, in_features: int, hidden: int = 128, dropout: float = 0.1,
                  nu_min: float = 0.1, alpha_min: float = 2.0, beta_min: float = 0.01, l2: float = 1e-5,
-                 scale: float | None = None):
+                 scale: float | str | None = None):
         super().__init__()
-        if scale is not None and not scale > 0:
-            raise ValueError(f"scale must be > 0 or None, not {scale!r}")
-        self.scale = None if scale is None else float(scale)
+        self._init_scale(scale)
         self.l2 = l2
         self.nu_min, self.alpha_min, self.beta_min = nu_min, alpha_min, beta_min
         self.fc = nn.Linear(in_features, hidden)
@@ -53,12 +73,13 @@ class NIGHead(nn.Module):
         nu = F.softplus(p[:, 1:2]) + self.nu_min
         alpha = F.softplus(p[:, 2:3]) + self.alpha_min
         beta = F.softplus(p[:, 3:4]) + self.beta_min
-        if self.scale is not None:
-            mu, beta = self.scale * mu, (self.scale * self.scale) * beta
+        s = self._s()
+        if s is not None:
+            mu, beta = s * mu, (s * s) * beta
         return mu, nu, alpha, beta
 
 
-class OrderedMeans(nn.Module):
+class OrderedMeans(_Scaled):
     """(mu_high, mu_close, mu_low) = (mu_c + softplus(raw_h), mu_c, mu_c - softplus(raw_l)).
     Input order is (close, high, low), output order (high, close, low) — as builder.py calls it.
 
@@ -69,15 +90,14 @@ class OrderedMeans(nn.Module):
     * ``detach_close``: the high / low offsets are added to ``mu_c.detach()``, so the high and low losses no longer
       move the close mean (E1: they pulled close mu to corr -0.19 with its true mean, B-063)."""
 
-    def __init__(self, scale: float | None = None, detach_close: bool = False):
+    def __init__(self, scale: float | str | None = None, detach_close: bool = False):
         super().__init__()
-        if scale is not None and not scale > 0:
-            raise ValueError(f"scale must be > 0 or None, not {scale!r}")
-        self.scale = None if scale is None else float(scale)
+        self._init_scale(scale)
         self.detach_close = bool(detach_close)
 
     def _offset(self, raw: torch.Tensor) -> torch.Tensor:
-        return F.softplus(raw) if self.scale is None else self.scale * F.softplus(raw / self.scale)
+        s = self._s()
+        return F.softplus(raw) if s is None else s * F.softplus(raw / s)
 
     def forward(self, mu_c: torch.Tensor, raw_h: torch.Tensor, raw_l: torch.Tensor
                 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
