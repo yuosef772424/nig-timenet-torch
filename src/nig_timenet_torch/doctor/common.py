@@ -12,6 +12,7 @@ and ``action`` = what to change when it fails (the card section says more). Inst
 
 import json
 import math
+import shutil
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
@@ -170,6 +171,8 @@ def make_context(artifact: str, out, *, run_dir: str | None = None, model: dict 
     default model and training settings with ``model`` / ``train`` overrides. ``max_rows`` strides every split."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
+    if run_dir is None and not trained:           # the doctor's own short run: always trained afresh, never resumed
+        shutil.rmtree(out / "run", ignore_errors=True)
     base = default_model_settings()
     arch = architecture or base.architecture
     keep = arch == base.architecture and not no_preset
