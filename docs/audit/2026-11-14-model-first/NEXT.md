@@ -73,20 +73,10 @@ Not ready for trading. In reading order:
   and on a second period, next to always-up / always-down.
 - O-3: does `input_scaler` matter on real data on its own? One arm without it on the real slice.
 
-## 6. Known open error: CI is red on PR #55 (not fixed, session budget ran out)
+## 6. CI error on PR #55: fixed (2026-11-14, second session)
 
-What: the project's self-checks still describe the PRE-audit default model and the module list before this round
-(pinned defaults, model assembly pins, ratchets, MAP, card checks), and some existing tests build the default
-model and call it without fitting its scalers. A pins / ratchets pass was started and is only PARTLY committed
-(`tests/pins/defaults.json`, `tests/ratchets.json`, `docs/MAP.md`, `tests/conftest.py`, `docs/decisions/D-023-*`):
-the full fast suite was NOT run to the end after it. The 65 new tests of this round pass on their own.
-
-How to fix (about one short session):
-1. `python -m pytest -q -x` and take the failures one by one.
-2. A pin / ratchet / map that only records the old state: update it through its own path
-   (`UPDATE_MODEL_PINS=1 python -m pytest tests/model/test_assembly_pins.py`, `python -m tests.build_map`,
-   `tests/pins/*.json` + decision D-023, `tests/ratchets.json` with a reason).
-3. A test that builds the default model and runs a forward: either call
-   `model.scalers.fit_scalers(model, x_train, y_train)` first, or build the pre-audit model
-   `ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))` (TF-parity / oracle tests must use the latter).
-4. `ruff check src tests`, then the whole suite without `-x`; never skip or weaken a test to get green.
+Four tests still described the pre-audit default; each was updated through its own path, none weakened or skipped:
+`tests/model/test_assembly_pins.py` (`UPDATE_MODEL_PINS=1`: the four new override keys), `tests/jobs/test_baseline_pin.py`
+(`PIN_UPDATE=1`: new default model, new `fitted_scalers` key), `tests/model/test_bn_warmup.py` (the "default keeps the
+state_dict" test now builds the pre-audit model explicitly), `notebooks/main.ipynb` `CHANGES` (the four new
+`model.overrides`). Whole suite with `-m "slow or not slow"`: 978 passed, 2 skipped; `ruff check src tests` clean.
