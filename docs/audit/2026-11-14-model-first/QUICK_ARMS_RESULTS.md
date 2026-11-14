@@ -22,3 +22,22 @@ Reading:
 - GRU vs transformer: IC differences <= 0.01 on high / low, the same size as the seed-to-seed spread; no claim either
   way (rule C4). The close head has no direction signal (IC 0.02-0.04), consistent with N-08.
 - Not run: longer runs (where the first overfit epoch appears), more rows, the doctor on the trained weights.
+
+## Battery (T-profit, TEST rows, cost 0.08 % per side, `--battery --n-variants 4`, seed 0, same arms)
+
+CI = day-block bootstrap at 98.8 %. Net average per trade; "profit" needs the model to beat every baseline row AND a CI
+above 0.
+
+| arm | close direction (all rows) | LONG at pred_low (limit) | SHORT at pred_high (limit) | battery verdict |
+|---|---|---|---|---|
+| gru 3e-4 | -0.203 % [-0.281, -0.130] | -0.039 % [-0.138, +0.063] | -0.120 % [-0.227, -0.007] | not tradeable |
+| transformer 3e-4 | -0.150 % [-0.212, -0.090] | -0.043 % [-0.142, +0.058] | -0.117 % [-0.226, -0.006] | not tradeable |
+| gru 1e-4 | -0.171 % [-0.243, -0.102] | -0.032 % [-0.143, +0.080] | -0.131 % [-0.249, -0.019] | not tradeable |
+| transformer 1e-4 | -0.175 % [-0.246, -0.107] | -0.041 % [-0.142, +0.063] | -0.129 % [-0.244, -0.018] | not tradeable |
+
+- No arm has a positive row; the long-limit CIs straddle 0 but the model is not better than the "constant offset"
+  baseline (gru 1e-4: model -0.032 % vs shuffled -0.062 %, constant offset -0.051 %, with overlapping CIs).
+- Sigma as position size does not help (gru 3e-4: 1/sigma -0.197 % vs equal weight -0.203 % vs shuffled -0.205 %).
+- Direction accuracy 0.51 on TEST; confidence is flat against accuracy; |mu| is 5 % of the true move (shrunk).
+- The weekly and per-coin sections are empty or tiny (the TEST rows are 20,000 strided rows, 1 week of one coin
+  group), so they say nothing: the large-sample run is the one to read.

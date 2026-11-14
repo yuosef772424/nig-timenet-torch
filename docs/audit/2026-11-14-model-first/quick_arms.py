@@ -14,8 +14,15 @@ import time
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.flat_run import epoch_line
-from nig_timenet_torch.workflow.settings import (BatterySettings, EvalSettings, ModelSettings, RunSettings,
-                                                 SplitSettings, TrainSettings, default_model_settings)
+from nig_timenet_torch.workflow.settings import (
+    BatterySettings,
+    EvalSettings,
+    ModelSettings,
+    RunSettings,
+    SplitSettings,
+    TrainSettings,
+    default_model_settings,
+)
 
 
 def arm_settings(a, encoder: str, lr: float, out: pathlib.Path) -> RunSettings:
@@ -25,7 +32,8 @@ def arm_settings(a, encoder: str, lr: float, out: pathlib.Path) -> RunSettings:
         run_dir=str(out / "ckpt"), data=LoaderSettings(name=a.artifact, mmap=True),
         split=SplitSettings(max_rows=a.rows), model=model,
         train=TrainSettings(epochs=a.epochs, batch_size=a.batch_size, seed=a.seed, lr=lr, device=a.device),
-        evaluation=EvalSettings(health_max_rows=2000, battery=BatterySettings(enabled=a.battery, n_variants=a.n_variants)))
+        evaluation=EvalSettings(health_max_rows=2000,
+                                battery=BatterySettings(enabled=a.battery, n_variants=a.n_variants)))
 
 
 def main():
