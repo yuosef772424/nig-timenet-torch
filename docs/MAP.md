@@ -74,7 +74,20 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `data_io/split_plan.py` | One global train/val/test split with purge by label end and embargo, plus the per-row times it needs (feature start, feature end, label end) derived from last_candles. | split plan, purge embargo, label end, sample times, leakage check |
 | `data_io/synthetic.py` | E1 test environment (MODEL_DEV_PROTOCOL section 3): synthetic 4h bars from intrabar random walks, HAR-like volatility, a planted close drift of known IC; a contract artifact with each label's exact conditional mean / sd. | synthetic data, e1 environment, oracle, planted signal, known ic, heteroscedastic noise, har volatility, intrabar path, contract artifact, gates |
 | `data_io/target_codec.py` | TARGET_CODECS, the one place a regression target is encoded from last_candles and decoded back to a price: "return" (own-anchor simple return) and "logret_close" (log return vs the last close, TF logret_* artifacts). | target codec, return target, log return, reg target scale, decode to price, own anchor, anchor column |
+| `data_io/vision_slice.py` | A REAL-data stand-in for the owner's Drive artifact, buildable anywhere: public Binance USDT-perp 4h klines -> a contract artifact with the real artifact's definition (log-move inputs, log-return labels). | real data, binance vision, klines, logret artifact, contract artifact, doctor, e3 source, cpu readiness run |
 | `data_io/walk_max.py` | Exact moments of the running maximum M_n = max(0, S_1..S_n) of a Gaussian random walk with iid N(mu, s^2) steps (Spitzer's identity), vectorised over rows: mean, variance and E[exp(theta M_n)]. | random walk, running maximum, spitzer identity, exact moments, moment generating function, oracle, synthetic |
+
+### doctor
+
+| module | what it is for | tags |
+|---|---|---|
+| `doctor/__main__.py` | ``python -m nig_timenet_torch.doctor``: command-line entry of the readiness report (doctor/readiness.py). | doctor, entry point, cli, readiness report |
+| `doctor/common.py` | Shared pieces of the model doctor: the Check row, verdict helpers, report table, DoctorContext (one run through the workflow steps), the purged time-ordered ridge probe and the simple-feature baseline. | doctor, check row, readiness table, probe, ridge probe, purged folds, simple baseline, har features, context |
+| `doctor/data_checks.py` | Card C: is the data sound? Label / window alignment, codec round trip, unit scales, split purity and shift, the information ceiling of the inputs, duplicates / effective sample size, coverage counts. | doctor, card c, data checks, leakage, label alignment, codec round trip, split purity, distribution shift, input information ceiling, near duplicate windows, effective sample size, flat bars, clipped labels |
+| `doctor/info_flow.py` | Card A: where is information lost or gained inside the model? Probes each stream stage in forward order for every signal (labels, E1 oracle means, tracers) next to the strong simple baseline. | doctor, card a, information flow, stage probe, tracer, path ablation, readout gap, effective rank, dead units |
+| `doctor/metric_checks.py` | Card D: do the numbers mean what we say? Every metric next to its trivial baseline, the decode path to price, profit after cost with its uncertainty, and the selection metric against the trading goal. | doctor, card d, metric checks, trivial baseline, climatology, nll, coverage, sharpness, decode round trip, profit after cost, block bootstrap, selection metric, trading goal |
+| `doctor/readiness.py` | Card E — the readiness report: ONE command runs cards A-D on a configuration and prints, per check: stage, check, value, baseline, verdict and what to change; then the diagnosis: which stage to work on first. | doctor, card e, readiness report, entry point, diagnosis, which stage, cli |
+| `doctor/trainer_checks.py` | Card B: does the trainer guide the model to learn? One-batch overfit, gradient / update health, loss balance, LR range, E1 oracle, shuffled labels, selection regret, resume, train vs eval mode. | doctor, card b, trainer checks, overfit one batch, lr range test, update ratio, loss balance, shuffled labels, resume, train eval gap, batch norm moving statistics, selection regret, oracle |
 
 ### eval
 
@@ -117,6 +130,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `model/panel.py` | Cross-asset panel model (source: crypto-signal-prediction cross_asset/model.py @ aeafc564), BUILD_PLAN.md P43. |  |
 | `model/parts.py` | The registered input_skip variants of the transformer encoder (none, concat_each_block, dense_skip, late_raw, no_proj); class flags say what a variant adds, so builders never compare variant names. | input skip, variants, transformer encoder, patch embedding, readout, registry, flags |
 | `model/probe.py` | Per-layer ridge-probe report: forward-hook activations of named modules fitted to a label with time-ordered folds (AUC for binary y, else R^2), the raw input scored next to every layer. | probe, layer probe, ridge, activations, forward hook, health report |
+| `model/scalers.py` | The train-fitted scaling state kept INSIDE the model (buffers): InputScaler (per-channel input standardisation) and the fitted NIG label scale; fit_scalers() is the ONE place either is fitted. | input scaler, train statistics, standardisation, label scale, fitted state, buffers, logret_std, unfitted |
 | `model/taps.py` | Inspection-only taps: record the output of every (or chosen) named module of ANY architecture into a dict during a forward pass, per-layer summaries, and a signal trace (ridge R^2 of a known signal per layer). | taps, layer outputs, inspection, diagnostics, forward hook, signal trace, dead units, model doctor |
 
 ### stats
@@ -172,6 +186,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | encoder | `ENCODERS` | `model/encoders.py` | `gru`, `tcn`, `transformer` |
 | head | `HEAD_REGISTRY` | `model/heads.py` | `binary_classification`, `multiclass_classification`, `nig_regression` |
 | init | `INITS` | `trainer/switches.py` | `keras`, `torch` |
+| input_scaler | `INPUT_SCALERS` | `model/scalers.py` | `none`, `train_std` |
 | input_skip | `INPUT_SKIP_VARIANTS` | `model/parts.py` | `concat_each_block`, `dense_skip`, `late_raw`, `no_proj`, `none` |
 | selection_metric | `SELECTION_METRICS` | `trainer/selection_metric.py` | `val_auc_close_class`, `val_auc_high_class`, `val_auc_low_class`, `val_pinball_close_reg`, `val_pinball_high_reg`, `val_pinball_low_reg`, `val_raw_loss` |
 | source | `SOURCES` | `data/sources.py` | `files`, `synthetic` |
@@ -186,6 +201,9 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `data/cli.py`: runnable (`python -m nig_timenet_torch.data.cli`)
 - `data_io/artifact.py`: runnable (`python -m nig_timenet_torch.data_io.artifact`)
 - `data_io/environments.py`: runnable (`python -m nig_timenet_torch.data_io.environments`)
+- `data_io/vision_slice.py`: runnable (`python -m nig_timenet_torch.data_io.vision_slice`)
+- `doctor/__main__.py`: runnable (`python -m nig_timenet_torch.doctor`)
+- `doctor/readiness.py`: runnable (`python -m nig_timenet_torch.doctor.readiness`)
 - `jobs/baseline.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/device_smoke.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/gates.py`: job entry (`docs/jobs/*.json` name it)
