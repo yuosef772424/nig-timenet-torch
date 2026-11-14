@@ -60,3 +60,13 @@ Confidence words: **proved** = measured by a run named in the row; **argued** = 
   60,000 strided rows per split.
 - `input_scaler` on real data in isolation (only the whole bundle was run there).
 - Multi-timeframe models with the input scaler (the fit handles a dict of inputs; no test ran it).
+
+## 5. Doctor on trained weights, Drive artifact (2026-11-14, second session)
+
+Colab T4, artifact `preprocessing_output_1` (535 coins, 2,506,192 windows), `quick_arms` weights (seed 0, lr 3e-4, 6
+epochs, 20,000 strided rows per split), `doctor ARTIFACT --run-dir RUN/ckpt --trained --max-rows 20000`.
+
+| id | what | evidence | action |
+|---|---|---|---|
+| N-18 | The doctor's alignment check (card C) FAILED on the Drive artifact for low / close (max err 0.61 / 0.34): a false alarm. 99.99 % of 600,000 sampled pairs match exactly (median / q99.9 error 0); the few misses (close 1e-5, low 8e-5 of pairs) are rows whose label is exactly +-1.0, the TF export's clip (B-054). The artifact records no `reg_target_clip`, so the check did not skip saturated labels. | `align_dist.py`-style error distribution on the artifact; after the fix card C = 16 pass / 1 warn / 0 fail | **fixed**: `doctor/data_checks.py:label_clip` (the artifact's key, else the mode's registry default); test added |
+| N-19 | Readiness on the Drive artifact, GRU vs transformer (same rows, seed 0, lr 3e-4): both "not ready", same stages. A 0 / 0 fail, B 3 fail (A6 head conflict at the end, close mode gap, E1 oracle low slope 1.59 GRU / 1.47 transformer), D 5 (GRU) / 7 (transformer) fail: the transformer's close head is no better than a constant (MAE skill -5e-5, slope 0.49). Profit rows negative for both: close -0.140 % / -0.135 % per trade net, limit-long -0.067 % / -0.071 %, short -0.179 % / -0.187 % (all CIs contain nothing above 0 or lose to a trivial rule). Slope of the label on mu: high 1.91 / 1.84, low 1.60 / 1.45 (mu shrunk, O-1 again, on the real artifact). | `/content/doc2_{gru,transformer}/readiness.md` on Colab (not committed) | documented; one seed, 6 epochs, 20,000 rows: a decision needs the large-sample run |
