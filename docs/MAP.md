@@ -102,6 +102,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `jobs/baseline.py` | Entry ``baseline``: trains one seed of the default NIG-TimeNet model on the contract artifact, then writes the summary, health report and test report (ROADMAP T5r); a thin entry over workflow.run. | baseline job, colab entry, training run, test report, health report, resume, smoke job |
 | `jobs/device_smoke.py` | Entry ``device_smoke``: proves that the runner, the device assertion and the output contract work on this VM. | device smoke, colab entry, device assertion, runner proof, rule e1 |
 | `jobs/gates.py` | Entry ``gates``: runs the MODEL_DEV_PROTOCOL gates (E1 -> E2 -> E3 x seeds) on one configuration and writes gate_report.json / .md keyed by its configuration hash (ROADMAP G2); a thin entry over workflow.gate_run. | gates job, colab entry, gate report, configuration hash, e1 e2 e3, seeds, rule c6 |
+| `jobs/grad_stack.py` | Entry ``grad_stack``: the gradient stacking experiment (workflow/grad_stack.py) as a Colab job. | grad stack job, colab entry, gradient features, experiment |
 
 ### model
 
@@ -109,14 +110,16 @@ line range). A module without a card shows its first docstring line; it gets a c
 |---|---|---|
 | `model/architectures.py` | The ARCHITECTURES registry (build_fn + default_config per architecture), ModelSettings / build_model, the anti-memorization preset and the TinyMLP plug-in proof; every architecture exposes the health-report hooks. | architectures, registry, model settings, default config, tiny mlp, plugin, health report, probe points |
 | `model/builder.py` | NigTimeNetV2 (the fused model: input path, one encoder branch per timeframe, trunk, heads) and build_nig_timenet_v2; encoders come from model.encoders.ENCODERS, head kinds from HEAD_REGISTRY. | builder, nig timenet v2, model assembly, encoder dispatch, head dispatch, oracle weights, state dict |
+| `model/chart_cnn.py` | ChartCNN: a model built from scratch (no project layer): each input window is drawn as a 2-channel chart image (high-low range bars + close line), a 2D CNN reads it, one shared head outputs every target's numbers. | chart image, cnn, candlestick image, robust to outliers, new architecture, chart_cnn, from scratch |
 | `model/contract.py` | The boundary contract of a model (input and output names, shapes, dtypes, head kind), read from any built model by one forward pass and checked with a field-level diff; architectures plug in through it. | model contract, boundary, architecture, plugin, head kind, check_contract |
-| `model/encoders.py` | The ENCODERS registry: each encoder builds its modules through the model's ``add(name, module)`` (Keras layer names, so state_dict keys are unchanged) and owns its forward over the token sequence. | encoders, encoder registry, transformer, gru, tcn, causal conv, sequence encoder, plugin |
+| `model/encoders.py` | The ENCODERS registry: each encoder builds its modules through the model's ``add(name, module)`` (Keras layer names, so state_dict keys are unchanged) and owns its forward over the token sequence. | encoders, encoder registry, transformer, gru, tcn, itransformer, timesnet, causal conv, sequence encoder, plugin |
 | `model/heads.py` | The ONE head vocabulary: HEAD_REGISTRY (a head KIND -> output keys, label key, task type, output width, forward), head_spec, and the nig_outputs / class_outputs helpers that assemble a head's output dict. | heads, head registry, head spec, output keys, nig outputs, class outputs, task type, output width |
 | `model/layers.py` | The layer classes of NIG-TimeNet v2 (instance norm, symlog, decomposition, patch embedding, relative GQA attention, transformer block, pooling, FiLM, gated fusion, Keras-style GRU) with TF-identical numerics. | layers, instance norm, stats mode, symlog, attention, transformer block, gru, film, keras port |
 | `model/nig_layers.py` | The NIG head layers: NIGHead (mu/nu/alpha/beta with floors; FX1 output scale), OrderedMeans (high >= close >= low; FX1 scale / detach close), NIGUncertainty, ConfidenceHead. | nig head, ordered means, evidential, uncertainty, confidence head, softplus offset, head parametrisation |
 | `model/panel.py` | Cross-asset panel model (source: crypto-signal-prediction cross_asset/model.py @ aeafc564), BUILD_PLAN.md P43. |  |
 | `model/parts.py` | The registered input_skip variants of the transformer encoder (none, concat_each_block, dense_skip, late_raw, no_proj); class flags say what a variant adds, so builders never compare variant names. | input skip, variants, transformer encoder, patch embedding, readout, registry, flags |
 | `model/probe.py` | Per-layer ridge-probe report: forward-hook activations of named modules fitted to a label with time-ordered folds (AUC for binary y, else R^2), the raw input scored next to every layer. | probe, layer probe, ridge, activations, forward hook, health report |
+| `model/scratch_nets.py` | Two models built from scratch (no project layer) to find where memorization starts and learning breaks: conv1d_net (dilated 1D convolutions + a dense head) and no_dense_net (no Linear layer anywhere: convolutions only). | conv1d, dilated convolution, no dense, fully convolutional, global pooling, new architecture, from scratch |
 | `model/taps.py` | Inspection-only taps: record the output of every (or chosen) named module of ANY architecture into a dict during a forward pass, per-layer summaries, and a signal trace (ridge R^2 of a known signal per layer). | taps, layer outputs, inspection, diagnostics, forward hook, signal trace, dead units, model doctor |
 
 ### stats
@@ -153,6 +156,9 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `workflow/e1_arms.py` | E1 arm runner: train configuration arms on the synthetic E1 env, gate A start / end + gate B / C rows, and per-head mu calibration against the known E1 conditional mean (mean ratio, spread ratio, corr, slope). | e1, arms, synthetic, mu calibration, slope, oracle, readout gap, model doctor, exploration |
 | `workflow/flat_run.py` | The flat model (one row per coin window, NIG regression + binary class head per price target) as run steps: inputs, anchors, model settings, trainer, fit settings, one chunked predict per stage. | flat run, run steps, trainer config, stage inputs, anchors by name, head kinds, predict stage |
 | `workflow/gate_run.py` | The gate run: E1 -> E2 -> E3 x seeds through the run steps, gate A before / after each short run, gates B / C / canary on the test split, one report keyed by the configuration hash; gate_check refuses an ungated run. | gate run, gate report, gate job, e1 e2 e3, seeds, configuration hash, job-side check, baseline arm, refusal |
+| `workflow/grad_net.py` | GradNet (grad_stack variant grad_full): model B sees ONLY the full per-row gradients of a frozen model A (every layer and unit), one encoder per layer, a project backbone over the layer tokens. | grad net, full gradients, per-layer encoders, frozen model a, gradient tokens, grad stack, experiment |
+| `workflow/grad_stack.py` | Gradient stacking experiment (owner request 2026-11-10, quick, outside the roadmap): model A on the earlier half of train, its per-layer gradients feed model B on the later half; all variants through the test. | grad stack, gradient features, stacking, time split halves, per-layer gradients, experiment |
+| `workflow/grad_stack_report.py` | The reporting half of grad_stack: learning curves (where memorization starts), the comparison files and the evaluation battery of every variant of a finished run folder. | grad stack report, learning curves, overfit, memorization, battery, test report, gate verdicts |
 | `workflow/health_report.py` | T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer trace) as JSON and markdown next to the checkpoint. | health report, diagnostics, t-sharp, probe, trainer trace, markdown report |
 | `workflow/prediction_table.py` | The one batched predict that turns a model and its inputs into the canonical PredictionTable, with one writer and one validating reader. | prediction table, batched predict, table meta, table writer, table reader |
 | `workflow/reading.py` | The T5r reading of a finished run: volatility baselines of the high / low heads (rule C1), every use of the outputs with controls on VAL and TEST, deep diagnosis of profitable-looking rules, the evidence check. | t5r reading, rule c1, volatility baseline, strategy book, strategy diagnosis, evidence check, run reading |
@@ -166,10 +172,10 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | kind | variable | module | registered names |
 |---|---|---|---|
-| architecture | `ARCHITECTURES` | `model/architectures.py` | `nig_timenet_v2`, `tiny_mlp` |
+| architecture | `ARCHITECTURES` | `model/architectures.py` | `chart_cnn`, `conv1d_net`, `nig_timenet_v2`, `no_dense_net`, `tiny_mlp` |
 | calibrator | `CALIBRATORS` | `eval/calibrator.py` | `isotonic` |
 | custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` | `ath_distance`, `calendar`, `crash_rebound`, `direction_consistency`, `fisher`, `fractal`, `jump`, `mean_reversion`, `position_in_range`, `psar`, `range_rel`, `returns`, `risk_adj_momentum`, `rsi_divergence`, `rvi`, `supertrend`, `trend_age`, `vol_asymmetry`, `vol_estimators`, `vol_ratio`, `vol_term_structure`, `volume_z` |
-| encoder | `ENCODERS` | `model/encoders.py` | `gru`, `tcn`, `transformer` |
+| encoder | `ENCODERS` | `model/encoders.py` | `gru`, `itransformer`, `tcn`, `timesnet`, `transformer` |
 | head | `HEAD_REGISTRY` | `model/heads.py` | `binary_classification`, `multiclass_classification`, `nig_regression` |
 | init | `INITS` | `trainer/switches.py` | `keras`, `torch` |
 | input_skip | `INPUT_SKIP_VARIANTS` | `model/parts.py` | `concat_each_block`, `dense_skip`, `late_raw`, `no_proj`, `none` |
@@ -189,7 +195,9 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `jobs/baseline.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/device_smoke.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/gates.py`: job entry (`docs/jobs/*.json` name it)
+- `jobs/grad_stack.py`: job entry (`docs/jobs/*.json` name it)
 - `workflow/e1_arms.py`: runnable (`python -m nig_timenet_torch.workflow.e1_arms`)
+- `workflow/grad_stack.py`: runnable (`python -m nig_timenet_torch.workflow.grad_stack`)
 - `notebooks/colab_nig_timenet_torch.ipynb`: notebook runner
 - `notebooks/data_pipeline.ipynb`: notebook runner
 - `notebooks/main.ipynb`: notebook runner

@@ -67,7 +67,8 @@ def test_forward_matches_outputs_npz(model):
 def test_encoders_registry_is_the_one_source():
     from nig_timenet_torch.model.encoders import ENCODERS
 
-    assert ENCODERS.names() == ("transformer", "gru", "tcn")
-    assert [ENCODERS.entry(n).meta["supports_input_skip"] for n in ENCODERS.names()] == [True, False, False]
+    assert ENCODERS.names() == ("transformer", "gru", "tcn", "itransformer", "timesnet")
+    skip = [ENCODERS.entry(n).meta["supports_input_skip"] for n in ENCODERS.names()]
+    assert skip == [True, False, False, False, False]
     with pytest.raises(NotImplementedError, match="transformer encoder only"):
         build_nig_timenet_v2(32, 6, encoder="gru", input_skip="late_raw")

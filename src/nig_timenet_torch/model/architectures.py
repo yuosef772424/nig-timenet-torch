@@ -152,3 +152,23 @@ def build_tiny_mlp(seq_len: int, n_features: int, **config) -> TinyMLP:
 
 ARCHITECTURES.register("tiny_mlp", build_tiny_mlp, version=1, build_fn=build_tiny_mlp,
                        default_config={"price_targets": list(TARGET_COLUMNS), "hidden": 32})
+
+
+# chart_cnn (owner 2026-11-10: a structurally different model that uses none of the project's layers)
+from nig_timenet_torch.model.chart_cnn import CHART_CNN_DEFAULT_CONFIG, build_chart_cnn  # noqa: E402
+
+ARCHITECTURES.register("chart_cnn", build_chart_cnn, version=1, build_fn=build_chart_cnn,
+                       default_config=CHART_CNN_DEFAULT_CONFIG)
+
+# conv1d_net / no_dense_net (owner 2026-11-10: change the structure completely to find where memorization starts)
+from nig_timenet_torch.model.scratch_nets import (  # noqa: E402
+    CONV1D_NET_DEFAULT_CONFIG,
+    NO_DENSE_NET_DEFAULT_CONFIG,
+    build_conv1d_net,
+    build_no_dense_net,
+)
+
+ARCHITECTURES.register("conv1d_net", build_conv1d_net, version=1, build_fn=build_conv1d_net,
+                       default_config=CONV1D_NET_DEFAULT_CONFIG)
+ARCHITECTURES.register("no_dense_net", build_no_dense_net, version=1, build_fn=build_no_dense_net,
+                       default_config=NO_DENSE_NET_DEFAULT_CONFIG)

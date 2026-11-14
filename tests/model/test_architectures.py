@@ -35,11 +35,15 @@ def test_architecture_default_is_nig_timenet_v2():
 def test_every_architecture_exposes_the_health_report_hooks():
     """model_plugin_howto: head_modules() and default_probe_points on every registered architecture; the probe points
     are real module names of the built model."""
+    from nig_timenet_torch.model.chart_cnn import HeadView
     from nig_timenet_torch.model.nig_layers import NIGHead
 
     for name in ARCHITECTURES.names():
         model = build_model(ModelSettings(name), 8, 4)
         heads = model.head_modules()
-        assert set(heads) == {"high", "low", "close"} and all(isinstance(h, NIGHead) for h in heads.values()), name
+        # chart_cnn / conv1d_net / no_dense_net write their own head (no project layer, D-023): a HeadView
+        # with the same floors / parameters
+        kinds = (NIGHead, HeadView) if name in ("chart_cnn", "conv1d_net", "no_dense_net") else (NIGHead,)
+        assert set(heads) == {"high", "low", "close"} and all(isinstance(h, kinds) for h in heads.values()), name
         modules = dict(model.named_modules())
         assert model.default_probe_points and all(p in modules for p in model.default_probe_points), name
