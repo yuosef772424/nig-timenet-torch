@@ -20,7 +20,14 @@ from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, Mode
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 
 __all__ = ["RollingSettings", "RunSettings", "ROLLING_MODES", "SplitSettings", "TrainSettings", "EvalSettings",
-           "BatterySettings", "default_model_settings"]
+           "BatterySettings", "default_model_settings", "MODEL_FIRST_FIXES"]
+
+#: Model overrides every run gets on top of the anti-memorization preset since the 2026-11-14 model-first audit
+#: (docs/audit/2026-11-14-model-first/NOTES.md N-01..N-04; E1, 3 seeds: blocking gate fails 7.7 -> 2.7 at 3 epochs and
+#: 7.3 -> 2.7 at 10): BatchNorm moving statistics that follow the data from the first step, high / low offsets that
+#: no longer drag the close mean, NIG heads working in train-fitted label units, train-standardised inputs.
+MODEL_FIRST_FIXES = {"bn_warmup": True, "order_detach_close": True, "nig_scale": "train_std",
+                     "input_scaler": "train_std"}
 
 ROLLING_MODES = ("expanding", "sliding")
 
@@ -130,8 +137,9 @@ class EvalSettings:
 
 def default_model_settings() -> ModelSettings:
     """The model every run builds unless told otherwise: ``nig_timenet_v2`` with the anti-memorization preset (the TF
-    ``main.ipynb`` model, BUILD_PLAN.md V1)."""
-    return ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))
+    ``main.ipynb`` model, BUILD_PLAN.md V1) plus ``MODEL_FIRST_FIXES``. The model before the audit is
+    ``ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))``."""
+    return ModelSettings("nig_timenet_v2", {**ANTI_MEMORIZATION_CONFIG, **MODEL_FIRST_FIXES})
 
 
 @dataclass(frozen=True)

@@ -290,10 +290,13 @@ def _gate_a(ctx: DoctorContext, checks: list[Check]) -> None:
         rep = grad_report(trainer, r.x["train"], r.y["train"], batches)
         for a, c in rep["checks"].items():
             v = c["value"]
-            v = (f"{len(v)} out of band" if isinstance(v, list) else
-                 {k: round(x, 3) for k, x in v.items()} if isinstance(v, dict) else v)
-            checks.append(Check("B", f"trainer/gradients ({phase})", f"{names[a]} [{a}]", str(v) if isinstance(
-                v, dict) else v, c.get("rule", "")[:70], c["verdict"],
+            if isinstance(v, list):
+                v = f"{len(v)} out of band"
+            elif isinstance(v, dict) and v:              # the two extremes; every value is in the JSON detail
+                lo, hi = min(v, key=v.get), max(v, key=v.get)
+                v = f"min {lo} {v[lo]:.3f}, max {hi} {v[hi]:.3f}"
+            checks.append(Check("B", f"trainer/gradients ({phase})", f"{names[a]} [{a}]", v,
+                                c.get("rule", "")[:70], c["verdict"],
                 actions[a] if c["verdict"] != "pass" else "", {k: x for k, x in c.items() if k != "rule"}))
         if phase == "end":
             ctx.notes["update_ratio_end"] = rep["checks"]["A4"]["value"]
