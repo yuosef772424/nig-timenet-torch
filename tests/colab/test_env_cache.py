@@ -141,3 +141,11 @@ def test_activate_puts_site_packages_first_and_reports_modules_already_imported(
     assert sys.path[0] == str(sp) and got["already_imported"] == ["sys"]
     with pytest.raises(ec.EnvCacheError, match="no site-packages"):
         ec.activate_env(str(tmp_path / "missing"))
+
+
+def test_default_key_ignores_the_python_patch_level(project, monkeypatch):
+    v = type("V", (tuple,), {"major": 3, "minor": 13})
+    monkeypatch.setattr(ec.sys, "version_info", v((3, 13, 16, "final", 0)))
+    a = ec.environment_key(project, torch_version="2.14.1")[0]
+    monkeypatch.setattr(ec.sys, "version_info", v((3, 13, 18, "final", 0)))
+    assert ec.environment_key(project, torch_version="2.14.1")[0] == a

@@ -64,7 +64,7 @@ def _torch_version() -> str:
 def environment_key(pyproject: str, extras: tuple = ("data",), python_version: str | None = None,
                     torch_version: str | None = None) -> tuple[str, list[str]]:
     reqs = requirements_of(Path(pyproject).read_text(encoding="utf-8"), extras)
-    py = python_version or "%d.%d.%d" % sys.version_info[:3]
+    py = python_version or "%d.%d" % sys.version_info[:2]   # not the patch level: a Colab update must not miss the cache
     return cache_key(py, torch_version or _torch_version(), reqs), reqs
 
 
