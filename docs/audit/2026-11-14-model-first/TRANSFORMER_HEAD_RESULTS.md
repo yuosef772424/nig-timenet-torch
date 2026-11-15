@@ -266,3 +266,73 @@ Reading:
 - Why the validation LOSS does not move while the IC does: the NLL is dominated by the scale of the common move,
   which no input predicts; the rank inside a timestamp is a small part of it.
 
+## 7. Drive artifact, Colab L4 (2026-11-15, fourth session)
+
+Artifact `preprocessing_output_1` (535 coins), code f010693, batch 128, `steps_per_execution` 32, seed 0 unless said.
+`sel` = `val_raw_loss` (lower is better); IC = rank IC by timestamp on TEST with the best-epoch weights. Curves were
+read through the bridge while the runs were alive; rows marked "running" had no summary file when this was written.
+
+7a. Output head, small transformer without SwiGLU (`ffn: none`), 60,000 rows, patience 8:
+
+| lr | head | best sel | best epoch / epochs | IC high | IC low | IC close | state |
+|---|---|---|---|---|---|---|---|
+| 3e-4 | dense | -6.541 | 9 / 19 | 0.401 | 0.441 | 0.032 | stopped early |
+| 3e-4 | scalar_joint | -6.505 | 12 / 21 | 0.397 | 0.420 | 0.026 | stopped early |
+| 1e-5 | dense | -6.504 at epoch 61 | still falling (~0.002 per epoch) | | | | running (cap 80) |
+| 1e-5 | scalar_joint | -6.412 at epoch 58 | still falling (~0.003 per epoch) | | | | running (cap 80) |
+
+lr 1e-5, sel at epochs 10 / 20 / 30 / 40 / 50: dense -6.280 / -6.386 / -6.454 / -6.484 / -6.495; scalar_joint
+-5.812 / -6.174 / -6.311 / -6.361 / -6.392.
+
+Reading: on the Drive artifact the Dense head is better on this trunk at lr 3e-4 to the early stop (by 0.036, low IC
+0.441 vs 0.420), the same sign as the slice gave for the transformer without SwiGLU (section 3a). At lr 1e-5 the
+attention head starts 0.47 behind, closes to 0.09 by epoch 58 and both curves flatten; it has not caught the Dense
+head in 58 epochs and neither run has stopped. The attention head does run for more epochs, as the owner saw; here
+it does not end better. One seed, one trunk (the owner's run used another trunk: section 8).
+
+7b. Multi-coin block, GRU, lr 3e-4, 600,000 rows as whole timestamps (~1,100 timestamps of 535 coins), patience 6:
+
+| arm | seed | best sel | best epoch / epochs | IC high | IC low | IC close | state |
+|---|---|---|---|---|---|---|---|
+| B whole-timestamp batches, no block | 1 | -6.490 | 7 / 8 | 0.395 | 0.436 | 0.066 | stopped early |
+| C + attention block | 1 | -6.474 | 2 / 8 | 0.398 | 0.439 | 0.061 | stopped early |
+| E + mean block | 1 | -6.473 | 2 / 8 | 0.399 | 0.446 | 0.066 | stopped early |
+| B / C / E | 0 | -6.511 (epoch 13) / -6.487 (epoch 11) / -6.473 (epoch 11) | | | | | running |
+
+Reading: on the Drive artifact, seed 1, the block does not repeat the slice's gain: low IC +0.003 (attention) and
++0.010 (mean), close IC unchanged, validation loss worse by 0.016, and both block arms have their best epoch at
+epoch 2. Not confirmed. Two differences from the slice run that could matter and were not separated: 535 coins per
+timestamp instead of ~57 (one timestamp is already a batch of 535 rows, so an epoch has ~1,100 steps of highly
+correlated rows), and selection by `val_raw_loss`, which the slice already showed does not see the rank gain (NEXT
+section 8 row 1). The close IC of 0.06 in ALL three arms is higher than in per-coin row samples (0.02-0.04): with
+whole timestamps the test IC is measured over 535 coins per timestamp, so it is not comparable with the strided-row
+tables above and is not a model effect.
+
+## 8. The owner's `1-e5` runs on Drive (read by a subagent, read-only, 2026-11-15)
+
+Drive folder `1-e5`: `single_{conv1d_net, no_dense_net, chart_cnn, itransformer}_lr1e-5` (plus gru, timesnet,
+transformer, not read), each with `summary.json`, `learning_curves.csv`, `test_report_by_variant.csv`, gate files and
+`runs/full/{battery_report.txt, battery_profit.json, best.pt, checkpoint.pt}`; created 2026-11-10 / 11.
+
+- Settings: lr 1e-5 (lr_min 1e-7), 10 epochs, batch 256, seed 0, cuda, one variant (`full`), `n_variants` 1, cost
+  0.08 % per side. No commit, branch, optimizer or model kwargs are recorded in the folders.
+- Data: 158,346 + 159,310 train rows, 25,848 val, 28,296 test, 415 coins on test, splits 2020-02 .. 2024-06,
+  2024-06 .. 2026-02, val 2026-03 .. 06, test 2026-07 .. 09: about ONE ROW PER COIN-DAY. Median |y| on test 0.059
+  against 0.011 for `y_close_reg` of the present artifact (2,506,192 4h windows): the labels are 6-7 times larger.
+  The summaries name `preprocessing_output_1` as the data path, but the artifact now at that path was created
+  2026-11-14, after these runs; no artifact with ~318k rows is on Drive any more. The label definition of those
+  runs was not found.
+- Test numbers as recorded (rank IC high / low / close): conv1d_net 0.300 / 0.409 / 0.073, no_dense_net 0.287 /
+  0.393 / 0.076, chart_cnn 0.112 / 0.111 / 0.006, itransformer 0.284 / 0.389 / 0.078. Market-neutral, top / bottom
+  20 % (the best ratio, chosen on TEST): +0.22 % / +0.10 % / -0.83 % / +0.65 % per period; with the ratio chosen on
+  VAL: +0.02 % / -0.21 % / -0.83 % / +0.21 %. 71 portfolio periods; the battery's own verdicts: not tradeable /
+  marginal / "tradeable in theory" (one best-case row) / not tradeable. itransformer: VAL IC of mu with the return
+  -0.054, TEST +0.083 (they disagree). Mean |mu| / mean |y| about 0.10 in all four.
+
+Reading: these are results on another dataset (daily rows, a larger-move label), so their close IC of 0.07-0.08 and
+the +0.65 % row cannot be set next to any table of this file, and "the same settings" on the present artifact is
+not the same experiment. Inside that folder the evidence for profit is one TEST-chosen row over 71 periods on one
+seed, with VAL and TEST disagreeing in sign for the best model. What would make it usable: rebuild that dataset
+(its definition has to come from the owner or from the TF export of 2026-11-10), record it in the manifest, and
+rerun the four models on 2 seeds with the ratio chosen on VAL.
+
