@@ -149,3 +149,16 @@ def test_default_key_ignores_the_python_patch_level(project, monkeypatch):
     a = ec.environment_key(project, torch_version="2.14.1")[0]
     monkeypatch.setattr(ec.sys, "version_info", v((3, 13, 18, "final", 0)))
     assert ec.environment_key(project, torch_version="2.14.1")[0] == a
+
+
+def test_unpack_over_an_existing_venv_whose_python_is_a_symlink_outside_it(tmp_path):
+    """The restore after a build in the same session: venv/bin/python -> the system python must not read as unsafe."""
+    venv = tmp_path / "venv"
+    (venv / "bin").mkdir(parents=True)
+    (venv / "bin" / "python").symlink_to(sys.executable)          # points OUTSIDE venv
+    (venv / "lib").mkdir()
+    (venv / "lib" / "x.py").write_text("x = 1\n")
+    tar = tmp_path / "env.tar"
+    ec.pack(str(venv), tar)
+    ec.unpack(tar, str(venv))                                      # the venv still exists with its symlink
+    assert (venv / "lib" / "x.py").read_text() == "x = 1\n" and (venv / "bin" / "python").is_symlink()

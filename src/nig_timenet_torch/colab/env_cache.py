@@ -64,7 +64,7 @@ def _torch_version() -> str:
 def environment_key(pyproject: str, extras: tuple = ("data",), python_version: str | None = None,
                     torch_version: str | None = None) -> tuple[str, list[str]]:
     reqs = requirements_of(Path(pyproject).read_text(encoding="utf-8"), extras)
-    py = python_version or "%d.%d" % sys.version_info[:2]   # not the patch level: a Colab update must not miss the cache
+    py = python_version or "%d.%d" % sys.version_info[:2]  # not the patch level: an update must not miss the cache
     return cache_key(py, torch_version or _torch_version(), reqs), reqs
 
 
@@ -86,7 +86,8 @@ def unpack(tar_file: Path, venv_dir: str) -> None:
     root = Path(venv_dir).resolve()
     with tarfile.open(tar_file) as tf:
         for m in tf.getmembers():
-            if os.path.isabs(m.name) or not (root / m.name).resolve().is_relative_to(root):
+            # a LEXICAL check: resolve() would follow a symlink already in venv_dir (bin/python -> the system python)
+            if os.path.isabs(m.name) or not Path(os.path.normpath(root / m.name)).is_relative_to(root):
                 raise EnvCacheError(f"{tar_file} holds an unsafe path {m.name!r}; delete it to rebuild the env")
         shutil.rmtree(venv_dir, ignore_errors=True)
         os.makedirs(venv_dir)
