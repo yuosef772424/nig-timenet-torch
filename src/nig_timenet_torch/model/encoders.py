@@ -1,8 +1,8 @@
-"""ENCODERS: the registered sequence encoders of NigTimeNetV2 (transformer P15, GRU P33b, TCN P40).
+"""ENCODERS: the registered sequence encoders of NigTimeNetV2 (transformer P15, GRU P33b, TCN P40, iTransformer).
 
 PURPOSE:  The ENCODERS registry: each encoder builds its modules through the model's ``add(name, module)`` (Keras
           layer names, so state_dict keys are unchanged) and owns its forward over the token sequence.
-TAGS:     encoders, encoder registry, transformer, gru, tcn, causal conv, sequence encoder, plugin
+TAGS:     encoders, encoder registry, transformer, gru, tcn, itransformer, causal conv, sequence encoder, plugin
 PITFALLS: Module names (``patch_embed``, ``step_proj``, ``block_i``, ``gru_i``, ``tcn_conv_i``, ...) are weights.json
           attr_paths and checkpoint keys: never rename. A new encoder = one class + one ``ENCODERS.register`` line;
           ``supports_input_skip`` says whether the input_skip variants apply to it (transformer only today).
@@ -153,6 +153,31 @@ class TCNEncoder(Encoder):
         return h
 
 
+class ITransformerEncoder(Encoder):
+    """iTransformer (Liu et al. 2024; ported from branch claude/sequential-gradient-model-uhub56): every input channel's
+    WHOLE window is one token (Linear(T -> d_model)), the transformer blocks attend across channels (non-causal: the
+    tokens are channels, not time steps). Output (B, W, d_model): the pooling downstream runs over channels."""
+
+    def n_tokens(self, seq_len, patch_len, stride):
+        raise NotImplementedError("itransformer's token count is the token width, not a function of seq_len: the "
+                                  "attention NIG head (nig_head) is not defined for it")
+
+    def build(self, model, add, sfx, *, seq_len, tok_width, dims):
+        add("var_embed", nn.Linear(seq_len, dims.d_model))
+        model.branch_blocks[sfx] = self.n_blocks(dims, seq_len)
+        for i in range(model.branch_blocks[sfx]):
+            add(f"iblock_{i + 1}", TransformerBlock(dims.d_model, dims.num_heads, dims.num_kv_heads, dims.max_rel_pos,
+                                                    False, None, dims.dropout, dims.attn_dropout))
+        return dims.d_model
+
+    def encode(self, model, tok, sfx):
+        h = _get(model, "var_embed", sfx)(tok.transpose(1, 2))          # (B, W, d_model): one token per channel
+        for i in range(model.branch_blocks[sfx]):
+            h = _get(model, f"iblock_{i + 1}", sfx)(h)
+        return h
+
+
 ENCODERS.register("transformer", TransformerEncoder(), version=1, supports_input_skip=True)
 ENCODERS.register("gru", GRUEncoder(), version=1, supports_input_skip=False)
 ENCODERS.register("tcn", TCNEncoder(), version=1, supports_input_skip=False)
+ENCODERS.register("itransformer", ITransformerEncoder(), version=1, supports_input_skip=False)
