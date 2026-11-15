@@ -27,9 +27,11 @@ from nig_timenet_torch.workflow.settings import (
 )
 
 
-def arm_settings(a, encoder: str, lr: float, out: pathlib.Path) -> RunSettings:
+def arm_settings(a, encoder: str, lr: float, out: pathlib.Path, head: str = "dense") -> RunSettings:
     base = default_model_settings()
-    model = ModelSettings(base.architecture, {**base.overrides, "encoder": encoder})
+    model = ModelSettings(
+        base.architecture, {**base.overrides, "encoder": encoder, **({"nig_head": head} if head != "dense" else {})}
+    )
     return RunSettings(
         run_dir=str(out / "ckpt"),
         data=LoaderSettings(name=a.artifact, mmap=True),
@@ -57,11 +59,13 @@ def main():
     out = pathlib.Path(a.out)
     rows = []
     for spec in a.arms.split(","):
-        enc, lr = spec.split(":")
-        name, folder = f"{enc}_lr{lr}", out / f"{enc}_lr{lr}"
+        enc, lr, *rest = spec.split(":")  # encoder:lr[:nig_head]  (nig_head: dense | scalar_joint | scalar_factorized)
+        head = rest[0] if rest else "dense"
+        name = f"{enc}_lr{lr}" + ("" if head == "dense" else f"_{head}")
+        folder = out / f"{name}_s{a.seed}"
         t0 = time.time()
         print(f"\n===== arm {name} =====", flush=True)
-        r = steps.build(steps.prepare(arm_settings(a, enc, float(lr), folder), folder))
+        r = steps.build(steps.prepare(arm_settings(a, enc, float(lr), folder, head), folder))
         steps.train(r, on_epoch=lambda row: print(epoch_line(row, a.epochs), flush=True))
         rep = steps.test_step(r)
         if a.battery:

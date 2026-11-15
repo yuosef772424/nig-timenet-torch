@@ -16,7 +16,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from nig_timenet_torch.core.registry import Contract, Registry
-from nig_timenet_torch.model.layers import KerasGRU, PatchEmbedding, RMSNorm, TransformerBlock
+from nig_timenet_torch.model.layers import KerasGRU, PatchEmbedding, RMSNorm, TransformerBlock, num_patches
 from nig_timenet_torch.model.parts import build_input_skip, skip_variant
 
 __all__ = ["ENCODERS", "Encoder", "EncoderDims", "CausalConv1D", "tcn_n_blocks"]
@@ -68,6 +68,10 @@ class Encoder:
     def n_blocks(self, dims: EncoderDims, seq_len: int) -> int:
         return dims.num_layers
 
+    def n_tokens(self, seq_len: int, patch_len: int, stride: int) -> int:
+        """How many tokens ``encode`` returns (the default: one per time step)."""
+        return int(seq_len)
+
     def build(self, model, add, sfx: str, *, seq_len: int, tok_width: int, dims: EncoderDims) -> int:
         raise NotImplementedError
 
@@ -76,6 +80,9 @@ class Encoder:
 
 
 class TransformerEncoder(Encoder):
+    def n_tokens(self, seq_len, patch_len, stride):
+        return num_patches(seq_len, patch_len, stride)[0]
+
     def build(self, model, add, sfx, *, seq_len, tok_width, dims):
         variant = skip_variant(model.input_skip)
         seq_width = dims.d_model

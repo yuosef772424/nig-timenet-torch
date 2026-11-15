@@ -64,3 +64,36 @@ n_variants 1). One seed, CPU, small: a look, not a result (rule C4).
   branch that has both (merge of the two branches, or port `itransformer` / `timesnet` here).
 - The `battery` flag `tradeable=True` for conv1d_net and gru is not a profit: "best strategy" is chosen on TEST among
   many rows; all model rows after cost are negative with CIs containing 0 or below.
+
+## `steps_per_execution` (D-024) and the attention NIG head (experiment), 2026-11-15
+
+Local CPU, the 8-coin real slice (`vision_slice`, 82,650 rows; NOT the Drive artifact), 20,000 strided rows per split,
+batch 128, lr 3e-4, default model (preset + `MODEL_FIRST_FIXES`).
+
+**steps_per_execution = 32 vs 1** (3 epochs, seed 0): the weights are identical. SHA-256 of the final state_dict:
+gru `9fc6fa309f6abf36` in both runs, transformer `fbd4275b97329fb1` in both; best value -6.408851 / -6.397815 equal to
+6 decimals. `tests/trainer/test_steps_per_execution.py`: bit-identical (`torch.equal`) for N in 2, 5, 32, 1000, with
+and without clipping + EMA. Speed: 32 / 34 s (gru) and 32 / 32 s (transformer) per run on a 4-core CPU = no change,
+as expected: the option removes one host sync per step, which costs nothing on a CPU. The GPU timing is NOT measured
+yet (Colab runtime was down).
+
+**Attention head vs Dense head** (`nig_head`, `model/attn_heads.py`: port of the AI note's `ScalarOutputAttention`
+for the NIG heads only; floors, unc clip, confidence and class heads unchanged; the note's other changes - floors 0,
+no unc clip, attention confidence / class heads - are NOT tested here). GRU encoder, 6 epochs, 2 seeds, val selection
+loss (lower is better) and TEST rank IC (high / low / close); parameters 102,310 dense vs 104,126 attention:
+
+| head | seed | best val loss | IC high | IC low | IC close |
+|---|---|---|---|---|---|
+| dense (old) | 0 | -6.491 | 0.354 | 0.424 | 0.027 |
+| dense (old) | 1 | -6.482 | 0.360 | 0.428 | 0.021 |
+| scalar_joint | 0 | -6.363 | 0.364 | 0.434 | 0.047 |
+| scalar_joint | 1 | -6.349 | 0.355 | 0.411 | -0.010 |
+| scalar_factorized | 0 | -6.342 | 0.116 | 0.420 | 0.026 |
+| scalar_factorized | 1 | -6.352 | 0.130 | 0.420 | 0.001 |
+
+Reading (a look: 2 seeds, 6 epochs, 8 coins, CPU): the attention heads give a worse validation loss by ~0.13 on both
+seeds and no better IC; `scalar_joint` ties dense on IC within the seed spread; `scalar_factorized` loses the `high`
+head (IC 0.12-0.13 vs 0.36). No overfit appears in any arm (best epoch = last), so the note's premise (the Dense head
+memorises) is not visible at this size and the attention head cannot show its claimed benefit here. Not run: the Drive
+artifact, a long run where Dense starts to overfit, the note's floors / confidence / class-head changes, the
+attention-map checks across regimes (the note's own proposed test).

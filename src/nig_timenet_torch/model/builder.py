@@ -20,6 +20,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
+from nig_timenet_torch.model.attn_heads import ScalarNIGHead, check_nig_head, n_encoder_tokens
 from nig_timenet_torch.model.encoders import ENCODERS, CausalConv1D, EncoderDims, tcn_n_blocks
 from nig_timenet_torch.model.heads import (
     HEAD_REGISTRY,
@@ -74,8 +75,9 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                  norm_eps, linear_path_l2, encoder="transformer", input_clip=None, stats_mode="full",
                  input_noise_std=0.0, feature_dropout=0.0, level_passthrough=False, level_norm=None,
                  input_skip="none", n_classes=3, order_detach_close=False, nig_scale=None,
-                 bn_warmup=False, readout_dropout=None, input_scaler="none"):
+                 bn_warmup=False, readout_dropout=None, input_scaler="none", nig_head="dense", nig_head_dropout=0.0):
         super().__init__()
+        self.nig_head_kind = check_nig_head(nig_head)
         self.input_scaler_kind = input_scaler
         self._stream = None  # set by model.taps.stream_taps while recording (a plain attribute, not saved)
         self._stream_edit = {}  # {stream name: fn(tensor) -> tensor}, read only while recording
@@ -125,9 +127,16 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                             if kinds_with_task(self.head_types[t], "evidential")]
         self.head_specs = {t: head_spec(k, t) for t in self.nig_targets
                            for k in kinds_with_task(self.head_types[t], "evidential")}
+        if nig_head != "dense":  # experiment (model/attn_heads.py): the heads read [branch embedding; encoder tokens]
+            if self.timeframes:
+                raise NotImplementedError("nig_head != 'dense' is defined on one timeframe only")
+            self.head_seq_norm = RMSNorm(d_model)
+            n_tok = 1 + n_encoder_tokens(encoder, branches[0][1], patch_len, stride)
         for t in self.nig_targets:
-            setattr(self, f"nig_{t}", NIGHead(h_dim, head_hidden, readout_p, nu_min, alpha_min, beta_min,
-                                              scale=nig_scale))
+            setattr(self, f"nig_{t}", ScalarNIGHead(d_model, n_tok, nig_head.removeprefix("scalar_"), nig_head_dropout,
+                                                    nu_min, alpha_min, beta_min, scale=nig_scale)
+                    if nig_head != "dense" else
+                    NIGHead(h_dim, head_hidden, readout_p, nu_min, alpha_min, beta_min, scale=nig_scale))
             setattr(self, f"unc_{t}", NIGUncertainty(unc_max))
             setattr(self, f"conf_{t}", ConfidenceHead(h_dim))
         self.apply_order = enforce_order and set(TARGET_COLUMNS) <= set(self.nig_targets)
@@ -193,6 +202,10 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         """One timeframe's encoder up to its pooled embedding h (after readout_fc + linear_path). Stream taps (in
         order): input, scaled, inst_norm, stats, level, tokens, enc_in, enc_block_i, enc_out, pooled, readout,
         linear_path, branch_out (+ the branch suffix)."""
+        return self.branch_tokens(x, sfx)[0]
+
+    def branch_tokens(self, x: torch.Tensor, sfx: str = "") -> tuple[torch.Tensor, torch.Tensor]:
+        """``branch`` plus the encoder's output tokens (B, T', d_model) after final_norm (attention heads' input)."""
         tap = lambda name, v: self._tap(name + sfx, v)  # noqa: E731
         x = tap("input", x)
         if self._m("input_scaler", sfx) is not None:
@@ -222,7 +235,7 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             parts.append(self.skip.readout_extra(tok))
         lin_in = z if lvl is None else torch.cat([z, lvl], dim=-1)
         readout = tap("readout", F.gelu(self._m("readout_fc", sfx)(tap("pooled", torch.cat(parts, dim=-1)))))
-        return tap("branch_out", readout + tap("linear_path", self._m("linear_path", sfx)(lin_in.flatten(1))))
+        return tap("branch_out", readout + tap("linear_path", self._m("linear_path", sfx)(lin_in.flatten(1)))), h
 
     def _branch_inputs(self, x) -> list[torch.Tensor]:
         if self.timeframes is None:
@@ -256,8 +269,15 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         return ENCODERS.get(self.encoder).encode(self, tok, sfx)
 
     def forward(self, x) -> dict[str, torch.Tensor]:
-        h = self.trunk(x)
-        raw = {t: getattr(self, f"nig_{t}")(h) for t in self.nig_targets}
+        if self.nig_head_kind == "dense":
+            h = self.trunk(x)
+            raw = {t: getattr(self, f"nig_{t}")(h) for t in self.nig_targets}
+        else:  # experiment: the NIG heads read the head sequence, the confidence / class heads the pooled trunk
+            (xi,) = self._branch_inputs(x)
+            br, tokens = self.branch_tokens(xi.to(torch.float32))
+            h = self.trunk_drop(self._tap("trunk", self.trunk_norm(br)))
+            seq = self.head_seq_norm(torch.cat([br[:, None, :], tokens], dim=1))
+            raw = {t: getattr(self, f"nig_{t}")(seq) for t in self.nig_targets}
         if self.apply_order:
             mu_h, mu_c, mu_l = self.ordered_means(raw["close"][0], raw["high"][0], raw["low"][0])
             mus = {"high": mu_h, "close": mu_c, "low": mu_l}
@@ -312,7 +332,7 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          linear_path_l2=1e-4, input_clip=None, stats_mode="full", input_noise_std=0.0,
                          feature_dropout=0.0, level_passthrough=False, level_norm=None, order_detach_close=False,
                          nig_scale=None, bn_warmup=False, readout_dropout=None, input_scaler="none",
-                         **options) -> NigTimeNetV2:
+                         nig_head="dense", nig_head_dropout=0.0, **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
@@ -346,4 +366,5 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         input_clip=input_clip, stats_mode=stats_mode, input_noise_std=input_noise_std, feature_dropout=feature_dropout,
         level_passthrough=level_passthrough, level_norm=level_norm, input_skip=input_skip, n_classes=n_classes,
         order_detach_close=order_detach_close, nig_scale=nig_scale,
-        bn_warmup=bn_warmup, readout_dropout=readout_dropout, input_scaler=input_scaler)
+        bn_warmup=bn_warmup, readout_dropout=readout_dropout, input_scaler=input_scaler,
+        nig_head=nig_head, nig_head_dropout=nig_head_dropout)

@@ -73,7 +73,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    a = build_parser().parse_args(argv)
+    try:
+        return _run(build_parser().parse_args(argv))
+    except Exception as e:  # noqa: BLE001 - a bridge / network error should read as one line, not a traceback
+        name = type(e).__name__
+        if name in ("ConnectionFailure", "AuthFailure", "RemoteError", "ConfigError", "ValueError"):
+            print(
+                f"colab_ops: {name}: {e}\n(runtime restarted? take the new CB_URL and token from the bridge cell)",
+                file=sys.stderr,
+            )
+            return 2
+        raise
+
+
+def _run(a) -> int:
     b = from_env()
     if a.cmd == "rt":
         print(json.dumps(b.runtime()))
