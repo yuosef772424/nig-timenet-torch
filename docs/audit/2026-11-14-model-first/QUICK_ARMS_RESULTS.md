@@ -97,3 +97,31 @@ head (IC 0.12-0.13 vs 0.36). No overfit appears in any arm (best epoch = last), 
 memorises) is not visible at this size and the attention head cannot show its claimed benefit here. Not run: the Drive
 artifact, a long run where Dense starts to overfit, the note's floors / confidence / class-head changes, the
 attention-map checks across regimes (the note's own proposed test).
+
+## On the Drive artifact, Colab T4 (2026-11-15): `steps_per_execution` and the attention head
+
+Torch 2.14.1+cu130 (Colab's own, never installed), code 1cc5049..19b918b, env restored from the Drive cache,
+`/content/art1` (2,506,192 windows), 60,000 strided rows per split, batch 128, lr 3e-4, GRU, default model.
+
+**steps_per_execution (GPU, seed 0, 2 epochs):** weights SHA-256 identical (`16119de5f7671217` for N = 1 and 32),
+best value -6.460381 in both. Time: epoch 2 = 24 s in both runs (epoch 1 33 s vs 26 s is the CUDA warm-up), whole
+arm 90.7 s vs 76.4 s (start-up and evaluation included, not repeated). So no per-epoch gain: the T4 sat at 27 %
+utilisation and 100 ms per step of a tiny model, i.e. the loop is limited by the host (batch indexing and the copy of
+each batch from CPU memory on a 2-core VM), not by the log sync. A real speed-up needs the batches on the GPU.
+
+**Attention head vs Dense** (10 epochs, 2 seeds; `val` = best selection loss, lower is better; IC on TEST rows):
+
+| head | seed | best val | best ep | IC high | IC low | IC close | AUC high / low / close |
+|---|---|---|---|---|---|---|---|
+| dense | 0 | -6.529 | 9 | 0.407 | 0.441 | 0.039 | 0.780 / 0.782 / 0.517 |
+| dense | 1 | -6.536 | 10 | 0.406 | 0.444 | 0.035 | 0.778 / 0.780 / 0.513 |
+| scalar_joint | 0 | -6.451 | 7 | 0.402 | 0.434 | 0.018 | 0.774 / 0.781 / 0.504 |
+| scalar_joint | 1 | -6.496 | 10 | 0.406 | 0.435 | 0.031 | 0.779 / 0.782 / 0.511 |
+| scalar_factorized | 0 | -6.452 | 10 | 0.381 | 0.432 | 0.018 | 0.776 / 0.785 / 0.515 |
+| scalar_factorized | 1 | -6.469 | 10 | 0.366 | 0.438 | 0.014 | 0.779 / 0.782 / 0.511 |
+
+Reading: the same as on the 8-coin slice, at 3x the rows and 10 epochs. Dense has the best validation loss on both
+seeds (by 0.04-0.08), the best low IC and a high IC that the joint head only ties; the factorized head loses 0.03-0.04
+of high IC. Best epochs are the last or next to last in every arm: no memorisation shows up at this size, so the
+note's premise is not visible and its head offers nothing here. Still not tested: the note's floors / confidence /
+class-head changes, a run long enough for Dense to overfit, regime-dependence of the attention maps.
