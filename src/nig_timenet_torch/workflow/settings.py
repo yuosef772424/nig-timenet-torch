@@ -28,7 +28,7 @@ __all__ = ["RollingSettings", "RunSettings", "ROLLING_MODES", "SplitSettings", "
 #: 7.3 -> 2.7 at 10): BatchNorm moving statistics that follow the data from the first step, high / low offsets that
 #: no longer drag the close mean, train-standardised inputs. The audit also set ``nig_scale="train_std"`` (NIG heads in
 #: train-fitted label units); the run default takes the same idea from ``RUN_DEFAULT_SWITCHES["nig_scale_fit"]``
-#: (D-023) instead, the two are exclusive (D-026, owner to confirm). ``bn_warmup`` / ``order_detach_close`` agree.
+#: (D-023) instead, the two are exclusive (D-026, MG2: E1 tie, kept). ``bn_warmup`` / ``order_detach_close`` agree.
 MODEL_FIRST_FIXES = {"bn_warmup": True, "order_detach_close": True, "input_scaler": "train_std"}
 
 ROLLING_MODES = ("expanding", "sliding")

@@ -158,6 +158,9 @@ def test_experiment_switches_reach_the_settings_and_a_finished_run_is_read_with_
     assert s.model.overrides["bn_warmup"] and s.model.overrides["order_detach_close"]
     assert s.model.overrides["nig_scale"] == 0.01 and s.model.overrides["encoder"] == "gru"
     assert s.train.early_stop.restore_best_weights is False and ns["run"].result.restored_best is False
+    off = run_notebook("main", {**base, "RUN_NAME": "fx1off", "FX1_BUNDLE": False, "FX1_NIG_SCALE": None})
+    assert off["settings"].model.overrides["bn_warmup"] is False   # False turns the D-023 default switches off
+    assert off["settings"].model.overrides["order_detach_close"] is False
     # the same configuration, KEEP_LAST_WEIGHTS off (it is part of the identity), read back without training
     first = run_notebook("main", {**base, "RUN_NAME": "fx1b"})
     assert first["run"].result.restored_best is True
