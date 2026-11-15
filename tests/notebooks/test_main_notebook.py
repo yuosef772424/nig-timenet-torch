@@ -169,3 +169,19 @@ def test_experiment_switches_reach_the_settings_and_a_finished_run_is_read_with_
         run_notebook("main", {**base, "RUN_NAME": "x1", "LOAD_WEIGHTS": "last", "KEEP_LAST_WEIGHTS": True})
     with pytest.raises(ValueError, match="LOAD_WEIGHTS must be"):
         run_notebook("main", {**base, "RUN_NAME": "x2", "LOAD_WEIGHTS": "newest"})
+
+
+def test_notebook_trains_staged_and_runs_the_rolling_section(tmp_path, art):
+    """ST1 / F2: ``train.staged`` in CHANGES makes the training cell run the staged steps and print the stage table;
+    ROLLING runs section 13b on the same settings; both default to off (the other notebook tests)."""
+    staged = {"start_share": 0.5, "eval_every": 2, "step_cap_epochs": 2, "warmup_steps": 2, "bn_refresh_steps": 2,
+              "k": 2, "probe_rows": 16}
+    small = {"train.epochs": 1, "train.batch_size": 64, "train.device": "cpu", "evaluation.health_max_rows": 50,
+             "train.staged": staged}
+    rolling = {"train_span": "20D", "test_span": "7D", "step": "10D", "embargo": "1D", "max_folds": 2}
+    ns = run_notebook("main", {"ARTIFACT": str(art), "RUN_NAME": "st1", "WORK_ON": "local",
+                               "DRIVE_RUNS": str(tmp_path / "drive"), "LOCAL_RUNS": str(tmp_path / "local"),
+                               "CHANGES": small, "BATTERY_FOLDER": "", "ROLLING": rolling})
+    assert ns["settings"].train.staged is not None and len(ns["run"].extra["stages"]) == 2
+    assert ns["rolling_summary"]["n_folds"] == 2
+    assert (tmp_path / "local" / "st1" / "out" / "rolling" / "rolling_summary.md").is_file()

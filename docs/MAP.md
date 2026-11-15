@@ -125,6 +125,8 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `jobs/baseline.py` | Entry ``baseline``: trains one seed of the default NIG-TimeNet model on the contract artifact, then writes the summary, health report and test report (ROADMAP T5r); a thin entry over workflow.run. | baseline job, colab entry, training run, test report, health report, resume, smoke job |
 | `jobs/device_smoke.py` | Entry ``device_smoke``: proves that the runner, the device assertion and the output contract work on this VM. | device smoke, colab entry, device assertion, runner proof, rule e1 |
 | `jobs/gates.py` | Entry ``gates``: runs the MODEL_DEV_PROTOCOL gates (E1 -> E2 -> E3 x seeds) on one configuration and writes gate_report.json / .md keyed by its configuration hash (ROADMAP G2); a thin entry over workflow.gate_run. | gates job, colab entry, gate report, configuration hash, e1 e2 e3, seeds, rule c6 |
+| `jobs/rolling.py` | Entry ``rolling``: the rolling walk-forward study of ROADMAP F2 on the contract artifact (folds x seeds through the run steps, per-fold tables and metrics, mean and spread per fold and across folds), thin over workflow.rolling_run. | rolling job, colab entry, walk forward, folds, seeds, retrain every k, per fold metrics, smoke job |
+| `jobs/staged.py` | Entry ``staged``: the staged-training study of ROADMAP ST1 on the contract artifact (per seed the staged arm and the equal-step baselines B1 / B2 / B3), thin over workflow.staged_study. | staged job, colab entry, staged training, baselines b1 b2 b3, seeds, study json, smoke job |
 
 ### model
 
@@ -167,6 +169,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `trainer/loss_balance.py` | Registered per-head loss balancers (LOSS_BALANCERS: none, equal_grad_norm): multipliers on the per-target losses so that every head's gradient on the shared representation has the same norm (B-060, gate A5; FX2). | loss balance, gradient normalisation, gradnorm, multi-task, head gradient share, gate a5, b-060, registry |
 | `trainer/schedules.py` | Lambda / learning-rate schedules (ROADMAP T1; source: crypto-signal-prediction trainer/schedules.py, identical at |  |
 | `trainer/selection_metric.py` | SELECTION_METRICS registry: named, fixed validation metrics for checkpoint / early-stopping selection (val_raw_loss, per-head AUC and pinball). | selection metric, early stopping, checkpoint selection, validation, auc, pinball |
+| `trainer/staged.py` | Staged training (ROADMAP ST1, card F): train on part of the rows until the train probe and the fixed validation show memorisation, restore the best weights, add rows, lower the lr; plus B1 / B2 / B3 plans. A step loop of the ONE Trainer. | staged training, memorisation sign, growth arms, train probe, stage table, lr decay, equal budget baselines, st1 |
 | `trainer/switches.py` | Registered training switches of TR1 / D-021: weight initialisation (INITS: torch, keras), weight-decay parameter groups (WEIGHT_DECAY_GROUPS: all_params, exclude_norm_bias) and the EMA copy of the weights of fit. | training switches, init registry, keras init, glorot, orthogonal, weight decay groups, ema weights, tr1 |
 | `trainer/targets.py` | The trainer config schema: ``validate_trainer_config`` (unknown keys raise), ``resolve_targets`` / ``resolve_loss`` (defaults filled once) and ``targets_config``, the ONE builder of the targets (from HeadSpec). | trainer config, strict config, validate, targets_config, HeadSpec, task config_keys, loss defaults, did you mean |
 | `trainer/task_weighting.py` | Kendall uncertainty weighting: total = sum_t 0.5 exp(-log_var_t) L_t + 0.5 log_var_t over the trainer's non-excluded (positive-loss) tasks; the log-variances are learned parameters with a configurable start value. | kendall, uncertainty weighting, task weighting, log variance, multi-task, class heads |
@@ -187,11 +190,15 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `workflow/health_report.py` | T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer trace) as JSON and markdown next to the checkpoint. | health report, diagnostics, t-sharp, probe, trainer trace, markdown report |
 | `workflow/prediction_table.py` | The one batched predict that turns a model and its inputs into the canonical PredictionTable, with one writer and one validating reader. | prediction table, batched predict, table meta, table writer, table reader |
 | `workflow/reading.py` | The T5r reading of a finished run: volatility baselines of the high / low heads (rule C1), every use of the outputs with controls on VAL and TEST, deep diagnosis of profitable-looking rules, the evidence check. | t5r reading, rule c1, volatility baseline, strategy book, strategy diagnosis, evidence check, run reading |
-| `workflow/rolling.py` | P37: rolling-retrain loop — SEAM ONLY (the shape of the loop; no experiment is run through it in this repo). |  |
+| `workflow/rolling.py` | Rolling / walk-forward fold geometry (P37, ROADMAP F2): purged train / test windows per fold, the inner validation tail of a fold, and the callable-based loop ``run_rolling_study``; the run-step loop is rolling_run.py. | rolling folds, walk forward, expanding, sliding, purge embargo, inner validation, fold geometry, label end |
+| `workflow/rolling_run.py` | Rolling walk-forward through the run steps (ROADMAP F2): per fold and seed one Run (purged fold split, scalers fitted on the fold's train rows, the one Trainer, test report), per-fold tables, mean and spread per fold and across folds. | rolling run, walk forward, folds, seeds, retrain every k, inner validation, per fold metrics, fold summary, f2 |
 | `workflow/run.py` | The run steps of one flat single-split run (prepare, build, train, health report, test report, summary) and run_all() that calls them in order. Jobs and notebooks call the steps; nobody copies them. | run steps, single split, flat run, train step, health step, test report step, run summary, notebook steps |
 | `workflow/run_common.py` | Steps every run shares: load the artifact, read its facts, split by time, pick the device, build the run identity. Small functions of the settings so a notebook can call them one by one. | run steps, load data, split plan, run identity, device, artifact facts, smoke mode |
-| `workflow/settings.py` | Settings of the workflow layer: the strict RunSettings tree of one flat single-split run, and the rolling seam (RollingSettings) that the I4 package will connect to the run steps. | run settings, strict settings tree, split settings, train settings, evaluation settings, rolling seam |
+| `workflow/settings.py` | Settings of the workflow layer: the strict RunSettings tree of one flat single-split run, and the rolling walk-forward settings (RollingSettings) that workflow/rolling.py (folds) and rolling_run.py (runs) read. | run settings, strict settings tree, split settings, train settings, evaluation settings, rolling settings |
+| `workflow/staged_report.py` | The inputs and the report of staged training (ROADMAP ST1): the growth context of the training rows, the rough independent-label count of a stage, and the per-stage / per-arm tables as markdown. | staged training, stage table, growth context, independent labels, steps to the sign, equal budget comparison |
+| `workflow/staged_study.py` | The staged-training experiment of ROADMAP ST1 (card F section 5): per seed one staged run and the equal-step baselines B1 / B2 / B3 through the run steps, the per-stage tables, the comparison and the accept rule. | staged study, baselines b1 b2 b3, equal steps, accept rule, seeds, stage table, steps to the sign, st1 |
 | `workflow/staleness.py` | P38: staleness seam — pure functions over already-written PredictionTables (P27); nothing is trained here and |  |
+| `workflow/study_settings.py` | The job-config-to-RunSettings mapping the study entries share (jobs/staged.py, jobs/rolling.py): the default model plus overrides, the strict train / split sections, the artifact and the smoke stride. | job settings, study entries, run settings from config, model overrides, strict sections, smoke mode |
 
 ## Registries (`core/registry.py`; add a component = one file + one registration line)
 
@@ -201,6 +208,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | calibrator | `CALIBRATORS` | `eval/calibrator.py` | `isotonic` |
 | custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` | `ath_distance`, `calendar`, `crash_rebound`, `direction_consistency`, `fisher`, `fractal`, `jump`, `mean_reversion`, `position_in_range`, `psar`, `range_rel`, `returns`, `risk_adj_momentum`, `rsi_divergence`, `rvi`, `supertrend`, `trend_age`, `vol_asymmetry`, `vol_estimators`, `vol_ratio`, `vol_term_structure`, `volume_z` |
 | encoder | `ENCODERS` | `model/encoders.py` | `conv_transformer`, `gru`, `itransformer`, `tcn`, `transformer` |
+| growth | `GROWTH` | `trainer/staged.py` | `coins`, `stride`, `time` |
 | head | `HEAD_REGISTRY` | `model/heads.py` | `binary_classification`, `multiclass_classification`, `nig_regression` |
 | init | `INITS` | `trainer/switches.py` | `keras`, `torch` |
 | input_scaler | `INPUT_SCALERS` | `model/scalers.py` | `none`, `train_std` |
@@ -228,6 +236,8 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `jobs/baseline.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/device_smoke.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/gates.py`: job entry (`docs/jobs/*.json` name it)
+- `jobs/rolling.py`: job entry (`docs/jobs/*.json` name it)
+- `jobs/staged.py`: job entry (`docs/jobs/*.json` name it)
 - `workflow/e1_arms.py`: runnable (`python -m nig_timenet_torch.workflow.e1_arms`)
 - `notebooks/colab_nig_timenet_torch.ipynb`: notebook runner
 - `notebooks/data_pipeline.ipynb`: notebook runner

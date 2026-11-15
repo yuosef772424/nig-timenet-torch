@@ -2,14 +2,16 @@
     and run_all() that calls them in order. Jobs and notebooks call the steps; nobody copies them.
 TAGS: run steps, single split, flat run, train step, health step, test report step, run summary, notebook steps
 PITFALLS: steps share one mutable Run (call them in order; a step that needs an earlier one raises); the test split is
-    used only by test_step, never for training or selection; rolling and panel runs are package I4 (not here); the
-    training data stay on the CPU and move to the device batch by batch (B-019).
+    used only by test_step, never for training or selection; a rolling run is one Run per fold
+    (workflow/rolling_run.py), the panel run is parked; the training data stay on the CPU and move to the device
+    batch by batch (B-019). ``train_staged`` (ST1) shares the Run, the Trainer and the later steps with ``train``.
 SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run.py); changes: single split only, steps over one Run object,
     health report and test report (D-005) as steps, outputs written to an output folder, the code of
-    jobs/baseline.py moved here.
+    jobs/baseline.py moved here; staged training (ST1) and per-fold runs (F2) added.
 
 Every step is a function of a ``Run`` (the settings plus what the earlier steps produced).
-``run_all(settings, out=...)`` is: prepare -> build -> train -> health_step -> test_step -> battery_step. Outputs in
+``run_all(settings, out=...)`` is: prepare -> build -> train (``train_staged`` when ``train.staged`` is set) ->
+health_step -> test_step -> battery_step. Outputs in
 ``out``: ``test_report.json``, ``battery_report.txt``, ``battery_profit.json``, a copy of ``health_report.json`` /
 ``.md`` and a copy of the best weights (``best.pt`` + ``best_meta.json``, so a job publishes them with its results);
 ``write_summary`` adds ``baseline_summary.json``. The run folder keeps the originals and the resume checkpoint.
@@ -37,15 +39,16 @@ from nig_timenet_torch.model.scalers import fit_scalers
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
 from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
+from nig_timenet_torch.trainer.staged import StagedResult, plan_stages, staged_fit
 from nig_timenet_torch.trainer.trainer import FitResult, FitSettings, Trainer
-from nig_timenet_torch.workflow import flat_run, run_common
+from nig_timenet_torch.workflow import flat_run, run_common, staged_report
 from nig_timenet_torch.workflow.battery_run import battery_step
 from nig_timenet_torch.workflow.health_report import REPORT_JSON, REPORT_MD, HealthRun, health_report
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
 from nig_timenet_torch.workflow.settings import RunSettings
 
-__all__ = ["Run", "prepare", "build", "train", "restore", "health_step", "test_step", "battery_step", "write_summary",
-           "run_all", "test_lines", "SUMMARY", "TEST_REPORT"]
+__all__ = ["Run", "prepare", "prepare_split", "build", "train", "train_staged", "restore", "health_step", "test_step",
+           "battery_step", "write_summary", "run_all", "test_lines", "SUMMARY", "TEST_REPORT"]
 
 RESTORE_WEIGHTS = ("best", "last")  # restore(weights=...): best-epoch weights (default) or the last finished epoch
 SUMMARY = "baseline_summary.json"
@@ -61,6 +64,7 @@ class Run:
     bounds: tuple                      # (train_end, val_end)
     device: torch.device
     out: Path | None = None
+    fold: int = 0                      # the fold of a rolling study (0 = a single split); written into the tables
     x: dict = field(default_factory=dict)       # {"train" | "val": inputs}
     y: dict = field(default_factory=dict)       # {"train" | "val": {label key: tensor}}
     ms: ModelSettings | None = None
@@ -68,6 +72,8 @@ class Run:
     fit_settings: FitSettings | None = None
     ident: RunIdentity | None = None
     result: FitResult | None = None
+    staged: StagedResult | None = None   # ST1: what train_staged produced (the baselines read its steps and stages)
+    plan: list | None = None             # ST1: the StageSpec list train_staged ran
     extra: dict = field(default_factory=dict)  # numbers later steps add to the summary
 
     @property
@@ -82,7 +88,7 @@ class Run:
                                                                 self.settings.split.cross_section)
         return flat_run.predict_stage(self.trainer, self.dataset, self.idx[stage], self.x[stage], self.ident,
                                       self.device, stage=stage, train_end=self.bounds[0],
-                                      chunk=self.settings.evaluation.chunk)
+                                      chunk=self.settings.evaluation.chunk, fold=self.fold)
 
 
 def _need(run: Run, what: str, step: str) -> None:
@@ -100,12 +106,27 @@ def prepare(settings: RunSettings, out=None) -> Run:
     targets = run_common.price_targets(ds)
     run_common.check_decode(ds, targets)
     run_common.input_key(ds)
-    (tr, va, te), bounds = run_common.make_plan(ds, settings.split)
+    parts, bounds = run_common.make_plan(ds, settings.split)
     if settings.split.exclude_coins:
         names = ", ".join(settings.split.exclude_coins)
         print(f"excluded coins ({len(settings.split.exclude_coins)}): {names}", flush=True)
-    run = Run(settings, art, targets, {"train": tr, "val": va, "test": te}, bounds, run_common.pick_device(settings),
-              None if out is None else Path(out))
+    return _assemble(settings, art, targets, parts, bounds, out)
+
+
+def prepare_split(settings: RunSettings, art: LoadedData, parts: tuple, bounds: tuple, out=None) -> Run:
+    """A Run over row sets that are already split, of an artifact that is already loaded and checked (a rolling fold,
+    ``workflow/rolling_run.py``): ``parts`` = (train, val, test) rows BEFORE the settings' coin exclusions and smoke
+    stride, which are applied here exactly as ``prepare`` does; ``bounds`` = (train_end, val_end) of the rows."""
+    if out is not None:
+        os.makedirs(out, exist_ok=True)
+    parts = run_common.select_rows(art.dataset, settings.split, parts)
+    return _assemble(settings, art, run_common.price_targets(art.dataset), parts, bounds, out)
+
+
+def _assemble(settings: RunSettings, art: LoadedData, targets: tuple, parts: tuple, bounds: tuple, out) -> Run:
+    ds = art.dataset
+    run = Run(settings, art, targets, dict(zip(("train", "val", "test"), parts, strict=True)), bounds,
+              run_common.pick_device(settings), None if out is None else Path(out))
     for stage in ("train", "val"):
         run.x[stage], run.y[stage] = flat_run.flat_inputs(ds, run.idx[stage], settings.split.cross_section)
     return run
@@ -144,6 +165,40 @@ def train(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
                                  on_epoch=on_epoch, trace_batches=trace_batches)
     _copy_best_weights(run)
     return run
+
+
+def train_staged(run: Run, *, deadline: float | None = None, on_eval=None, stages=None) -> Run:
+    """Staged training (ROADMAP ST1, card F) through the one Trainer: ``settings.train.staged`` says how the rows grow
+    and the lr falls (``trainer.staged``); resumes a run folder that holds a checkpoint. ``stages``: a ready plan
+    (the equal-step baselines of ``workflow.staged_study``) instead of the staged arm's. The per-stage table lands in
+    ``run.extra['stages']``; ``run.result`` is a FitResult over the evaluation points so the later steps read it as
+    before. The scalers were fitted once on the whole training split by ``build``."""
+    _need(run, "trainer", "build")
+    st = run.settings.train.staged
+    if st is None:
+        raise ValueError("train_staged needs settings.train.staged (a StageSettings)")
+    fs = run.fit_settings
+    plan = stages or plan_stages(st, staged_report.growth_context(run.dataset, run.idx["train"], fs.seed),
+                                 fs.batch_size, run.trainer.optimizer.param_groups[0]["lr"])
+    print(f"staged training: {len(plan)} stage(s), rows {[len(s.rows) for s in plan]}, lr "
+          f"{[round(s.lr, 8) for s in plan]}; {len(run.idx['val'])} val rows (at most {st.val_max_rows} used)",
+          flush=True)
+    res = staged_fit(run.trainer, run.x["train"], run.y["train"], run.x["val"], run.y["val"], plan, st, fs,
+                     run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline, on_eval=on_eval)
+    run.staged, run.plan = res, plan
+    _staged_outputs(run, res)
+    _copy_best_weights(run)
+    return run
+
+
+def _staged_outputs(run: Run, res: StagedResult) -> None:
+    """FitResult for the later steps, the stage table (with the rough independent-label counts) for the summary."""
+    run.result = FitResult(res.history, len(res.history), res.best_eval, res.best_value, res.finished,
+                           res.restored_best)
+    indep = staged_report.independent_labels(run.dataset, run.idx["train"], [r["rows"] for r in res.stages])
+    run.extra["stages"] = [{**r, "independent_labels": n} for r, n in zip(res.stages, indep, strict=True)]
+    run.extra["staged"] = {"total_steps": res.total_steps, "finished": res.finished, "val_rows_used": res.val_rows,
+                           "best_step": res.best_step}
 
 
 def restore(run: Run, *, weights: str = "best", allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:
@@ -275,7 +330,10 @@ def write_summary(run: Run, extra: dict | None = None) -> dict:
 def run_all(settings: RunSettings, out=None, *, deadline: float | None = None, on_epoch=None) -> Run:
     """prepare -> build -> train -> health report -> test report -> battery (when ``evaluation.battery.enabled``)."""
     r = build(prepare(settings, out))
-    train(r, deadline=deadline, on_epoch=on_epoch)
+    if settings.train.staged is None:
+        train(r, deadline=deadline, on_epoch=on_epoch)
+    else:
+        train_staged(r, deadline=deadline, on_eval=on_epoch)
     health_step(r)
     rep = test_step(r)
     print(f"test evaluation ({rep['n_rows']} rows, best-epoch weights):", flush=True)

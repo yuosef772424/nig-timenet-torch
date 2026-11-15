@@ -195,3 +195,26 @@ def test_rank_ic_selection_metric_reads_the_timestamps_on_a_cross_section_run(ar
     r = steps.train(steps.build(steps.prepare(settings(art, tmp_path, **over), tmp_path / "out")))
     vals = [e["val_selection_metric"] for e in r.result.history]
     assert all(-1.0 <= v <= 1.0 for v in vals) and r.result.best_value == max(vals)
+
+
+def test_staged_run_through_the_run_steps(art, tmp_path):  # noqa: F811
+    """ST1: ``train.staged`` set -> run_all trains through train_staged (the one Trainer), the summary carries the
+    per-stage table, restore() re-reads the folder; unset -> the plain loop (switch off = today's behaviour)."""
+    from nig_timenet_torch.trainer.staged import StageSettings
+    st = StageSettings(start_share=0.5, eval_every=2, step_cap_epochs=2, warmup_steps=2, bn_refresh_steps=2, k=2,
+                       probe_rows=16)
+    s = settings(art, tmp_path, **{"train.staged": st, "evaluation.battery.enabled": False})
+    out = tmp_path / "out"
+    r = steps.run_all(s, out)
+    summ = steps.write_summary(r)
+    assert [t["rows"] for t in summ["stages"]] == [len(r.idx["train"]) // 2, len(r.idx["train"])]
+    assert all("independent_labels" in t and "rank_ic" in t for t in summ["stages"])
+    assert summ["staged"]["total_steps"] == sum(t["steps"] for t in summ["stages"])
+    assert (out / "test_report.json").is_file() and (out / "best.pt").is_file()
+    again = steps.restore(steps.build(steps.prepare(s, tmp_path / "out2")))
+    assert again.result.best_epoch == r.result.best_epoch
+    assert steps.write_summary(r)["epochs_done"] == len(r.result.history)
+    plain = steps.run_all(settings(art, tmp_path / "other", **{"evaluation.battery.enabled": False}), None)
+    assert "stages" not in plain.extra and plain.settings.train.staged is None
+    with pytest.raises(ValueError, match="staged"):
+        steps.train_staged(steps.build(steps.prepare(settings(art, tmp_path / "x"))))

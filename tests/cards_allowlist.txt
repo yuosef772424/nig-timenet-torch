@@ -13,5 +13,4 @@ model/panel.py
 trainer/checkpoint.py
 trainer/schedules.py
 trainer/tracker.py
-workflow/rolling.py
 workflow/staleness.py

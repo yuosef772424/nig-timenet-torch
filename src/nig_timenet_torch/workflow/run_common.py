@@ -27,7 +27,7 @@ from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings
 
 __all__ = ["load_data", "price_targets", "codec_state", "check_decode", "input_key", "split_bounds", "make_plan",
-           "stride_rows", "pick_device", "code_sha", "run_identity"]
+           "stride_rows", "select_rows", "pick_device", "code_sha", "run_identity"]
 
 
 def load_data(settings: RunSettings) -> LoadedData:
@@ -128,13 +128,18 @@ def make_plan(dataset: dict, split: SplitSettings) -> tuple[tuple[np.ndarray, np
     train_end, val_end = split_bounds(dataset, split)
     plan = purge_embargo_split(le, fs, train_end, train_end, val_end, val_end, pd.Timedelta(hours=split.embargo_hours),
                                feature_end=fe)
-    drop = excluded_rows(dataset, split.exclude_coins)  # after the time split: the cut dates do not move
-    parts = top_coin_rows(dataset, tuple(i[~drop[i]] for i in (plan.train_idx, plan.val_idx, plan.test_idx)),
-                          split.top_coins)
+    return select_rows(dataset, split, (plan.train_idx, plan.val_idx, plan.test_idx)), (train_end, val_end)
+
+
+def select_rows(dataset: dict, split: SplitSettings, parts: tuple) -> tuple:
+    """The (train, val, test) rows a run uses out of the time split ``parts``: ``exclude_coins`` (after the time split,
+    the cut dates do not move), ``top_coins`` (ranked on the TRAIN rows), then the smoke stride / cross-section order.
+    A rolling fold (workflow/rolling_run.py) goes through the same function."""
+    drop = excluded_rows(dataset, split.exclude_coins)
+    parts = top_coin_rows(dataset, tuple(i[~drop[i]] for i in parts), split.top_coins)
     pick = (lambda i: cross_section_rows(dataset, i, split.max_rows)) if split.cross_section else (
         lambda i: stride_rows(i, split.max_rows))
-    idx = tuple(pick(i) for i in parts)
-    return idx, (train_end, val_end)
+    return tuple(pick(i) for i in parts)
 
 
 def top_coin_rows(dataset: dict, parts: tuple, top: int | None) -> tuple:
