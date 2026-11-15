@@ -41,3 +41,26 @@ above 0.
 - Direction accuracy 0.51 on TEST; confidence is flat against accuracy; |mu| is 5 % of the true move (shrunk).
 - The weekly and per-coin sections are empty or tiny (the TEST rows are 20,000 strided rows, 1 week of one coin
   group), so they say nothing: the large-sample run is the one to read.
+
+## Models of `claude/sequential-gradient-model-uhub56` on the current Drive artifact (CPU, 2026-11-15)
+
+`colab_ops runs itransformer,conv1d_net,gru --rows 20000 --epochs 6 --device cpu` (that branch's code bb8225b, lr
+1e-4 -> 1e-6 cosine, batch 256, seed 0, 20,000 strided rows per split, `variants=("full",)`; TEST rows, battery
+n_variants 1). One seed, CPU, small: a look, not a result (rule C4).
+
+| model | val loss best | IC high / low / close | market-neutral (best of 3 q) | battery verdict |
+|---|---|---|---|---|
+| conv1d_net | -6.18 | 0.382 / 0.419 / 0.014 | -0.35 .. -0.45 % per period | `tradeable=True`, but every profit row negative (read the rows, not the flag) |
+| gru (branch default model) | -0.70 | 0.071 / 0.088 / 0.000 | -0.33 .. -0.38 % | same |
+| itransformer | -0.45 | 0.007 / 0.121 / -0.003 | -0.29 .. -0.31 % | `tradeable=False` |
+
+- **Not comparable with the earlier report of the owner** (itransformer high IC 0.284, market-neutral +0.65 %): that
+  report had 318,613 train rows over 2020-02 .. 2026-09 (about one row per coin-day) and per-trade moves of ~3 %, so it
+  was a different artifact than the one now at `preprocessing_output_1` (2,506,192 4h windows, log-return labels,
+  `reg_target_scale` 1.0, rebuilt 2026-11-14 01:00). The earlier artifact is not on Drive any more.
+- gru and itransformer (the project's `nig_timenet_v2` with that encoder) barely learned in 6 epochs on this artifact,
+  conv1d_net did. Argued, not run: that branch predates `MODEL_FIRST_FIXES` (label scale N-01, BatchNorm warm-up N-04),
+  and the default model needs them when labels are raw log-returns (sd 0.02-0.03). Test: the same encoders on a
+  branch that has both (merge of the two branches, or port `itransformer` / `timesnet` here).
+- The `battery` flag `tradeable=True` for conv1d_net and gru is not a profit: "best strategy" is chosen on TEST among
+  many rows; all model rows after cost are negative with CIs containing 0 or below.
