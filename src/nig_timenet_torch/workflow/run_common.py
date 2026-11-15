@@ -106,8 +106,25 @@ def make_plan(dataset: dict, split: SplitSettings) -> tuple[tuple[np.ndarray, np
     train_end, val_end = split_bounds(dataset, split)
     plan = purge_embargo_split(le, fs, train_end, train_end, val_end, val_end, pd.Timedelta(hours=split.embargo_hours),
                                feature_end=fe)
-    idx = tuple(stride_rows(i, split.max_rows) for i in (plan.train_idx, plan.val_idx, plan.test_idx))
+    pick = (lambda i: cross_section_rows(dataset, i, split.max_rows)) if split.cross_section else (
+        lambda i: stride_rows(i, split.max_rows))
+    idx = tuple(pick(i) for i in (plan.train_idx, plan.val_idx, plan.test_idx))
     return idx, (train_end, val_end)
+
+
+def cross_section_rows(dataset: dict, idx: np.ndarray, max_rows: int | None) -> np.ndarray:
+    """``idx`` in time-major order (all coins of a timestamp together, a stable sort) and, with ``max_rows``, only as
+    many WHOLE timestamps, evenly strided over the dates, as hold about ``max_rows`` rows."""
+    idx = np.asarray(idx)
+    times = np.asarray(dataset["last_candles"])[idx, TS_COL].astype(np.int64)
+    order = np.argsort(times, kind="stable")
+    idx, times = idx[order], times[order]
+    if max_rows is None or len(idx) <= max_rows:
+        return idx
+    uniq = np.unique(times)
+    keep = max(1, int(round(len(uniq) * max_rows / len(idx))))
+    chosen = uniq[np.unique(np.linspace(0, len(uniq) - 1, keep).astype(np.int64))]
+    return idx[np.isin(times, chosen)]
 
 
 def pick_device(settings: RunSettings) -> torch.device:

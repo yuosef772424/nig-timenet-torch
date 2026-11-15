@@ -21,6 +21,7 @@ from torch import nn
 
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.model.attn_heads import check_nig_head, nig_head_builder, reads_sequence
+from nig_timenet_torch.model.cross_coin import CrossCoin, split_group
 from nig_timenet_torch.model.encoders import ENCODERS, CausalConv1D, EncoderDims, tcn_n_blocks
 from nig_timenet_torch.model.heads import (
     HEAD_REGISTRY,
@@ -77,8 +78,9 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                  input_noise_std=0.0, feature_dropout=0.0, level_passthrough=False, level_norm=None,
                  input_skip="none", n_classes=3, order_detach_close=False, nig_scale=None, bn_warmup=False,
                  readout_dropout=None, input_scaler="none", nig_head="dense", nig_head_dropout=0.0, ffn="swiglu",
-                 ffn_dim=None):
+                 ffn_dim=None, cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0):
         super().__init__()
+        self.n_group_features = None if isinstance(n_features, dict) else int(n_features)  # split_group reads it
         self.nig_head_kind = check_nig_head(nig_head)
         self.input_scaler_kind = input_scaler
         self._stream = None  # set by model.taps.stream_taps while recording (a plain attribute, not saved)
@@ -136,6 +138,11 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             setattr(self, f"nig_{t}", head())
             setattr(self, f"unc_{t}", NIGUncertainty(unc_max))
             setattr(self, f"conf_{t}", ConfidenceHead(h_dim))
+        if cross_coin_layers:  # rows of one timestamp attend to each other between the trunk and the heads
+            if self.timeframes or reads_sequence(nig_head):
+                raise NotImplementedError("cross_coin_layers needs one timeframe and a head that reads the trunk")
+            self.cross_coin = CrossCoin(h_dim, int(cross_coin_layers), cross_coin_heads, dropout,
+                                        cross_coin_peer_dropout)
         self.apply_order = enforce_order and set(TARGET_COLUMNS) <= set(self.nig_targets)
         if self.apply_order:
             self.ordered_means = OrderedMeans(nig_scale, order_detach_close)
@@ -266,8 +273,13 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         return ENCODERS.get(self.encoder).encode(self, tok, sfx)
 
     def forward(self, x) -> dict[str, torch.Tensor]:
+        gid = None
+        if torch.is_tensor(x) and self.n_group_features is not None:  # an optional last channel = the row's timestamp
+            x, gid = split_group(x, self.n_group_features)
         if not reads_sequence(self.nig_head_kind):
             h = self.trunk(x)
+            if hasattr(self, "cross_coin"):
+                h = self._tap("cross_coin", self.cross_coin(h, gid))
             raw = {t: getattr(self, f"nig_{t}")(h) for t in self.nig_targets}
         else:  # experiment: the NIG heads read the head sequence, the confidence / class heads the pooled trunk
             (xi,) = self._branch_inputs(x)
@@ -330,6 +342,7 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          feature_dropout=0.0, level_passthrough=False, level_norm=None, order_detach_close=False,
                          nig_scale=None, bn_warmup=False, readout_dropout=None, input_scaler="none",
                          nig_head="dense", nig_head_dropout=0.0, ffn="swiglu", ffn_dim=None,
+                         cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
                          **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
@@ -338,7 +351,9 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
     heads' dropout, None = ``dropout``) are opt-in: their defaults reproduce the P15 graph. ``input_scaler`` (a name of
     scalers.INPUT_SCALERS) and ``nig_scale="train_std"`` add train-fitted buffers: call ``scalers.fit_scalers``.
     ``ffn`` / ``ffn_dim``: the feed-forward sublayer of the transformer blocks (TransformerBlock.FFN_KINDS; "none" =
-    attention only), read by the transformer and itransformer encoders."""
+    attention only), read by the transformer and itransformer encoders. ``cross_coin_layers`` > 0 adds
+    model/cross_coin.py between the trunk and the heads: the input then carries one extra channel, the row's timestamp
+    id (``workflow`` ``SplitSettings.cross_section``), and batches must hold whole timestamps."""
     ENCODERS.entry(encoder)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
     if skip_variant(input_skip).adds_modules and not ENCODERS.entry(encoder).meta["supports_input_skip"]:
@@ -369,4 +384,6 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         level_passthrough=level_passthrough, level_norm=level_norm, input_skip=input_skip, n_classes=n_classes,
         order_detach_close=order_detach_close, nig_scale=nig_scale,
         bn_warmup=bn_warmup, readout_dropout=readout_dropout, input_scaler=input_scaler,
-        nig_head=nig_head, nig_head_dropout=nig_head_dropout, ffn=ffn, ffn_dim=ffn_dim)
+        nig_head=nig_head, nig_head_dropout=nig_head_dropout, ffn=ffn, ffn_dim=ffn_dim,
+        cross_coin_layers=cross_coin_layers, cross_coin_heads=cross_coin_heads,
+        cross_coin_peer_dropout=cross_coin_peer_dropout)

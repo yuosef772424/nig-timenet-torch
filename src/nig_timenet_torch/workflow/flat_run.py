@@ -19,6 +19,7 @@ from nig_timenet_torch.data_io.target_codec import anchor_column
 from nig_timenet_torch.model.architectures import ModelSettings, build_model
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer.batch_set import representative_batches
+from nig_timenet_torch.trainer.groups import group_chunks, row_groups
 from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.trainer.switches import param_groups
 from nig_timenet_torch.trainer.targets import targets_config
@@ -59,10 +60,24 @@ def batch_set(dataset: dict, idx: np.ndarray, batch_size: int, seed: int) -> lis
     return representative_batches(row_coins(dataset, idx).astype(str), times, batch_size, seed=seed)
 
 
-def flat_inputs(dataset: dict, idx: np.ndarray) -> tuple[torch.Tensor, dict]:
+def time_ids(dataset: dict, idx: np.ndarray) -> np.ndarray:
+    """The timestamp id of the rows ``idx``: the rank of the row's time among all times of the dataset (so an id means
+    the same timestamp in every split); below 2^24, exact in float32."""
+    times = np.asarray(dataset["last_candles"])[:, TS_COL].astype(np.int64)
+    ids = np.searchsorted(np.unique(times), times[np.asarray(idx)])
+    if len(ids) and ids.max() >= 2 ** 24:
+        raise ValueError("more than 2^24 distinct timestamps: the id does not fit a float32 channel")
+    return ids
+
+
+def flat_inputs(dataset: dict, idx: np.ndarray, time_channel: bool = False) -> tuple[torch.Tensor, dict]:
     """(x (n, T, F), {label_key: (n,)}) of the dataset rows ``idx``, float32, on the CPU; the heads are the artifact's
-    price targets x ``HEAD_KINDS`` (label keys from ``head_spec``)."""
+    price targets x ``HEAD_KINDS`` (label keys from ``head_spec``). ``time_channel``: x gets one more channel, the
+    row's timestamp id repeated over the window (model/cross_coin.py, trainer/groups.py read it)."""
     x = torch.as_tensor(np.asarray(dataset[input_key(dataset)])[idx], dtype=torch.float32)
+    if time_channel:
+        gid = torch.as_tensor(time_ids(dataset, idx), dtype=torch.float32)
+        x = torch.cat([x, gid[:, None, None].expand(-1, x.shape[1], 1)], dim=-1)
     keys = [head_spec(kind, t).label_key for t in price_targets(dataset) for kind in HEAD_KINDS]
     return x, {k: torch.as_tensor(np.asarray(dataset[k])[idx], dtype=torch.float32) for k in keys}
 
@@ -102,8 +117,14 @@ def make_trainer(settings: RunSettings, ms: ModelSettings, targets, seq_len: int
                  device: torch.device) -> Trainer:
     """A new model and Trainer (seed the RNG before calling for a reproducible init). The optimizer's parameter groups
     come from ``trainer.switches.param_groups`` (``all_params`` = one group, as before D-021)."""
+    model = build_model(ms, seq_len, n_features - int(settings.split.cross_section)).to(device)
+    trainer = _trainer(settings, model, targets)
+    trainer.group_channel = settings.split.cross_section
+    return trainer
+
+
+def _trainer(settings: RunSettings, model, targets) -> Trainer:
     t = settings.train
-    model = build_model(ms, seq_len, n_features).to(device)
     return Trainer(model, trainer_config(targets, t.label_smoothing, t), selection_metric=t.selection_metric,
                    optimizer=lambda ps: torch.optim.AdamW(
                        param_groups(t.weight_decay_groups, model, ps, t.weight_decay), lr=t.lr,
@@ -122,9 +143,11 @@ def predict_stage(trainer: Trainer, dataset: dict, idx: np.ndarray, x: torch.Ten
                   device: torch.device, *, stage: str, train_end, chunk: int) -> pd.DataFrame:
     """PredictionTable of the rows ``idx`` (inputs ``x``, aligned), in device-sized chunks."""
     parts = []
-    for s in range(0, len(idx), chunk):
-        meta = table_meta(dataset, idx[s:s + chunk], stage=stage, fold=0, train_end=train_end)
-        parts.append(predict_table(trainer.model, x[s:s + chunk].to(device), meta, ident))
+    cuts = (group_chunks(row_groups(x), chunk) if trainer.group_channel
+            else [slice(s, s + chunk) for s in range(0, len(idx), chunk)])
+    for c in cuts:
+        meta = table_meta(dataset, idx[c], stage=stage, fold=0, train_end=train_end)
+        parts.append(predict_table(trainer.model, x[c].to(device), meta, ident))
     return pd.concat(parts, ignore_index=True)
 
 

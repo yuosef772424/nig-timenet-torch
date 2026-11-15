@@ -40,7 +40,7 @@ def arm_settings(a, encoder: str, lr: float, out: pathlib.Path, head: str = "den
     return RunSettings(
         run_dir=str(out / "ckpt"),
         data=LoaderSettings(name=a.artifact, mmap=True),
-        split=SplitSettings(max_rows=a.rows),
+        split=SplitSettings(max_rows=a.rows, cross_section=a.cross_section),
         model=model,
         train=TrainSettings(
             epochs=a.epochs, batch_size=a.batch_size, seed=a.seed, lr=lr, device=a.device, steps_per_execution=a.spe,
@@ -66,6 +66,10 @@ def main():
     p.add_argument("--tag", default="", help="suffix of the arm folders (to keep --model variants apart)")
     p.add_argument("--card-a", action="store_true", help="doctor card A on the trained weights (val rows): stage "
                    "table info_flow.csv + card_a.json (path use, transformer block / attention / feed-forward use)")
+    p.add_argument("--cross-section", action="store_true", help="whole timestamps: time-major rows, --rows keeps "
+                   "whole timestamps, batches of whole timestamps (needed by the model override cross_coin_layers)")
+    p.add_argument("--random-batches", action="store_true", help="with --cross-section: keep the rows but train on "
+                   "ordinary shuffled batches (the control for the time-grouped batches; no cross-coin model)")
     a = p.parse_args()
     out = pathlib.Path(a.out)
     rows = []
@@ -77,6 +81,8 @@ def main():
         t0 = time.time()
         print(f"\n===== arm {name} =====", flush=True)
         r = steps.build(steps.prepare(arm_settings(a, enc, float(lr), folder, head), folder))
+        if a.random_batches:
+            r.trainer.group_channel = False
         steps.train(r, on_epoch=lambda row: print(epoch_line(row, a.epochs), flush=True))
         rep = steps.test_step(r)
         if a.battery:

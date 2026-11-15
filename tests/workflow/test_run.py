@@ -83,3 +83,29 @@ def test_restore_rereads_a_finished_run_folder_without_training(art, tmp_path): 
     empty = steps.build(steps.prepare(updated(s, {"run_dir": str(tmp_path / "none")})))
     with pytest.raises(FileNotFoundError, match="nothing to restore"):
         steps.restore(empty)
+
+
+def test_cross_section_run_holds_whole_timestamps_and_trains_the_cross_coin_model(art, tmp_path):  # noqa: F811
+    import numpy as np
+
+    from nig_timenet_torch.core.schema import TS_COL
+    from nig_timenet_torch.trainer.groups import row_groups
+    from nig_timenet_torch.workflow.flat_run import time_ids
+
+    over = {"split.cross_section": True, "split.max_rows": 60, "evaluation.battery.enabled": False,
+            "model.overrides": {**RunSettings(run_dir="x").model.overrides, "cross_coin_layers": 1}}
+    r = steps.build(steps.prepare(settings(art, tmp_path, **over), tmp_path / "out"))
+    times = np.asarray(r.dataset["last_candles"])[:, TS_COL].astype(np.int64)
+    plain = steps.prepare(settings(art, tmp_path), None)
+    for stage in ("train", "val", "test"):
+        t = times[r.idx[stage]]
+        assert (np.diff(t) >= 0).all()                                   # time-major
+        full = times[plain.idx[stage]]                                   # every kept timestamp is kept whole
+        assert all((t == u).sum() == (full == u).sum() for u in np.unique(t))
+    x = r.x["train"]
+    assert x.shape[2] == plain.x["train"].shape[2] + 1 and r.trainer.group_channel
+    assert np.array_equal(row_groups(x).numpy(), time_ids(r.dataset, r.idx["train"]))
+    assert hasattr(r.trainer.model, "cross_coin")
+    steps.train(r)
+    rep = steps.test_step(r)
+    assert rep["n_rows"] == len(r.idx["test"]) and r.trainer.model.cross_coin.last_attention_rows > 0

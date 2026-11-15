@@ -65,6 +65,10 @@ class SplitSettings:
     val_share: float = 0.10              # TF data/defaults.py val_pct
     embargo_hours: float = 0.0           # 0: the split already purges by label end
     max_rows: int | None = None          # smoke mode (rule E5): at most this many rows per split, evenly strided
+    # cross-coin runs (model/cross_coin.py): rows of each split in time-major order, ``max_rows`` keeps WHOLE
+    # timestamps (evenly strided over the dates), the inputs get the timestamp-id channel and the trainer cuts
+    # batches and evaluation chunks at timestamp borders
+    cross_section: bool = False
 
     def __post_init__(self):
         if bool(self.train_end) != bool(self.val_end):

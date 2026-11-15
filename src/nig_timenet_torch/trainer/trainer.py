@@ -25,6 +25,7 @@ import torch
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.trainer import checkpoint
+from nig_timenet_torch.trainer.groups import group_batches, group_chunks, row_groups
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
 from nig_timenet_torch.trainer.log_groups import GroupedLogs, tensor_logs
 from nig_timenet_torch.trainer.schedules import LrSettings, ParamSchedule, apply_schedules, lr_at
@@ -149,6 +150,8 @@ class Trainer:
         validate_trainer_config(tasks_cfg)
         check_selectable(selection_metric)
         self.selection_metric = selection_metric
+        #: True = the last input channel is a group (timestamp) id: batches and evaluation chunks hold whole groups
+        self.group_channel = False
         config = tasks_cfg  # kept as given: it is hashed into the RunIdentity (defaults are never written into it)
         self.model, self.config = model, config
         self.targets_cfg = resolve_targets(config)
@@ -239,7 +242,10 @@ class Trainer:
         concatenated outputs (an AUC must not be averaged over batches)."""
         self.model.eval()
         dev = self._device()
-        parts = [self.model(xb.to(dev)) for xb in x.split(batch_size)]
+        if self.group_channel:  # whole timestamps per chunk (rows are time-major: workflow cross_section)
+            parts = [self.model(x[c].to(dev)) for c in group_chunks(row_groups(x), batch_size)]
+        else:
+            parts = [self.model(xb.to(dev)) for xb in x.split(batch_size)]
         outputs = {k: torch.cat([p[k] for p in parts]) for k in parts[0]}
         y = {k: v.to(dev) for k, v in y.items()}
         total, raw, per_target, stats, _ = self.compute_losses(None, y, outputs=outputs)
@@ -256,7 +262,9 @@ class Trainer:
         """One shuffled pass; the mean of every log, weighted by batch size; ``ema`` is updated after every step.
         The logs of ``settings.steps_per_execution`` steps are read back together (one host sync per group)."""
         logs, dev = GroupedLogs(settings.steps_per_execution), self._device()
-        for ix in self.batch_indices(len(x), settings.batch_size):
+        batches = (group_batches(row_groups(x), settings.batch_size) if self.group_channel
+                   else self.batch_indices(len(x), settings.batch_size))
+        for ix in batches:
             step = self.train_step(x[ix].to(dev), {k: v[ix].to(dev) for k, v in y.items()},
                                    grad_clip_norm=settings.grad_clip_norm, as_tensors=True)
             if ema is not None:
