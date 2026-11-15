@@ -2,11 +2,15 @@
 outputs the jobs and notebooks rely on."""
 
 import json
+from pathlib import Path
 
+import numpy as np
 import pytest
+import torch
 
 from nig_timenet_torch.core.config import from_dict, updated
 from nig_timenet_torch.data_io.loading import LoaderSettings
+from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.settings import RunSettings
 
@@ -83,3 +87,60 @@ def test_restore_rereads_a_finished_run_folder_without_training(art, tmp_path): 
     empty = steps.build(steps.prepare(updated(s, {"run_dir": str(tmp_path / "none")})))
     with pytest.raises(FileNotFoundError, match="nothing to restore"):
         steps.restore(empty)
+
+
+def test_restore_last_loads_the_last_epoch_weights_not_the_best(art, tmp_path):  # noqa: F811
+    """weights="last" puts the weights after the LAST finished epoch (checkpoint.pt) in the model, weights="best"
+    (the default) best.pt; an unknown name raises."""
+    s = settings(art, tmp_path)
+    steps.run_all(s, tmp_path / "out1")
+    ckpt = checkpoint.load_checkpoint(Path(s.run_dir))
+
+    def weights_after(**kw):
+        r = steps.restore(steps.build(steps.prepare(s, tmp_path / "out2")), **kw)
+        return r, r.trainer.model.state_dict()
+
+    r_last, w_last = weights_after(weights="last")
+    assert not r_last.result.restored_best
+    assert all(torch.equal(w_last[k], v) for k, v in ckpt["model"].items())
+    best = checkpoint.load_best(Path(s.run_dir))
+    _, w_default = weights_after()
+    assert all(torch.equal(w_default[k], v) for k, v in best.items())
+    with pytest.raises(ValueError, match="weights must be one of"):
+        steps.restore(steps.build(steps.prepare(s, tmp_path / "out3")), weights="newest")
+
+
+def test_fit_without_restore_best_weights_leaves_the_last_epoch_in_the_model(art, tmp_path):  # noqa: F811
+    """train.early_stop.restore_best_weights=False: after fit the model holds the weights of the last finished epoch
+    (the ones checkpoint.pt keeps), so every report step reads them."""
+    s = updated(settings(art, tmp_path), {"train.early_stop.restore_best_weights": False})
+    r = steps.run_all(s, tmp_path / "out")
+    ckpt = checkpoint.load_checkpoint(Path(s.run_dir))
+    w = r.trainer.model.state_dict()
+    assert not r.result.restored_best
+    assert all(torch.equal(w[k], v) for k, v in ckpt["model"].items())
+
+
+def test_exclude_coins_removes_their_rows_from_every_split_and_keeps_the_cut_dates(art, tmp_path):  # noqa: F811
+    from nig_timenet_torch.workflow.flat_run import row_coins
+    base = steps.prepare(settings(art, tmp_path))
+    names = [b["name"] for b in base.dataset["asset_bounds"]]
+    gone = [names[0], names[1].replace("USDT", "").lower()]  # one exact, one without USDT and in lower case
+    r = steps.prepare(settings(art, tmp_path, **{"split.exclude_coins": gone}))
+    keep = {n for n in names[:2]}
+    for stage in ("train", "val", "test"):
+        assert not keep & set(row_coins(r.dataset, r.idx[stage]).astype(str))
+        want = base.idx[stage][~np.isin(row_coins(base.dataset, base.idx[stage]).astype(str), list(keep))]
+        assert np.array_equal(r.idx[stage], want)  # nothing else moved
+    assert r.bounds == base.bounds
+    assert len(r.x["train"]) < len(base.x["train"])
+
+
+def test_exclude_coins_refuses_unknown_names_and_removing_everything(art, tmp_path):  # noqa: F811
+    with pytest.raises(ValueError, match="not coins of this artifact"):
+        steps.prepare(settings(art, tmp_path, **{"split.exclude_coins": ["NOPEUSDT"]}))
+    names = [b["name"] for b in steps.prepare(settings(art, tmp_path)).dataset["asset_bounds"]]
+    with pytest.raises(ValueError, match="every coin"):
+        steps.prepare(settings(art, tmp_path, **{"split.exclude_coins": names}))
+    with pytest.raises(ValueError, match="coin names"):
+        updated(RunSettings(run_dir="x"), {"split.exclude_coins": [""]})

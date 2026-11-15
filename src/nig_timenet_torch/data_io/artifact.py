@@ -33,7 +33,7 @@ from nig_timenet_torch.core.schema import TS_COL
 from nig_timenet_torch.data_io import npy_dir
 
 __all__ = ["ArtifactError", "ArtifactManifest", "Artifact", "SCHEMA", "TIME_SEAL", "EXPECTED_SEALED_COUNT",
-           "EXPECTED_LOCK_SHA256", "read_manifest", "load_artifact", "verify_hashes"]
+           "EXPECTED_LOCK_SHA256", "norm_coin", "read_manifest", "load_artifact", "verify_hashes"]
 
 SCHEMA = "torch_artifact/1"
 #: The time seal of the TF holdout lock (docs/DATA_ARTIFACT_CONTRACT.md): no bar, and no label, at or after it.
@@ -85,6 +85,10 @@ def _norm(symbol: str) -> str:
     """Name as the TF guard compares it: upper case, with or without the trailing USDT."""
     n = str(symbol).strip().upper()
     return n[:-4] if n.endswith("USDT") and len(n) > 4 else n
+
+
+#: public name of the comparison key (used by ``split.exclude_coins``)
+norm_coin = _norm
 
 
 def _timestamp(value, field: str) -> pd.Timestamp:

@@ -58,8 +58,14 @@ class SplitSettings:
     val_share: float = 0.10              # TF data/defaults.py val_pct
     embargo_hours: float = 0.0           # 0: the split already purges by label end
     max_rows: int | None = None          # smoke mode (rule E5): at most this many rows per split, evenly strided
+    exclude_coins: tuple[str, ...] = ()  # coins whose rows leave train, val AND test (after the time split; names as in
+                                         # asset_bounds, with or without USDT, any case); () = keep every coin
 
     def __post_init__(self):
+        coins = (self.exclude_coins,) if isinstance(self.exclude_coins, str) else tuple(self.exclude_coins)
+        if not all(isinstance(c, str) and c.strip() for c in coins):
+            raise ValueError(f"exclude_coins must be coin names (non-empty strings), got {self.exclude_coins!r}")
+        object.__setattr__(self, "exclude_coins", coins)
         if bool(self.train_end) != bool(self.val_end):
             raise ValueError("train_end and val_end are given together or not at all")
         if not (0.0 < self.train_share and 0.0 < self.val_share and self.train_share + self.val_share < 1.0):
