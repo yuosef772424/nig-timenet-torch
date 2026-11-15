@@ -40,11 +40,11 @@ def arm_settings(a, encoder: str, lr: float, out: pathlib.Path, head: str = "den
     return RunSettings(
         run_dir=str(out / "ckpt"),
         data=LoaderSettings(name=a.artifact, mmap=True),
-        split=SplitSettings(max_rows=a.rows, cross_section=a.cross_section),
+        split=SplitSettings(max_rows=a.rows, cross_section=a.cross_section, top_coins=a.top_coins),
         model=model,
         train=TrainSettings(
             epochs=a.epochs, batch_size=a.batch_size, seed=a.seed, lr=lr, device=a.device, steps_per_execution=a.spe,
-            early_stop=EarlyStopSettings(patience=a.patience),
+            early_stop=EarlyStopSettings(patience=a.patience), selection_metric=a.selection,
         ),
         evaluation=EvalSettings(
             health_max_rows=2000, battery=BatterySettings(enabled=a.battery, n_variants=a.n_variants)
@@ -70,6 +70,8 @@ def main():
                    "whole timestamps, batches of whole timestamps (needed by the model override cross_coin_layers)")
     p.add_argument("--random-batches", action="store_true", help="with --cross-section: keep the rows but train on "
                    "ordinary shuffled batches (the control for the time-grouped batches; no cross-coin model)")
+    p.add_argument("--top-coins", type=int, default=None, help="keep the N coins with the most train rows")
+    p.add_argument("--selection", default="val_raw_loss", help="selection metric (e.g. val_rank_ic_reg)")
     a = p.parse_args()
     out = pathlib.Path(a.out)
     rows = []

@@ -102,3 +102,40 @@ def test_every_kind_is_the_identity_at_init_and_local_to_the_timestamp(kind):
     assert (out2[1] - out[1]).abs().max() > 1e-4 and torch.equal(out2[GID != 5], out[GID != 5])
     with pytest.raises(ValueError, match="cross_coin_kind"):
         CrossCoin(16, kind="median")
+
+
+def test_relative_inputs_are_the_differences_between_the_coins_of_a_timestamp():
+    from nig_timenet_torch.model.cross_coin import RelativeInputs
+
+    torch.manual_seed(0)
+    x, gid = torch.randn(6, 5, 3), torch.tensor([4, 4, 4, 9, 9, 2])
+    out = RelativeInputs()(x, gid)
+    assert out.shape == (6, 5, 12)
+    own, rel, z, market = out.split(3, dim=-1)
+    assert torch.equal(own, x)
+    torch.testing.assert_close(market[:3], x[:3].mean(0, keepdim=True).expand(3, -1, -1))
+    torch.testing.assert_close(rel[:3], x[:3] - x[:3].mean(0, keepdim=True))
+    torch.testing.assert_close(rel[:3].sum(0), torch.zeros(5, 3), atol=1e-5, rtol=0)  # differences sum to zero
+    assert rel[5].abs().max() == 0 and z[5].abs().max() == 0                        # a coin alone has no difference
+    alone = RelativeInputs()(x, None)
+    assert torch.equal(alone[..., 9:], x) and alone[..., 3:9].abs().max() == 0
+
+
+def test_cross_input_model_reads_its_peers_and_keeps_the_contract():
+    torch.manual_seed(0)
+    m = build_nig_timenet_v2(32, 3, **KW, cross_input="relative").eval()
+    base = build_nig_timenet_v2(32, 3, **KW).eval()
+    assert m.instance_norm.gamma.shape == (12,) and base.instance_norm.gamma.shape == (3,)
+    x = torch.randn(6, 32, 3)
+    xg = torch.cat([x, torch.tensor([1.0, 1, 1, 2, 2, 2])[:, None, None].expand(-1, 32, 1)], dim=-1)
+    with torch.no_grad():
+        out = m(xg)
+        moved = xg.clone()
+        moved[0, :, :3] += torch.randn(32, 3)                # coin 0 of timestamp 1 changes
+        out2 = m(moved)
+    assert set(out) == set(base(x)) and all(torch.isfinite(v).all() for v in out.values())
+    assert (out2["y_close"][1] - out["y_close"][1]).abs() > 1e-6          # its peer's prediction moves
+    torch.testing.assert_close(out2["y_close"][3:], out["y_close"][3:])   # the other timestamp does not
+    assert m._gid is None
+    with pytest.raises(ValueError, match="cross_input"):
+        build_nig_timenet_v2(32, 3, **KW, cross_input="ranks")

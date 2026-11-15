@@ -25,7 +25,7 @@ from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats import metrics
 
-__all__ = ["SELECTION_METRICS", "compute_selection_metric", "check_selectable", "NOT_SELECTABLE"]
+__all__ = ["SELECTION_METRICS", "compute_selection_metric", "check_selectable", "NOT_SELECTABLE", "GROUP_KEY"]
 
 #: direction metrics of the high / low heads: suspended by the owner (never evidence, never used for selection); they
 #: stay registered for reporting
@@ -57,6 +57,27 @@ def _pinball_fn(t):
                                                               _np(outputs[spec.output_keys["mu"]]), 0.5)
 
 
+#: label-dict key under which the trainer passes the rows' group (timestamp) ids to a selection metric
+GROUP_KEY = "__group"
+
+
+def _rank_ic_fn(targets):
+    """Mean over ``targets`` of the rank IC of the NIG mean with its label, inside each timestamp when the trainer
+    passes the groups (a cross-section run), else over all rows."""
+    specs = [head_spec("nig_regression", t) for t in targets]
+
+    def fn(outputs, labels, logs) -> float:
+        groups = _np(labels[GROUP_KEY]) if GROUP_KEY in labels else None
+        return float(np.mean([metrics.rank_ic(_np(labels[s.label_key]), _np(outputs[s.output_keys["mu"]]), groups)
+                              for s in specs]))
+    return fn
+
+
+SELECTION_METRICS.register("val_rank_ic_reg", _rank_ic_fn(TARGET_COLUMNS), version=1, higher_is_better=True,
+                           selectable=True)
+for _t in TARGET_COLUMNS:
+    SELECTION_METRICS.register(f"val_rank_ic_{_t}_reg", _rank_ic_fn((_t,)), version=1, higher_is_better=True,
+                               selectable=True)
 SELECTION_METRICS.register("val_raw_loss", _val_raw_loss, version=1, higher_is_better=False, selectable=True)
 for _t in TARGET_COLUMNS:
     SELECTION_METRICS.register(f"val_auc_{_t}_class", _auc_fn(_t), version=1, higher_is_better=True,

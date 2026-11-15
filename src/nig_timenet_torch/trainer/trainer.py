@@ -29,7 +29,12 @@ from nig_timenet_torch.trainer.groups import group_batches, group_chunks, row_gr
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
 from nig_timenet_torch.trainer.log_groups import GroupedLogs, tensor_logs
 from nig_timenet_torch.trainer.schedules import LrSettings, ParamSchedule, apply_schedules, lr_at
-from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS, check_selectable, compute_selection_metric
+from nig_timenet_torch.trainer.selection_metric import (
+    GROUP_KEY,
+    SELECTION_METRICS,
+    check_selectable,
+    compute_selection_metric,
+)
 from nig_timenet_torch.trainer.switches import INITS, EmaWeights, apply_init
 from nig_timenet_torch.trainer.targets import resolve_loss, resolve_targets, validate_trainer_config
 from nig_timenet_torch.trainer.task_weighting import UncertaintyWeightedLoss
@@ -242,15 +247,17 @@ class Trainer:
         concatenated outputs (an AUC must not be averaged over batches)."""
         self.model.eval()
         dev = self._device()
+        gid = row_groups(x) if self.group_channel else None
         if self.group_channel:  # whole timestamps per chunk (rows are time-major: workflow cross_section)
-            parts = [self.model(x[c].to(dev)) for c in group_chunks(row_groups(x), batch_size)]
+            parts = [self.model(x[c].to(dev)) for c in group_chunks(gid, batch_size)]
         else:
             parts = [self.model(xb.to(dev)) for xb in x.split(batch_size)]
         outputs = {k: torch.cat([p[k] for p in parts]) for k in parts[0]}
         y = {k: v.to(dev) for k, v in y.items()}
         total, raw, per_target, stats, _ = self.compute_losses(None, y, outputs=outputs)
         logs = self._logs(total, raw, per_target, stats)
-        logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, y, logs)
+        labels = y if gid is None else {**y, GROUP_KEY: gid}  # a rank metric reads the timestamps
+        logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, labels, logs)
         return logs
 
     def _device(self) -> torch.device:

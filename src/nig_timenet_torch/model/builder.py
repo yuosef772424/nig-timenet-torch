@@ -21,7 +21,7 @@ from torch import nn
 
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.model.attn_heads import check_nig_head, nig_head_builder, reads_sequence
-from nig_timenet_torch.model.cross_coin import CrossCoin, split_group
+from nig_timenet_torch.model.cross_coin import CROSS_INPUTS, CrossCoin, split_group
 from nig_timenet_torch.model.encoders import ENCODERS, CausalConv1D, EncoderDims, tcn_n_blocks
 from nig_timenet_torch.model.heads import (
     HEAD_REGISTRY,
@@ -79,8 +79,15 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                  input_skip="none", n_classes=3, order_detach_close=False, nig_scale=None, bn_warmup=False,
                  readout_dropout=None, input_scaler="none", nig_head="dense", nig_head_dropout=0.0, ffn="swiglu",
                  ffn_dim=None, cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
-                 cross_coin_kind="attention"):
+                 cross_coin_kind="attention", cross_input="none"):
         super().__init__()
+        self._gid = None  # the rows' timestamp ids during one forward (cross_input reads it inside the branch)
+        if cross_input not in CROSS_INPUTS:
+            raise ValueError(f"cross_input must be one of {tuple(CROSS_INPUTS)}, not {cross_input!r}")
+        if CROSS_INPUTS[cross_input] is not None:
+            if isinstance(seq_len, dict):
+                raise NotImplementedError("cross_input needs one timeframe")
+            self.cross_input = CROSS_INPUTS[cross_input]()
         self.n_group_features = None if isinstance(n_features, dict) else int(n_features)  # split_group reads it
         self.nig_head_kind = check_nig_head(nig_head)
         self.input_scaler_kind = input_scaler
@@ -162,6 +169,8 @@ class NigTimeNetV2(OracleWeights, nn.Module):
 
         if INPUT_SCALERS.entry(self.input_scaler_kind).meta["fitted"]:  # train-fitted standardisation (scalers.py)
             add("input_scaler", INPUT_SCALERS.get(self.input_scaler_kind)(nf))
+        if hasattr(self, "cross_input"):  # the scaled input grows to [own, relative, relative z, market]
+            nf = nf * self.cross_input.width_mult
         add("instance_norm", InstanceNorm(nf, eps=norm_eps, clip=input_clip, stats_mode=stats_mode))
         if feature_dropout > 0:
             add("feature_dropout", SpatialDropout1D(feature_dropout))
@@ -215,6 +224,8 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         x = tap("input", x)
         if self._m("input_scaler", sfx) is not None:
             x = tap("scaled", self._m("input_scaler", sfx)(x))
+        if hasattr(self, "cross_input"):
+            x = tap("cross_input", self.cross_input(x, self._gid))
         z, stats = self._m("instance_norm", sfx)(x)
         z = tap("inst_norm", z)
         for name in ("feature_dropout", "input_noise"):
@@ -277,8 +288,10 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         gid = None
         if torch.is_tensor(x) and self.n_group_features is not None:  # an optional last channel = the row's timestamp
             x, gid = split_group(x, self.n_group_features)
+        self._gid = gid
         if not reads_sequence(self.nig_head_kind):
             h = self.trunk(x)
+            self._gid = None
             if hasattr(self, "cross_coin"):
                 h = self._tap("cross_coin", self.cross_coin(h, gid))
             raw = {t: getattr(self, f"nig_{t}")(h) for t in self.nig_targets}
@@ -344,7 +357,7 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          nig_scale=None, bn_warmup=False, readout_dropout=None, input_scaler="none",
                          nig_head="dense", nig_head_dropout=0.0, ffn="swiglu", ffn_dim=None,
                          cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
-                         cross_coin_kind="attention", **options) -> NigTimeNetV2:
+                         cross_coin_kind="attention", cross_input="none", **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
@@ -387,4 +400,5 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         bn_warmup=bn_warmup, readout_dropout=readout_dropout, input_scaler=input_scaler,
         nig_head=nig_head, nig_head_dropout=nig_head_dropout, ffn=ffn, ffn_dim=ffn_dim,
         cross_coin_layers=cross_coin_layers, cross_coin_heads=cross_coin_heads,
-        cross_coin_peer_dropout=cross_coin_peer_dropout, cross_coin_kind=cross_coin_kind)
+        cross_coin_peer_dropout=cross_coin_peer_dropout, cross_coin_kind=cross_coin_kind,
+        cross_input=cross_input)

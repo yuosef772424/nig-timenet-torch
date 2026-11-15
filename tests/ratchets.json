@@ -3,7 +3,7 @@
   "counts": {
     "G1_output_name_literals_outside_heads": 3,
     "G2_mode_name_comparisons": 8,
-    "G3_modules_over_400_lines": 1,
+    "G3_modules_over_400_lines": 0,
     "G3_functions_over_80_lines": 5,
     "G4_dead_settings_fields": 0,
     "G5_optimizer_calls_outside_trainer": 0,
@@ -15,10 +15,5 @@
     "H4_config_get_defaults_in_trainer_and_jobs": 0,
     "E2_rmtree_calls_in_colab": 9
   },
-  "G3_size_exceptions": {
-    "doctor/trainer_checks.py": {
-      "max_lines": 470,
-      "why": "model-first audit 2026-11-14: card B of the doctor (6 independent trainer checks sharing one fixture); split when a check is added"
-    }
-  }
+  "G3_size_exceptions": {}
 }

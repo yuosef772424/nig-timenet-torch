@@ -12,7 +12,7 @@ from tests import scan
 from tests.ratchet import COUNTS, RATCHETS
 from tests.ratchet import ratchet as _ratchet
 
-MODULE_LINES, FUNCTION_LINES = 400, 80
+MODULE_LINES, FUNCTION_LINES = 1000, 80  # module budget 400 -> 1000: owner 2026-11-15 (D-025)
 
 
 def test_every_pinned_count_has_a_test():
@@ -46,7 +46,7 @@ def test_e2_rmtree_calls_in_colab_do_not_grow():
 
 
 def test_g3_size_budget():
-    """G3: module <= 400 lines, function <= 80 lines; a module over budget needs a reason in ratchets.json."""
+    """G3: module <= 1000 lines, function <= 80 lines; a module over budget needs a reason in ratchets.json."""
     over_modules = sorted(m for m, n in scan.module_lines().items() if n > MODULE_LINES)
     unexcused = [m for m in over_modules if m not in RATCHETS["G3_size_exceptions"]]
     assert not unexcused, f"over {MODULE_LINES} lines without a reason in G3_size_exceptions: {unexcused}"

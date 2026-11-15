@@ -69,6 +69,9 @@ class SplitSettings:
     # timestamps (evenly strided over the dates), the inputs get the timestamp-id channel and the trainer cuts
     # batches and evaluation chunks at timestamp borders
     cross_section: bool = False
+    # keep only the ``top_coins`` coins with the most TRAIN rows (the longest history; the artifact holds no volume
+    # to rank liquidity by), in every split. None = all coins.
+    top_coins: int | None = None
 
     def __post_init__(self):
         if bool(self.train_end) != bool(self.val_end):
@@ -77,6 +80,8 @@ class SplitSettings:
             raise ValueError("train_share and val_share must be > 0 and sum to less than 1")
         if self.embargo_hours < 0:
             raise ValueError("embargo_hours must be >= 0")
+        if self.top_coins is not None and (isinstance(self.top_coins, bool) or self.top_coins < 1):
+            raise ValueError(f"top_coins must be None or an integer >= 1, got {self.top_coins!r}")
         if self.max_rows is not None and (isinstance(self.max_rows, bool) or self.max_rows < 1):
             raise ValueError(f"max_rows must be None or an integer >= 1, got {self.max_rows!r}")
 

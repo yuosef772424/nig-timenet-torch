@@ -1,5 +1,5 @@
-"""PURPOSE: Cross-coin block of NigTimeNetV2 (``cross_coin_layers``): the rows of one batch that share a timestamp
-    attend to each other between the trunk and the heads, as a residual that is the identity at initialisation.
+"""PURPOSE: The multi-coin parts of NigTimeNetV2: ``cross_input`` (each coin's window relative to its timestamp's
+    market, bar by bar) and ``cross_coin_layers`` (rows of one timestamp exchange information after the trunk).
 TAGS: cross coin, panel, cross asset, multi coin, attention across coins, time group, group channel, residual, zero init
 PITFALLS: the group of a row (its timestamp id) arrives as ONE EXTRA INPUT CHANNEL, constant over the window
     (``split_group``; float32 holds ids up to 2^24 exactly). An input without that channel = every row alone (the block
@@ -12,7 +12,8 @@ PITFALLS: the group of a row (its timestamp id) arrives as ONE EXTRA INPUT CHANN
 import torch
 from torch import nn
 
-__all__ = ["CrossCoinBlock", "CrossSectionPool", "CROSS_COIN_KINDS", "CrossCoin", "split_group", "group_grid"]
+__all__ = ["CrossCoinBlock", "CrossSectionPool", "CROSS_COIN_KINDS", "CrossCoin", "RelativeInputs",
+           "CROSS_INPUTS", "split_group", "group_grid"]
 
 
 def split_group(x: torch.Tensor, n_features: int) -> tuple[torch.Tensor, torch.Tensor | None]:
@@ -34,6 +35,30 @@ def group_grid(gid: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int, int]
     pos = torch.empty_like(inv)
     pos[order] = torch.arange(len(inv), device=inv.device) - starts[inv[order]]
     return inv, pos, int(counts.numel()), int(counts.max())
+
+
+class RelativeInputs(nn.Module):
+    """(B, T, F) -> (B, T, 4F), bar by bar inside each timestamp group: [own, own - group mean, (own - group mean) /
+    group sd, group mean]. Windows of one timestamp cover the same bars, so the group mean at bar t is the market at
+    that bar: the encoder then reads how each coin moved AGAINST the others over the whole window (the differences
+    between coins), next to the market itself. A row without peers gets zeros in the two relative blocks. No
+    weights."""
+
+    width_mult = 4
+
+    def forward(self, x: torch.Tensor, gid: torch.Tensor | None) -> torch.Tensor:
+        if gid is None:
+            return torch.cat([x, torch.zeros_like(x), torch.zeros_like(x), x], dim=-1)
+        inv, _, n_groups, _ = group_grid(gid)
+        n = torch.bincount(inv, minlength=n_groups).to(x.dtype)[:, None, None]
+        mean = x.new_zeros(n_groups, *x.shape[1:]).index_add_(0, inv, x) / n
+        dev = x - mean[inv]
+        var = x.new_zeros(n_groups, *x.shape[1:]).index_add_(0, inv, dev * dev) / n
+        return torch.cat([x, dev, dev / (var[inv] + 1e-6).sqrt(), mean[inv]], dim=-1)
+
+
+#: cross_input -> module class (None = the per-coin input as it is)
+CROSS_INPUTS = {"none": None, "relative": RelativeInputs}
 
 
 class CrossCoinBlock(nn.Module):
