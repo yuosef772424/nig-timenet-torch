@@ -33,6 +33,7 @@ from nig_timenet_torch.eval.target_report import target_report
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.model.label_scale import fit_label_scale
+from nig_timenet_torch.model.scalers import fit_scalers
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
 from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
@@ -77,7 +78,8 @@ class Run:
         """PredictionTable of ALL rows of ``stage`` (the model holds the best weights after fit)."""
         _need(self, "result", "train")
         if stage not in self.x:
-            self.x[stage], self.y[stage] = flat_run.flat_inputs(self.dataset, self.idx[stage])
+            self.x[stage], self.y[stage] = flat_run.flat_inputs(self.dataset, self.idx[stage],
+                                                                self.settings.split.cross_section)
         return flat_run.predict_stage(self.trainer, self.dataset, self.idx[stage], self.x[stage], self.ident,
                                       self.device, stage=stage, train_end=self.bounds[0],
                                       chunk=self.settings.evaluation.chunk)
@@ -105,7 +107,7 @@ def prepare(settings: RunSettings, out=None) -> Run:
     run = Run(settings, art, targets, {"train": tr, "val": va, "test": te}, bounds, run_common.pick_device(settings),
               None if out is None else Path(out))
     for stage in ("train", "val"):
-        run.x[stage], run.y[stage] = flat_run.flat_inputs(ds, run.idx[stage])
+        run.x[stage], run.y[stage] = flat_run.flat_inputs(ds, run.idx[stage], settings.split.cross_section)
     return run
 
 
@@ -118,6 +120,10 @@ def build(run: Run) -> Run:
     run.trainer = flat_run.make_trainer(s, run.ms, run.targets, run.x["train"].shape[1], run.x["train"].shape[2],
                                         run.device)
     fit_label_scale(run.trainer.model, run.y["train"])   # FX2: a fitted NIG label scale learns from TRAIN only
+    # train-fitted state of the model (input scaler, NIG label scale): TRAIN rows only; a resume / restore then
+    # loads the same values from the checkpoint. Empty for a model without such modules.
+    x_fit = run.x["train"][..., :-1] if s.split.cross_section else run.x["train"]   # without the timestamp channel
+    run.extra["fitted_scalers"] = fit_scalers(run.trainer.model, x_fit, run.y["train"])
     run.fit_settings = flat_run.fit_settings_of(s)
     run.ident = run_common.run_identity(run.trainer, run.fit_settings, run.ms, run.art, s)
     return run

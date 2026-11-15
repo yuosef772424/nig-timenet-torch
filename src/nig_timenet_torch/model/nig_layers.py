@@ -14,6 +14,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from nig_timenet_torch.core.constants import NIG_ALPHA_DEN_MIN
+from nig_timenet_torch.model.scalers import FITTED_SCALE, FittedScale
 
 __all__ = ["NIGHead", "OrderedMeans", "NIGUncertainty", "ConfidenceHead", "grad_scale"]
 
@@ -24,21 +25,37 @@ def grad_scale(x: torch.Tensor, g: float) -> torch.Tensor:
     return x if g == 1.0 else x * g + x.detach() * (1.0 - g)
 
 
-def _scale_arg(module: nn.Module, scale: float | None, fitted_scale: bool) -> float | None:
-    """The fixed scale (float > 0 or None); with ``fitted_scale`` (FX2, ``model.label_scale``) ``module.fitted`` is
-    True and a ``label_scale`` buffer is registered (1.0 until ``fit_label_scale`` writes the training-label scale)."""
-    module.fitted = bool(fitted_scale)
-    if fitted_scale:
-        if scale is not None:
-            raise ValueError("a fitted label scale and a fixed nig_scale are exclusive")
-        module.register_buffer("label_scale", torch.ones(()))
-        return None
-    if scale is not None and not scale > 0:
-        raise ValueError(f"scale must be > 0 or None, not {scale!r}")
-    return None if scale is None else float(scale)
+class _Scaled(nn.Module):
+    """Holds the label scale of a head part: None (label units as they are), a float (hand-set) or
+    ``scalers.FITTED_SCALE`` ("train_std": a FittedScale buffer set by ``scalers.fit_scalers`` on the train labels)."""
+
+    def _init_scale(self, scale, fitted_scale: bool = False) -> None:
+        """``fitted_scale`` (FX2, ``model.label_scale``): the scale is a ``label_scale`` buffer (1.0 until
+        ``fit_label_scale`` writes the training-label scale); it is exclusive with a ``scale`` value."""
+        self.fitted_scale = None
+        self.fitted = bool(fitted_scale)
+        if fitted_scale:
+            if scale is not None:
+                raise ValueError("a fitted label scale and a fixed nig_scale are exclusive")
+            self.register_buffer("label_scale", torch.ones(()))
+            self.scale = None
+        elif scale == FITTED_SCALE:
+            self.scale, self.fitted_scale = FITTED_SCALE, FittedScale()
+        elif scale is None:
+            self.scale = None
+        elif isinstance(scale, str) or not scale > 0:
+            raise ValueError(f"scale must be > 0, None or {FITTED_SCALE!r}, not {scale!r}")
+        else:
+            self.scale = float(scale)
+
+    def _s(self):
+        """The scale as a float / 0-dim tensor (None = no scaling)."""
+        if self.fitted:
+            return self.label_scale
+        return self.fitted_scale() if self.fitted_scale is not None else self.scale
 
 
-class NIGHead(nn.Module):
+class NIGHead(_Scaled):
     """fc (Dense hidden, swish) -> dropout -> out (Dense 4) = raw [mu, nu, alpha, beta].
     mu is linear (no floor); nu/alpha/beta = softplus(raw) + nu_min/alpha_min/beta_min.
     ``l2`` (upstream default 1e-5) is fc's kernel regulariser: ``regularization_loss() = l2 * sum(fc.weight^2)``.
@@ -48,13 +65,14 @@ class NIGHead(nn.Module):
     by a constant, so training equals training on labels scaled by 1 / s, while every output stays in label units.
     TF trained on labels x 100 (reg_target_scale 100); s = 0.01 restores that on a scale-1 artifact (B-052, B-062).
     ``fitted_scale`` (FX2): s is the ``label_scale`` buffer that ``model.label_scale.fit_label_scale`` fits on the
-    training labels (beta floor proportional to the label variance)."""
+    training labels (beta floor proportional to the label variance).
+    ``scale="train_std"``: s is fitted on the train labels (``scalers.fit_scalers``) and saved with the weights."""
 
     def __init__(self, in_features: int, hidden: int = 128, dropout: float = 0.1,
                  nu_min: float = 0.1, alpha_min: float = 2.0, beta_min: float = 0.01, l2: float = 1e-5,
-                 scale: float | None = None, fitted_scale: bool = False):
+                 scale: float | str | None = None, fitted_scale: bool = False):
         super().__init__()
-        self.scale = _scale_arg(self, scale, fitted_scale)
+        self._init_scale(scale, fitted_scale)
         self.l2 = l2
         self.nu_min, self.alpha_min, self.beta_min = nu_min, alpha_min, beta_min
         self.fc = nn.Linear(in_features, hidden)
@@ -73,13 +91,13 @@ class NIGHead(nn.Module):
         nu = F.softplus(p[:, 1:2]) + self.nu_min
         alpha = F.softplus(p[:, 2:3]) + self.alpha_min
         beta = F.softplus(p[:, 3:4]) + self.beta_min
-        s = self.label_scale if self.fitted else self.scale
+        s = self._s()
         if s is not None:
             mu, beta = s * mu, (s * s) * beta
         return mu, nu, alpha, beta
 
 
-class OrderedMeans(nn.Module):
+class OrderedMeans(_Scaled):
     """(mu_high, mu_close, mu_low) = (mu_c + softplus(raw_h), mu_c, mu_c - softplus(raw_l)).
     Input order is (close, high, low), output order (high, close, low) — as builder.py calls it.
 
@@ -90,13 +108,13 @@ class OrderedMeans(nn.Module):
     * ``detach_close``: the high / low offsets are added to ``mu_c.detach()``, so the high and low losses no longer
       move the close mean (E1: they pulled close mu to corr -0.19 with its true mean, B-063)."""
 
-    def __init__(self, scale: float | None = None, detach_close: bool = False, fitted_scale: bool = False):
+    def __init__(self, scale: float | str | None = None, detach_close: bool = False, fitted_scale: bool = False):
         super().__init__()
-        self.scale = _scale_arg(self, scale, fitted_scale)
+        self._init_scale(scale, fitted_scale)
         self.detach_close = bool(detach_close)
 
     def _offset(self, raw: torch.Tensor) -> torch.Tensor:
-        s = self.label_scale if self.fitted else self.scale
+        s = self._s()
         return F.softplus(raw) if s is None else s * F.softplus(raw / s)
 
     def forward(self, mu_c: torch.Tensor, raw_h: torch.Tensor, raw_l: torch.Tensor

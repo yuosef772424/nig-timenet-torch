@@ -129,8 +129,40 @@ def make_plan(dataset: dict, split: SplitSettings) -> tuple[tuple[np.ndarray, np
     plan = purge_embargo_split(le, fs, train_end, train_end, val_end, val_end, pd.Timedelta(hours=split.embargo_hours),
                                feature_end=fe)
     drop = excluded_rows(dataset, split.exclude_coins)  # after the time split: the cut dates do not move
-    idx = tuple(stride_rows(i[~drop[i]], split.max_rows) for i in (plan.train_idx, plan.val_idx, plan.test_idx))
+    parts = top_coin_rows(dataset, tuple(i[~drop[i]] for i in (plan.train_idx, plan.val_idx, plan.test_idx)),
+                          split.top_coins)
+    pick = (lambda i: cross_section_rows(dataset, i, split.max_rows)) if split.cross_section else (
+        lambda i: stride_rows(i, split.max_rows))
+    idx = tuple(pick(i) for i in parts)
     return idx, (train_end, val_end)
+
+
+def top_coin_rows(dataset: dict, parts: tuple, top: int | None) -> tuple:
+    """(train, val, test) rows of the ``top`` coins with the most TRAIN rows (ties: artifact order); None = as given.
+    The ranking reads the train rows only, so nothing of val / test chooses the universe."""
+    if top is None:
+        return parts
+    coin = np.empty(np.asarray(dataset["last_candles"]).shape[0], dtype=np.int64)
+    for i, b in enumerate(dataset["asset_bounds"]):
+        coin[b["start"]:b["end"]] = i
+    counts = np.bincount(coin[np.asarray(parts[0])], minlength=len(dataset["asset_bounds"]))
+    keep = np.argsort(-counts, kind="stable")[:top]
+    return tuple(np.asarray(p)[np.isin(coin[np.asarray(p)], keep)] for p in parts)
+
+
+def cross_section_rows(dataset: dict, idx: np.ndarray, max_rows: int | None) -> np.ndarray:
+    """``idx`` in time-major order (all coins of a timestamp together, a stable sort) and, with ``max_rows``, only as
+    many WHOLE timestamps, evenly strided over the dates, as hold about ``max_rows`` rows."""
+    idx = np.asarray(idx)
+    times = np.asarray(dataset["last_candles"])[idx, TS_COL].astype(np.int64)
+    order = np.argsort(times, kind="stable")
+    idx, times = idx[order], times[order]
+    if max_rows is None or len(idx) <= max_rows:
+        return idx
+    uniq = np.unique(times)
+    keep = max(1, int(round(len(uniq) * max_rows / len(idx))))
+    chosen = uniq[np.unique(np.linspace(0, len(uniq) - 1, keep).astype(np.int64))]
+    return idx[np.isin(times, chosen)]
 
 
 def pick_device(settings: RunSettings) -> torch.device:

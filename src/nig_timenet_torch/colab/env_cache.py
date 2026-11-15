@@ -64,7 +64,7 @@ def _torch_version() -> str:
 def environment_key(pyproject: str, extras: tuple = ("data",), python_version: str | None = None,
                     torch_version: str | None = None) -> tuple[str, list[str]]:
     reqs = requirements_of(Path(pyproject).read_text(encoding="utf-8"), extras)
-    py = python_version or "%d.%d.%d" % sys.version_info[:3]
+    py = python_version or "%d.%d" % sys.version_info[:2]  # not the patch level: an update must not miss the cache
     return cache_key(py, torch_version or _torch_version(), reqs), reqs
 
 
@@ -86,7 +86,8 @@ def unpack(tar_file: Path, venv_dir: str) -> None:
     root = Path(venv_dir).resolve()
     with tarfile.open(tar_file) as tf:
         for m in tf.getmembers():
-            if os.path.isabs(m.name) or not (root / m.name).resolve().is_relative_to(root):
+            # a LEXICAL check: resolve() would follow a symlink already in venv_dir (bin/python -> the system python)
+            if os.path.isabs(m.name) or not Path(os.path.normpath(root / m.name)).is_relative_to(root):
                 raise EnvCacheError(f"{tar_file} holds an unsafe path {m.name!r}; delete it to rebuild the env")
         shutil.rmtree(venv_dir, ignore_errors=True)
         os.makedirs(venv_dir)
@@ -105,7 +106,9 @@ def _pip(run, venv_dir: str, reqs: list[str], torch_version: str, workdir: Path)
     workdir.mkdir(parents=True, exist_ok=True)
     (workdir / "requirements.txt").write_text("\n".join(reqs) + "\n", encoding="utf-8")
     (workdir / "constraints.txt").write_text(f"torch=={torch_version}\n", encoding="utf-8")
-    cmd = [os.path.join(venv_dir, "bin", "python"), "-m", "pip", "install", "-q", "-r",
+    # --ignore-installed: the venv must hold the requirements itself, not rely on what THIS VM's system site already has
+    # (a fresh VM has other versions: a tar built on a VM that already satisfied them would restore an empty env)
+    cmd = [os.path.join(venv_dir, "bin", "python"), "-m", "pip", "install", "-q", "--ignore-installed", "-r",
            str(workdir / "requirements.txt"), "-c", str(workdir / "constraints.txt")]
     r = run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
@@ -130,7 +133,9 @@ def ensure_env(pyproject: str, venv_dir: str, cache_dir: str, *, extras: tuple =
             echo(f"cached env unusable ({type(e).__name__}): rebuilding")
         tar.unlink(missing_ok=True)
     shutil.rmtree(venv_dir, ignore_errors=True)
-    cmd = [python or sys.executable, "-m", "venv", "--system-site-packages", venv_dir]
+    # --without-pip: this Colab's ensurepip fails; the system pip is visible through --system-site-packages and installs
+    # into the venv when run as the venv's python (-m pip)
+    cmd = [python or sys.executable, "-m", "venv", "--system-site-packages", "--without-pip", venv_dir]
     r = run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         raise EnvCacheError(f"venv creation failed (exit {r.returncode}): {(r.stderr or r.stdout)[-500:]}")

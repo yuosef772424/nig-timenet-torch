@@ -17,7 +17,6 @@ total and raw loss, as the TF trainer adds ``model.losses``.
 
 import json
 import time
-from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
@@ -26,10 +25,17 @@ import torch
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.trainer import checkpoint
+from nig_timenet_torch.trainer.groups import group_batches, group_chunks, row_groups
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
+from nig_timenet_torch.trainer.log_groups import GroupedLogs, tensor_logs
 from nig_timenet_torch.trainer.loss_balance import make_balancer
 from nig_timenet_torch.trainer.schedules import LrSettings, ParamSchedule, apply_schedules, lr_at
-from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS, check_selectable, compute_selection_metric
+from nig_timenet_torch.trainer.selection_metric import (
+    GROUP_KEY,
+    SELECTION_METRICS,
+    check_selectable,
+    compute_selection_metric,
+)
 from nig_timenet_torch.trainer.switches import INITS, EmaWeights, apply_init
 from nig_timenet_torch.trainer.targets import resolve_loss, resolve_targets, validate_trainer_config
 from nig_timenet_torch.trainer.task_weighting import UncertaintyWeightedLoss
@@ -54,10 +60,16 @@ class FitSettings:
     grad_clip_norm: float | None = None   # clip the global gradient norm per step (TF used 1.0, B-018)
     ema_decay: float | None = None        # evaluate / select / keep an EMA copy of the weights (TF use_ema, B-018)
     init: str = "torch"                   # trainer.switches.INITS, applied at the start of a fresh fit (B-007)
+    # Keras ``steps_per_execution``: the logs of this many consecutive steps are read back from the device together
+    # (one host sync per group instead of one per step). Speed only: the updates are the same ones, in the same order.
+    steps_per_execution: int = 1
 
     def __post_init__(self):
         if self.epochs < 1 or self.batch_size < 1:
             raise ValueError("epochs and batch_size must be >= 1")
+        if isinstance(self.steps_per_execution, bool) or not isinstance(self.steps_per_execution, int) \
+                or self.steps_per_execution < 1:
+            raise ValueError(f"steps_per_execution must be an integer >= 1, got {self.steps_per_execution!r}")
         if self.grad_clip_norm is not None and not self.grad_clip_norm > 0:
             raise ValueError("grad_clip_norm must be None or > 0")
         if self.ema_decay is not None and not 0.0 < self.ema_decay < 1.0:
@@ -145,6 +157,8 @@ class Trainer:
         validate_trainer_config(tasks_cfg)
         check_selectable(selection_metric)
         self.selection_metric = selection_metric
+        #: True = the last input channel is a group (timestamp) id: batches and evaluation chunks hold whole groups
+        self.group_channel = False
         config = tasks_cfg  # kept as given: it is hashed into the RunIdentity (defaults are never written into it)
         self.model, self.config = model, config
         self.targets_cfg = resolve_targets(config)
@@ -207,9 +221,11 @@ class Trainer:
         logs.update({k: float(v.detach()) for k, v in stats.items()})
         return logs
 
-    def train_step(self, x, y, sample_weight=None, grad_clip_norm: float | None = None) -> dict[str, float]:
+    def train_step(self, x, y, sample_weight=None, grad_clip_norm: float | None = None,
+                   as_tensors: bool = False) -> dict[str, float]:
         """One optimizer step on (x, y) with the model in train() mode; returns scalar logs. ``grad_clip_norm``
-        clips the global norm of every trainer parameter's gradient before the step (None = no clipping)."""
+        clips the global norm of every trainer parameter's gradient before the step (None = no clipping).
+        ``as_tensors``: the logs stay 0-d device tensors (no host sync; ``_train_epoch`` reads them per group)."""
         if self.optimizer is None:
             raise RuntimeError("Trainer has no optimizer")
         self.model.train()
@@ -220,6 +236,8 @@ class Trainer:
         if grad_clip_norm is not None:
             torch.nn.utils.clip_grad_norm_(list(self.parameters()), grad_clip_norm)
         self.optimizer.step()
+        if as_tensors:
+            return tensor_logs(total, raw, per_target, stats)
         return self._logs(total, raw, per_target, stats)
 
     @torch.no_grad()
@@ -239,12 +257,17 @@ class Trainer:
         concatenated outputs (an AUC must not be averaged over batches)."""
         self.model.eval()
         dev = self._device()
-        parts = [self.model(xb.to(dev)) for xb in x.split(batch_size)]
+        gid = row_groups(x) if self.group_channel else None
+        if self.group_channel:  # whole timestamps per chunk (rows are time-major: workflow cross_section)
+            parts = [self.model(x[c].to(dev)) for c in group_chunks(gid, batch_size)]
+        else:
+            parts = [self.model(xb.to(dev)) for xb in x.split(batch_size)]
         outputs = {k: torch.cat([p[k] for p in parts]) for k in parts[0]}
         y = {k: v.to(dev) for k, v in y.items()}
         total, raw, per_target, stats, _ = self.compute_losses(None, y, outputs=outputs)
         logs = self._logs(total, raw, per_target, stats)
-        logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, y, logs)
+        labels = y if gid is None else {**y, GROUP_KEY: gid}  # a rank metric reads the timestamps
+        logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, labels, logs)
         return logs
 
     def _device(self) -> torch.device:
@@ -253,17 +276,18 @@ class Trainer:
         return torch.device("cpu") if first is None else first.device
 
     def _train_epoch(self, x, y, settings: FitSettings, ema: EmaWeights | None = None) -> dict[str, float]:
-        """One shuffled pass; the mean of every log, weighted by batch size; ``ema`` is updated after every step."""
-        sums: defaultdict[str, float] = defaultdict(float)  # a metric accumulator, not a config read
-        dev = self._device()
-        for ix in self.batch_indices(len(x), settings.batch_size):
-            logs = self.train_step(x[ix].to(dev), {k: v[ix].to(dev) for k, v in y.items()},
-                                   grad_clip_norm=settings.grad_clip_norm)
+        """One shuffled pass; the mean of every log, weighted by batch size; ``ema`` is updated after every step.
+        The logs of ``settings.steps_per_execution`` steps are read back together (one host sync per group)."""
+        logs, dev = GroupedLogs(settings.steps_per_execution), self._device()
+        batches = (group_batches(row_groups(x), settings.batch_size) if self.group_channel
+                   else self.batch_indices(len(x), settings.batch_size))
+        for ix in batches:
+            step = self.train_step(x[ix].to(dev), {k: v[ix].to(dev) for k, v in y.items()},
+                                   grad_clip_norm=settings.grad_clip_norm, as_tensors=True)
             if ema is not None:
                 ema.update(self.model)
-            for k, v in logs.items():
-                sums[k] += v * len(ix)
-        return {k: v / len(x) for k, v in sums.items()}
+            logs.add(len(ix), step)
+        return logs.means(len(x))
 
     def _begin_epoch(self, epoch: int, settings: FitSettings, schedules: dict[str, ParamSchedule]) -> float:
         """Everything that must be a pure function of (settings, epoch) so that resume equals an uninterrupted

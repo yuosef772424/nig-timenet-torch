@@ -810,6 +810,7 @@
   },
   "input_clip": 4.0,
   "input_noise_std": 0.1,
+  "input_scaler": "train_std",
   "kernel_sizes": [
    3,
    5,

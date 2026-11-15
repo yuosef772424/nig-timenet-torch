@@ -144,3 +144,54 @@ def test_exclude_coins_refuses_unknown_names_and_removing_everything(art, tmp_pa
         steps.prepare(settings(art, tmp_path, **{"split.exclude_coins": names}))
     with pytest.raises(ValueError, match="coin names"):
         updated(RunSettings(run_dir="x"), {"split.exclude_coins": [""]})
+
+
+def test_cross_section_run_holds_whole_timestamps_and_trains_the_cross_coin_model(art, tmp_path):  # noqa: F811
+    import numpy as np
+
+    from nig_timenet_torch.core.schema import TS_COL
+    from nig_timenet_torch.trainer.groups import row_groups
+    from nig_timenet_torch.workflow.flat_run import time_ids
+
+    over = {"split.cross_section": True, "split.max_rows": 60, "evaluation.battery.enabled": False,
+            "model.overrides": {**RunSettings(run_dir="x").model.overrides, "cross_coin_layers": 1}}
+    r = steps.build(steps.prepare(settings(art, tmp_path, **over), tmp_path / "out"))
+    times = np.asarray(r.dataset["last_candles"])[:, TS_COL].astype(np.int64)
+    plain = steps.prepare(settings(art, tmp_path), None)
+    for stage in ("train", "val", "test"):
+        t = times[r.idx[stage]]
+        assert (np.diff(t) >= 0).all()                                   # time-major
+        full = times[plain.idx[stage]]                                   # every kept timestamp is kept whole
+        assert all((t == u).sum() == (full == u).sum() for u in np.unique(t))
+    x = r.x["train"]
+    assert x.shape[2] == plain.x["train"].shape[2] + 1 and r.trainer.group_channel
+    assert np.array_equal(row_groups(x).numpy(), time_ids(r.dataset, r.idx["train"]))
+    assert hasattr(r.trainer.model, "cross_coin")
+    steps.train(r)
+    rep = steps.test_step(r)
+    assert rep["n_rows"] == len(r.idx["test"]) and r.trainer.model.cross_coin.last_attention_rows > 0
+
+
+def test_top_coins_keeps_the_coins_with_the_most_train_rows_in_every_split(art, tmp_path):  # noqa: F811
+    import numpy as np
+
+    from nig_timenet_torch.workflow.flat_run import row_coins
+
+    full = steps.prepare(settings(art, tmp_path), None)
+    top = steps.prepare(settings(art, tmp_path, **{"split.top_coins": 2}), None)
+    names, counts = np.unique(row_coins(full.dataset, full.idx["train"]).astype(str), return_counts=True)
+    kept = set(row_coins(top.dataset, top.idx["train"]).astype(str))
+    assert len(kept) == 2 and min(counts[np.isin(names, list(kept))]) >= np.sort(counts)[-2]
+    for stage in ("val", "test"):
+        assert set(row_coins(top.dataset, top.idx[stage]).astype(str)) <= kept
+    with pytest.raises(ValueError, match="top_coins"):
+        updated(RunSettings(run_dir="x"), {"split.top_coins": 0})
+
+
+def test_rank_ic_selection_metric_reads_the_timestamps_on_a_cross_section_run(art, tmp_path):  # noqa: F811
+    over = {"split.cross_section": True, "train.selection_metric": "val_rank_ic_reg", "train.epochs": 2,
+            "evaluation.battery.enabled": False,
+            "model.overrides": {**RunSettings(run_dir="x").model.overrides, "cross_input": "relative"}}
+    r = steps.train(steps.build(steps.prepare(settings(art, tmp_path, **over), tmp_path / "out")))
+    vals = [e["val_selection_metric"] for e in r.result.history]
+    assert all(-1.0 <= v <= 1.0 for v in vals) and r.result.best_value == max(vals)

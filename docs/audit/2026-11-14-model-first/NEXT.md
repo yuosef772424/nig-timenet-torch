@@ -1,0 +1,105 @@
+# Model-first audit — what remains (2026-11-14)
+
+Read `NOTES.md` first. The loop this round leaves behind:
+
+`run the checks -> the report names the stage -> fix that one thing -> run the checks again -> compare`
+
+## 1. Commands
+
+```bash
+# everything, synthetic data with a known answer (~90 s on a CPU)
+python -m nig_timenet_torch.doctor e1 --out doctor_out/e1
+
+# real candles without Drive: build once (public 4h klines, sealed coins refused), then run (~4 min on a CPU)
+python -m nig_timenet_torch.data_io.vision_slice /data/real4h --raw /data/raw4h
+python -m nig_timenet_torch.doctor /data/real4h --out doctor_out/real
+
+# the owner's artifact, or a FINISHED run's best weights (GPU smoke job or Colab)
+python -m nig_timenet_torch.doctor /content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1 \
+    --out doctor_out/drive --full
+python -m nig_timenet_torch.doctor ARTIFACT --run-dir RUN_DIR --trained --out doctor_out/run
+
+# after a fix: same command, another --out, then compare the "Verdict per card" tables and readiness.json
+python -m nig_timenet_torch.doctor /data/real4h --out doctor_out/real_after --model '{"dropout": 0.1}'
+
+# the model before this audit, for comparison
+python -m nig_timenet_torch.doctor e1 --out doctor_out/e1_old \
+    --model '{"bn_warmup": false, "order_detach_close": false, "nig_scale": null, "input_scaler": "none"}'
+```
+
+Cards: `cards/A_information_flow.md`, `B_trainer.md`, `C_data.md`, `D_metrics.md`, `E_readiness.md`.
+
+## 2. What the readiness report says today (new default, real slice, 3 epochs, one seed)
+
+Not ready for trading. In reading order:
+
+1. Data: sound (alignment, purge, codec, units all pass). The test period is another volatility regime (warn).
+2. Trainer: learns. Fails left: the E1 oracle slope of the low head (1.65: mu shrunk) and the short E1 run's
+   close signal (warn).
+3. Model: no stage loses the labels' information; the trunk holds what the simple features hold (low: 0.17 vs
+   0.22 on 3,000 rows, a warning inside the probe's noise).
+4. Inputs: no readable signal for the close label (ceiling IC 0.013). **This is the stage to work on**: the high /
+   low heads already sit at the simple-model ceiling (0.338 vs 0.339, 0.388 vs 0.411), so a better model of the SAME
+   inputs cannot become profitable through direction.
+5. Goal: no use of the outputs is profitable after 0.08 % per side.
+
+## 3. Ordered by expected effect on the model
+
+| # | what | why | what settles it |
+|---|---|---|---|
+| 1 | New inputs for direction (volume, taker flow, funding, cross-coin context) | N-08: the ceiling for close is ~0 on 3 log-move channels; the kline files already carry volume and taker-buy volume (`vision_slice` reads the first six columns only) | add channels to `build_logret_dataset`, rerun card C: the close ceiling must rise above 0.02 before any model work on direction |
+| 2 | Confirm the new default on the Drive artifact, 3 seeds, full length (GPU) | N-07 is one seed, 3 epochs, 60 coins | `baseline` job with the default config x 3 seeds, then `doctor --run-dir ... --trained --include-test`; accept if high / low IC and NLL beat the pre-audit seeds on every seed |
+| 3 | Low-head shrinkage (O-1) | slope of the label on mu 1.6-1.7 on the low head, 1.2 on high, on E1 and on real data; dropout dilution explains ~0.87 of spread, not 1.6 | (a) fit a NIG head on PERFECT features with skewed labels: if the slope stays > 1 the likelihood's location is the cause (mode, not mean); (b) arms with `readout_dropout` 0.1 and `feature_dropout` 0; (c) a registered affine recalibration of mu fitted on validation (`eval/calibrator.py`) and its effect on the limit-order rows |
+| 4 | Model size against independent labels | N-10: 14 parameters per independent label on 60,000 rows; the full train split of the slice (565k rows) gives ~68k independent labels for ~100k parameters | card C on the full rows; arms `d_model` 32 / 16 on the real slice: val loss and IC must not fall |
+| 5 | Learning rate | N-14: 1e-3 is 15-38x below the sweep's best | arms lr 3e-3 and 1e-2 with warm-up on the real slice, 3 seeds; read card B (A4, mode gap) and val IC |
+| 6 | Selection | N-13: smoothed selection keeps the wrong epoch's weights; NaN validation never stops | keep the weights of the epoch with the best RAW value inside the smoothing window; count a non-finite value as a wasted epoch; a rank-IC selection metric for the high / low heads |
+| 7 | E2 gate B alarm with the fitted scale | FX1 saw a confidence-gap alarm with `nig_scale` 0.01 on permuted labels | `gates` job on the new default, 3 seeds |
+| 8 | `model/probe.py` folds | N-15: row folds on coin-major rows | reuse `doctor.common.time_folds` in the health report's probe |
+
+## 4. Needs a GPU smoke job
+
+- `python -m nig_timenet_torch.doctor ARTIFACT --full` end to end on CUDA (the GRU backward in eval mode of gate A
+  needs cuDNN off: `trainer/trace.py` handles it; the doctor's own passes are forward-only or train-mode).
+- Mixed precision: wrap the NIG heads (and `ordered_means`) in `autocast(enabled=False)` before reading T-sharp or
+  coverage; `InputScaler` and `FittedScale` buffers are float32 and must stay so; the loss already casts to float32.
+- `torch.compile`: `model._tap` reads a Python attribute per call (a guard, not a graph break); recompile after
+  `stream_taps` is entered, or run the doctor on the uncompiled module.
+- Step time with the input scaler (one subtraction and division per batch).
+
+## 5. Open questions
+
+- O-1: is the slope > 1 of the low head a property of the likelihood under skew or of the training? (table row 3)
+- O-2: N-09's AUC 0.53 on the close class head: drift of the period or timing? Settle with the same check on test
+  and on a second period, next to always-up / always-down.
+- O-3: does `input_scaler` matter on real data on its own? One arm without it on the real slice.
+
+## 6. CI error on PR #55: fixed (2026-11-14, second session)
+
+Four tests still described the pre-audit default; each was updated through its own path, none weakened or skipped:
+`tests/model/test_assembly_pins.py` (`UPDATE_MODEL_PINS=1`: the four new override keys), `tests/jobs/test_baseline_pin.py`
+(`PIN_UPDATE=1`: new default model, new `fitted_scalers` key), `tests/model/test_bn_warmup.py` (the "default keeps the
+state_dict" test now builds the pre-audit model explicitly), `notebooks/main.ipynb` `CHANGES` (the four new
+`model.overrides`). Whole suite with `-m "slow or not slow"`: 978 passed, 2 skipped; `ruff check src tests` clean.
+
+## 7. After the third session (2026-11-15): transformer, SwiGLU, head
+
+Read `TRANSFORMER_HEAD_RESULTS.md`. What remains, by expected effect:
+
+| # | what | why | what settles it |
+|---|---|---|---|
+| 1 | Inputs, not encoders (unchanged from section 3 row 1) | N-20: the outputs go around the encoder; every encoder and head variant lands on the same IC | add volume / taker-flow channels, rerun card C (ceiling) and card A (`all blocks`, `enc_out` `d_ic`): the encoder is worth work only once these stop being ~0 |
+| 2 | `ffn: none` at the owner's transformer size (d_model 384, 6 blocks, 8 heads) on the Drive artifact | N-21 was measured at d_model 64, 2 blocks, 60 coins | GPU: `quick_arms ... --arms transformer:3e-4 --model '{"d_model":384,"num_layers":6,"num_heads":8,"num_kv_heads":4}'` with and without `"ffn":"none"`, 2 seeds, to the early stop; adopt if val loss and IC do not fall |
+| 3 | Attention head vs Dense to the early stop on the Drive artifact, transformer AND GRU, 2 seeds | N-23: a 0.013 gain at 60,000 rows on the slice; the earlier Colab table stopped at 10 epochs | `--arms transformer:3e-4,transformer:3e-4:scalar_joint,gru:3e-4,gru:3e-4:scalar_joint --rows 60000 --epochs 40 --patience 8`, seeds 0 and 1; a head is better only if it wins on both seeds by more than the seed spread |
+| 4 | A faster-starting attention head | N-24: near-constant at init, lr-starved at 1e-5 | initialise `gain` / the query scale so the output sd across rows at init matches the Dense head's (~0.16), then repeat row 3 at lr 1e-5 |
+| 5 | Staged training (owner 2026-11-15) | train on a part until memorisation shows, add data, lower lr, repeat | spec for the next session: `cards/F_iterative_training.md` (ROADMAP ST1) |
+
+## 8. After the fourth session (2026-11-15): multi-coin model
+
+| # | what | why | what settles it |
+|---|---|---|---|
+| 1 | Select cross-coin runs by a rank metric | N-28: the gain is in the test rank IC, `val_raw_loss` does not see it and stops the `mean` arm at epoch 2-3 | a registered selection metric = mean cross-sectional rank IC of the regression heads on validation; rerun section 6b with it |
+| 2 | Battery on the cross-coin model | the close rank IC 0.05 is only worth something as a market-neutral trade after costs | `quick_arms ... --cross-section --battery` on the Drive artifact, 2 seeds, read the market-neutral rows next to their baselines |
+| 3 | Doctor / health report on a cross-section run | N-30 | route their input builds through `flat_inputs(..., time_channel)` |
+| 4 | A rank head next to the NIG heads | N-27: the relative target is a different product; cheap to add as an extra head once row 1 exists | arm with / without, same rows, 2 seeds |
+| 5 | Turn the relative-input rank gain into something tradeable | N-33: close rank IC 0.085, gross edge ~0.08 % per 4h period, cost 0.32 % | (a) a longer target (two candles, as the owner's `1-e5` data; then 6 bars) so the move per trade grows against the cost; (b) rebalance only when the rank changes by more than a threshold (turnover is what pays the cost); (c) all rows of the 100 coins and a lower lr; (d) volume / taker-flow channels in the artifact, relative inputs applied to them too |
+
