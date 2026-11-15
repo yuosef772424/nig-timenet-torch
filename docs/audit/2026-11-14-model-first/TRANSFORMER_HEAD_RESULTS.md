@@ -278,17 +278,17 @@ read through the bridge while the runs were alive; rows marked "running" had no 
 |---|---|---|---|---|---|---|---|
 | 3e-4 | dense | -6.541 | 9 / 19 | 0.401 | 0.441 | 0.032 | stopped early |
 | 3e-4 | scalar_joint | -6.505 | 12 / 21 | 0.397 | 0.420 | 0.026 | stopped early |
-| 1e-5 | dense | -6.504 at epoch 61 | still falling (~0.002 per epoch) | | | | running (cap 80) |
-| 1e-5 | scalar_joint | -6.412 at epoch 58 | still falling (~0.003 per epoch) | | | | running (cap 80) |
+| 1e-5 | dense | -6.513 | 78 / 80 | 0.402 | 0.436 | 0.030 | epoch cap, no stop |
+| 1e-5 | scalar_joint | -6.452 | 80 / 80 | 0.394 | 0.431 | 0.036 | epoch cap, no stop |
 
 lr 1e-5, sel at epochs 10 / 20 / 30 / 40 / 50: dense -6.280 / -6.386 / -6.454 / -6.484 / -6.495; scalar_joint
 -5.812 / -6.174 / -6.311 / -6.361 / -6.392.
 
 Reading: on the Drive artifact the Dense head is better on this trunk at lr 3e-4 to the early stop (by 0.036, low IC
 0.441 vs 0.420), the same sign as the slice gave for the transformer without SwiGLU (section 3a). At lr 1e-5 the
-attention head starts 0.47 behind, closes to 0.09 by epoch 58 and both curves flatten; it has not caught the Dense
-head in 58 epochs and neither run has stopped. The attention head does run for more epochs, as the owner saw; here
-it does not end better. One seed, one trunk (the owner's run used another trunk: section 8).
+attention head starts 0.47 behind, closes to 0.06 by epoch 80 and both curves flatten (-6.513 against -6.452 at the
+80-epoch cap, neither stopped; IC equal inside 0.01). The attention head does run for more epochs, as the owner saw;
+here it does not end better. One seed, one trunk (the owner's run used another trunk: section 8).
 
 7b. Multi-coin block, GRU, lr 3e-4, 600,000 rows as whole timestamps (~1,100 timestamps of 535 coins), patience 6:
 
@@ -297,16 +297,17 @@ it does not end better. One seed, one trunk (the owner's run used another trunk:
 | B whole-timestamp batches, no block | 1 | -6.490 | 7 / 8 | 0.395 | 0.436 | 0.066 | stopped early |
 | C + attention block | 1 | -6.474 | 2 / 8 | 0.398 | 0.439 | 0.061 | stopped early |
 | E + mean block | 1 | -6.473 | 2 / 8 | 0.399 | 0.446 | 0.066 | stopped early |
-| B / C / E | 0 | -6.511 (epoch 13) / -6.487 (epoch 11) / -6.473 (epoch 11) | | | | | running |
+| B whole-timestamp batches, no block | 0 | -6.511 | 13 / 17 | 0.395 | 0.436 | 0.052 | stopped early |
+| E + mean block | 0 | -6.508 | 13 / 16 | 0.411 | 0.453 | 0.054 | stopped early |
+| C + attention block | 0 | | | | | | not finished when read |
 
-Reading: on the Drive artifact, seed 1, the block does not repeat the slice's gain: low IC +0.003 (attention) and
-+0.010 (mean), close IC unchanged, validation loss worse by 0.016, and both block arms have their best epoch at
-epoch 2. Not confirmed. Two differences from the slice run that could matter and were not separated: 535 coins per
-timestamp instead of ~57 (one timestamp is already a batch of 535 rows, so an epoch has ~1,100 steps of highly
-correlated rows), and selection by `val_raw_loss`, which the slice already showed does not see the rank gain (NEXT
-section 8 row 1). The close IC of 0.06 in ALL three arms is higher than in per-coin row samples (0.02-0.04): with
-whole timestamps the test IC is measured over 535 coins per timestamp, so it is not comparable with the strided-row
-tables above and is not a model effect.
+Reading: on the Drive artifact the `mean` block gives a small gain in the same direction on both seeds for the two
+range heads (high +0.016 / +0.004, low +0.017 / +0.010) and nothing for close (+0.002 / 0.000); validation loss equal
+(seed 0) or worse (seed 1, where the block arm's best epoch is epoch 2). Smaller than on the slice (low +0.022, close
++0.039) and not on the head that matters for direction. Selection was by `val_raw_loss`, which does not see a rank
+gain (section 9 uses a rank metric). The close IC of 0.05-0.07 in ALL arms is higher than in per-coin row samples
+(0.02-0.04): with whole timestamps the test IC is measured over 535 coins per timestamp, so it is not comparable with
+the strided-row tables above and is not a model effect.
 
 ## 8. The owner's `1-e5` runs on Drive (read by a subagent, read-only, 2026-11-15)
 
@@ -321,7 +322,8 @@ transformer, not read), each with `summary.json`, `learning_curves.csv`, `test_r
   against 0.011 for `y_close_reg` of the present artifact (2,506,192 4h windows): the labels are 6-7 times larger.
   The summaries name `preprocessing_output_1` as the data path, but the artifact now at that path was created
   2026-11-14, after these runs; no artifact with ~318k rows is on Drive any more. The label definition of those
-  runs was not found.
+  runs was not found in the folder; the owner (2026-11-15): the target of that dataset is built from TWO candles
+  (a two-bar horizon), where the present artifact uses one.
 - Test numbers as recorded (rank IC high / low / close): conv1d_net 0.300 / 0.409 / 0.073, no_dense_net 0.287 /
   0.393 / 0.076, chart_cnn 0.112 / 0.111 / 0.006, itransformer 0.284 / 0.389 / 0.078. Market-neutral, top / bottom
   20 % (the best ratio, chosen on TEST): +0.22 % / +0.10 % / -0.83 % / +0.65 % per period; with the ratio chosen on
