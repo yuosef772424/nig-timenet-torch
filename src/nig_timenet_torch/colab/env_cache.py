@@ -105,7 +105,9 @@ def _pip(run, venv_dir: str, reqs: list[str], torch_version: str, workdir: Path)
     workdir.mkdir(parents=True, exist_ok=True)
     (workdir / "requirements.txt").write_text("\n".join(reqs) + "\n", encoding="utf-8")
     (workdir / "constraints.txt").write_text(f"torch=={torch_version}\n", encoding="utf-8")
-    cmd = [os.path.join(venv_dir, "bin", "python"), "-m", "pip", "install", "-q", "-r",
+    # --ignore-installed: the venv must hold the requirements itself, not rely on what THIS VM's system site already has
+    # (a fresh VM has other versions: a tar built on a VM that already satisfied them would restore an empty env)
+    cmd = [os.path.join(venv_dir, "bin", "python"), "-m", "pip", "install", "-q", "--ignore-installed", "-r",
            str(workdir / "requirements.txt"), "-c", str(workdir / "constraints.txt")]
     r = run(cmd, capture_output=True, text=True)
     if r.returncode != 0:

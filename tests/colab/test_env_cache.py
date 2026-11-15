@@ -82,6 +82,7 @@ def test_first_call_builds_and_packs_the_second_restores_without_pip(tmp_path, p
     assert "--without-pip" in run.cmds[0] and "--system-site-packages" in run.cmds[0]  # ensurepip fails on Colab
     pip = run.cmds[1]
     assert pip[:3] == [str(Path(venv, "bin", "python")), "-m", "pip"] and "-c" in pip
+    assert "--ignore-installed" in pip
     constraints = Path(pip[pip.index("-c") + 1]).read_text()
     assert constraints == "torch==2.15.0+cu126\n"  # torch is pinned, never installed
     assert "torch" not in Path(pip[pip.index("-r") + 1]).read_text()
