@@ -90,3 +90,20 @@ def test_bad_options_raise():
         build_model(ms, {"4h": T, "1d": T}, {"4h": F_, "1d": F_})
     with pytest.raises(ValueError, match="mode"):
         ScalarOutputAttention(8, 3, 4, "nope")
+
+
+def test_linear_head_is_one_layer_with_the_dense_contract_and_reads_the_trunk():
+    dense, lin = _model("dense"), _model("linear")
+    keys = [k for k in lin.state_dict() if k.startswith("nig_high.")]
+    assert keys == ["nig_high.out.weight", "nig_high.out.bias"] and lin.nig_high.out.weight.shape == (4, 64)
+    assert not hasattr(lin, "head_seq_norm") and float(lin.regularization_loss().detach()) > 0  # linear_path only
+    x = torch.randn(6, T, F_) * 0.02
+    od, ol = dense(x), lin(x)
+    assert set(od) == set(ol) and all(torch.isfinite(v).all() for v in ol.values())
+    assert (ol["y_high_nu"] > 0.1).all() and (ol["y_high_alpha"] > 2.0).all()
+    assert "nig_high.fc" not in lin.activation_points
+
+
+def test_unknown_nig_head_raises():
+    with pytest.raises(ValueError, match="nig_head must be one of"):
+        _model("mlp")

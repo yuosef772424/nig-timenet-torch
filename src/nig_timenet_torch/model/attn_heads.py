@@ -3,7 +3,8 @@
 TAGS: attention head, scalar output attention, nig head, joint attention, factorized attention, head sequence, dense
     readout, experiment
 PITFALLS: an EXPERIMENT (owner 2026-11-15, the idea comes from an AI-written note: not a decision): default
-    ``nig_head='dense'`` builds the old model byte for byte. Single-timeframe only. The head sequence is
+    ``nig_head='dense'`` builds the old model byte for byte; ``linear`` (one Linear layer) is the experiment's
+    control. Single-timeframe only. The head sequence is
     [branch embedding ; encoder tokens after final_norm] normalised by ``head_seq_norm``; its length is fixed at build
     (``n_tokens``). Computed in float32. The doctor's head probes read ``head.fc`` and do not apply to this head.
 """
@@ -15,16 +16,24 @@ import torch.nn.functional as F
 from torch import nn
 
 from nig_timenet_torch.model.encoders import ENCODERS
-from nig_timenet_torch.model.nig_layers import _Scaled
+from nig_timenet_torch.model.layers import RMSNorm
+from nig_timenet_torch.model.nig_layers import NIGHead, _Scaled
 
-__all__ = ["NIG_HEADS", "check_nig_head", "ScalarOutputAttention", "ScalarNIGHead", "n_encoder_tokens"]
+__all__ = ["NIG_HEADS", "check_nig_head", "ScalarOutputAttention", "ScalarNIGHead", "LinearNIGHead",
+           "n_encoder_tokens", "nig_head_builder", "reads_sequence"]
 
-NIG_HEADS = ("dense", "scalar_joint", "scalar_factorized")
+#: nig_head name -> the attention mode of ScalarNIGHead, or None for a head that reads the pooled trunk
+NIG_HEADS = {"dense": None, "linear": None, "scalar_joint": "joint", "scalar_factorized": "factorized"}
+
+
+def reads_sequence(name: str) -> bool:
+    """True for the heads that read the head sequence [branch embedding ; encoder tokens], not the pooled trunk."""
+    return NIG_HEADS[name] is not None
 
 
 def check_nig_head(name: str) -> str:
     if name not in NIG_HEADS:
-        raise ValueError(f"nig_head must be one of {NIG_HEADS}, not {name!r}")
+        raise ValueError(f"nig_head must be one of {tuple(NIG_HEADS)}, not {name!r}")
     return name
 
 
@@ -102,3 +111,38 @@ class ScalarNIGHead(_Scaled):
         if s is not None:
             mu, beta = s * mu, (s * s) * beta
         return mu, nu, alpha, beta
+
+
+class LinearNIGHead(NIGHead):
+    """The least free head: (mu, nu, alpha, beta) = one Linear(trunk -> 4), no hidden layer (same floors, scale and
+    output contract as ``NIGHead``). The control of the attention-head experiment: is a gain from the attention
+    mechanism or only from taking the hidden Dense layer away?"""
+
+    def __init__(self, in_features: int, dropout: float = 0.0, **nig):
+        super().__init__(in_features, 1, dropout, **nig)
+        del self.fc                                    # no hidden layer: nothing to regularise, nothing to probe
+        self.out = nn.Linear(in_features, 4)
+
+    def regularization_loss(self) -> torch.Tensor:
+        return torch.zeros((), device=self.out.weight.device)
+
+    def raw_params(self, h: torch.Tensor) -> torch.Tensor:
+        return self.out(self.drop(h))
+
+
+#: nig_head name -> (h_dim, dense options, NIG options) -> a head that reads the pooled trunk
+POOLED_HEADS = {"dense": lambda h_dim, dense, nig: NIGHead(h_dim, dense["hidden"], dense["dropout"], **nig),
+                "linear": lambda h_dim, dense, nig: LinearNIGHead(h_dim, 0.0, **nig)}  # trunk_drop did the dropout
+
+
+def nig_head_builder(model, name: str, h_dim: int, d_model: int, n_tokens, nig: dict, *, dense: dict,
+                     attn_dropout: float):
+    """() -> a new NIG head of kind ``name``. A sequence head also gives ``model`` its ``head_seq_norm``;
+    ``n_tokens()`` is the encoder's token count (called for a sequence head only)."""
+    if name in POOLED_HEADS:
+        return lambda: POOLED_HEADS[name](h_dim, dense, nig)
+    if model.timeframes:
+        raise NotImplementedError("a sequence nig_head is defined on one timeframe only")
+    model.head_seq_norm = RMSNorm(d_model)
+    n_tok = 1 + n_tokens()
+    return lambda: ScalarNIGHead(d_model, n_tok, NIG_HEADS[name], attn_dropout, **nig)

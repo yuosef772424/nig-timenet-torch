@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
-from nig_timenet_torch.model.attn_heads import ScalarNIGHead, check_nig_head, n_encoder_tokens
+from nig_timenet_torch.model.attn_heads import check_nig_head, nig_head_builder, reads_sequence
 from nig_timenet_torch.model.encoders import ENCODERS, CausalConv1D, EncoderDims, tcn_n_blocks
 from nig_timenet_torch.model.heads import (
     HEAD_REGISTRY,
@@ -128,16 +128,12 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                             if kinds_with_task(self.head_types[t], "evidential")]
         self.head_specs = {t: head_spec(k, t) for t in self.nig_targets
                            for k in kinds_with_task(self.head_types[t], "evidential")}
-        if nig_head != "dense":  # experiment (model/attn_heads.py): the heads read [branch embedding; encoder tokens]
-            if self.timeframes:
-                raise NotImplementedError("nig_head != 'dense' is defined on one timeframe only")
-            self.head_seq_norm = RMSNorm(d_model)
-            n_tok = 1 + n_encoder_tokens(encoder, branches[0][1], patch_len, stride)
+        head = nig_head_builder(self, nig_head, h_dim, d_model,
+                                lambda: ENCODERS.get(encoder).n_tokens(branches[0][1], patch_len, stride),
+                                dict(nu_min=nu_min, alpha_min=alpha_min, beta_min=beta_min, scale=nig_scale),
+                                dense=dict(hidden=head_hidden, dropout=readout_p), attn_dropout=nig_head_dropout)
         for t in self.nig_targets:
-            setattr(self, f"nig_{t}", ScalarNIGHead(d_model, n_tok, nig_head.removeprefix("scalar_"), nig_head_dropout,
-                                                    nu_min, alpha_min, beta_min, scale=nig_scale)
-                    if nig_head != "dense" else
-                    NIGHead(h_dim, head_hidden, readout_p, nu_min, alpha_min, beta_min, scale=nig_scale))
+            setattr(self, f"nig_{t}", head())
             setattr(self, f"unc_{t}", NIGUncertainty(unc_max))
             setattr(self, f"conf_{t}", ConfidenceHead(h_dim))
         self.apply_order = enforce_order and set(TARGET_COLUMNS) <= set(self.nig_targets)
@@ -270,7 +266,7 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         return ENCODERS.get(self.encoder).encode(self, tok, sfx)
 
     def forward(self, x) -> dict[str, torch.Tensor]:
-        if self.nig_head_kind == "dense":
+        if not reads_sequence(self.nig_head_kind):
             h = self.trunk(x)
             raw = {t: getattr(self, f"nig_{t}")(h) for t in self.nig_targets}
         else:  # experiment: the NIG heads read the head sequence, the confidence / class heads the pooled trunk
