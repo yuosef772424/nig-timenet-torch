@@ -101,4 +101,5 @@ Read `TRANSFORMER_HEAD_RESULTS.md`. What remains, by expected effect:
 | 2 | Battery on the cross-coin model | the close rank IC 0.05 is only worth something as a market-neutral trade after costs | `quick_arms ... --cross-section --battery` on the Drive artifact, 2 seeds, read the market-neutral rows next to their baselines |
 | 3 | Doctor / health report on a cross-section run | N-30 | route their input builds through `flat_inputs(..., time_channel)` |
 | 4 | A rank head next to the NIG heads | N-27: the relative target is a different product; cheap to add as an extra head once row 1 exists | arm with / without, same rows, 2 seeds |
+| 5 | Turn the relative-input rank gain into something tradeable | N-33: close rank IC 0.085, gross edge ~0.08 % per 4h period, cost 0.32 % | (a) a longer target (two candles, as the owner's `1-e5` data; then 6 bars) so the move per trade grows against the cost; (b) rebalance only when the rank changes by more than a threshold (turnover is what pays the cost); (c) all rows of the 100 coins and a lower lr; (d) volume / taker-flow channels in the artifact, relative inputs applied to them too |
 

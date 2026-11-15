@@ -338,3 +338,65 @@ seed, with VAL and TEST disagreeing in sign for the best model. What would make 
 (its definition has to come from the owner or from the TF export of 2026-11-10), record it in the manifest, and
 rerun the four models on 2 seeds with the ratio chosen on VAL.
 
+## 9. The multi-coin model, improved: relative inputs, the best 100 coins, selection by rank (fifth session)
+
+Owner: "the features are in the differences between coins"; "choose the best 100 coins"; "improve its trainer".
+
+- `cross_input: relative` (model/cross_coin.py `RelativeInputs`): inside each timestamp and bar by bar, every coin's
+  scaled window becomes [own, own - market, (own - market) / cross-sectional sd, market], market = the mean over the
+  coins of that timestamp at that bar. The encoder reads the whole window of each coin AGAINST the others; the
+  model still gives one prediction (all heads) per coin.
+- `split.top_coins: 100`: the 100 coins with the most TRAIN rows (the longest history; the artifact holds no volume
+  to rank liquidity by; chosen from train rows only).
+- Trainer: whole-timestamp batches and evaluation chunks (section 6), and selection / early stop by
+  `val_rank_ic_reg` (mean cross-sectional rank IC of the three NIG means on validation) instead of `val_raw_loss`.
+
+Drive artifact, Colab L4, top 100 coins, 400,000 rows as whole timestamps, GRU, lr 3e-4, patience 6, battery with
+`n_variants` 3 and 0.08 % per side. `val` = best validation rank IC (higher is better); IC = TEST rank IC by timestamp:
+
+| arm | seed | val | best epoch / epochs | IC high | IC low | IC close | close AUC |
+|---|---|---|---|---|---|---|---|
+| B per-coin model, whole-timestamp batches | 0 | 0.272 | 2 / 8 | 0.319 | 0.387 | 0.059 | 0.517 |
+| B | 1 | 0.271 | 1 / 7 | 0.320 | 0.376 | 0.050 | 0.528 |
+| R + relative inputs | 0 | 0.291 | 2 / 8 | 0.330 | 0.415 | 0.090 | 0.527 |
+| R | 1 | 0.288 | 4 / 10 | 0.327 | 0.410 | 0.079 | 0.522 |
+| RE + relative inputs + mean block | 0 | 0.288 | 2 / 8 | 0.330 | 0.414 | 0.084 | 0.531 |
+| RE | 1 | | | | | | not finished when read |
+
+Real slice (60 coins, 200,000 rows, CPU), seed 0, the same three arms: IC high / low / close B 0.355 / 0.419 / 0.051,
+R 0.366 / 0.435 / 0.070, RE 0.367 / 0.436 / 0.063 (seed 1 still running when read).
+
+Profit after cost, TEST (Drive, top 100; market-neutral = long the top share / short the bottom share ranked by the
+close mean, 584 periods, 4 sides of cost = 0.32 % per period; the row marked VAL is the share chosen on validation):
+
+| arm | seed | market-neutral, VAL-chosen share | top / bottom 20 % | close direction trades |
+|---|---|---|---|---|
+| B | 0 | -0.241 % (20 %) | -0.241 % | -0.132 % (always up -0.094 %) |
+| B | 1 | -0.247 % (30 %) | -0.228 % | -0.197 % |
+| R | 0 | -0.226 % (20 %) | -0.226 % | -0.139 % |
+| R | 1 | -0.265 % (20 %) | -0.265 % | -0.140 % |
+
+Reading:
+- The relative inputs are the first change in this audit that moves the TEST rank IC on the Drive artifact on both
+  seeds: low +0.031, close +0.030 (0.055 -> 0.085), high +0.009; validation rank IC +0.018. The same direction on the
+  slice. Each seed of R is above each seed of B on all three heads. The owner's idea holds: what a coin does against
+  the others carries information the coin's own window does not.
+- The mean block on top of the relative inputs adds nothing (RE = R): once the differences are in the input, the
+  trunk-level exchange is redundant.
+- It is not profit. Every market-neutral row is negative after cost in every arm (-0.23 % .. -0.27 % per 4h
+  period), and the relative inputs do not change that: the gross edge of the ranking is about +0.06 .. +0.09 % per
+  period against a cost of 0.32 % for four sides. A close rank IC of 0.085 on 4h bars is too small for a
+  strategy that turns the whole book over every bar. The close direction trades lose to "always up" in every arm.
+- Best epochs are 1-4 of 7-10: with 4,000 timestamps the model reaches its best rank quickly and then drifts; more
+  timestamps (all rows of the 100 coins) and a lower lr are the obvious next arms.
+- 2 seeds, one artifact, one encoder: a look by rule C4, though a consistent one. Not run: the doctor on this model
+  (N-30), a longer horizon label (the owner's `1-e5` data used a two-candle target, section 8), fewer rebalances.
+
+Commands (Colab, after `colab_ops setup BRANCH`; the same file follows and resumes the arms without the bridge):
+
+```bash
+python docs/audit/2026-11-14-model-first/colab_follow.py resume    # start / continue every unfinished arm
+python docs/audit/2026-11-14-model-first/colab_follow.py status
+python docs/audit/2026-11-14-model-first/colab_follow.py results   # test table, battery, copy to Drive
+```
+
