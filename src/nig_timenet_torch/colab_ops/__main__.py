@@ -41,6 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--dest", default="/content/nig-timenet-torch")
     t.add_argument("--no-artifact", action="store_true")
     t.add_argument("--no-install", action="store_true")
+    t.add_argument(
+        "--torch-key", default=None, help="torch version the env cache key is for (a fresh Colab's, e.g. 2.14.1+cu130)"
+    )
     a = sub.add_parser("arms", help="small-sample encoder x lr arms (quick_arms.py) in the background")
     a.add_argument("out")
     a.add_argument("--arms", default="gru:3e-4,transformer:3e-4")
@@ -87,7 +90,12 @@ def main(argv: list[str] | None = None) -> int:
     elif a.cmd == "put":
         print(b.put(a.local, a.remote).get("stdout", ""))
     elif a.cmd == "setup":
-        r = b.exec(recipes.setup_script(a.branch, a.dest, artifact=not a.no_artifact, install=not a.no_install), 1500)
+        r = b.exec(
+            recipes.setup_script(
+                a.branch, a.dest, artifact=not a.no_artifact, install=not a.no_install, torch_key=a.torch_key
+            ),
+            1500,
+        )
         print(r.get("stdout", ""), r.get("stderr", ""), f"exit {r.get('exit_code')}")
         return int(r.get("exit_code") or 0)
     elif a.cmd == "arms":

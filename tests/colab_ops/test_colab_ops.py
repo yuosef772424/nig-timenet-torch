@@ -17,12 +17,30 @@ def test_setup_script_is_valid_bash_idempotent_and_has_no_secret():
     assert recipes.TOKEN_FILE in s and "x-access-token:%s" in s and "$T" in s
     assert "if [ -d" in s and "git fetch" in s and "git clone" in s  # update or clone
     assert "[ -d /content/art1 ] ||" in s  # the artifact copy is skipped when present
+    assert "ensure_env('pyproject.toml', '/content/nig_venv', '/content/drive/MyDrive/nig_timenet_env'" in s
+    assert "pip install" not in s  # Colab's torch is never replaced
     assert "ghp_" not in s and "github_pat" not in s
 
 
 def test_setup_script_options():
     s = recipes.setup_script("b", artifact=False, install=False)
-    assert "art1" not in s.replace("/content/art1", "") and "pip install" not in s
+    assert "cp -r" not in s and "ensure_env" not in s
+
+
+def test_env_script_keys_the_cache_on_the_requested_torch():
+    e = recipes.env_script("/content/r", torch_key="2.14.1+cu130")
+    assert subprocess.run(["bash", "-n"], input=e, text=True).returncode == 0
+    assert "torch_version='2.14.1+cu130'" in e and "nig_env.sh" in e
+    assert "torch_version=None" in recipes.env_script("/content/r")
+
+
+def test_job_lines_load_the_cached_env_first():
+    for line in (
+        recipes.arms_line("/o", arms="gru:3e-4", rows=1, epochs=1, seed=0, device="cpu"),
+        recipes.doctor_line("/r", "/o", encoder="gru", lr=1e-3, rows=1, epochs=1, device="cpu"),
+        recipes.runs_line("gru", 1e-3, 1e-4, 1, 1),
+    ):
+        assert line.startswith(". /content/nig_env.sh && ")
 
 
 def test_arms_doctor_runs_lines():
