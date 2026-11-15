@@ -1,0 +1,117 @@
+# Transformer encoder, SwiGLU and the output head (2026-11-15, third session)
+
+Owner questions: (1) does information reach the transformer blocks; (2) SwiGLU is > 70 % of a block's weights: does
+the model need it; (3) which useful parts of the other models belong in a transformer; (4) the attention output head
+against the Dense head gave contradicting results (the owner's own run at lr 1e-5: the attention head trained for more
+epochs and scored better).
+
+Data of sections 1-3: the public-kline real slice (`data_io/vision_slice.py`: 60 unsealed coins, 4h, 706,104 windows of
+32 bars x 3 channels). NOT the Drive artifact. CPU, batch 128, lr 3e-4, default model (preset + `MODEL_FIRST_FIXES`,
+d_model 64, 2 layers) with the encoder / head / feed-forward changed, early stopping (patience 8 on the 3-epoch mean of
+`val_raw_loss`; the head arms of 3a: patience 15). Every arm: seeds 0 and 1 on one commit. `best val` = the lowest
+RAW `val_raw_loss` of the run (lower is better; the sum over the three NIG heads and the three class heads); IC = rank
+IC by timestamp on the TEST rows with the best-epoch weights. One epoch of validation loss moves by about +-0.015
+from epoch to epoch and the two seeds of one arm differ by 0.005-0.013: differences below ~0.015 are not read (rule
+C4: 2 seeds = a look).
+
+Commands (one arm; `--model` = JSON of model overrides, `--card-a` = card A on the trained weights):
+
+```bash
+python docs/audit/2026-11-14-model-first/quick_arms.py ARTIFACT OUT --rows 20000 --epochs 30 --patience 8 --seed 0 \
+    --arms transformer:3e-4 --model '{"ffn": "none"}' --tag _noffn --card-a --device cpu
+```
+
+## 1. Does information reach the transformer blocks? (card A, new rows `attn use / ffn use / block use`)
+
+Yes, it reaches them, and the outputs barely use them. Trained transformer (default size), validation rows:
+
+| measurement (seed 0 / seed 1) | value | reading |
+|---|---|---|
+| probe IC of `y_high` at `enc_in -> enc_block_1 -> enc_block_2 -> enc_out` (seed 0) | 0.268 -> 0.263 -> 0.259 -> 0.250 | the label information is present at the entry of the blocks and at their exit: nothing is lost, nothing is added |
+| update / stream of a block's attention; of its SwiGLU | 0.31-0.38; 0.44-0.53 | both sublayers write into the stream (SwiGLU more) |
+| attention entropy, share of uniform | 0.91-0.95 | the attention is close to an average of the tokens: it does not select |
+| ALL blocks switched off: change of the label rank IC (high / low / close) | seed 1: -0.019 / 0.000 / -0.001 | the whole attention stack is worth <= 0.02 IC of 0.33-0.39 |
+| encoder output rows shuffled (`enc_out` path use): IC change high / low | -0.052 / -0.007 | the encoder as a whole: <= 0.05 |
+| `linear_path` rows shuffled: IC change high / low | -0.110 / -0.079 | the flat linear path carries the model |
+| `stats` rows shuffled (window mean / log sd): IC change high / low | -0.030 / -0.047 | then the volatility level |
+
+The same holds for the GRU encoder (enc_out -0.029 / -0.006, linear_path -0.112 / -0.107, stats -0.071 / -0.099) and
+for every variant below. Reading: on these inputs the high / low labels are a volatility forecast that a linear map of
+the window plus its level already gives (card C: simple-model ceiling 0.34 / 0.41, the model sits on it), so any
+sequence encoder is close to dead weight and the encoder comparison below is a comparison of small differences.
+Nothing is broken on the way to the blocks; there is nothing more for them to find in three log-move channels (N-08).
+
+## 2. SwiGLU: remove it? (`ffn`: `swiglu` default | `none`; `ffn_dim`)
+
+Parameters of the two blocks: 89,608 with SwiGLU, 24,968 without (whole model 144,558 -> 79,918). 20,000 strided rows
+per split:
+
+| arm | params | best val s0 / s1 | mean | IC high | IC low | s / epoch |
+|---|---|---|---|---|---|---|
+| transformer (SwiGLU, 2 blocks) | 144,558 | -5.899 / -5.912 | -5.906 | 0.333 | 0.381 | 12 |
+| transformer, `ffn: none` | 79,918 | -5.924 / -5.914 | -5.919 | 0.333 | 0.389 | 8.5 |
+| transformer, `ffn: none`, 4 blocks, `num_kv_heads` 4 (the weights moved into attention) | 121,270 | -5.917 / -5.910 | -5.914 | 0.331 | 0.395 | 13 |
+
+Reading: taking SwiGLU out costs nothing on either seed (validation loss equal or better, IC equal within the seed
+spread), with 45 % fewer weights and 30 % less time. Spending the saved weights on more attention (4 blocks, full
+key / value heads) buys nothing either, which agrees with section 1 (the blocks are hardly used at all). In the
+trained SwiGLU model, switching SwiGLU off in one block moves the label IC by <= 0.009.
+Not run: the owner's size (d_model 384, 6 blocks, 8 heads, SwiGLU width 1024: 1.18 M of 1.62 M weights per block) and
+the Drive artifact; see section 4.
+
+## 3. A transformer with the useful parts of the other encoders (`encoder: conv_transformer`)
+
+`conv_transformer` (model/encoders.py): one token per bar (the GRU / TCN `step_proj`, no patching), a causal
+convolution stem (2 TCN blocks, dilations 1 and 2), then the transformer blocks (relative-position attention; `ffn`
+applies). 20,000 rows:
+
+| arm | params | best val s0 / s1 | mean | IC high | IC low | s / epoch |
+|---|---|---|---|---|---|---|
+| transformer (patches, SwiGLU) | 144,558 | -5.899 / -5.912 | -5.906 | 0.333 | 0.381 | 12 |
+| transformer, `ffn: none` | 79,918 | -5.924 / -5.914 | -5.919 | 0.333 | 0.389 | 8.5 |
+| conv_transformer | 166,702 | -5.923 / -5.919 | -5.921 | 0.333 | 0.388 | 21 |
+| conv_transformer, `ffn: none` | 102,062 | -5.927 / -5.923 | -5.925 | 0.331 | 0.393 | 16 |
+| gru (the default encoder) | 102,310 | -5.926 / -5.933 | -5.929 | 0.334 | 0.390 | 11 |
+
+Reading: the patch transformer with SwiGLU is the weakest arm on both seeds; per-bar tokens + the conv stem, or just
+dropping SwiGLU, bring the transformer level with the GRU (the top four arms are inside the seed spread). No arm beats
+the GRU, and no arm moves the IC: the encoder is not what limits this model (section 1).
+
+## 3a. Output head: Dense vs attention vs one Linear layer (`nig_head`)
+
+`linear` (new, model/attn_heads.py: one Linear(trunk -> 4), no hidden layer) is the control: the least free head.
+Transformer encoder (SwiGLU), until early stop:
+
+| rows per split | head | best val s0 / s1 | mean | best epoch | epochs run | IC high | IC low | IC close |
+|---|---|---|---|---|---|---|---|---|
+| 20,000 | dense | -5.899 / -5.912 | -5.906 | 11 / 7 | 26 / 22 | 0.333 | 0.381 | 0.010 |
+| 20,000 | scalar_joint | -5.902 / -5.902 | -5.902 | 9 / 9 | 25 / 24 | 0.332 | 0.392 | 0.018 |
+| 20,000 | linear | -5.901 / -5.899 | -5.900 | 9 / 11 | 19 / 21 (patience 8) | 0.330 | 0.379 | 0.015 |
+| 60,000 | dense | -5.930 / -5.935 | -5.932 | 5 / 4 | 14 / 14 | 0.354 | 0.396 | 0.006 |
+| 60,000 | scalar_joint | -5.944 / -5.946 | -5.945 | 6 / 5 | 16 / 14 | 0.352 | 0.403 | 0.027 |
+
+lr 1e-5 (20,000 rows, seed 0, stopped by hand: 150 epochs on this CPU reach only the lr x steps of ~5 epochs at
+3e-4): selection loss at epoch 20 dense -5.673, scalar_joint -5.311; at epoch 37 -5.766 and -5.541; dense at epoch
+55 -5.819. Both still falling.
+
+Reading:
+- 20,000 rows: the three heads tie (means within 0.006), the same best epochs, the same run length, the same decay
+  after the best epoch. A head with one Linear layer does as well as the Dense head: on this model the freedom of the
+  head is not what decides anything.
+- 60,000 rows: the attention head has the better validation loss on BOTH seeds, by 0.012-0.014 (most of it in the
+  `low` head: -2.687 vs -2.676 / -2.682), its best epoch is one epoch later, IC equal. This is the direction of the
+  owner's observation, at the edge of the noise.
+- Why it trains for more epochs (measured at init, `ScalarOutputAttention` on RMS-normalised tokens): its output is
+  an average over all T x d cells, so across rows it starts almost constant (sd 0.025 against 0.16 for the Dense head)
+  and its range is bounded (about +-5 x gain). It has to grow its queries and gain before it says anything, which at
+  lr 1e-5 is slow: after the same 37 epochs it is 0.22 behind. More epochs before the stop is therefore expected from
+  the parametrisation alone and is not by itself a sign of less memorisation; whether it ENDS better is the question,
+  and 60,000 rows say "slightly, yes" on the transformer.
+- Against the earlier Colab result (GRU encoder, Drive artifact, 60,000 rows, 10 epochs: Dense better by 0.04-0.08):
+  those runs ended at their 10-epoch limit, not at an early stop (best epochs 7-10 of 10), so the slower head was
+  compared before it had finished; and the encoder was the GRU, not the transformer. Section 4 repeats it to the
+  stop.
+
+## 4. Drive artifact, Colab T4
+
+Pending in this file: see the section added below when the runs finish.
