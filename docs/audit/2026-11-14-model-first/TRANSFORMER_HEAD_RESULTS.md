@@ -90,6 +90,17 @@ Transformer encoder (SwiGLU), until early stop:
 | 60,000 | dense | -5.930 / -5.935 | -5.932 | 5 / 4 | 14 / 14 | 0.354 | 0.396 | 0.006 |
 | 60,000 | scalar_joint | -5.944 / -5.946 | -5.945 | 6 / 5 | 16 / 14 | 0.352 | 0.403 | 0.027 |
 
+Head x encoder at 60,000 rows (patience 8, 2 seeds; `encoder` = the trunk the head sits on):
+
+| encoder | head | best val s0 / s1 | mean | best epoch | IC high | IC low | IC close |
+|---|---|---|---|---|---|---|---|
+| transformer (SwiGLU) | dense | -5.930 / -5.935 | -5.932 | 5 / 4 | 0.354 | 0.396 | 0.006 |
+| transformer (SwiGLU) | scalar_joint | -5.944 / -5.946 | -5.945 | 6 / 5 | 0.352 | 0.403 | 0.027 |
+| transformer, `ffn: none` | dense | -5.946 / -5.952 | -5.949 | 12 / 11 | 0.354 | 0.391 | -0.002 |
+| transformer, `ffn: none` | scalar_joint | -5.929 / -5.933 | -5.931 | 6 / 5 | 0.354 | 0.407 | 0.047 |
+| gru | dense | -5.952 / -5.961 | -5.956 | 10 / 14 | 0.358 | 0.389 | 0.004 |
+| gru | scalar_joint | -5.928 / -5.919 | -5.923 | 14 / 14 | 0.353 | 0.407 | 0.021 |
+
 lr 1e-5 (20,000 rows, seed 0, stopped by hand: 150 epochs on this CPU reach only the lr x steps of ~5 epochs at
 3e-4): selection loss at epoch 20 dense -5.673, scalar_joint -5.311; at epoch 37 -5.766 and -5.541; dense at epoch
 55 -5.819. Both still falling.
@@ -98,9 +109,17 @@ Reading:
 - 20,000 rows: the three heads tie (means within 0.006), the same best epochs, the same run length, the same decay
   after the best epoch. A head with one Linear layer does as well as the Dense head: on this model the freedom of the
   head is not what decides anything.
-- 60,000 rows: the attention head has the better validation loss on BOTH seeds, by 0.012-0.014 (most of it in the
-  `low` head: -2.687 vs -2.676 / -2.682), its best epoch is one epoch later, IC equal. This is the direction of the
-  owner's observation, at the edge of the noise.
+- 60,000 rows: the sign of the head effect depends on the trunk, the same way on both seeds of each pair. On the
+  SwiGLU transformer the attention head is better by 0.012-0.014; on the transformer without SwiGLU it is worse by
+  0.017-0.019; on the GRU it is worse by 0.024-0.042. This is why earlier results contradicted each other: the
+  attention head wins only on the weakest trunk (the SwiGLU patch transformer, which itself overfits earliest: best
+  epoch 4-5), where it stands in for a regulariser; on the trunks that are better to begin with, the Dense head is
+  better. The best arms are Dense on the GRU (-5.956) and Dense on the transformer without SwiGLU (-5.949).
+- The attention head has the higher `low` rank IC in all three pairs (+0.007 .. +0.018) and an equal or lower `high`
+  IC; its validation NLL is nevertheless worse on two trunks, i.e. it ranks the low move slightly better and
+  calibrates worse. Inside the seed spread of the IC (0.01-0.02): a look, not a result.
+- At 60,000 rows `ffn: none` again beats SwiGLU with the Dense head on both seeds (-5.949 vs -5.932) and its best
+  epoch moves from 4-5 to 11-12: without SwiGLU the transformer overfits later.
 - Why it trains for more epochs (measured at init, `ScalarOutputAttention` on RMS-normalised tokens): its output is
   an average over all T x d cells, so across rows it starts almost constant (sd 0.025 against 0.16 for the Dense head)
   and its range is bounded (about +-5 x gain). It has to grow its queries and gain before it says anything, which at
