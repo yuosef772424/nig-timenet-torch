@@ -92,3 +92,13 @@ Read `TRANSFORMER_HEAD_RESULTS.md`. What remains, by expected effect:
 | 3 | Attention head vs Dense to the early stop on the Drive artifact, transformer AND GRU, 2 seeds | N-23: a 0.013 gain at 60,000 rows on the slice; the earlier Colab table stopped at 10 epochs | `--arms transformer:3e-4,transformer:3e-4:scalar_joint,gru:3e-4,gru:3e-4:scalar_joint --rows 60000 --epochs 40 --patience 8`, seeds 0 and 1; a head is better only if it wins on both seeds by more than the seed spread |
 | 4 | A faster-starting attention head | N-24: near-constant at init, lr-starved at 1e-5 | initialise `gain` / the query scale so the output sd across rows at init matches the Dense head's (~0.16), then repeat row 3 at lr 1e-5 |
 | 5 | Staged training (owner 2026-11-15) | train on a part until memorisation shows, add data, lower lr, repeat | spec for the next session: `cards/F_iterative_training.md` (ROADMAP ST1) |
+
+## 8. After the fourth session (2026-11-15): multi-coin model
+
+| # | what | why | what settles it |
+|---|---|---|---|
+| 1 | Select cross-coin runs by a rank metric | N-28: the gain is in the test rank IC, `val_raw_loss` does not see it and stops the `mean` arm at epoch 2-3 | a registered selection metric = mean cross-sectional rank IC of the regression heads on validation; rerun section 6b with it |
+| 2 | Battery on the cross-coin model | the close rank IC 0.05 is only worth something as a market-neutral trade after costs | `quick_arms ... --cross-section --battery` on the Drive artifact, 2 seeds, read the market-neutral rows next to their baselines |
+| 3 | Doctor / health report on a cross-section run | N-30 | route their input builds through `flat_inputs(..., time_channel)` |
+| 4 | A rank head next to the NIG heads | N-27: the relative target is a different product; cheap to add as an extra head once row 1 exists | arm with / without, same rows, 2 seeds |
+
