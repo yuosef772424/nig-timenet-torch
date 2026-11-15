@@ -242,22 +242,27 @@ Reading:
 | C + attention block | -5.810 / -5.815 | -5.813 | 0.336 | 0.375 | 0.002 |
 | D + attention block, peer dropout 0.2 | -5.811 / -5.811 | -5.811 | 0.339 | 0.367 | -0.002 |
 
-200,000 rows (~3,600 timestamps), seed 0 (seed 1: see the note under the table):
+200,000 rows (~3,600 timestamps), 2 seeds (best val s0 / s1; IC = mean of the seeds, per-seed values in brackets):
 
-| arm | best val | best epoch | IC high | IC low | IC close |
+| arm | best val s0 / s1 | mean | IC high | IC low | IC close |
 |---|---|---|---|---|---|
-| B whole-timestamp batches, no block | -5.912 | 8 | 0.356 | 0.397 | 0.018 |
-| C + attention block | -5.910 | 8 | 0.350 | 0.418 | 0.039 |
-| E + mean block | -5.910 | 6 | 0.359 | 0.427 | 0.058 |
+| B whole-timestamp batches, no block | -5.912 / -5.905 | -5.909 | 0.356 | 0.403 (0.397, 0.409) | 0.013 (0.018, 0.008) |
+| C + attention block | -5.910 / -5.905 | -5.908 | 0.355 | 0.419 (0.418, 0.420) | 0.033 (0.039, 0.026) |
+| E + mean block | -5.910 / -5.913 | -5.911 | 0.360 | 0.425 (0.427, 0.423) | 0.052 (0.058, 0.045) |
 
 Reading:
 - Whole-timestamp batches cost nothing against shuffled batches on the same rows (A vs B). But whole timestamps at
   a fixed ROW budget is a poorer sample: 60,000 rows as 1,000 timestamps reach -5.82, the same number of rows
   strided over all dates reach -5.956 (section 3a), and arm A's best epoch is the first. Cross-section runs need
   more rows than per-coin runs to cover the same dates.
-- 60,000 rows: the block changes nothing. 200,000 rows, one seed: the validation loss is the same, the TEST rank IC
-  of `low` rises 0.397 -> 0.418 (attention) -> 0.427 (mean) and of `close` 0.018 -> 0.039 -> 0.058. That is the size
-  and the place the ridge check of 6a predicts (+0.04 on `low`), and the simpler `mean` kind does at least as well
-  as attention. One seed: a look (rule C4), to be confirmed by the second seed and by the Drive artifact (535 coins
-  per timestamp), section 7.
+- 60,000 rows: the block changes nothing. 200,000 rows: the validation loss is the same in all three arms, and the
+  TEST rank IC rises on BOTH seeds: `low` 0.403 -> 0.419 (attention) -> 0.425 (mean), `close` 0.013 -> 0.033 -> 0.052
+  (each seed of E is above each seed of B on both heads); `high` does not move. That is the place the ridge check of
+  6a predicts (`low` +0.04; not `high`), and the simpler `mean` kind does at least as well as attention.
+- The close head's 0.05 is the first close rank IC above the simple-model ceiling (~0.01) in this project. It is a
+  cross-sectional rank only (which coin closes higher than the others at that timestamp); 2 seeds, 60 coins, CPU: a
+  look. Confirmation = the Drive artifact (535 coins per timestamp), section 7, then the battery's market-neutral
+  rows, which are the trade this IC would feed.
+- Why the validation LOSS does not move while the IC does: the NLL is dominated by the scale of the common move,
+  which no input predicts; the rank inside a timestamp is a small part of it.
 

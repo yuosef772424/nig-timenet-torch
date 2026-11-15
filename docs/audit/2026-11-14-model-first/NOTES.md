@@ -88,3 +88,15 @@ seeds per arm unless a row says otherwise.
 Behaviour changes of this session: none (new options `ffn`, `ffn_dim`, encoder `conv_transformer`, head `linear`; every
 default builds the same model, state_dict keys and weights as before: tests/model/test_assembly_pins.py unchanged).
 
+## 7. Direct input path, multi-coin model, targets (2026-11-15, fourth session; branch `claude/audit-models-output-layer-90e1uu`)
+
+Tables: `TRANSFORMER_HEAD_RESULTS.md` sections 5-7. Real slice unless a row says Drive.
+
+| id | what | evidence | action |
+|---|---|---|---|
+| N-26 | A direct line from the input into the transformer blocks changes nothing: `input_skip` concat_each_block / dense_skip / late_raw give -5.910 / -5.906 / -5.900 against -5.906 without (2 seeds). | section 5 | documented; no new code (the three paths existed). Agrees with N-20: the blocks are not starved |
+| N-27 | 60 % of the close label's variance (81 % of low, 38 % of high) is the move all coins share at that timestamp. A relative TARGET does not raise the simple-model ceiling; features RELATIVE TO THE TIMESTAMP do: `low` rank IC +0.04 on val and test (ridge), close from -0.01 to +0.01. | section 6a (`rel_target` check: ridge on simple features, 150,000 rows of whole timestamps) | documented: the target preparation is sound for the NIG heads; the gain is on the input / trunk side. A rank head next to the NIG heads is a later option |
+| N-28 | Multi-coin model built inside the default architecture (`cross_coin_layers`, kinds `attention` / `mean`, identity at init; timestamp-id channel; `SplitSettings.cross_section`; whole-timestamp batches). At 200,000 rows the `mean` kind raises the TEST rank IC on both seeds: low 0.403 -> 0.425, close 0.013 -> 0.052; attention 0.419 / 0.033; validation loss equal; at 60,000 rows no effect. | section 6b; tests/model/test_cross_coin.py, tests/workflow/test_run.py | **built** (D-025, defaults unchanged). `model/panel.py` (TF port) left parked |
+| N-29 | Whole timestamps at a fixed row budget are a poorer sample than rows strided over all dates: 60,000 rows as 1,000 timestamps reach -5.82 (best epoch 1 with shuffled batches), strided rows -5.956. | section 6b arm A vs section 3a | documented: cross-section runs need more rows; compare arms only on the same row set |
+| N-30 | The doctor and the health report do not run on a cross-section run (they build their own inputs without the timestamp channel; the model then treats every row as alone). | read, not run | open: pass `cross_section` through `DoctorContext.xy` and `health_step` before reading a cross-coin model with them |
+
