@@ -120,3 +120,6 @@ Evidence: `docs/audit/2026-11-14-model-first/NOTES.md` (N-01 .. N-25), `TRANSFOR
 - `nig_timenet_torch.model.taps.stream_taps(edit)`: `<new>` -> `None`
 - `nig_timenet_torch.trainer.trainer.FitSettings(steps_per_execution)`: `<new>` -> `1`
 - `nig_timenet_torch.workflow.settings.TrainSettings(steps_per_execution)`: `<new>` -> `1`
+
+## Added by the merge of #51, #52 and #56 (this file only carries the keys that exist after the merge)
+- `nig_timenet_torch.model.attn_heads.ScalarNIGHead(fitted_scale)`: `<new>` -> `False` (D-023 `fitted_scale` reaches the attention head; off at the old behaviour)
