@@ -91,6 +91,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | module | what it is for | tags |
 |---|---|---|
 | `doctor/__main__.py` | ``python -m nig_timenet_torch.doctor``: command-line entry of the readiness report (doctor/readiness.py). | doctor, entry point, cli, readiness report |
+| `doctor/block_use.py` | PURPOSE: Card A, transformer part: does information pass THROUGH each transformer block, and which sublayer |  |
 | `doctor/common.py` | Shared pieces of the model doctor: the Check row, verdict helpers, report table, DoctorContext (one run through the workflow steps), the purged time-ordered ridge probe and the simple-feature baseline. | doctor, check row, readiness table, probe, ridge probe, purged folds, simple baseline, har features, context |
 | `doctor/data_checks.py` | Card C: is the data sound? Label / window alignment, codec round trip, unit scales, split purity and shift, the information ceiling of the inputs, duplicates / effective sample size, coverage counts. | doctor, card c, data checks, leakage, label alignment, codec round trip, split purity, distribution shift, input information ceiling, near duplicate windows, effective sample size, flat bars, clipped labels |
 | `doctor/info_flow.py` | Card A: where is information lost or gained inside the model? Probes each stream stage in forward order for every signal (labels, E1 oracle means, tracers) next to the strong simple baseline. | doctor, card a, information flow, stage probe, tracer, path ablation, readout gap, effective rank, dead units |

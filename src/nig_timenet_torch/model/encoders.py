@@ -38,6 +38,8 @@ class EncoderDims:
     attn_dropout: float
     causal: bool
     window: int | None
+    ffn: str = "swiglu"            # TransformerBlock.FFN_KINDS: the feed-forward sublayer of every transformer block
+    ffn_dim: int | None = None     # SwiGLU hidden width (None = 8/3 * d_model)
 
 
 class CausalConv1D(nn.Conv1d):
@@ -96,7 +98,8 @@ class TransformerEncoder(Encoder):
         model.branch_blocks[sfx] = self.n_blocks(dims, seq_len)
         for i in range(model.branch_blocks[sfx]):
             add(f"block_{i + 1}", TransformerBlock(seq_width, dims.num_heads, dims.num_kv_heads, dims.max_rel_pos,
-                                                   dims.causal, dims.window, dims.dropout, dims.attn_dropout))
+                                                   dims.causal, dims.window, dims.dropout, dims.attn_dropout,
+                                                   dims.ffn, dims.ffn_dim))
         return seq_width
 
     def encode(self, model, tok, sfx):
@@ -167,7 +170,8 @@ class ITransformerEncoder(Encoder):
         model.branch_blocks[sfx] = self.n_blocks(dims, seq_len)
         for i in range(model.branch_blocks[sfx]):
             add(f"iblock_{i + 1}", TransformerBlock(dims.d_model, dims.num_heads, dims.num_kv_heads, dims.max_rel_pos,
-                                                    False, None, dims.dropout, dims.attn_dropout))
+                                                    False, None, dims.dropout, dims.attn_dropout, dims.ffn,
+                                                    dims.ffn_dim))
         return dims.d_model
 
     def encode(self, model, tok, sfx):

@@ -42,6 +42,7 @@ from nig_timenet_torch.model.layers import (
     RMSNorm,
     SpatialDropout1D,
     SymLog,
+    TransformerBlock,
 )
 from nig_timenet_torch.model.nig_layers import ConfidenceHead, NIGHead, NIGUncertainty, OrderedMeans
 from nig_timenet_torch.model.oracle_weights import OracleWeights, keras_to_torch_value, torch_param_name  # noqa: F401
@@ -74,8 +75,9 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                  head_types, enforce_order, head_hidden, nu_min, alpha_min, beta_min, unc_max, class_head_hidden,
                  norm_eps, linear_path_l2, encoder="transformer", input_clip=None, stats_mode="full",
                  input_noise_std=0.0, feature_dropout=0.0, level_passthrough=False, level_norm=None,
-                 input_skip="none", n_classes=3, order_detach_close=False, nig_scale=None,
-                 bn_warmup=False, readout_dropout=None, input_scaler="none", nig_head="dense", nig_head_dropout=0.0):
+                 input_skip="none", n_classes=3, order_detach_close=False, nig_scale=None, bn_warmup=False,
+                 readout_dropout=None, input_scaler="none", nig_head="dense", nig_head_dropout=0.0, ffn="swiglu",
+                 ffn_dim=None):
         super().__init__()
         self.nig_head_kind = check_nig_head(nig_head)
         self.input_scaler_kind = input_scaler
@@ -89,8 +91,7 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                 raise NotImplementedError(f"head types {bad} for {t!r} are not ported (known: {HEAD_REGISTRY.names()})")
         self.class_kind = {t: k for t in self.price_targets if (k := class_head_kind(self.head_types[t], t))}
         self.linear_path_l2 = linear_path_l2  # kernel L2 of every linear_path, see regularization_loss()
-        self.num_layers = num_layers
-        self.encoder = encoder
+        self.num_layers, self.encoder = num_layers, encoder
         self.use_stats = stats_mode not in NO_STATS_MODES
         self.level_passthrough = level_passthrough
         self.input_skip = input_skip
@@ -112,7 +113,7 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         self.branch_suffixes = tuple(b[0] for b in branches)
         self.branch_blocks = {}
         dims = EncoderDims(d_model, num_layers, num_heads, num_kv_heads, patch_len, stride, max_rel_pos, dropout,
-                           attn_dropout, causal, window)
+                           attn_dropout, causal, window, ffn, ffn_dim)
         for sfx, T, nf in branches:
             self._build_branch(sfx, T, nf, dims, kernel_sizes=kernel_sizes, norm_eps=norm_eps, input_clip=input_clip,
                                stats_mode=stats_mode, input_noise_std=input_noise_std,
@@ -332,17 +333,22 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          linear_path_l2=1e-4, input_clip=None, stats_mode="full", input_noise_std=0.0,
                          feature_dropout=0.0, level_passthrough=False, level_norm=None, order_detach_close=False,
                          nig_scale=None, bn_warmup=False, readout_dropout=None, input_scaler="none",
-                         nig_head="dense", nig_head_dropout=0.0, **options) -> NigTimeNetV2:
+                         nig_head="dense", nig_head_dropout=0.0, ffn="swiglu", ffn_dim=None,
+                         **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
     nig_layers; bn_warmup: layers.BatchNormChannelsLast; readout_dropout: the rate of trunk_drop and of the NIG
     heads' dropout, None = ``dropout``) are opt-in: their defaults reproduce the P15 graph. ``input_scaler`` (a name of
-    scalers.INPUT_SCALERS) and ``nig_scale="train_std"`` add train-fitted buffers: call ``scalers.fit_scalers``."""
+    scalers.INPUT_SCALERS) and ``nig_scale="train_std"`` add train-fitted buffers: call ``scalers.fit_scalers``.
+    ``ffn`` / ``ffn_dim``: the feed-forward sublayer of the transformer blocks (TransformerBlock.FFN_KINDS; "none" =
+    attention only), read by the transformer and itransformer encoders."""
     ENCODERS.entry(encoder)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
     if skip_variant(input_skip).adds_modules and not ENCODERS.entry(encoder).meta["supports_input_skip"]:
         raise NotImplementedError(f"input_skip={input_skip!r} is defined on the transformer encoder only (P34)")
+    if ffn not in TransformerBlock.FFN_KINDS:
+        raise ValueError(f"ffn must be one of {tuple(TransformerBlock.FFN_KINDS)}, not {ffn!r}")
     if level_norm not in LEVEL_NORMS:
         raise ValueError(f"level_norm must be one of {LEVEL_NORMS}, not {level_norm!r}")
     options = dict(options)
@@ -367,4 +373,4 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         level_passthrough=level_passthrough, level_norm=level_norm, input_skip=input_skip, n_classes=n_classes,
         order_detach_close=order_detach_close, nig_scale=nig_scale,
         bn_warmup=bn_warmup, readout_dropout=readout_dropout, input_scaler=input_scaler,
-        nig_head=nig_head, nig_head_dropout=nig_head_dropout)
+        nig_head=nig_head, nig_head_dropout=nig_head_dropout, ffn=ffn, ffn_dim=ffn_dim)

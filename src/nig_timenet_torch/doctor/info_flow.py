@@ -14,6 +14,7 @@ effective rank, constant share); the Checks are the readable verdicts:
 * ``readout gap`` per head: does the head's own mu use what the trunk holds?
 * ``largest loss`` per signal: the stage with the biggest drop that is not recovered at the trunk;
 * ``path use``: how much each path changes the outputs when its rows are shuffled (an unused path is dead weight);
+* ``attn / ffn / block use`` (doctor/block_use.py): each transformer block and its sublayers switched off in turn;
 * ``training gain``: the same trunk probe on an untrained twin (does training create information?);
 * ``instrument self-check``: a deliberately destroyed stage must be the one the instrument names.
 """
@@ -22,6 +23,7 @@ import numpy as np
 import pandas as pd
 import torch
 
+from nig_timenet_torch.doctor.block_use import block_use
 from nig_timenet_torch.doctor.common import (
     Check,
     DoctorContext,
@@ -76,6 +78,7 @@ def collect_streams(model, x: torch.Tensor, *, edit: dict | None = None, chunk: 
     acts: dict[str, list] = {}
     outs: dict[str, list] = {}
     heads = model.head_modules() if hasattr(model, "head_modules") else {}
+    heads = {t: h for t, h in heads.items() if hasattr(h, "fc")}       # an attention head has no hidden layer to tap
     names = {m: n for n, m in model.named_modules()}
     try:
         for i in range(0, len(x), chunk):
@@ -256,6 +259,8 @@ def info_flow(ctx: DoctorContext, *, max_rows: int | None = None) -> tuple[list[
                                 m, "0 = the outputs ignore the path", "warn" if m < 0.01 else "info",
                                 "the outputs do not depend on this path (dead weight, or its gradient is blocked)"
                                 if m < 0.01 else "", change))
+    blocks, ctx.notes["block_use"] = block_use(model, x, {t: signals[f"y_{t}"] for t in ctx.targets}, ctx.targets)
+    checks.extend(blocks)   # 4b. transformer blocks: is each block, and its attention / feed-forward part, used?
     # 5. does training create information? the same probe on an untrained twin
     twin = fresh_trainer(ctx, seed=ctx.seed + 1000).model
     acts0, _ = collect_streams(twin, x)

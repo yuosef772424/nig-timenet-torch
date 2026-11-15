@@ -14,6 +14,7 @@ import pathlib
 import time
 
 from nig_timenet_torch.data_io.loading import LoaderSettings
+from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.flat_run import epoch_line
 from nig_timenet_torch.workflow.settings import (
@@ -30,7 +31,8 @@ from nig_timenet_torch.workflow.settings import (
 def arm_settings(a, encoder: str, lr: float, out: pathlib.Path, head: str = "dense") -> RunSettings:
     base = default_model_settings()
     model = ModelSettings(
-        base.architecture, {**base.overrides, "encoder": encoder, **({"nig_head": head} if head != "dense" else {})}
+        base.architecture, {**base.overrides, "encoder": encoder, **({"nig_head": head} if head != "dense" else {}),
+                            **json.loads(a.model)}
     )
     return RunSettings(
         run_dir=str(out / "ckpt"),
@@ -38,7 +40,8 @@ def arm_settings(a, encoder: str, lr: float, out: pathlib.Path, head: str = "den
         split=SplitSettings(max_rows=a.rows),
         model=model,
         train=TrainSettings(
-            epochs=a.epochs, batch_size=a.batch_size, seed=a.seed, lr=lr, device=a.device, steps_per_execution=a.spe
+            epochs=a.epochs, batch_size=a.batch_size, seed=a.seed, lr=lr, device=a.device, steps_per_execution=a.spe,
+            early_stop=EarlyStopSettings(patience=a.patience),
         ),
         evaluation=EvalSettings(
             health_max_rows=2000, battery=BatterySettings(enabled=a.battery, n_variants=a.n_variants)
@@ -55,13 +58,16 @@ def main():
     p.add_argument("--battery", action="store_true", help="run the evaluation battery (val + test, T-profit)")
     p.add_argument("--spe", type=int, default=1, help="steps_per_execution (speed only; weights must not change)")
     p.add_argument("--n-variants", type=int, default=1, help="variants tried so far (widens the battery CIs)")
+    p.add_argument("--patience", type=int, default=15, help="early-stop patience in epochs (the run default is 15)")
+    p.add_argument("--model", default="{}", help="JSON of extra model overrides for every arm")
+    p.add_argument("--tag", default="", help="suffix of the arm folders (to keep --model variants apart)")
     a = p.parse_args()
     out = pathlib.Path(a.out)
     rows = []
     for spec in a.arms.split(","):
         enc, lr, *rest = spec.split(":")  # encoder:lr[:nig_head]  (nig_head: dense | scalar_joint | scalar_factorized)
         head = rest[0] if rest else "dense"
-        name = f"{enc}_lr{lr}" + ("" if head == "dense" else f"_{head}")
+        name = f"{enc}_lr{lr}" + ("" if head == "dense" else f"_{head}") + a.tag
         folder = out / f"{name}_s{a.seed}"
         t0 = time.time()
         print(f"\n===== arm {name} =====", flush=True)
@@ -88,12 +94,14 @@ def main():
                 "best_epoch": summ["best_epoch"],
                 "best_value": summ["best_value"],
                 "epochs_done": summ["epochs_done"],
+                "stopped_early": summ["stopped_early"],
                 "seconds": round(time.time() - t0, 1),
                 **keep,
             }
         )
         print("\n".join(steps.test_lines(rep)), flush=True)
         out.mkdir(parents=True, exist_ok=True)
+        (out / f"arms_{name}_s{a.seed}.json").write_text(json.dumps(rows[-1], indent=1, default=float))
         (out / "arms.json").write_text(json.dumps(rows, indent=1, default=float))
     print("\nARMS:", json.dumps(rows, indent=1, default=float))
 
