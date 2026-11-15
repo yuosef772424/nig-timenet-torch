@@ -8,12 +8,15 @@ and the test scalars, writes OUT/<arm>/{baseline_summary,test_report}.json and O
 """
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import pathlib
 import time
 
 from nig_timenet_torch.data_io.loading import LoaderSettings
+from nig_timenet_torch.doctor.common import DoctorContext
+from nig_timenet_torch.doctor.info_flow import info_flow
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.flat_run import epoch_line
@@ -61,6 +64,8 @@ def main():
     p.add_argument("--patience", type=int, default=15, help="early-stop patience in epochs (the run default is 15)")
     p.add_argument("--model", default="{}", help="JSON of extra model overrides for every arm")
     p.add_argument("--tag", default="", help="suffix of the arm folders (to keep --model variants apart)")
+    p.add_argument("--card-a", action="store_true", help="doctor card A on the trained weights (val rows): stage "
+                   "table info_flow.csv + card_a.json (path use, transformer block / attention / feed-forward use)")
     a = p.parse_args()
     out = pathlib.Path(a.out)
     rows = []
@@ -76,6 +81,11 @@ def main():
         rep = steps.test_step(r)
         if a.battery:
             steps.battery_step(r)
+        if a.card_a:
+            checks, table = info_flow(DoctorContext(run=r, out=folder, quick=True, seed=a.seed))
+            table.to_csv(folder / "info_flow.csv", index=False)
+            (folder / "card_a.json").write_text(json.dumps([dataclasses.asdict(c) for c in checks], indent=1,
+                                                           default=float))
         summ = steps.write_summary(r)
         flat = dict(steps._flat(rep))
         keep = {

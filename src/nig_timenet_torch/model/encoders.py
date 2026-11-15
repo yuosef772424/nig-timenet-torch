@@ -1,8 +1,9 @@
-"""ENCODERS: the registered sequence encoders of NigTimeNetV2 (transformer P15, GRU P33b, TCN P40, iTransformer).
+"""ENCODERS: the registered sequence encoders of NigTimeNetV2 (transformer P15, GRU P33b, TCN P40, iTransformer,
+conv_transformer = per-bar tokens + causal conv stem + attention blocks).
 
 PURPOSE:  The ENCODERS registry: each encoder builds its modules through the model's ``add(name, module)`` (Keras
           layer names, so state_dict keys are unchanged) and owns its forward over the token sequence.
-TAGS:     encoders, encoder registry, transformer, gru, tcn, itransformer, causal conv, sequence encoder, plugin
+TAGS:     encoders, encoder registry, transformer, gru, tcn, itransformer, conv transformer, causal conv, plugin
 PITFALLS: Module names (``patch_embed``, ``step_proj``, ``block_i``, ``gru_i``, ``tcn_conv_i``, ...) are weights.json
           attr_paths and checkpoint keys: never rename. A new encoder = one class + one ``ENCODERS.register`` line;
           ``supports_input_skip`` says whether the input_skip variants apply to it (transformer only today).
@@ -181,7 +182,40 @@ class ITransformerEncoder(Encoder):
         return h
 
 
+class ConvTransformerEncoder(Encoder):
+    """The transformer with what the other encoders do well merged in (2026-11-15 audit): one token PER BAR (the GRU /
+    TCN ``step_proj``; no patching, so the last token is the last bar), a causal convolution stem (``STEM`` TCN blocks,
+    dilations 1, 2, ...: each token already holds its local shape before any attention), then the transformer blocks
+    (relative-position attention; their feed-forward follows ``ffn``). Output (B, T, d_model)."""
+
+    STEM = 2  # causal conv blocks before the attention blocks (receptive field 1 + 2 * (2^STEM - 1) bars)
+
+    def build(self, model, add, sfx, *, seq_len, tok_width, dims):
+        add("step_proj", nn.Linear(tok_width, dims.d_model))
+        for i in range(self.STEM):
+            add(f"stem_norm_{i + 1}", RMSNorm(dims.d_model))
+            add(f"stem_conv_{i + 1}", CausalConv1D(dims.d_model, dims.d_model, 3, 2 ** i))
+            add(f"stem_drop_{i + 1}", nn.Dropout(dims.dropout))
+        model.branch_blocks[sfx] = self.n_blocks(dims, seq_len)
+        for i in range(model.branch_blocks[sfx]):
+            add(f"block_{i + 1}", TransformerBlock(dims.d_model, dims.num_heads, dims.num_kv_heads, dims.max_rel_pos,
+                                                   dims.causal, dims.window, dims.dropout, dims.attn_dropout,
+                                                   dims.ffn, dims.ffn_dim))
+        return dims.d_model
+
+    def encode(self, model, tok, sfx):
+        h = _get(model, "step_proj", sfx)(tok)
+        for i in range(self.STEM):
+            y = F.gelu(_get(model, f"stem_conv_{i + 1}", sfx)(_get(model, f"stem_norm_{i + 1}", sfx)(h)))
+            h = h + _get(model, f"stem_drop_{i + 1}", sfx)(y)
+        h = model._tap("enc_in" + sfx, h)
+        for i in range(model.branch_blocks[sfx]):
+            h = model._tap(f"enc_block_{i + 1}{sfx}", _get(model, f"block_{i + 1}", sfx)(h))
+        return h
+
+
 ENCODERS.register("transformer", TransformerEncoder(), version=1, supports_input_skip=True)
+ENCODERS.register("conv_transformer", ConvTransformerEncoder(), version=1, supports_input_skip=False)
 ENCODERS.register("gru", GRUEncoder(), version=1, supports_input_skip=False)
 ENCODERS.register("tcn", TCNEncoder(), version=1, supports_input_skip=False)
 ENCODERS.register("itransformer", ITransformerEncoder(), version=1, supports_input_skip=False)
