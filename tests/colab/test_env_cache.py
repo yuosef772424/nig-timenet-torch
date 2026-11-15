@@ -79,6 +79,7 @@ def test_first_call_builds_and_packs_the_second_restores_without_pip(tmp_path, p
     run = FakeRun()
     first = ec.ensure_env(project, venv, str(cache), run=run, **kw)
     assert first["source"] == "built" and Path(first["tar"]).is_file() and len(run.cmds) == 2
+    assert "--without-pip" in run.cmds[0] and "--system-site-packages" in run.cmds[0]  # ensurepip fails on Colab
     pip = run.cmds[1]
     assert pip[:3] == [str(Path(venv, "bin", "python")), "-m", "pip"] and "-c" in pip
     constraints = Path(pip[pip.index("-c") + 1]).read_text()

@@ -130,7 +130,9 @@ def ensure_env(pyproject: str, venv_dir: str, cache_dir: str, *, extras: tuple =
             echo(f"cached env unusable ({type(e).__name__}): rebuilding")
         tar.unlink(missing_ok=True)
     shutil.rmtree(venv_dir, ignore_errors=True)
-    cmd = [python or sys.executable, "-m", "venv", "--system-site-packages", venv_dir]
+    # --without-pip: this Colab's ensurepip fails; the system pip is visible through --system-site-packages and installs
+    # into the venv when run as the venv's python (-m pip)
+    cmd = [python or sys.executable, "-m", "venv", "--system-site-packages", "--without-pip", venv_dir]
     r = run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         raise EnvCacheError(f"venv creation failed (exit {r.returncode}): {(r.stderr or r.stdout)[-500:]}")
