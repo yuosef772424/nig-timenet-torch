@@ -88,3 +88,17 @@ def test_group_batches_and_chunks_hold_whole_groups():
         assert not set(ids.tolist()) & (set(gid[:c.start].tolist()) | set(gid[c.stop:].tolist()))
     x = torch.cat([torch.randn(len(gid), 4, 3), gid[:, None, None].expand(-1, 4, 1).float()], dim=-1)
     assert torch.equal(row_groups(x), gid)
+
+
+@pytest.mark.parametrize("kind", ["attention", "mean"])
+def test_every_kind_is_the_identity_at_init_and_local_to_the_timestamp(kind):
+    torch.manual_seed(0)
+    c, h = CrossCoin(16, 1, 4, 0.0, kind=kind).eval(), torch.randn(10, 16)
+    assert torch.equal(c(h, GID), h)
+    out = _open(c)(h, GID)
+    moved = h.clone()
+    moved[0] += torch.randn(16)
+    out2 = c(moved, GID)
+    assert (out2[1] - out[1]).abs().max() > 1e-4 and torch.equal(out2[GID != 5], out[GID != 5])
+    with pytest.raises(ValueError, match="cross_coin_kind"):
+        CrossCoin(16, kind="median")

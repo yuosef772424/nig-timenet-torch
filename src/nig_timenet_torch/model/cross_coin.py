@@ -12,7 +12,7 @@ PITFALLS: the group of a row (its timestamp id) arrives as ONE EXTRA INPUT CHANN
 import torch
 from torch import nn
 
-__all__ = ["CrossCoinBlock", "CrossCoin", "split_group", "group_grid"]
+__all__ = ["CrossCoinBlock", "CrossSectionPool", "CROSS_COIN_KINDS", "CrossCoin", "split_group", "group_grid"]
 
 
 def split_group(x: torch.Tensor, n_features: int) -> tuple[torch.Tensor, torch.Tensor | None]:
@@ -64,15 +64,41 @@ class CrossCoinBlock(nn.Module):
         return g + self.drop(self.ffn(self.norm2(g)))
 
 
+class CrossSectionPool(nn.Module):
+    """The cheapest cross-coin step (kind "mean"): every coin gets [own, timestamp mean, own - mean, timestamp sd] of
+    the trunk through one hidden layer. No attention: what a coin is RELATIVE to its timestamp is given, not learned
+    (ridge on the simple features gains 0.04 rank IC on ``low`` from exactly this: TRANSFORMER_HEAD_RESULTS.md
+    section 5)."""
+
+    def __init__(self, d_model: int, num_heads: int = 4, dropout: float = 0.1, peer_dropout: float = 0.0):
+        super().__init__()
+        self.ffn = nn.Sequential(nn.Linear(4 * d_model, 2 * d_model), nn.GELU(), nn.Dropout(dropout),
+                                 nn.Linear(2 * d_model, d_model))
+
+    def forward(self, g: torch.Tensor, real: torch.Tensor) -> torch.Tensor:
+        w = real[..., None].to(g.dtype)
+        n = w.sum(dim=1, keepdim=True).clamp_min(1.0)
+        mean = (g * w).sum(dim=1, keepdim=True) / n
+        sd = (((g - mean) ** 2 * w).sum(dim=1, keepdim=True) / n + 1e-6).sqrt()
+        return self.ffn(torch.cat([g, mean.expand_as(g), g - mean, sd.expand_as(g)], dim=-1))
+
+
+#: cross_coin_kind -> block class (d_model, num_heads, dropout, peer_dropout)
+CROSS_COIN_KINDS = {"attention": CrossCoinBlock, "mean": CrossSectionPool}
+
+
 class CrossCoin(nn.Module):
     """h (B, d) -> h + gate * (blocks(h grouped by timestamp) - h): ``gate`` (d,) starts at 0, so the model starts as
     the per-coin model and the cross-coin path has to earn its weight. ``last_attention_rows`` = how many rows had at
     least one peer in the last forward (a diagnostic: 0 means the batches do not hold cross-sections)."""
 
     def __init__(self, d_model: int, layers: int = 1, num_heads: int = 4, dropout: float = 0.1,
-                 peer_dropout: float = 0.0):
+                 peer_dropout: float = 0.0, kind: str = "attention"):
         super().__init__()
-        self.blocks = nn.ModuleList(CrossCoinBlock(d_model, num_heads, dropout, peer_dropout) for _ in range(layers))
+        if kind not in CROSS_COIN_KINDS:
+            raise ValueError(f"cross_coin_kind must be one of {tuple(CROSS_COIN_KINDS)}, not {kind!r}")
+        self.blocks = nn.ModuleList(CROSS_COIN_KINDS[kind](d_model, num_heads, dropout, peer_dropout)
+                                    for _ in range(layers))
         self.out_norm = nn.LayerNorm(d_model)
         self.gate = nn.Parameter(torch.zeros(d_model))
         self.last_attention_rows = 0

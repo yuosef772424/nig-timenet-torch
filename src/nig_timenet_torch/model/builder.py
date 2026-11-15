@@ -78,7 +78,8 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                  input_noise_std=0.0, feature_dropout=0.0, level_passthrough=False, level_norm=None,
                  input_skip="none", n_classes=3, order_detach_close=False, nig_scale=None, bn_warmup=False,
                  readout_dropout=None, input_scaler="none", nig_head="dense", nig_head_dropout=0.0, ffn="swiglu",
-                 ffn_dim=None, cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0):
+                 ffn_dim=None, cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
+                 cross_coin_kind="attention"):
         super().__init__()
         self.n_group_features = None if isinstance(n_features, dict) else int(n_features)  # split_group reads it
         self.nig_head_kind = check_nig_head(nig_head)
@@ -142,7 +143,7 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             if self.timeframes or reads_sequence(nig_head):
                 raise NotImplementedError("cross_coin_layers needs one timeframe and a head that reads the trunk")
             self.cross_coin = CrossCoin(h_dim, int(cross_coin_layers), cross_coin_heads, dropout,
-                                        cross_coin_peer_dropout)
+                                        cross_coin_peer_dropout, cross_coin_kind)
         self.apply_order = enforce_order and set(TARGET_COLUMNS) <= set(self.nig_targets)
         if self.apply_order:
             self.ordered_means = OrderedMeans(nig_scale, order_detach_close)
@@ -343,7 +344,7 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          nig_scale=None, bn_warmup=False, readout_dropout=None, input_scaler="none",
                          nig_head="dense", nig_head_dropout=0.0, ffn="swiglu", ffn_dim=None,
                          cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
-                         **options) -> NigTimeNetV2:
+                         cross_coin_kind="attention", **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
@@ -386,4 +387,4 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         bn_warmup=bn_warmup, readout_dropout=readout_dropout, input_scaler=input_scaler,
         nig_head=nig_head, nig_head_dropout=nig_head_dropout, ffn=ffn, ffn_dim=ffn_dim,
         cross_coin_layers=cross_coin_layers, cross_coin_heads=cross_coin_heads,
-        cross_coin_peer_dropout=cross_coin_peer_dropout)
+        cross_coin_peer_dropout=cross_coin_peer_dropout, cross_coin_kind=cross_coin_kind)
