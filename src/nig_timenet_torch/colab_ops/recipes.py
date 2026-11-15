@@ -28,7 +28,8 @@ REPO = "https://github.com/yuosef772424/nig-timenet-torch.git"
 TOKEN_FILE = "/content/drive/MyDrive/crypto/secrets/github_token.txt"
 ARTIFACT_DRIVE = "/content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1"
 ARTIFACT_LOCAL = "/content/art1"
-ENV_CACHE = "/content/drive/MyDrive/nig_timenet_env"  # the notebook's ENV_CACHE_DIR: one env-<key>.tar lives here
+# the shared project folder `crypto` (other accounts see it): one env-<key>.tar lives here
+ENV_CACHE = "/content/drive/MyDrive/crypto/nig_timenet_env"
 VENV = "/content/nig_venv"
 ENV_SH = "/content/nig_env.sh"  # `. /content/nig_env.sh` puts the cached env + the repo on PYTHONPATH
 _GIT = (

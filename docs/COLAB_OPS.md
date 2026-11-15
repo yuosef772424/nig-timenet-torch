@@ -21,7 +21,7 @@ export COLAB_BRIDGE_TOKEN=<BRIDGE_TOKEN of the cell>
 
 ## The environment cache (nobody installs per conversation)
 
-`setup` restores `/content/drive/MyDrive/nig_timenet_env/env-<key>.tar` (316 MB: numpy, pandas, pyarrow,
+`setup` restores `/content/drive/MyDrive/crypto/nig_timenet_env/env-<key>.tar` (the shared project folder `crypto`, so every account that shares it uses the same env; before 2026-11-15 it lived in `MyDrive/nig_timenet_env`, the notebook's `ENV_CACHE_DIR`: set it to the new path to share it) (316 MB: numpy, pandas, pyarrow,
 pandas-ta-classic, requests and their dependencies, as a venv with `--system-site-packages`) into `/content/nig_venv`
 in ~10 s, and writes `/content/nig_env.sh` (`PYTHONPATH` = the venv + the repo's `src`). Every job line starts with
 `. /content/nig_env.sh`. Colab's own torch is used and never installed.

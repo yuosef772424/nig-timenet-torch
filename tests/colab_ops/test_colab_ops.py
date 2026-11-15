@@ -17,7 +17,7 @@ def test_setup_script_is_valid_bash_idempotent_and_has_no_secret():
     assert recipes.TOKEN_FILE in s and "x-access-token:%s" in s and "$T" in s
     assert "if [ -d" in s and "git fetch" in s and "git clone" in s  # update or clone
     assert "[ -d /content/art1 ] ||" in s  # the artifact copy is skipped when present
-    assert "ensure_env('pyproject.toml', '/content/nig_venv', '/content/drive/MyDrive/nig_timenet_env'" in s
+    assert "ensure_env('pyproject.toml', '/content/nig_venv', '/content/drive/MyDrive/crypto/nig_timenet_env'" in s
     assert "pip install" not in s  # Colab's torch is never replaced
     assert "ghp_" not in s and "github_pat" not in s
 
