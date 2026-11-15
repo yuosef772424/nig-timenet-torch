@@ -175,3 +175,89 @@ python -m nig_timenet_torch.colab_ops start ". /content/nig_env.sh && cd /conten
   --arms transformer:1e-5,transformer:1e-5:scalar_joint,transformer:3e-4,transformer:3e-4:scalar_joint \
   --device cuda" small
 ```
+
+## 5. A direct line into the transformer (`input_skip`), fourth session 2026-11-15
+
+Owner: "if there is doubt about information loss, a line can go to the transformer directly". Card A found no loss on
+the way in (section 1), and the three existing direct paths of the transformer encoder (model/parts.py) agree:
+real slice, 20,000 rows, 2 seeds, to the early stop.
+
+| arm | best val s0 / s1 | mean | IC high | IC low |
+|---|---|---|---|---|
+| transformer (no direct path) | -5.899 / -5.912 | -5.906 | 0.333 | 0.381 |
+| `input_skip: concat_each_block` (the raw patches re-enter before every block) | -5.917 / -5.903 | -5.910 | 0.330 | 0.383 |
+| `input_skip: dense_skip` (every block sees the raw patches and all earlier outputs) | -5.905 / -5.907 | -5.906 | 0.333 | 0.386 |
+| `input_skip: late_raw` (the last 4 bars join the readout) | -5.897 / -5.902 | -5.900 | 0.330 | 0.375 |
+
+Reading: no arm leaves the seed spread. The blocks are not starved of the input; they have nothing more to add.
+
+## 6. The multi-coin model (`cross_coin_layers`, `SplitSettings.cross_section`; D-025)
+
+What existed: `model/panel.py`, the TF port (its own two heads, a (day, pos) grid built by the caller, no training
+path in this project: parked). What was built instead, inside the default architecture so that the trainer, the
+gates, the battery and the reports apply unchanged:
+
+- `model/cross_coin.py`: between the trunk and the heads, the rows of a batch that share a timestamp exchange
+  information; the result enters as `h + gate * (block(h) - h)` with `gate` = 0 at the start, so the model begins
+  as the per-coin model exactly. Two kinds: `attention` (masked self-attention over the coins, optional
+  `cross_coin_peer_dropout`) and `mean` (each coin gets the timestamp's mean, its own minus the mean, and the sd of
+  the trunk, through one hidden layer).
+- The timestamp of a row travels as one extra input channel; `SplitSettings.cross_section` puts every split in
+  time-major order, makes `max_rows` keep WHOLE timestamps, and the trainer then cuts batches and evaluation chunks
+  at timestamp borders (`trainer/groups.py`).
+
+6a. Is the target of a multi-coin model prepared well? (owner question)
+
+Measured on the real slice (150,000 train rows, whole timestamps, ~56-59 coins each; ridge on the simple features;
+rank IC by timestamp on val / test):
+
+| label | share of its variance that is the timestamp's common move | absolute target, own features | + features relative to the timestamp mean | relative target, own features | relative target + relative features |
+|---|---|---|---|---|---|
+| close | 0.60 | -0.008 / -0.010 | +0.007 / +0.013 | -0.003 / +0.002 | +0.007 / +0.012 |
+| high | 0.38 | 0.336 / 0.365 | 0.337 / 0.364 | 0.291 / 0.325 | 0.337 / 0.364 |
+| low | 0.81 | 0.393 / 0.410 | 0.434 / 0.445 | 0.375 / 0.414 | 0.434 / 0.445 |
+
+Reading:
+- The labels are per-coin log returns; 60 % of the close label (and 81 % of the low label) is the move every coin
+  shares at that timestamp. A per-coin model spends its loss on that common part and cannot see it coming; a
+  cross-sectional rank (what a market-neutral trade uses) never needs it.
+- Making the TARGET relative (label minus the timestamp mean) does not by itself raise the ceiling (it lowers it
+  with own features only): the rank metric already ignores the common part.
+- Giving the model the coin RELATIVE TO ITS TIMESTAMP on the input side is what pays: `low` +0.04 rank IC on both
+  val and test, `close` from ~-0.01 to ~+0.01 (inside the noise), `high` nothing.
+- So the present target preparation is sound for the NIG heads (they must stay in price units for the limit-order
+  rows of the battery), and the improvement is on the input / trunk side: cross-sectional context. The TF panel
+  port's own targets ("beats the day median", "scaled relative return") are a different product (a ranking model);
+  they are not needed for that gain and they drop the price units the battery reads. Worth adding later as an EXTRA
+  head (a rank head next to the NIG heads), not as a replacement.
+
+6b. Does the cross-coin block find that gain? (GRU, lr 3e-4, real slice, whole timestamps)
+
+60,000 rows (~1,000 timestamps), 2 seeds:
+
+| arm | best val s0 / s1 | mean | IC high | IC low | IC close |
+|---|---|---|---|---|---|
+| A same rows, ordinary shuffled batches, no block | -5.812 / -5.830 | -5.821 | 0.341 | 0.366 | 0.009 |
+| B whole-timestamp batches, no block | -5.814 / -5.822 | -5.818 | 0.338 | 0.372 | 0.003 |
+| C + attention block | -5.810 / -5.815 | -5.813 | 0.336 | 0.375 | 0.002 |
+| D + attention block, peer dropout 0.2 | -5.811 / -5.811 | -5.811 | 0.339 | 0.367 | -0.002 |
+
+200,000 rows (~3,600 timestamps), seed 0 (seed 1: see the note under the table):
+
+| arm | best val | best epoch | IC high | IC low | IC close |
+|---|---|---|---|---|---|
+| B whole-timestamp batches, no block | -5.912 | 8 | 0.356 | 0.397 | 0.018 |
+| C + attention block | -5.910 | 8 | 0.350 | 0.418 | 0.039 |
+| E + mean block | -5.910 | 6 | 0.359 | 0.427 | 0.058 |
+
+Reading:
+- Whole-timestamp batches cost nothing against shuffled batches on the same rows (A vs B). But whole timestamps at
+  a fixed ROW budget is a poorer sample: 60,000 rows as 1,000 timestamps reach -5.82, the same number of rows
+  strided over all dates reach -5.956 (section 3a), and arm A's best epoch is the first. Cross-section runs need
+  more rows than per-coin runs to cover the same dates.
+- 60,000 rows: the block changes nothing. 200,000 rows, one seed: the validation loss is the same, the TEST rank IC
+  of `low` rises 0.397 -> 0.418 (attention) -> 0.427 (mean) and of `close` 0.018 -> 0.039 -> 0.058. That is the size
+  and the place the ridge check of 6a predicts (+0.04 on `low`), and the simpler `mean` kind does at least as well
+  as attention. One seed: a look (rule C4), to be confirmed by the second seed and by the Drive artifact (535 coins
+  per timestamp), section 7.
+
