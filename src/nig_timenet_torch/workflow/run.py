@@ -32,6 +32,8 @@ from nig_timenet_torch.data_io.loading import LoadedData
 from nig_timenet_torch.eval.target_report import target_report
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.model.heads import head_spec
+from nig_timenet_torch.model.label_scale import fit_label_scale
+from nig_timenet_torch.model.scalers import fit_scalers
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
 from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
@@ -45,6 +47,7 @@ from nig_timenet_torch.workflow.settings import RunSettings
 __all__ = ["Run", "prepare", "build", "train", "restore", "health_step", "test_step", "battery_step", "write_summary",
            "run_all", "test_lines", "SUMMARY", "TEST_REPORT"]
 
+RESTORE_WEIGHTS = ("best", "last")  # restore(weights=...): best-epoch weights (default) or the last finished epoch
 SUMMARY = "baseline_summary.json"
 TEST_REPORT = "test_report.json"
 
@@ -75,7 +78,8 @@ class Run:
         """PredictionTable of ALL rows of ``stage`` (the model holds the best weights after fit)."""
         _need(self, "result", "train")
         if stage not in self.x:
-            self.x[stage], self.y[stage] = flat_run.flat_inputs(self.dataset, self.idx[stage])
+            self.x[stage], self.y[stage] = flat_run.flat_inputs(self.dataset, self.idx[stage],
+                                                                self.settings.split.cross_section)
         return flat_run.predict_stage(self.trainer, self.dataset, self.idx[stage], self.x[stage], self.ident,
                                       self.device, stage=stage, train_end=self.bounds[0],
                                       chunk=self.settings.evaluation.chunk)
@@ -97,10 +101,13 @@ def prepare(settings: RunSettings, out=None) -> Run:
     run_common.check_decode(ds, targets)
     run_common.input_key(ds)
     (tr, va, te), bounds = run_common.make_plan(ds, settings.split)
+    if settings.split.exclude_coins:
+        names = ", ".join(settings.split.exclude_coins)
+        print(f"excluded coins ({len(settings.split.exclude_coins)}): {names}", flush=True)
     run = Run(settings, art, targets, {"train": tr, "val": va, "test": te}, bounds, run_common.pick_device(settings),
               None if out is None else Path(out))
     for stage in ("train", "val"):
-        run.x[stage], run.y[stage] = flat_run.flat_inputs(ds, run.idx[stage])
+        run.x[stage], run.y[stage] = flat_run.flat_inputs(ds, run.idx[stage], settings.split.cross_section)
     return run
 
 
@@ -112,6 +119,11 @@ def build(run: Run) -> Run:
     run.ms = flat_run.model_settings(s.model, run.targets)
     run.trainer = flat_run.make_trainer(s, run.ms, run.targets, run.x["train"].shape[1], run.x["train"].shape[2],
                                         run.device)
+    fit_label_scale(run.trainer.model, run.y["train"])   # FX2: a fitted NIG label scale learns from TRAIN only
+    # train-fitted state of the model (input scaler, NIG label scale): TRAIN rows only; a resume / restore then
+    # loads the same values from the checkpoint. Empty for a model without such modules.
+    x_fit = run.x["train"][..., :-1] if s.split.cross_section else run.x["train"]   # without the timestamp channel
+    run.extra["fitted_scalers"] = fit_scalers(run.trainer.model, x_fit, run.y["train"])
     run.fit_settings = flat_run.fit_settings_of(s)
     run.ident = run_common.run_identity(run.trainer, run.fit_settings, run.ms, run.art, s)
     return run
@@ -134,10 +146,15 @@ def train(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
     return run
 
 
-def restore(run: Run, *, allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:
-    """Instead of ``train``: read a FINISHED run folder (``settings.run_dir``) and put its best-epoch weights in the
-    model, so the evaluation steps re-read a trained model without training (T5r). The saved RunIdentity must equal
-    this run's except for ``allow_changes`` (default: the commit; settings, seed and data must be the same)."""
+def restore(run: Run, *, weights: str = "best", allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:
+    """Instead of ``train``: read a FINISHED run folder (``settings.run_dir``) and put its weights in the model, so the
+    evaluation steps re-read a trained model without training (T5r). ``weights``: ``"best"`` (default) = the
+    best-epoch weights (``best.pt``); ``"last"`` = the weights after the last finished epoch (``checkpoint.pt``; the EMA
+    copy when the run trained with ``ema_decay``, exactly what ``fit`` leaves in the model without
+    ``restore_best_weights``). The saved RunIdentity must equal this run's except for ``allow_changes`` (default: the
+    commit; settings, seed and data must be the same)."""
+    if weights not in RESTORE_WEIGHTS:
+        raise ValueError(f"restore: weights must be one of {RESTORE_WEIGHTS}, got {weights!r}")
     _need(run, "trainer", "build")
     run_dir = Path(run.settings.run_dir)
     ckpt = checkpoint.load_checkpoint(run_dir)
@@ -146,12 +163,15 @@ def restore(run: Run, *, allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:
     check_resume(RunIdentity.from_json(json.loads(ckpt["identity"])), run.ident,
                  allow_changes=("epochs", *allow_changes))
     tracker = ckpt["tracker"]
-    if tracker.get("best_epoch") is None:
-        raise ValueError(f"{run_dir}: the checkpoint records no best epoch")
-    run.trainer.model.load_state_dict(checkpoint.load_best(run_dir))
+    if weights == "best":
+        if tracker.get("best_epoch") is None:
+            raise ValueError(f"{run_dir}: the checkpoint records no best epoch")
+        run.trainer.model.load_state_dict(checkpoint.load_best(run_dir))
+    else:
+        run.trainer.model.load_state_dict(ckpt["ema"]["shadow"] if "ema" in ckpt else ckpt["model"])
     history = list(ckpt["history"])
     run.result = FitResult(history, int(ckpt["epochs_done"]), tracker["best_epoch"], tracker["best"],
-                           len(history) < run.fit_settings.epochs, True)
+                           len(history) < run.fit_settings.epochs, weights == "best")
     return run
 
 

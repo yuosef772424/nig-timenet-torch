@@ -1,7 +1,13 @@
-"""Kendall et al. uncertainty task weighting (source: crypto-signal-prediction trainer/task_weighting.py @ aeafc564).
+"""Kendall et al. uncertainty task weighting.
 
-total = sum_t 0.5 * exp(-log_var_t) * L_t + 0.5 * log_var_t. Only valid for POSITIVE task losses: the trainer keeps
-evidential tasks (NIG NLL can go negative) out of it (``uncertainty_weighting_exclude_task_types``).
+PURPOSE: Kendall uncertainty weighting: total = sum_t 0.5 exp(-log_var_t) L_t + 0.5 log_var_t over the trainer's
+    non-excluded (positive-loss) tasks; the log-variances are learned parameters with a configurable start value.
+TAGS: kendall, uncertainty weighting, task weighting, log variance, multi-task, class heads
+PITFALLS: only valid for POSITIVE task losses: the trainer keeps evidential tasks (NIG NLL can go negative) out of it
+    (``uncertainty_weighting_exclude_task_types``); at equilibrium log_var_t -> log L_t, so any fixed loss multiplier
+    on a Kendall task is learned away (why ``trainer.loss_balance`` refuses Kendall tasks); ``init_log_var`` (FX2,
+    default 0.0 = as before) is the start value of every log-variance (B-060 candidate).
+SOURCE: crypto-signal-prediction trainer/task_weighting.py @ aeafc564
 """
 
 import torch
@@ -11,11 +17,11 @@ __all__ = ["UncertaintyWeightedLoss"]
 
 
 class UncertaintyWeightedLoss(nn.Module):
-    def __init__(self, task_names: list[str]):
+    def __init__(self, task_names: list[str], init_log_var: float = 0.0):
         super().__init__()
         self.task_names = list(task_names)
         for t in self.task_names:
-            setattr(self, f"log_var_{t}", nn.Parameter(torch.zeros(())))
+            setattr(self, f"log_var_{t}", nn.Parameter(torch.full((), float(init_log_var))))
 
     def log_var(self, t: str) -> nn.Parameter:
         return getattr(self, f"log_var_{t}")

@@ -181,6 +181,12 @@ Registered options in `FitSettings` / `Trainer`, defaults reproduce today (D-nnn
 - Output: the verified cause(s) and the switch each implies (input to T6c); failed ideas get a TF failure-registry row.
 - Acceptance: the M1 effect size is explained (or the remaining unexplained part stated), each claim with seed spread.
 
+### ST1 — staged training (`feat` + `exp`, M, builder then researcher; owner 2026-11-15)
+- Spec, definitions, baselines, tests and the accept rule: `docs/audit/2026-11-14-model-first/cards/F_iterative_training.md`.
+  Train on a part of the data until the eval-mode train / validation gap shows memorisation, add rows, lower the lr,
+  repeat; compare against equal-step baselines (all rows constant lr; all rows with the same lr decay).
+- Acceptance: the card's section 6 tests green; the per-stage table and the B1 / B2 / B3 comparison on >= 2 seeds.
+
 ### TR2 — input pipeline and step time (`feat`, S-M, builder)
 - Switches, default today with equal outputs proven (same batches, same order): pinned memory + non-blocking copy,
   a one-batch prefetch, the whole training tensor on the GPU when it fits, AMP fp16 with GradScaler (default off).

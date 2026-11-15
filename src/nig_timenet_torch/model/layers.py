@@ -13,9 +13,8 @@ import torch.nn.functional as F
 from torch import nn
 
 __all__ = ["InstanceNorm", "STATS_TRANSFORMS", "SymLog", "CausalMultiScaleDecomp", "keras_dense_weight_to_torch",
-           "keras_conv1d_weight_to_torch", "num_patches", "PatchEmbedding",
-           "RMSNorm", "RelativeGQAttention", "SwiGLU", "TransformerBlock",
-           "LastToken", "AttentionPool", "FiLM", "GatedFusion",
+           "keras_conv1d_weight_to_torch", "num_patches", "PatchEmbedding", "RMSNorm", "RelativeGQAttention", "SwiGLU",
+           "TransformerBlock", "LastToken", "AttentionPool", "FiLM", "GatedFusion",
            "BatchNormChannelsLast", "SpatialDropout1D", "GaussianNoise", "KerasGRU"]
 
 
@@ -250,20 +249,21 @@ class SwiGLU(nn.Module):
 
 class TransformerBlock(nn.Module):
     """Pre-norm block (source: model/transformer.py TransformerBlock):
-    x = x + drop1(attn(norm1(x))); x = x + drop2(ffn(norm2(x))). Dropout is identity in eval()."""
+    x = x + drop1(attn(norm1(x))); x = x + drop2(ffn(norm2(x))). Dropout is identity in eval(). ``ffn`` (FFN_KINDS):
+    "none" = attention only (no norm2 / ffn / drop2 parameters); ``ffn_dim`` = SwiGLU hidden width (None = 8/3 d)."""
+    FFN_KINDS = {"swiglu": SwiGLU, "none": None}  #: feed-forward kinds (None = attention only)
 
     def __init__(self, d_model, num_heads, num_kv_heads=None, max_rel_pos=16, causal=False, window=None,
-                 dropout=0.1, attn_dropout=0.0):
+                 dropout=0.1, attn_dropout=0.0, ffn="swiglu", ffn_dim=None):
         super().__init__()
-        self.norm1, self.norm2 = RMSNorm(d_model), RMSNorm(d_model)
+        self.norm1, self.norm2 = RMSNorm(d_model), RMSNorm(d_model) if self.FFN_KINDS[ffn] else None
         self.attn = RelativeGQAttention(d_model, num_heads, num_kv_heads, max_rel_pos, causal, window, attn_dropout)
-        self.ffn = SwiGLU(d_model)
-        self.drop1, self.drop2 = nn.Dropout(dropout), nn.Dropout(dropout)
+        self.ffn = self.FFN_KINDS[ffn](d_model, ffn_dim) if self.FFN_KINDS[ffn] else None
+        self.drop1, self.drop2 = nn.Dropout(dropout), nn.Dropout(dropout) if self.ffn is not None else None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x + self.drop1(self.attn(self.norm1(x)))
-        x = x + self.drop2(self.ffn(self.norm2(x)))
-        return x
+        return x if self.ffn is None else x + self.drop2(self.ffn(self.norm2(x)))
 
 
 class LastToken(nn.Module):

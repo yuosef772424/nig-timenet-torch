@@ -79,8 +79,10 @@ def test_first_call_builds_and_packs_the_second_restores_without_pip(tmp_path, p
     run = FakeRun()
     first = ec.ensure_env(project, venv, str(cache), run=run, **kw)
     assert first["source"] == "built" and Path(first["tar"]).is_file() and len(run.cmds) == 2
+    assert "--without-pip" in run.cmds[0] and "--system-site-packages" in run.cmds[0]  # ensurepip fails on Colab
     pip = run.cmds[1]
     assert pip[:3] == [str(Path(venv, "bin", "python")), "-m", "pip"] and "-c" in pip
+    assert "--ignore-installed" in pip
     constraints = Path(pip[pip.index("-c") + 1]).read_text()
     assert constraints == "torch==2.15.0+cu126\n"  # torch is pinned, never installed
     assert "torch" not in Path(pip[pip.index("-r") + 1]).read_text()
@@ -139,3 +141,24 @@ def test_activate_puts_site_packages_first_and_reports_modules_already_imported(
     assert sys.path[0] == str(sp) and got["already_imported"] == ["sys"]
     with pytest.raises(ec.EnvCacheError, match="no site-packages"):
         ec.activate_env(str(tmp_path / "missing"))
+
+
+def test_default_key_ignores_the_python_patch_level(project, monkeypatch):
+    v = type("V", (tuple,), {"major": 3, "minor": 13})
+    monkeypatch.setattr(ec.sys, "version_info", v((3, 13, 16, "final", 0)))
+    a = ec.environment_key(project, torch_version="2.14.1")[0]
+    monkeypatch.setattr(ec.sys, "version_info", v((3, 13, 18, "final", 0)))
+    assert ec.environment_key(project, torch_version="2.14.1")[0] == a
+
+
+def test_unpack_over_an_existing_venv_whose_python_is_a_symlink_outside_it(tmp_path):
+    """The restore after a build in the same session: venv/bin/python -> the system python must not read as unsafe."""
+    venv = tmp_path / "venv"
+    (venv / "bin").mkdir(parents=True)
+    (venv / "bin" / "python").symlink_to(sys.executable)          # points OUTSIDE venv
+    (venv / "lib").mkdir()
+    (venv / "lib" / "x.py").write_text("x = 1\n")
+    tar = tmp_path / "env.tar"
+    ec.pack(str(venv), tar)
+    ec.unpack(tar, str(venv))                                      # the venv still exists with its symlink
+    assert (venv / "lib" / "x.py").read_text() == "x = 1\n" and (venv / "bin" / "python").is_symlink()

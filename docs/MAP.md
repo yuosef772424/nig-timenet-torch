@@ -23,6 +23,15 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `colab/runner.py` | One Colab job from queue to results: fetch job.json, refuse / repeat / version a finished job_id, check out the pinned commit, run the entry under a wall-clock guard, publish the bundle to Drive and colab-results. | colab runner, job queue, check rerun, job versions, wall clock guard, publish, rule e1, rule e2 |
 | `colab/session.py` | Section 1 of the notebook, second half (ROADMAP T3): check the device the run will use and record the whole setup. |  |
 
+### colab_ops
+
+| module | what it is for | tags |
+|---|---|---|
+| `colab_ops/__main__.py` | ``python -m nig_timenet_torch.colab_ops <command>``: the Colab steps of every session as one CLI (rt, exec, start, wait, out, put, setup, arms, doctor, runs). | colab ops cli, setup runtime, start job, wait job, read output, repeated steps |
+| `colab_ops/bridge.py` | Synchronous client of the Colab bridge agent (exec, start, output, wait, runtime status, small file put) over the signed HTTP protocol of colab-mcp-bridge; what the CLI and the notebooks call. | colab bridge client, remote exec, background process, wait for process, runtime status, file put |
+| `colab_ops/recipes.py` | Pure builders of the shell text a Colab runtime runs: setup (code + deps + artifact copy), a job start line, the doctor line; no network, no secrets, testable on any machine. | colab recipes, setup script, shell builders, git clone private, artifact copy, doctor command |
+| `colab_ops/scripts/run_models.py` | Script shipped to a Colab runtime: single-model runs (several architectures / encoders) of the sequential-gradient branch, then the evaluation battery at n_variants 1 and 6. | run models script, grad stack, single model, battery, colab script, sequential gradient branch |
+
 ### core
 
 | module | what it is for | tags |
@@ -74,7 +83,21 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `data_io/split_plan.py` | One global train/val/test split with purge by label end and embargo, plus the per-row times it needs (feature start, feature end, label end) derived from last_candles. | split plan, purge embargo, label end, sample times, leakage check |
 | `data_io/synthetic.py` | E1 test environment (MODEL_DEV_PROTOCOL section 3): synthetic 4h bars from intrabar random walks, HAR-like volatility, a planted close drift of known IC; a contract artifact with each label's exact conditional mean / sd. | synthetic data, e1 environment, oracle, planted signal, known ic, heteroscedastic noise, har volatility, intrabar path, contract artifact, gates |
 | `data_io/target_codec.py` | TARGET_CODECS, the one place a regression target is encoded from last_candles and decoded back to a price: "return" (own-anchor simple return) and "logret_close" (log return vs the last close, TF logret_* artifacts). | target codec, return target, log return, reg target scale, decode to price, own anchor, anchor column |
+| `data_io/vision_slice.py` | A REAL-data stand-in for the owner's Drive artifact, buildable anywhere: public Binance USDT-perp 4h klines -> a contract artifact with the real artifact's definition (log-move inputs, log-return labels). | real data, binance vision, klines, logret artifact, contract artifact, doctor, e3 source, cpu readiness run |
 | `data_io/walk_max.py` | Exact moments of the running maximum M_n = max(0, S_1..S_n) of a Gaussian random walk with iid N(mu, s^2) steps (Spitzer's identity), vectorised over rows: mean, variance and E[exp(theta M_n)]. | random walk, running maximum, spitzer identity, exact moments, moment generating function, oracle, synthetic |
+
+### doctor
+
+| module | what it is for | tags |
+|---|---|---|
+| `doctor/__main__.py` | ``python -m nig_timenet_torch.doctor``: command-line entry of the readiness report (doctor/readiness.py). | doctor, entry point, cli, readiness report |
+| `doctor/block_use.py` | Card A, transformer part: is each transformer block used, and by which sublayer (attention or feed-forward)? Update size, attention entropy, and the change of mu and of the label rank IC when a part is off. | doctor, card a, transformer block, attention, swiglu, feed forward, ablation, update ratio, attention entropy |
+| `doctor/common.py` | Shared pieces of the model doctor: the Check row, verdict helpers, report table, DoctorContext (one run through the workflow steps), the purged time-ordered ridge probe and the simple-feature baseline. | doctor, check row, readiness table, probe, ridge probe, purged folds, simple baseline, har features, context |
+| `doctor/data_checks.py` | Card C: is the data sound? Label / window alignment, codec round trip, unit scales, split purity and shift, the information ceiling of the inputs, duplicates / effective sample size, coverage counts. | doctor, card c, data checks, leakage, label alignment, codec round trip, split purity, distribution shift, input information ceiling, near duplicate windows, effective sample size, flat bars, clipped labels |
+| `doctor/info_flow.py` | Card A: where is information lost or gained inside the model? Probes each stream stage in forward order for every signal (labels, E1 oracle means, tracers) next to the strong simple baseline. | doctor, card a, information flow, stage probe, tracer, path ablation, readout gap, effective rank, dead units |
+| `doctor/metric_checks.py` | Card D: do the numbers mean what we say? Every metric next to its trivial baseline, the decode path to price, profit after cost with its uncertainty, and the selection metric against the trading goal. | doctor, card d, metric checks, trivial baseline, climatology, nll, coverage, sharpness, decode round trip, profit after cost, block bootstrap, selection metric, trading goal |
+| `doctor/readiness.py` | Card E — the readiness report: ONE command runs cards A-D on a configuration and prints, per check: stage, check, value, baseline, verdict and what to change; then the diagnosis: which stage to work on first. | doctor, card e, readiness report, entry point, diagnosis, which stage, cli |
+| `doctor/trainer_checks.py` | Card B: does the trainer guide the model to learn? One-batch overfit, gradient / update health, loss balance, LR range, E1 oracle, shuffled labels, selection regret, resume, train vs eval mode. | doctor, card b, trainer checks, overfit one batch, lr range test, update ratio, loss balance, shuffled labels, resume, train eval gap, batch norm moving statistics, selection regret, oracle |
 
 ### eval
 
@@ -108,15 +131,20 @@ line range). A module without a card shows its first docstring line; it gets a c
 | module | what it is for | tags |
 |---|---|---|
 | `model/architectures.py` | The ARCHITECTURES registry (build_fn + default_config per architecture), ModelSettings / build_model, the anti-memorization preset and the TinyMLP plug-in proof; every architecture exposes the health-report hooks. | architectures, registry, model settings, default config, tiny mlp, plugin, health report, probe points |
+| `model/attn_heads.py` | Experimental NIG output head without a Dense readout: ScalarOutputAttention (one learned query per output attends over the head sequence) and ScalarNIGHead (mu, nu, alpha, beta from it); selected by ``nig_head``. | attention head, scalar output attention, nig head, joint attention, factorized attention, head sequence, dense readout, experiment |
 | `model/builder.py` | NigTimeNetV2 (the fused model: input path, one encoder branch per timeframe, trunk, heads) and build_nig_timenet_v2; encoders come from model.encoders.ENCODERS, head kinds from HEAD_REGISTRY. | builder, nig timenet v2, model assembly, encoder dispatch, head dispatch, oracle weights, state dict |
 | `model/contract.py` | The boundary contract of a model (input and output names, shapes, dtypes, head kind), read from any built model by one forward pass and checked with a field-level diff; architectures plug in through it. | model contract, boundary, architecture, plugin, head kind, check_contract |
-| `model/encoders.py` | The ENCODERS registry: each encoder builds its modules through the model's ``add(name, module)`` (Keras layer names, so state_dict keys are unchanged) and owns its forward over the token sequence. | encoders, encoder registry, transformer, gru, tcn, causal conv, sequence encoder, plugin |
+| `model/cross_coin.py` | The multi-coin parts of NigTimeNetV2: ``cross_input`` (each coin's window relative to its timestamp's market, bar by bar) and ``cross_coin_layers`` (rows of one timestamp exchange information after the trunk). | cross coin, panel, cross asset, multi coin, attention across coins, time group, group channel, residual, zero init |
+| `model/encoders.py` | The ENCODERS registry: each encoder builds its modules through the model's ``add(name, module)`` (Keras layer names, so state_dict keys are unchanged) and owns its forward over the token sequence. | encoders, encoder registry, transformer, gru, tcn, itransformer, conv transformer, causal conv, plugin |
 | `model/heads.py` | The ONE head vocabulary: HEAD_REGISTRY (a head KIND -> output keys, label key, task type, output width, forward), head_spec, and the nig_outputs / class_outputs helpers that assemble a head's output dict. | heads, head registry, head spec, output keys, nig outputs, class outputs, task type, output width |
+| `model/label_scale.py` | LABEL_SCALES, the registered NIG head scale component (B-052, FX2): ``fixed`` (the nig_scale override or none) or ``train_std`` (fit on the TRAINING labels: s = mean std of the NIG labels, stored as a model buffer). | label scale, nig scale, beta floor, b-052, learned state, fit on train, registry, model buffer |
 | `model/layers.py` | The layer classes of NIG-TimeNet v2 (instance norm, symlog, decomposition, patch embedding, relative GQA attention, transformer block, pooling, FiLM, gated fusion, Keras-style GRU) with TF-identical numerics. | layers, instance norm, stats mode, symlog, attention, transformer block, gru, film, keras port |
 | `model/nig_layers.py` | The NIG head layers: NIGHead (mu/nu/alpha/beta with floors; FX1 output scale), OrderedMeans (high >= close >= low; FX1 scale / detach close), NIGUncertainty, ConfidenceHead. | nig head, ordered means, evidential, uncertainty, confidence head, softplus offset, head parametrisation |
+| `model/oracle_weights.py` | Loading the TF oracle's weights (weights.json attr_paths) into a torch model: the name / layout translation (Keras kernel -> torch weight) and ``OracleWeights.load_oracle_weights`` (a mixin of NigTimeNetV2). | oracle weights, keras to torch, attr path, weights json, load oracle weights, parity |
 | `model/panel.py` | Cross-asset panel model (source: crypto-signal-prediction cross_asset/model.py @ aeafc564), BUILD_PLAN.md P43. |  |
 | `model/parts.py` | The registered input_skip variants of the transformer encoder (none, concat_each_block, dense_skip, late_raw, no_proj); class flags say what a variant adds, so builders never compare variant names. | input skip, variants, transformer encoder, patch embedding, readout, registry, flags |
 | `model/probe.py` | Per-layer ridge-probe report: forward-hook activations of named modules fitted to a label with time-ordered folds (AUC for binary y, else R^2), the raw input scored next to every layer. | probe, layer probe, ridge, activations, forward hook, health report |
+| `model/scalers.py` | The train-fitted scaling state kept INSIDE the model (buffers): InputScaler (per-channel input standardisation) and the fitted NIG label scale; fit_scalers() is the ONE place either is fitted. | input scaler, train statistics, standardisation, label scale, fitted state, buffers, logret_std, unfitted |
 | `model/taps.py` | Inspection-only taps: record the output of every (or chosen) named module of ANY architecture into a dict during a forward pass, per-layer summaries, and a signal trace (ridge R^2 of a known signal per layer). | taps, layer outputs, inspection, diagnostics, forward hook, signal trace, dead units, model doctor |
 
 ### stats
@@ -133,12 +161,15 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `trainer/batch_set.py` | The representative batch set of MODEL_DEV_PROTOCOL section 1: R batches of the training split drawn with a fixed seed, each holding rows of >= 32 coins (all if fewer) spread over the whole training time range. | representative batch set, gradient gate, trainer trace, stratified batches, coins, time range, fixed seed |
 | `trainer/checkpoint.py` | Checkpoint files of a run folder (ROADMAP T1; TF source: trainer/checkpoints.py, simplified). |  |
 | `trainer/grad_report.py` | Gate A of MODEL_DEV_PROTOCOL section 2 (gradient health, checks A1-A7) on the representative batch set, with the planned optimizer and learning rate; one call = one measurement (step 0 or the end of a short run). | gate a, gradient health, grad report, dead parameters, update weight ratio, head gradient share, head conflict, dead units, representative batch set |
+| `trainer/groups.py` | Batches and evaluation chunks that hold WHOLE groups (timestamps), for a model whose rows interact inside a batch (model/cross_coin.py); the group id of a row is the last input channel at the last bar. | group batches, time groups, cross section, batch order, evaluation chunks, cross coin, group channel |
 | `trainer/identity.py` | RunIdentity: the persisted, immutable fingerprint of a run (settings hash incl. the WHOLE trainer config, seed, data fingerprint, code sha); ``check_resume`` refuses a resume whose identity changed. | run identity, fingerprint, resume, settings hash, checkpoint, ResumeMismatchError |
+| `trainer/log_groups.py` | Device-side training logs and their grouped read-back (Keras steps_per_execution): the logs of N steps stay 0-d tensors and are moved to the host together, one sync per group instead of one per step. | steps per execution, training logs, host sync, grouped logs, epoch means, tensor logs |
+| `trainer/loss_balance.py` | Registered per-head loss balancers (LOSS_BALANCERS: none, equal_grad_norm): multipliers on the per-target losses so that every head's gradient on the shared representation has the same norm (B-060, gate A5; FX2). | loss balance, gradient normalisation, gradnorm, multi-task, head gradient share, gate a5, b-060, registry |
 | `trainer/schedules.py` | Lambda / learning-rate schedules (ROADMAP T1; source: crypto-signal-prediction trainer/schedules.py, identical at |  |
 | `trainer/selection_metric.py` | SELECTION_METRICS registry: named, fixed validation metrics for checkpoint / early-stopping selection (val_raw_loss, per-head AUC and pinball). | selection metric, early stopping, checkpoint selection, validation, auc, pinball |
 | `trainer/switches.py` | Registered training switches of TR1 / D-021: weight initialisation (INITS: torch, keras), weight-decay parameter groups (WEIGHT_DECAY_GROUPS: all_params, exclude_norm_bias) and the EMA copy of the weights of fit. | training switches, init registry, keras init, glorot, orthogonal, weight decay groups, ema weights, tr1 |
 | `trainer/targets.py` | The trainer config schema: ``validate_trainer_config`` (unknown keys raise), ``resolve_targets`` / ``resolve_loss`` (defaults filled once) and ``targets_config``, the ONE builder of the targets (from HeadSpec). | trainer config, strict config, validate, targets_config, HeadSpec, task config_keys, loss defaults, did you mean |
-| `trainer/task_weighting.py` | Kendall et al. uncertainty task weighting (source: crypto-signal-prediction trainer/task_weighting.py @ aeafc564). |  |
+| `trainer/task_weighting.py` | Kendall uncertainty weighting: total = sum_t 0.5 exp(-log_var_t) L_t + 0.5 log_var_t over the trainer's non-excluded (positive-loss) tasks; the log-variances are learned parameters with a configurable start value. | kendall, uncertainty weighting, task weighting, log variance, multi-task, class heads |
 | `trainer/tasks.py` | TASK_REGISTRY: the task losses (evidential NIG, regression, classification) with, per task, the registered ``config_keys`` (the options a target config may carry) and ``default_options`` (their values when left out). | task loss, task registry, evidential, classification, regression, config_keys, default_options, calibration |
 | `trainer/trace.py` | T4 trainer trace: what the loss weighting and the schedules did, one row of numbers per epoch (log-only), and the per-head gradients on the shared parameters that the trace and gate A5 / A6 read. | trainer trace, gradient share, kendall weights, schedules, head gradients, shared trunk, log only |
 | `trainer/tracker.py` | Best epoch + early stopping in one resumable object (ROADMAP T1; source: crypto-signal-prediction |  |
@@ -169,11 +200,14 @@ line range). A module without a card shows its first docstring line; it gets a c
 | architecture | `ARCHITECTURES` | `model/architectures.py` | `nig_timenet_v2`, `tiny_mlp` |
 | calibrator | `CALIBRATORS` | `eval/calibrator.py` | `isotonic` |
 | custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` | `ath_distance`, `calendar`, `crash_rebound`, `direction_consistency`, `fisher`, `fractal`, `jump`, `mean_reversion`, `position_in_range`, `psar`, `range_rel`, `returns`, `risk_adj_momentum`, `rsi_divergence`, `rvi`, `supertrend`, `trend_age`, `vol_asymmetry`, `vol_estimators`, `vol_ratio`, `vol_term_structure`, `volume_z` |
-| encoder | `ENCODERS` | `model/encoders.py` | `gru`, `tcn`, `transformer` |
+| encoder | `ENCODERS` | `model/encoders.py` | `conv_transformer`, `gru`, `itransformer`, `tcn`, `transformer` |
 | head | `HEAD_REGISTRY` | `model/heads.py` | `binary_classification`, `multiclass_classification`, `nig_regression` |
 | init | `INITS` | `trainer/switches.py` | `keras`, `torch` |
+| input_scaler | `INPUT_SCALERS` | `model/scalers.py` | `none`, `train_std` |
 | input_skip | `INPUT_SKIP_VARIANTS` | `model/parts.py` | `concat_each_block`, `dense_skip`, `late_raw`, `no_proj`, `none` |
-| selection_metric | `SELECTION_METRICS` | `trainer/selection_metric.py` | `val_auc_close_class`, `val_auc_high_class`, `val_auc_low_class`, `val_pinball_close_reg`, `val_pinball_high_reg`, `val_pinball_low_reg`, `val_raw_loss` |
+| label_scale | `LABEL_SCALES` | `model/label_scale.py` | `fixed`, `train_std` |
+| loss_balance | `LOSS_BALANCERS` | `trainer/loss_balance.py` | `equal_grad_norm`, `none` |
+| selection_metric | `SELECTION_METRICS` | `trainer/selection_metric.py` | `val_auc_close_class`, `val_auc_high_class`, `val_auc_low_class`, `val_pinball_close_reg`, `val_pinball_high_reg`, `val_pinball_low_reg`, `val_rank_ic_close_reg`, `val_rank_ic_high_reg`, `val_rank_ic_low_reg`, `val_rank_ic_reg`, `val_raw_loss` |
 | source | `SOURCES` | `data/sources.py` | `files`, `synthetic` |
 | target_codec | `TARGET_CODECS` | `data_io/target_codec.py` | `logret_close`, `return` |
 | target_raw | `TARGET_RAW` | `data/targets.py` | `entry_range`, `magnitude`, `return`, `return_close`, `scaled`, `volnorm`, `window_scale` |
@@ -183,9 +217,14 @@ line range). A module without a card shows its first docstring line; it gets a c
 ## Entry points
 
 - `colab/__main__.py`: runnable (`python -m nig_timenet_torch.colab`)
+- `colab_ops/__main__.py`: runnable (`python -m nig_timenet_torch.colab_ops`)
+- `colab_ops/scripts/run_models.py`: runnable (`python -m nig_timenet_torch.colab_ops.scripts.run_models`)
 - `data/cli.py`: runnable (`python -m nig_timenet_torch.data.cli`)
 - `data_io/artifact.py`: runnable (`python -m nig_timenet_torch.data_io.artifact`)
 - `data_io/environments.py`: runnable (`python -m nig_timenet_torch.data_io.environments`)
+- `data_io/vision_slice.py`: runnable (`python -m nig_timenet_torch.data_io.vision_slice`)
+- `doctor/__main__.py`: runnable (`python -m nig_timenet_torch.doctor`)
+- `doctor/readiness.py`: runnable (`python -m nig_timenet_torch.doctor.readiness`)
 - `jobs/baseline.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/device_smoke.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/gates.py`: job entry (`docs/jobs/*.json` name it)

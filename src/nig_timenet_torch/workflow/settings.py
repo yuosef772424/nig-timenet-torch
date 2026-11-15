@@ -20,7 +20,15 @@ from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, Mode
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 
 __all__ = ["RollingSettings", "RunSettings", "ROLLING_MODES", "SplitSettings", "TrainSettings", "EvalSettings",
-           "BatterySettings", "default_model_settings"]
+           "BatterySettings", "default_model_settings", "MODEL_FIRST_FIXES"]
+
+#: Model overrides every run gets on top of the anti-memorization preset since the 2026-11-14 model-first audit
+#: (docs/audit/2026-11-14-model-first/NOTES.md N-01..N-04; E1, 3 seeds: blocking gate fails 7.7 -> 2.7 at 3 epochs and
+#: 7.3 -> 2.7 at 10): BatchNorm moving statistics that follow the data from the first step, high / low offsets that
+#: no longer drag the close mean, train-standardised inputs. The audit also set ``nig_scale="train_std"`` (NIG heads in
+#: train-fitted label units); the run default takes the same idea from ``RUN_DEFAULT_SWITCHES["nig_scale_fit"]``
+#: (D-023) instead, the two are exclusive (D-026, owner to confirm). ``bn_warmup`` / ``order_detach_close`` agree.
+MODEL_FIRST_FIXES = {"bn_warmup": True, "order_detach_close": True, "input_scaler": "train_std"}
 
 ROLLING_MODES = ("expanding", "sliding")
 
@@ -58,14 +66,29 @@ class SplitSettings:
     val_share: float = 0.10              # TF data/defaults.py val_pct
     embargo_hours: float = 0.0           # 0: the split already purges by label end
     max_rows: int | None = None          # smoke mode (rule E5): at most this many rows per split, evenly strided
+    exclude_coins: tuple[str, ...] = ()  # coins whose rows leave train, val AND test (after the time split; names as in
+                                         # asset_bounds, with or without USDT, any case); () = keep every coin
+    # cross-coin runs (model/cross_coin.py): rows of each split in time-major order, ``max_rows`` keeps WHOLE
+    # timestamps (evenly strided over the dates), the inputs get the timestamp-id channel and the trainer cuts
+    # batches and evaluation chunks at timestamp borders
+    cross_section: bool = False
+    # keep only the ``top_coins`` coins with the most TRAIN rows (the longest history; the artifact holds no volume
+    # to rank liquidity by), in every split. None = all coins.
+    top_coins: int | None = None
 
     def __post_init__(self):
+        coins = (self.exclude_coins,) if isinstance(self.exclude_coins, str) else tuple(self.exclude_coins)
+        if not all(isinstance(c, str) and c.strip() for c in coins):
+            raise ValueError(f"exclude_coins must be coin names (non-empty strings), got {self.exclude_coins!r}")
+        object.__setattr__(self, "exclude_coins", coins)
         if bool(self.train_end) != bool(self.val_end):
             raise ValueError("train_end and val_end are given together or not at all")
         if not (0.0 < self.train_share and 0.0 < self.val_share and self.train_share + self.val_share < 1.0):
             raise ValueError("train_share and val_share must be > 0 and sum to less than 1")
         if self.embargo_hours < 0:
             raise ValueError("embargo_hours must be >= 0")
+        if self.top_coins is not None and (isinstance(self.top_coins, bool) or self.top_coins < 1):
+            raise ValueError(f"top_coins must be None or an integer >= 1, got {self.top_coins!r}")
         if self.max_rows is not None and (isinstance(self.max_rows, bool) or self.max_rows < 1):
             raise ValueError(f"max_rows must be None or an integer >= 1, got {self.max_rows!r}")
 
@@ -83,6 +106,7 @@ class TrainSettings:
     device: str = "auto"                                   # "auto" = cuda when available, else cpu
     trace_representative: bool = False                     # trainer trace on the representative batch set (D-019)
     # D-021 switches (TR1 + the B-060 / B-062 candidates); every default reproduces the run before D-021
+    steps_per_execution: int = 1                           # Keras steps_per_execution (speed only)
     grad_clip_norm: float | None = None                    # B-018 (TF 1.0)
     ema_decay: float | None = None                         # B-018 (TF use_ema)
     init: str = "torch"                                    # B-007: trainer.switches.INITS ("keras")
@@ -93,9 +117,12 @@ class TrainSettings:
     lambda_calib_end: float = 0.1                          # end value of the NIG calibration term
     beta_nll: float = 0.0                                  # FX1 / B-062: NIG NLL x stop_grad(w_St^2)^beta_nll
     beta_nll_normalize: bool = False                       # FX1: beta-NLL weights / their batch mean
+    # D-023 switches (FX2, B-060 / gate A5); defaults reproduce the run before D-023
+    loss_balance: str = "none"                             # trainer.loss_balance.LOSS_BALANCERS
+    kendall_init_logvar: float = 0.0                       # start value of the Kendall log-variances
 
     def __post_init__(self):
-        for name in ("epochs", "batch_size"):
+        for name in ("epochs", "batch_size", "steps_per_execution"):
             v = getattr(self, name)
             if isinstance(v, bool) or not isinstance(v, int) or v < 1:
                 raise ValueError(f"TrainSettings.{name} must be an integer >= 1, got {v!r}")
@@ -128,10 +155,17 @@ class EvalSettings:
             raise ValueError("chunk and health_max_rows must be >= 1")
 
 
+#: D-023 (owner 2026-11-09): the FX1 / FX2 switches the E1 evidence showed useful are ON in the run default; the
+#: builder's own defaults (and the TF-parity preset ANTI_MEMORIZATION_CONFIG) are unchanged
+RUN_DEFAULT_SWITCHES = {"bn_warmup": True, "order_detach_close": True, "nig_scale_fit": "train_std",
+                        "nig_trunk_grad": 0.3}
+
+
 def default_model_settings() -> ModelSettings:
     """The model every run builds unless told otherwise: ``nig_timenet_v2`` with the anti-memorization preset (the TF
-    ``main.ipynb`` model, BUILD_PLAN.md V1)."""
-    return ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))
+    ``main.ipynb`` model, BUILD_PLAN.md V1) plus ``RUN_DEFAULT_SWITCHES`` (D-023) and ``MODEL_FIRST_FIXES`` (D-026).
+    The model before both is ``ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))``."""
+    return ModelSettings("nig_timenet_v2", {**ANTI_MEMORIZATION_CONFIG, **RUN_DEFAULT_SWITCHES, **MODEL_FIRST_FIXES})
 
 
 @dataclass(frozen=True)

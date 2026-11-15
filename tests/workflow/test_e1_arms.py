@@ -51,5 +51,9 @@ def test_cli_runs_an_arm_and_writes_rows_calibration_and_readout(e1, capsys):
     assert {"high", "low", "close"} == set(r["mu"]) == set(r["readout"])
     assert set(r["readout"]["high"]) == {"model", "readout"} and np.isfinite(r["readout"]["high"]["readout"]["corr"])
     assert any(x["gate"] == "A" for x in r["rows"]) and any(x["gate"] == "C" for x in r["rows"])
+    assert set(r["class_auc"]) == {"high", "low", "close"} and len(r["a5"]) == len(r["a6"]) == 2
+    probe = r["a6_probe_end"]
+    assert set(probe) == {"raw", "centred"} and set(probe["raw"]) == set(probe["centred"])
+    assert all("_class" not in k and -1.0 <= v <= 1.0 for k, v in probe["centred"].items())
     assert (e1 / "out" / "res_tiny.json").is_file()
     assert capsys.readouterr().out.splitlines()[-1].startswith("tiny")
