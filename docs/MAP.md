@@ -23,6 +23,15 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `colab/runner.py` | One Colab job from queue to results: fetch job.json, refuse / repeat / version a finished job_id, check out the pinned commit, run the entry under a wall-clock guard, publish the bundle to Drive and colab-results. | colab runner, job queue, check rerun, job versions, wall clock guard, publish, rule e1, rule e2 |
 | `colab/session.py` | Section 1 of the notebook, second half (ROADMAP T3): check the device the run will use and record the whole setup. |  |
 
+### colab_ops
+
+| module | what it is for | tags |
+|---|---|---|
+| `colab_ops/__main__.py` | ``python -m nig_timenet_torch.colab_ops <command>``: the Colab steps of every session as one CLI (rt, exec, start, wait, out, put, setup, arms, doctor, runs). | colab ops cli, setup runtime, start job, wait job, read output, repeated steps |
+| `colab_ops/bridge.py` | Synchronous client of the Colab bridge agent (exec, start, output, wait, runtime status, small file put) over the signed HTTP protocol of colab-mcp-bridge; what the CLI and the notebooks call. | colab bridge client, remote exec, background process, wait for process, runtime status, file put |
+| `colab_ops/recipes.py` | Pure builders of the shell text a Colab runtime runs: setup (code + deps + artifact copy), a job start line, the doctor line; no network, no secrets, testable on any machine. | colab recipes, setup script, shell builders, git clone private, artifact copy, doctor command |
+| `colab_ops/scripts/run_models.py` | Script shipped to a Colab runtime: single-model runs (several architectures / encoders) of the sequential-gradient branch, then the evaluation battery at n_variants 1 and 6. | run models script, grad stack, single model, battery, colab script, sequential gradient branch |
+
 ### core
 
 | module | what it is for | tags |
@@ -198,6 +207,8 @@ line range). A module without a card shows its first docstring line; it gets a c
 ## Entry points
 
 - `colab/__main__.py`: runnable (`python -m nig_timenet_torch.colab`)
+- `colab_ops/__main__.py`: runnable (`python -m nig_timenet_torch.colab_ops`)
+- `colab_ops/scripts/run_models.py`: runnable (`python -m nig_timenet_torch.colab_ops.scripts.run_models`)
 - `data/cli.py`: runnable (`python -m nig_timenet_torch.data.cli`)
 - `data_io/artifact.py`: runnable (`python -m nig_timenet_torch.data_io.artifact`)
 - `data_io/environments.py`: runnable (`python -m nig_timenet_torch.data_io.environments`)
