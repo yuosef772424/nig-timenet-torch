@@ -90,6 +90,7 @@ class TrainSettings:
     device: str = "auto"                                   # "auto" = cuda when available, else cpu
     trace_representative: bool = False                     # trainer trace on the representative batch set (D-019)
     # D-021 switches (TR1 + the B-060 / B-062 candidates); every default reproduces the run before D-021
+    steps_per_execution: int = 1                           # Keras steps_per_execution (speed only)
     grad_clip_norm: float | None = None                    # B-018 (TF 1.0)
     ema_decay: float | None = None                         # B-018 (TF use_ema)
     init: str = "torch"                                    # B-007: trainer.switches.INITS ("keras")
@@ -102,7 +103,7 @@ class TrainSettings:
     beta_nll_normalize: bool = False                       # FX1: beta-NLL weights / their batch mean
 
     def __post_init__(self):
-        for name in ("epochs", "batch_size"):
+        for name in ("epochs", "batch_size", "steps_per_execution"):
             v = getattr(self, name)
             if isinstance(v, bool) or not isinstance(v, int) or v < 1:
                 raise ValueError(f"TrainSettings.{name} must be an integer >= 1, got {v!r}")

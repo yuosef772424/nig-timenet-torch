@@ -1,5 +1,5 @@
 {
- "fingerprint": "a1b78c94d8771c85",
+ "fingerprint": "daef78fb193edbdb",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -90,6 +90,7 @@
   "nig_timenet_torch.colab_ops.recipes.arms_line(battery)": "True",
   "nig_timenet_torch.colab_ops.recipes.arms_line(n_variants)": "1",
   "nig_timenet_torch.colab_ops.recipes.arms_line(repo)": "'/content/nig-timenet-torch'",
+  "nig_timenet_torch.colab_ops.recipes.arms_line(spe)": "1",
   "nig_timenet_torch.colab_ops.recipes.doctor_line(batch_size)": "128",
   "nig_timenet_torch.colab_ops.recipes.doctor_line(repo)": "'/content/nig-timenet-torch'",
   "nig_timenet_torch.colab_ops.recipes.doctor_line(seed)": "0",
@@ -734,6 +735,7 @@
   "nig_timenet_torch.trainer.trainer.FitSettings(init)": "'torch'",
   "nig_timenet_torch.trainer.trainer.FitSettings(lr)": "None",
   "nig_timenet_torch.trainer.trainer.FitSettings(seed)": "0",
+  "nig_timenet_torch.trainer.trainer.FitSettings(steps_per_execution)": "1",
   "nig_timenet_torch.trainer.trainer.FitSettings(trace)": "False",
   "nig_timenet_torch.trainer.trainer.Trainer(optimizer)": "None",
   "nig_timenet_torch.trainer.trainer.Trainer(selection_metric)": "'val_raw_loss'",
@@ -843,6 +845,7 @@
   "nig_timenet_torch.workflow.settings.TrainSettings(lr)": "0.001",
   "nig_timenet_torch.workflow.settings.TrainSettings(seed)": "0",
   "nig_timenet_torch.workflow.settings.TrainSettings(selection_metric)": "'val_raw_loss'",
+  "nig_timenet_torch.workflow.settings.TrainSettings(steps_per_execution)": "1",
   "nig_timenet_torch.workflow.settings.TrainSettings(trace_representative)": "False",
   "nig_timenet_torch.workflow.settings.TrainSettings(uncertainty_weighting)": "True",
   "nig_timenet_torch.workflow.settings.TrainSettings(weight_decay)": "0.0001",

@@ -6,7 +6,9 @@
 One RunSettings per arm (default model = preset + MODEL_FIRST_FIXES, encoder and lr changed); prints the epoch lines
 and the test scalars, writes OUT/<arm>/{baseline_summary,test_report}.json and OUT/arms.json (one row per arm).
 """
+
 import argparse
+import hashlib
 import json
 import pathlib
 import time
@@ -29,11 +31,17 @@ def arm_settings(a, encoder: str, lr: float, out: pathlib.Path) -> RunSettings:
     base = default_model_settings()
     model = ModelSettings(base.architecture, {**base.overrides, "encoder": encoder})
     return RunSettings(
-        run_dir=str(out / "ckpt"), data=LoaderSettings(name=a.artifact, mmap=True),
-        split=SplitSettings(max_rows=a.rows), model=model,
-        train=TrainSettings(epochs=a.epochs, batch_size=a.batch_size, seed=a.seed, lr=lr, device=a.device),
-        evaluation=EvalSettings(health_max_rows=2000,
-                                battery=BatterySettings(enabled=a.battery, n_variants=a.n_variants)))
+        run_dir=str(out / "ckpt"),
+        data=LoaderSettings(name=a.artifact, mmap=True),
+        split=SplitSettings(max_rows=a.rows),
+        model=model,
+        train=TrainSettings(
+            epochs=a.epochs, batch_size=a.batch_size, seed=a.seed, lr=lr, device=a.device, steps_per_execution=a.spe
+        ),
+        evaluation=EvalSettings(
+            health_max_rows=2000, battery=BatterySettings(enabled=a.battery, n_variants=a.n_variants)
+        ),
+    )
 
 
 def main():
@@ -43,6 +51,7 @@ def main():
     p.add_argument("--batch-size", type=int, default=128), p.add_argument("--seed", type=int, default=0)
     p.add_argument("--arms", default="gru:3e-4,transformer:3e-4"), p.add_argument("--device", default="auto")
     p.add_argument("--battery", action="store_true", help="run the evaluation battery (val + test, T-profit)")
+    p.add_argument("--spe", type=int, default=1, help="steps_per_execution (speed only; weights must not change)")
     p.add_argument("--n-variants", type=int, default=1, help="variants tried so far (widens the battery CIs)")
     a = p.parse_args()
     out = pathlib.Path(a.out)
@@ -59,10 +68,26 @@ def main():
             steps.battery_step(r)
         summ = steps.write_summary(r)
         flat = dict(steps._flat(rep))
-        keep = {k: v for k, v in flat.items() if "per_coin" not in k and ("rank_ic" in k or "auc" in k
-                or k.endswith("mae_skill") or "skill" in k and "nll" in k)}
-        rows.append({"arm": name, "best_epoch": summ["best_epoch"], "best_value": summ["best_value"],
-                     "epochs_done": summ["epochs_done"], "seconds": round(time.time() - t0, 1), **keep})
+        keep = {
+            k: v
+            for k, v in flat.items()
+            if "per_coin" not in k
+            and ("rank_ic" in k or "auc" in k or k.endswith("mae_skill") or "skill" in k and "nll" in k)
+        }
+        h = hashlib.sha256()  # fingerprint of the weights the run ended with (live model)
+        for k, v in sorted(r.trainer.model.state_dict().items()):
+            h.update(k.encode() + v.detach().cpu().contiguous().numpy().tobytes())
+        rows.append(
+            {
+                "arm": name,
+                "weights_sha256": h.hexdigest()[:16],
+                "best_epoch": summ["best_epoch"],
+                "best_value": summ["best_value"],
+                "epochs_done": summ["epochs_done"],
+                "seconds": round(time.time() - t0, 1),
+                **keep,
+            }
+        )
         print("\n".join(steps.test_lines(rep)), flush=True)
         out.mkdir(parents=True, exist_ok=True)
         (out / "arms.json").write_text(json.dumps(rows, indent=1, default=float))

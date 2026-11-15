@@ -95,10 +95,12 @@ def arms_line(
     device: str,
     battery: bool = True,
     n_variants: int = 1,
+    spe: int = 1,
     repo: str = "/content/nig-timenet-torch",
 ) -> str:
     """The small-sample encoder x lr arms (docs/audit/2026-11-14-model-first/quick_arms.py)."""
     flags = f" --battery --n-variants {int(n_variants)}" if battery else ""
+    flags += f" --spe {int(spe)}" if spe != 1 else ""
     return (
         f". {ENV_SH} && cd {shlex.quote(repo)} && "
         f"python -u docs/audit/2026-11-14-model-first/quick_arms.py {ARTIFACT_LOCAL} "

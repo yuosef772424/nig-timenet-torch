@@ -52,6 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--seed", type=int, default=0)
     a.add_argument("--device", default="cuda")
     a.add_argument("--no-battery", action="store_true")
+    a.add_argument("--spe", type=int, default=1, help="steps_per_execution")
     a.add_argument("--n-variants", type=int, default=1)
     d = sub.add_parser("doctor", help="model doctor on a finished run's best weights, in the background")
     d.add_argument("run_dir")
@@ -110,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
                     device=a.device,
                     battery=not a.no_battery,
                     n_variants=a.n_variants,
+                    spe=a.spe,
                 ),
                 "arms",
             )

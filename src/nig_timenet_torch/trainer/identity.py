@@ -143,6 +143,7 @@ def _payload(fit_settings, model_settings, trainer_config, optimizer) -> dict:
     fit = _as_dict(fit_settings, "fit_settings")
     fit.pop("epochs", None)
     fit.pop("trace", None)  # log-only (T4): switching the trace on must not change a run's identity
+    fit.pop("steps_per_execution", None)  # speed only (same updates in the same order): not part of the identity
     for key, default in FIT_SWITCH_DEFAULTS.items():  # D-021: a switch at its default keeps the old identity
         if key in fit and fit[key] == default:
             del fit[key]
