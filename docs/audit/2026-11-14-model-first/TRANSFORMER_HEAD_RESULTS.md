@@ -131,6 +131,47 @@ Reading:
   compared before it had finished; and the encoder was the GRU, not the transformer. Section 4 repeats it to the
   stop.
 
-## 4. Drive artifact, Colab T4
+## 4. Drive artifact, Colab T4 (2026-11-15): partial, the runtime went offline
 
-Pending in this file: see the section added below when the runs finish.
+Artifact `preprocessing_output_1` (535 coins, 2,506,192 windows), code 43b317d and later, seed 0 unless said, batch
+128. `sel` = `val_raw_loss` per epoch (lower is better). The tunnel answered HTTP 530 before the last arms finished,
+so there are NO test numbers (IC) from these runs and the lr 3e-4 pair of 4b has two epochs only.
+
+4a. lr 1e-5, 200,000 rows per split, default-size transformer (SwiGLU), first two epochs (then stopped: a validation
+pass over 200,000 rows per epoch made an epoch ~7 minutes, 60 epochs ~7 hours):
+
+| head | sel epoch 1 | epoch 2 |
+|---|---|---|
+| dense | -6.089 | -6.226 |
+| scalar_joint | -5.513 | -5.693 |
+
+4b. The owner's fast setting: small transformer without SwiGLU (`ffn: none`, 79,918 weights), 60,000 rows, 10 epochs,
+`steps_per_execution` 32 (45 s per epoch):
+
+| lr | head | sel by epoch (1 .. 10) |
+|---|---|---|
+| 1e-5 | dense | -5.558 -5.854 -6.015 -6.096 -6.147 -6.184 -6.213 -6.241 -6.264 -6.280 |
+| 1e-5 | scalar_joint | -5.404 -5.436 -5.476 -5.522 -5.573 -5.624 -5.674 -5.724 -5.770 -5.812 |
+| 3e-4 | dense | -6.458 -6.478 (runtime lost) |
+| 3e-4 | scalar_joint | -6.323 -6.393 (runtime lost) |
+
+4c. lr 3e-4, 60,000 rows, default-size transformer (SwiGLU), Dense head, stopped by hand at epoch 14 to free the
+runtime: best sel -6.537 (seed 0, epoch 9) and -6.534 (seed 1, epoch 9), flat from epoch 4.
+
+Reading: on the Drive artifact at lr 1e-5 the attention head is far behind the Dense head at every epoch of a 10-epoch
+run (-5.81 against -6.28) and both are still falling at epoch 10, the attention head almost linearly: at this lr it
+has not left its start (N-24). With an early stop the Dense run plateaus and stops first, and the attention run keeps
+improving for many more epochs: the owner's "more epochs". Whether it then ENDS below the Dense head's plateau
+(about -6.53 at lr 3e-4) was not reached here. What settles it: both heads at lr 1e-5 to the early stop on the same
+rows and seed, 2 seeds (at 45 s per epoch and ~0.045 per epoch the attention head needs roughly 20 more epochs to
+reach -6.5; `--epochs 60 --patience 8`, about 45 minutes per arm on the T4), or the lr 3e-4 pair of 4b to the stop
+(10 minutes per arm):
+
+```bash
+python -m nig_timenet_torch.colab_ops setup ccr-adb40d84-31jfyt
+python -m nig_timenet_torch.colab_ops start ". /content/nig_env.sh && cd /content/nig-timenet-torch && python -u \
+  docs/audit/2026-11-14-model-first/quick_arms.py /content/art1 /content/out_small --rows 60000 --epochs 60 \
+  --patience 8 --seed 0 --spe 32 --model '{\"ffn\": \"none\"}' --tag _noffn \
+  --arms transformer:1e-5,transformer:1e-5:scalar_joint,transformer:3e-4,transformer:3e-4:scalar_joint \
+  --device cuda" small
+```
