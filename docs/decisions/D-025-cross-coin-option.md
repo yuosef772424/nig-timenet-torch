@@ -27,3 +27,30 @@ end to end); measured arms in `docs/audit/2026-11-14-model-first/TRANSFORMER_HEA
   its difference from the timestamp's mean, that difference in units of the timestamp's sd, and the mean itself.
 - Selection metrics `val_rank_ic_reg` and `val_rank_ic_<target>_reg` (cross-sectional rank IC of the NIG mean; the
   trainer passes the timestamps on a cross-section run). The default stays `val_raw_loss`.
+
+## New defaults (pinned as they are; each keeps the behaviour before the option existed)
+- `nig_timenet_torch.model.builder.NigTimeNetV2(cross_coin_heads)`: `<new>` -> `4`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(cross_coin_kind)`: `<new>` -> `'attention'`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(cross_coin_layers)`: `<new>` -> `0`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(cross_coin_peer_dropout)`: `<new>` -> `0.0`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(cross_input)`: `<new>` -> `'none'`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_coin_heads)`: `<new>` -> `4`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_coin_kind)`: `<new>` -> `'attention'`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_coin_layers)`: `<new>` -> `0`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_coin_peer_dropout)`: `<new>` -> `0.0`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_input)`: `<new>` -> `'none'`
+- `nig_timenet_torch.model.cross_coin.CrossCoin(dropout)`: `<new>` -> `0.1`
+- `nig_timenet_torch.model.cross_coin.CrossCoin(kind)`: `<new>` -> `'attention'`
+- `nig_timenet_torch.model.cross_coin.CrossCoin(layers)`: `<new>` -> `1`
+- `nig_timenet_torch.model.cross_coin.CrossCoin(num_heads)`: `<new>` -> `4`
+- `nig_timenet_torch.model.cross_coin.CrossCoin(peer_dropout)`: `<new>` -> `0.0`
+- `nig_timenet_torch.model.cross_coin.CrossCoinBlock(dropout)`: `<new>` -> `0.1`
+- `nig_timenet_torch.model.cross_coin.CrossCoinBlock(num_heads)`: `<new>` -> `4`
+- `nig_timenet_torch.model.cross_coin.CrossCoinBlock(peer_dropout)`: `<new>` -> `0.0`
+- `nig_timenet_torch.model.cross_coin.CrossSectionPool(dropout)`: `<new>` -> `0.1`
+- `nig_timenet_torch.model.cross_coin.CrossSectionPool(num_heads)`: `<new>` -> `4`
+- `nig_timenet_torch.model.cross_coin.CrossSectionPool(peer_dropout)`: `<new>` -> `0.0`
+- `nig_timenet_torch.trainer.groups.group_batches(shuffle)`: `<new>` -> `True`
+- `nig_timenet_torch.workflow.flat_run.flat_inputs(time_channel)`: `<new>` -> `False`
+- `nig_timenet_torch.workflow.settings.SplitSettings(cross_section)`: `<new>` -> `False`
+- `nig_timenet_torch.workflow.settings.SplitSettings(top_coins)`: `<new>` -> `None`
