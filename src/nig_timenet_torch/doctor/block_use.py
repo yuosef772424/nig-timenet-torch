@@ -1,6 +1,5 @@
-"""PURPOSE: Card A, transformer part: does information pass THROUGH each transformer block, and which sublayer
-    (attention or feed-forward) carries it? Size of each sublayer's update, attention entropy, and how much the
-    outputs move and the label rank IC falls when a sublayer or the whole block is switched off.
+"""PURPOSE: Card A, transformer part: is each transformer block used, and by which sublayer (attention or
+    feed-forward)? Update size, attention entropy, and the change of mu and of the label rank IC when a part is off.
 TAGS: doctor, card a, transformer block, attention, swiglu, feed forward, ablation, update ratio, attention entropy
 PITFALLS: forward hooks on ``block.attn`` / ``block.ffn`` in eval mode, so the weights and the training are untouched;
     a switched-off sublayer is a ZERO update on a model that was trained WITH it: it shows what the trained model uses,
@@ -21,7 +20,7 @@ import torch
 from nig_timenet_torch.doctor.common import Check
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.model.layers import TransformerBlock
-from nig_timenet_torch.stats.metrics import spearman
+from nig_timenet_torch.stats.metrics import pearson, spearman
 
 __all__ = ["block_use", "transformer_blocks", "switched_off"]
 
@@ -100,7 +99,7 @@ def block_use(model, x: torch.Tensor, y: dict[str, np.ndarray], targets) -> tupl
                     continue
                 with switched_off(block, off):
                     cut = _mus(model, x, targets)
-                change = {t: 1.0 - abs(float(np.corrcoef(base[t], cut[t])[0, 1])) for t in targets}
+                change = {t: 1.0 - abs(float(np.nan_to_num(pearson(base[t], cut[t])))) for t in targets}
                 d_ic = {t: float(spearman(y[t], cut[t])) - base_ic[t] for t in targets}
                 row = {"block": name, "part": part, "update_ratio": sizes[name].get(part, float("nan")),
                        "attn_entropy": sizes[name]["attn_entropy"], "mu_change": max(change.values()),

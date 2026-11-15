@@ -259,7 +259,7 @@ def info_flow(ctx: DoctorContext, *, max_rows: int | None = None) -> tuple[list[
                                 m, "0 = the outputs ignore the path", "warn" if m < 0.01 else "info",
                                 "the outputs do not depend on this path (dead weight, or its gradient is blocked)"
                                 if m < 0.01 else "", change))
-    blocks, ctx.notes["block_use"] = block_use(model, x, {t: signals[f"y_{t}"] for t in ctx.targets}, ctx.targets)
+    blocks, ctx.notes["block_use"] = block_use(model, x, {t: y[reg_key(t)] for t in ctx.targets}, ctx.targets)
     checks.extend(blocks)   # 4b. transformer blocks: is each block, and its attention / feed-forward part, used?
     # 5. does training create information? the same probe on an untrained twin
     twin = fresh_trainer(ctx, seed=ctx.seed + 1000).model
