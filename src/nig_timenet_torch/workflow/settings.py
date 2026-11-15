@@ -93,6 +93,9 @@ class TrainSettings:
     lambda_calib_end: float = 0.1                          # end value of the NIG calibration term
     beta_nll: float = 0.0                                  # FX1 / B-062: NIG NLL x stop_grad(w_St^2)^beta_nll
     beta_nll_normalize: bool = False                       # FX1: beta-NLL weights / their batch mean
+    # D-023 switches (FX2, B-060 / gate A5); defaults reproduce the run before D-023
+    loss_balance: str = "none"                             # trainer.loss_balance.LOSS_BALANCERS
+    kendall_init_logvar: float = 0.0                       # start value of the Kendall log-variances
 
     def __post_init__(self):
         for name in ("epochs", "batch_size"):
@@ -128,10 +131,16 @@ class EvalSettings:
             raise ValueError("chunk and health_max_rows must be >= 1")
 
 
+#: D-023 (owner 2026-11-09): the FX1 / FX2 switches the E1 evidence showed useful are ON in the run default; the
+#: builder's own defaults (and the TF-parity preset ANTI_MEMORIZATION_CONFIG) are unchanged
+RUN_DEFAULT_SWITCHES = {"bn_warmup": True, "order_detach_close": True, "nig_scale_fit": "train_std",
+                        "nig_trunk_grad": 0.3}
+
+
 def default_model_settings() -> ModelSettings:
     """The model every run builds unless told otherwise: ``nig_timenet_v2`` with the anti-memorization preset (the TF
-    ``main.ipynb`` model, BUILD_PLAN.md V1)."""
-    return ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))
+    ``main.ipynb`` model, BUILD_PLAN.md V1) plus ``RUN_DEFAULT_SWITCHES`` (D-023)."""
+    return ModelSettings("nig_timenet_v2", {**ANTI_MEMORIZATION_CONFIG, **RUN_DEFAULT_SWITCHES})
 
 
 @dataclass(frozen=True)

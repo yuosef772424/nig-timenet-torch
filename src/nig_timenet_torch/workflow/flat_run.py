@@ -92,10 +92,14 @@ def trainer_config(targets, label_smoothing: float, train: TrainSettings | None 
     schedules = copy.deepcopy(LAMBDA_SCHEDULES)
     schedules["lambda_reg"]["end"] = t.lambda_reg_end
     schedules["lambda_calib"]["end"] = t.lambda_calib_end
+    loss = {"use_uncertainty_weighting": t.uncertainty_weighting,
+            "uncertainty_weighting_exclude_task_types": ["evidential"], "schedules": schedules}
+    if t.loss_balance != TrainSettings.loss_balance:          # FX2 switches: only when set (config pinned)
+        loss["balance"] = t.loss_balance
+    if t.kendall_init_logvar != TrainSettings.kendall_init_logvar:
+        loss["kendall_init_logvar"] = t.kendall_init_logvar
     return {"targets": targets_config({t_: list(HEAD_KINDS) for t_ in targets}, options_by_kind=options),
-            "loss": {"use_uncertainty_weighting": t.uncertainty_weighting,
-                     "uncertainty_weighting_exclude_task_types": ["evidential"], "schedules": schedules},
-            "constraints": []}
+            "loss": loss, "constraints": []}
 
 
 def make_trainer(settings: RunSettings, ms: ModelSettings, targets, seq_len: int, n_features: int,

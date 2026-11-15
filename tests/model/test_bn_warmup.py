@@ -43,7 +43,7 @@ def test_warmup_moving_stats_are_the_mean_of_the_batches_seen():
 
 def test_model_override_reaches_both_batch_norms_and_default_keeps_the_state_dict():
     base = default_model_settings()
-    plain = build_model(base, 32, 3)
+    plain = build_model(ModelSettings(base.architecture, {**base.overrides, "bn_warmup": False}), 32, 3)
     warm = build_model(ModelSettings(base.architecture, {**base.overrides, "bn_warmup": True}), 32, 3)
     bns = [m for m in warm.modules() if isinstance(m, BatchNormChannelsLast)]
     assert len(bns) == 2 and all(m.warmup for m in bns)

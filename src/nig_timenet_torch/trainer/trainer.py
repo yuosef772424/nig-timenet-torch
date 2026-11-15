@@ -27,6 +27,7 @@ from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
+from nig_timenet_torch.trainer.loss_balance import make_balancer
 from nig_timenet_torch.trainer.schedules import LrSettings, ParamSchedule, apply_schedules, lr_at
 from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS, check_selectable, compute_selection_metric
 from nig_timenet_torch.trainer.switches import INITS, EmaWeights, apply_init
@@ -89,12 +90,13 @@ def weight_for_target(sample_weight, target_name: str, tcfg: dict):
 def compute_losses(model: torch.nn.Module, x, y, targets_cfg: dict, scheduled_vars: dict[str, float],
                    loss_weights: dict[str, float], uncertainty_layer: UncertaintyWeightedLoss | None,
                    kendall_task_names: list[str], fixed_task_names: list[str], sample_weight=None,
-                   training: bool = False, outputs: dict | None = None):
+                   training: bool = False, outputs: dict | None = None, multipliers: dict | None = None):
     """-> (total_loss, raw_loss, per_target_losses, per_stat_values, per_constraint_values).
     raw_loss = sum of loss * loss_weight (no Kendall terms) + regularisation; total applies Kendall to
     kendall_task_names and adds fixed_task_names unweighted. ``training`` only gates flooding (the model's own
     train()/eval() mode gates dropout). ``outputs``: precomputed model(x) (then x is not used). ``targets_cfg`` must be
-    RESOLVED (``targets.resolve_targets``: base and task defaults filled)."""
+    RESOLVED (``targets.resolve_targets``: base and task defaults filled). ``multipliers``: the loss balancer's
+    per-target factors (FX2, ``trainer.loss_balance``; None = 1.0), applied with ``loss_weight``."""
     if outputs is None:
         outputs = model(x)
     per_target, per_stat = {}, {}
@@ -111,7 +113,7 @@ def compute_losses(model: torch.nn.Module, x, y, targets_cfg: dict, scheduled_va
         flood = tcfg["flood_level"]
         if training and flood is not None:
             loss = (loss - float(flood)).abs() + float(flood)
-        per_target[t] = loss * float(loss_weights[t])
+        per_target[t] = loss * (float(loss_weights[t]) * (1.0 if multipliers is None else multipliers[t]))
         for k, v in stats.items():
             per_stat[f"{t}_{k}"] = torch.as_tensor(v, dtype=torch.float32)
 
@@ -156,7 +158,13 @@ class Trainer:
         self.kendall_task_names = [t for t, c in self.targets_cfg.items()
                                    if use_kendall and c["task_type"] not in excluded]
         self.fixed_task_names = [t for t in self.target_names if t not in self.kendall_task_names]
-        self.uncertainty_layer = UncertaintyWeightedLoss(self.kendall_task_names) if self.kendall_task_names else None
+        self.uncertainty_layer = (UncertaintyWeightedLoss(self.kendall_task_names, loss_cfg["kendall_init_logvar"])
+                                  if self.kendall_task_names else None)
+        self.balancer, self._shared = make_balancer(loss_cfg["balance"], self.target_names,
+                                                    self.kendall_task_names), None
+        if self.balancer.needs_shared:   # FX2: h of the last forward (the model names its shared module)
+            dict(model.named_modules())[model.balance_point].register_forward_hook(
+                lambda _m, _i, out: setattr(self, "_shared", out))
         first = next(iter(model.parameters()), None)
         if self.uncertainty_layer is not None and first is not None:  # Kendall log-vars live on the model's device
             self.uncertainty_layer.to(first.device)
@@ -182,7 +190,8 @@ class Trainer:
     def compute_losses(self, x, y, sample_weight=None, training: bool = False, outputs: dict | None = None):
         return compute_losses(self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights,
                               self.uncertainty_layer, self.kendall_task_names, self.fixed_task_names,
-                              sample_weight=sample_weight, training=training, outputs=outputs)
+                              sample_weight=sample_weight, training=training, outputs=outputs,
+                              multipliers=self.balancer.multipliers())
 
     @staticmethod
     def batch_indices(n: int, batch_size: int, shuffle: bool = True) -> list[torch.Tensor]:
@@ -206,6 +215,7 @@ class Trainer:
         self.model.train()
         self.optimizer.zero_grad(set_to_none=True)
         total, raw, per_target, stats, _ = self.compute_losses(x, y, sample_weight=sample_weight, training=True)
+        self.balancer.update(per_target, self._shared)
         total.backward()
         if grad_clip_norm is not None:
             torch.nn.utils.clip_grad_norm_(list(self.parameters()), grad_clip_norm)
@@ -271,6 +281,8 @@ class Trainer:
                  "optimizer": self.optimizer.state_dict(), "history": history,
                  "kendall": None if self.uncertainty_layer is None else self.uncertainty_layer.state_dict(),
                  "identity": json.dumps(identity.to_json(), sort_keys=True)}
+        if self.balancer.needs_shared:  # FX2 balancer state; a default checkpoint keeps its keys
+            state["balance"] = self.balancer.state_dict()
         if ema is not None:  # only with the switch on: a default checkpoint keeps its keys
             state["ema"] = ema.state_dict()
         return state
@@ -284,6 +296,8 @@ class Trainer:
         if self.uncertainty_layer is not None:
             self.uncertainty_layer.load_state_dict(ckpt["kendall"])
         self.optimizer.load_state_dict(ckpt["optimizer"])
+        if self.balancer.needs_shared:
+            self.balancer.load_state_dict(ckpt["balance"])
         tracker.load_state(ckpt["tracker"])
         return list(ckpt["history"])
 
