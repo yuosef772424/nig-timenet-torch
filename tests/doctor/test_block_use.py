@@ -28,10 +28,11 @@ def test_rows_per_block_and_part_and_the_model_is_left_as_it_was():
     model, (x, y) = _model(), _xy()
     before = model.eval()(x)["y_close"].clone()
     checks, rows = block_use(model, x, y, TARGET_COLUMNS)
-    assert [(r["block"], r["part"]) for r in rows] == [(b, p) for b in ("block_1", "block_2")
-                                                       for p in ("attn", "ffn", "block")]
+    assert [(r["block"], r["part"]) for r in rows] == [
+        *((b, p) for b in ("block_1", "block_2") for p in ("attn", "ffn", "block")), ("all blocks", "block")]
     assert len(checks) == len(rows) and all(c.card == "A" for c in checks)
-    assert all(0.0 < r["attn_entropy"] <= 1.0 + 1e-6 and r["mu_change"] >= 0.0 for r in rows)
+    assert all(0.0 < r["attn_entropy"] <= 1.0 + 1e-6 and r["mu_change"] >= 0.0 for r in rows[:-1])
+    assert rows[-1]["mu_change"] >= max(r["mu_change"] for r in rows[:-1] if r["part"] == "block") - 1e-9
     assert all(r["update_ratio"] > 0 for r in rows if r["part"] != "block")
     assert torch.equal(model(x)["y_close"], before)                     # hooks removed, weights untouched
 
@@ -72,7 +73,7 @@ def test_ffn_none_builds_attention_only_blocks_and_default_keeps_the_keys(encode
     assert all(torch.isfinite(v).all() for v in out.values())
     if encoder == "transformer":
         _, rows = block_use(bare, *_xy(), TARGET_COLUMNS)
-        assert [r["part"] for r in rows] == ["attn", "block"] * 2
+        assert [r["part"] for r in rows] == ["attn", "block"] * 2 + ["block"]
 
 
 def test_ffn_dim_sets_the_swiglu_width_and_unknown_kind_raises():

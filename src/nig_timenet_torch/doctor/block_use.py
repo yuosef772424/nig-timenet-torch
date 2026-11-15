@@ -10,9 +10,10 @@ PITFALLS: forward hooks on ``block.attn`` / ``block.ffn`` in eval mode, so the w
 ``update_ratio`` = RMS(sublayer output) / RMS(the stream it is added to), ``attn_entropy`` = mean entropy of the
 attention rows / log(number of tokens) (1 = uniform attention: the block averages, it does not select),
 ``mu_change`` = max over heads of 1 - |corr(mu, mu without the part)|, ``d_ic`` = worst change of the label rank IC.
+The last row (``all blocks``) switches every block off at once: what the whole attention stack is worth to the outputs.
 """
 
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 
 import numpy as np
 import torch
@@ -93,27 +94,30 @@ def block_use(model, x: torch.Tensor, y: dict[str, np.ndarray], targets) -> tupl
         base_ic = {t: float(spearman(y[t], base[t])) for t in targets}
         sizes = _sizes(model, x, blocks)
         rows, checks = [], []
-        for name, block in blocks.items():
-            for part, off in (("attn", ("attn",)), ("ffn", ("ffn",)), ("block", ("attn", "ffn"))):
-                if part == "ffn" and block.ffn is None:
-                    continue
-                with switched_off(block, off):
-                    cut = _mus(model, x, targets)
-                change = {t: 1.0 - abs(float(np.nan_to_num(pearson(base[t], cut[t])))) for t in targets}
-                d_ic = {t: float(spearman(y[t], cut[t])) - base_ic[t] for t in targets}
-                row = {"block": name, "part": part, "update_ratio": sizes[name].get(part, float("nan")),
-                       "attn_entropy": sizes[name]["attn_entropy"], "mu_change": max(change.values()),
-                       "d_ic": min(d_ic.values()), "mu_change_by_head": change, "d_ic_by_head": d_ic}
-                rows.append(row)
-                dead = part == "block" and row["mu_change"] < _DEAD
-                checks.append(Check(
-                    "A", f"model/{name}", f"{part} use: 1 - |corr(mu, mu with it switched off)|; worst label IC change",
-                    f"{row['mu_change']:.3f}; {row['d_ic']:+.3f}",
-                    f"update / stream {row['update_ratio']:.2f}, attention entropy {row['attn_entropy']:.2f} of uniform"
-                    if part != "block" else "0 = the outputs ignore the block", "warn" if dead else "info",
-                    "the outputs do not use this block: the information goes around it (linear_path, stats) or the "
-                    "block is not trained (card B: gradient share, update ratio); fewer blocks cost nothing"
-                    if dead else "", {k: v for k, v in row.items() if k.endswith("_by_head")}))
+        cases = [(name, block, part, off) for name, block in blocks.items()
+                 for part, off in (("attn", ("attn",)), ("ffn", ("ffn",)), ("block", ("attn", "ffn")))
+                 if not (part == "ffn" and block.ffn is None)]
+        for name, block, part, off in [*cases, ("all blocks", None, "block", ("attn", "ffn"))]:
+            with ExitStack() as stack:                       # the last case switches every block off at once
+                for b in ([block] if block is not None else blocks.values()):
+                    stack.enter_context(switched_off(b, off))
+                cut = _mus(model, x, targets)
+            change = {t: 1.0 - abs(float(np.nan_to_num(pearson(base[t], cut[t])))) for t in targets}
+            d_ic = {t: float(spearman(y[t], cut[t])) - base_ic[t] for t in targets}
+            size = sizes.get(name, {"attn_entropy": float("nan")})
+            row = {"block": name, "part": part, "update_ratio": size.get(part, float("nan")),
+                   "attn_entropy": size["attn_entropy"], "mu_change": max(change.values()),
+                   "d_ic": min(d_ic.values()), "mu_change_by_head": change, "d_ic_by_head": d_ic}
+            rows.append(row)
+            dead = part == "block" and row["mu_change"] < _DEAD
+            checks.append(Check(
+                "A", f"model/{name}", f"{part} use: 1 - |corr(mu, mu with it switched off)|; worst label IC change",
+                f"{row['mu_change']:.3f}; {row['d_ic']:+.3f}",
+                f"update / stream {row['update_ratio']:.2f}, attention entropy {row['attn_entropy']:.2f} of uniform"
+                if part != "block" else "0 = the outputs ignore the block", "warn" if dead else "info",
+                "the outputs do not use this block: the information goes around it (linear_path, stats) or the "
+                "block is not trained (card B: gradient share, update ratio); fewer blocks cost nothing"
+                if dead else "", {k: v for k, v in row.items() if k.endswith("_by_head")}))
         return checks, rows
     finally:
         model.train(was)

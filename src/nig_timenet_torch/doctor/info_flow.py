@@ -255,10 +255,13 @@ def info_flow(ctx: DoctorContext, *, max_rows: int | None = None) -> tuple[list[
                                                      ab[head_spec("nig_regression", t).output_keys["mu"]])[0, 1]))
                       for t in ctx.targets}
             m = max(change.values())
+            mk = {t: head_spec("nig_regression", t).output_keys["mu"] for t in ctx.targets}
+            d_ic = {f"d_ic_{t}": float(spearman(y[reg_key(t)], ab[mk[t]]) - spearman(y[reg_key(t)], outs[mk[t]]))
+                    for t in ctx.targets}                      # the label rank IC lost with the path
             checks.append(Check("A", f"model/{path}", "path use: 1 - |corr(mu, mu with this path's rows shuffled)|",
                                 m, "0 = the outputs ignore the path", "warn" if m < 0.01 else "info",
                                 "the outputs do not depend on this path (dead weight, or its gradient is blocked)"
-                                if m < 0.01 else "", change))
+                                if m < 0.01 else "", {**change, **d_ic}))
     blocks, ctx.notes["block_use"] = block_use(model, x, {t: y[reg_key(t)] for t in ctx.targets}, ctx.targets)
     checks.extend(blocks)   # 4b. transformer blocks: is each block, and its attention / feed-forward part, used?
     # 5. does training create information? the same probe on an untrained twin
