@@ -125,3 +125,7 @@ seeds (by 0.04-0.08), the best low IC and a high IC that the joint head only tie
 of high IC. Best epochs are the last or next to last in every arm: no memorisation shows up at this size, so the
 note's premise is not visible and its head offers nothing here. Still not tested: the note's floors / confidence /
 class-head changes, a run long enough for Dense to overfit, regime-dependence of the attention maps.
+
+> 2026-11-15, third session: the two attention-head tables above ended at their epoch limit (6 and 10 epochs), not at
+> an early stop, and used the GRU encoder. Run to the stop the heads tie at 20,000 rows and the attention head leads by
+> 0.013 at 60,000 rows on the transformer: `TRANSFORMER_HEAD_RESULTS.md` section 3a (the numbers above stay as measured).

@@ -80,3 +80,15 @@ Four tests still described the pre-audit default; each was updated through its o
 (`PIN_UPDATE=1`: new default model, new `fitted_scalers` key), `tests/model/test_bn_warmup.py` (the "default keeps the
 state_dict" test now builds the pre-audit model explicitly), `notebooks/main.ipynb` `CHANGES` (the four new
 `model.overrides`). Whole suite with `-m "slow or not slow"`: 978 passed, 2 skipped; `ruff check src tests` clean.
+
+## 7. After the third session (2026-11-15): transformer, SwiGLU, head
+
+Read `TRANSFORMER_HEAD_RESULTS.md`. What remains, by expected effect:
+
+| # | what | why | what settles it |
+|---|---|---|---|
+| 1 | Inputs, not encoders (unchanged from section 3 row 1) | N-20: the outputs go around the encoder; every encoder and head variant lands on the same IC | add volume / taker-flow channels, rerun card C (ceiling) and card A (`all blocks`, `enc_out` `d_ic`): the encoder is worth work only once these stop being ~0 |
+| 2 | `ffn: none` at the owner's transformer size (d_model 384, 6 blocks, 8 heads) on the Drive artifact | N-21 was measured at d_model 64, 2 blocks, 60 coins | GPU: `quick_arms ... --arms transformer:3e-4 --model '{"d_model":384,"num_layers":6,"num_heads":8,"num_kv_heads":4}'` with and without `"ffn":"none"`, 2 seeds, to the early stop; adopt if val loss and IC do not fall |
+| 3 | Attention head vs Dense to the early stop on the Drive artifact, transformer AND GRU, 2 seeds | N-23: a 0.013 gain at 60,000 rows on the slice; the earlier Colab table stopped at 10 epochs | `--arms transformer:3e-4,transformer:3e-4:scalar_joint,gru:3e-4,gru:3e-4:scalar_joint --rows 60000 --epochs 40 --patience 8`, seeds 0 and 1; a head is better only if it wins on both seeds by more than the seed spread |
+| 4 | A faster-starting attention head | N-24: near-constant at init, lr-starved at 1e-5 | initialise `gain` / the query scale so the output sd across rows at init matches the Dense head's (~0.16), then repeat row 3 at lr 1e-5 |
+
