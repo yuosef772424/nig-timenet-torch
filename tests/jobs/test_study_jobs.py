@@ -69,6 +69,25 @@ def test_configs_are_strict():
         rolling.CONFIG(**ok)                      # the rolling spans have no defaults
 
 
+def test_rolling_entry_pools_the_day_metrics_of_a_single_coin_run(tmp_path, art, monkeypatch):  # noqa: F811
+    """rolling-single-001: the day metrics do not need whole-timestamp batches (no ``split.cross_section``)."""
+    out = run_entry(rolling, tmp_path, "rs", art, monkeypatch, day_metrics=True,
+                    rolling={"train_span": "20D", "test_span": "7D", "step": "10D", "embargo": "1D", "max_folds": 2},
+                    train={"epochs": 1, "selection_metric": "val_raw_loss"})
+    pooled = json.loads((out / "pooled_days_seed_0" / "panel_report.json").read_text())
+    folds = [json.loads((out / f"fold_00{i}_seed_0" / "panel_report.json").read_text()) for i in (0, 1)]
+    assert pooled["test"]["settings"]["rows"] == sum(f["test"]["settings"]["rows"] for f in folds) > 0
+
+
+@pytest.mark.parametrize("name", ["panel-rolling-001", "panel-rolling-base-001", "rolling-single-001",
+                                  "rolling-single-smoke-001"])
+def test_walk_forward_job_files_build_their_config(name):
+    job = parse_job((ROOT / "docs" / "jobs" / f"{name}.json").read_text())
+    cfg = rolling.CONFIG(**job["config"])
+    assert job["entry"] == "rolling" and cfg.day_metrics and (job["max_minutes"] <= 30) == ("smoke" in name)
+    assert cfg.split.get("cross_section", False) == name.startswith("panel")
+
+
 @pytest.mark.parametrize("name", ["staged-smoke-001", "staged-001", "rolling-smoke-001", "rolling-001",
                                   "panel-smoke-001", "panel-001"])
 def test_job_files_are_valid(name):
