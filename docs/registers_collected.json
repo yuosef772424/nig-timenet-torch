@@ -1,4 +1,10 @@
 {
- "collected": {},
+ "collected": {
+  "59": {
+   "friction": 2,
+   "merged_at": "2026-11-16T00:35:30Z",
+   "suggestions": 4
+  }
+ },
  "since": "2026-11-16T00:01:00Z"
 }
