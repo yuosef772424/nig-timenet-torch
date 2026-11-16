@@ -1,0 +1,63 @@
+name: collect-registers
+
+# Weekly (and on demand): append the Friction / Suggestions rows of merged PR descriptions to docs/friction_log.csv and
+# docs/suggestions.csv and open a PR with the result (tools/collect_registers.py; the owner merges it).
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+# Least privilege: push a branch (contents) and open a PR (pull-requests); reading PR bodies needs pull-requests: read,
+# which pull-requests: write includes. Needs the repository setting "Allow GitHub Actions to create and approve pull
+# requests" (Settings > Actions > General); without it the last step fails with a clear message and nothing else changes.
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: collect-registers
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Collect rows from merged PRs
+        id: collect
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          # exit 1 means some PR has a bad or missing section: its rows are NOT collected, the others are; the
+          # failure is kept for the end so the good rows still reach the PR below
+          set +e
+          python -m tools.collect_registers
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+      - name: Open a PR with the updated registers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- docs/friction_log.csv docs/suggestions.csv docs/registers_collected.json; then
+            echo "nothing new to collect"; exit 0
+          fi
+          branch="registers/collect-$(date -u +%Y%m%d-%H%M)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add docs/friction_log.csv docs/suggestions.csv docs/registers_collected.json
+          git commit -m "docs: collect friction and suggestion rows from merged PRs"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "docs: collect friction and suggestion rows" \
+            --body "Automatic: rows from the Friction and Suggestions sections of merged PR descriptions (python -m tools.collect_registers). Review the rows, then merge."
+      - name: Fail when a PR section was bad
+        if: steps.collect.outputs.status != '0'
+        run: |
+          echo "Some merged PR has a missing or invalid Friction / Suggestions section (see the Collect step log)."
+          echo "Fix its description and re-run, or mark it with: python -m tools.collect_registers --skip N:reason"
+          exit 1

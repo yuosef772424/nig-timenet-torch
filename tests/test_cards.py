@@ -88,6 +88,16 @@ def test_touched_modules_have_cards():
     assert not dropped, f"provenance (SOURCE:) line dropped: {dropped}"
 
 
+def test_every_repo_tool_has_a_valid_card():
+    """tools/*.py (the step-closing tool, the register collector) are carded like the package (rule B7)."""
+    bad = {}
+    for path in sorted((ROOT / "tools").glob("*.py")):
+        problems = card_problems(card_of_file(path))
+        if problems:
+            bad[path.name] = problems
+    assert not bad, f"tools without a valid card: {bad}"
+
+
 def test_map_is_fresh():
     path = ROOT / build_map.MAP_REL
     assert path.exists() and path.read_text(encoding="utf-8") == build_map.build(), (

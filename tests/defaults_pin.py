@@ -31,6 +31,8 @@ DECISION_NAME = re.compile(r"^D-(\d{3})-[a-z0-9][a-z0-9-]*\.md$")
 #: ``- `key`: `old` -> `new` `` (backticks around key and both values; values may contain spaces)
 #: write `<new>` as the old value in a decision line to document a default that did not exist before
 ADDED = "<new>"
+#: a placeholder a drafted decision (tools/close_step.py) carries until the session fills it in: such a file fails CI
+UNFINISHED = re.compile(r"\bTODO\b")
 DECISION_LINE = re.compile(r"^\s*[-*]\s+`([^`]+)`:\s+`([^`]*)`\s+->\s+`([^`]*)`\s*$")
 
 
@@ -147,11 +149,15 @@ def decision_files(folder: Path = DECISIONS_DIR) -> list[Path]:
     return sorted(p for p in folder.glob("D-*.md"))
 
 
-def apply_decisions(pinned: dict[str, str], folder: Path = DECISIONS_DIR) -> dict[str, str]:
+def apply_decisions(pinned: dict[str, str], folder: Path = DECISIONS_DIR,
+                    exclude: frozenset[str] = frozenset()) -> dict[str, str]:
     """The defaults in force: the pin file with every decision applied in filename order. A decision whose old
-    value is not the value in force at that point raises (it describes a change that did not happen that way)."""
+    value is not the value in force at that point raises (it describes a change that did not happen that way).
+    ``exclude`` names decision files left out (tools/close_step.py: the value in force before the one it drafts)."""
     effective = dict(pinned)
     for path in decision_files(folder):
+        if path.name in exclude:
+            continue
         for key, old, new in parse_decision(path):
             if old == ADDED:  # documents a NEW default; the pin file (python -m tests.defaults_pin --add) must agree
                 if effective.get(key, new) != new:
@@ -176,17 +182,24 @@ def compare(current: dict[str, str], effective: dict[str, str]) -> tuple[dict[st
     return changed, added
 
 
+def write_additions(current: dict[str, str], pin_file: Path = PIN_FILE) -> tuple[int, int]:
+    """Write the keys of ``current`` missing from ``pin_file`` into it (an existing pinned value always wins: changing
+    it needs a decision file) and refresh its fingerprint. Returns ``(keys added, keys pinned)``."""
+    pinned = json.loads(pin_file.read_text(encoding="utf-8"))["defaults"] if pin_file.exists() else {}
+    merged = {**current, **pinned}
+    pin_file.parent.mkdir(parents=True, exist_ok=True)
+    pin_file.write_text(json.dumps({"fingerprint": fingerprint(merged), "defaults": dict(sorted(merged.items()))},
+                                   indent=1) + "\n", encoding="utf-8")
+    return len(set(current) - set(pinned)), len(merged)
+
+
 def main(argv: list[str]) -> None:
     current = collect_defaults()
     if "--add" not in argv:
         print(json.dumps(current, indent=1, sort_keys=True))
         return
-    pinned = load_pin() if PIN_FILE.exists() else {}
-    merged = {**current, **pinned}  # an existing pinned value always wins: changing it needs a decision file
-    PIN_FILE.parent.mkdir(parents=True, exist_ok=True)
-    PIN_FILE.write_text(json.dumps({"fingerprint": fingerprint(merged), "defaults": dict(sorted(merged.items()))},
-                                   indent=1) + "\n", encoding="utf-8")
-    print(f"{len(set(current) - set(pinned))} key(s) added; {len(merged)} pinned")
+    added, total = write_additions(current)
+    print(f"{added} key(s) added; {total} pinned")
 
 
 if __name__ == "__main__":

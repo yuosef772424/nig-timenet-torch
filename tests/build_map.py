@@ -99,9 +99,25 @@ def _main_guard(path: Path) -> str:
     return '"__main__"' if 'if __name__ == "__main__"' in text else ""
 
 
+def tools_section(tools_dir: Path | None = None) -> str:
+    """The repo tools (``tools/*.py``, run as ``python -m tools.<name>``) with their cards."""
+    tools_dir = tools_dir or ROOT / "tools"
+    out = ["## Repo tools (`tools/`, run from the repo root as `python -m tools.<name>`)", "",
+           "| module | what it is for | tags |", "|---|---|---|"]
+    for path in sorted(tools_dir.glob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        doc = module_docstring(path.read_text(encoding="utf-8"))
+        card = parse_card(doc)
+        what, tags = (card.get("PURPOSE", ""), card.get("TAGS", "")) if not card_problems(card) else (title_of(doc), "")
+        out.append(f"| `tools/{path.name}` | {_cell(what)} | {_cell(tags)} |")
+    return "\n".join(out) + "\n"
+
+
 def build(pkg_dir: Path | None = None) -> str:
     pkg_dir = pkg_dir or ROOT / PKG_REL
-    return "\n".join([HEADER, modules_section(pkg_dir), registries_section(pkg_dir), entry_points_section(pkg_dir)])
+    return "\n".join([HEADER, modules_section(pkg_dir), registries_section(pkg_dir), entry_points_section(pkg_dir),
+                      tools_section()])
 
 
 def main(argv: list[str]) -> int:
