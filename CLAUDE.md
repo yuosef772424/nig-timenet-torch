@@ -13,6 +13,9 @@ ROADMAP allows).
 - Reply to the owner in Arabic; code, docs and prompts in English.
 - Model work is led by the strongest model the owner has; the lead decides, reads the results and reviews what is
   pushed (owner 2026-11-16, `docs/PHILOSOPHY.md` section 1).
+- We are in the build phase: an arm that does not win is READ before the next one starts (what the model learned,
+  where and on which samples it fails, its bias, what a selection rule keeps, one named cause, the next hypotheses:
+  `docs/PHILOSOPHY.md` section 3, rule C7). "The data hold no edge" is not an answer without the evidence named there.
 - Subagents take the work that is mostly reading or mechanical (a past session's transcript, Drive run folders, many
   report files, a repetitive edit with a test), on a cheaper model (Sonnet), in their own `git worktree`, without
   pushing; the lead checks their output before using it. No subagent decides what to try or judges a result (rule A4).

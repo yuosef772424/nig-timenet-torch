@@ -234,3 +234,5 @@ at 50 / 80 / 95 %, PIT histogram) off by > 5 points.
 - Exploratory until the owner opens the holdout (C5); the holdout is opened once, in ROADMAP F4, only on the owner's
   request.
 - Results: `docs/results/<run>.md` with the gate report, the doctor report and the commit; bottleneck rows updated.
+- An arm that fails its accept rule is read before the next arm starts: the failure reading of `docs/PHILOSOPHY.md`
+  section 3 (rule C7) is part of its results note. "The data hold no edge" needs the evidence named there.

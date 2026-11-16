@@ -11,6 +11,10 @@ How this note was made: a reading agent copied the numbers from the report files
 `rank_loss_center s1` against its `panel_report.md`. The study-level files (`study.json` / `study.md`) were written to
 the runtime's local disk and are lost.
 
+Written before rule C7: this note is a first reading of the report files. Its failure reading (the error map by
+groups of rows, the failed samples, bias, selective use, the named cause, the next hypotheses) is owed and is done
+on the pooled walk-forward days (ROADMAP N1).
+
 ## Verdict
 
 - **No arm is profitable after costs and no arm passes the accept rule.** Every TEST mean day net is negative on
