@@ -9,7 +9,8 @@ on:
 
 # Least privilege: push a branch (contents) and open a PR (pull-requests); reading PR bodies needs pull-requests: read,
 # which pull-requests: write includes. Needs the repository setting "Allow GitHub Actions to create and approve pull
-# requests" (Settings > Actions > General); without it the last step fails with a clear message and nothing else changes.
+# requests" (Settings > Actions > General) to open the PR itself; without it the branch is still pushed and the job
+# summary links the page that opens the PR in one click.
 permissions:
   contents: write
   pull-requests: write
@@ -53,8 +54,14 @@ jobs:
           git add docs/friction_log.csv docs/suggestions.csv docs/registers_collected.json
           git commit -m "docs: collect friction and suggestion rows from merged PRs"
           git push origin "$branch"
-          gh pr create --base main --head "$branch" --title "docs: collect friction and suggestion rows" \
-            --body "Automatic: rows from the Friction and Suggestions sections of merged PR descriptions (python -m tools.collect_registers). Review the rows, then merge."
+          # Opening the PR needs the repository setting "Allow GitHub Actions to create and approve pull requests".
+          # Without it the branch is still pushed and the job summary links the one-click "open a PR" page.
+          if ! gh pr create --base main --head "$branch" --title "docs: collect friction and suggestion rows" \
+            --body "Automatic: rows from the Friction and Suggestions sections of merged PR descriptions (python -m tools.collect_registers). Review the rows, then merge."; then
+            url="https://github.com/${{ github.repository }}/compare/main...$branch?expand=1"
+            echo "::warning::could not open the PR (repository setting off?); branch $branch is pushed: $url"
+            echo "Collected rows are on branch \`$branch\`. Open the PR: $url" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Fail when a PR section was bad
         if: steps.collect.outputs.status != '0'
         run: |
