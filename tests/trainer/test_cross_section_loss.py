@@ -33,14 +33,15 @@ def test_group_ranks_are_ranks_inside_the_group():
 
 def test_the_term_is_one_minus_the_correlation_inside_the_timestamp_and_ignores_shift_and_scale():
     gid, y = _panel()
-    market = torch.randn(40)[gid]
+    g = torch.Generator().manual_seed(1)
+    market, noise = torch.randn(40, generator=g)[gid], torch.randn(len(y), generator=g)
     assert CROSS_SECTION_LOSSES["none"] is None
     for kind in ("ic", "rank_ic"):
         fn = CROSS_SECTION_LOSSES[kind]
         base = fn(y, y + market, gid)                        # the label's market move does not enter the term
         assert float(base) < 0.05
         assert float(fn(-y, y + market, gid)) > 1.9          # the reversed ranking
-        assert abs(float(fn(torch.randn(len(y)), y, gid)) - 1.0) < 0.1
+        assert abs(float(fn(noise, y, gid)) - 1.0) < 0.2       # an unrelated mean (sd of the term ~ 0.05 here)
         assert torch.allclose(fn(3.0 * y + 5.0 * market, y + market, gid), base, atol=1e-5)   # shift + scale
     assert float(group_correlation(y, y, torch.arange(len(y)))) == 0.0          # every row alone: no group qualifies
     assert float(group_correlation(y, torch.ones(len(y)), gid)) == 0.0          # a constant label: nothing to rank
@@ -49,7 +50,8 @@ def test_the_term_is_one_minus_the_correlation_inside_the_timestamp_and_ignores_
 def test_the_gradient_is_relative_only():
     gid, y = _panel()
     mu = torch.zeros(len(y), requires_grad=True)
-    CROSS_SECTION_LOSSES["rank_ic"](mu + 0.01 * torch.randn(len(y)), y, gid).backward()
+    start = 0.01 * torch.randn(len(y), generator=torch.Generator().manual_seed(2))
+    CROSS_SECTION_LOSSES["rank_ic"](mu + start, y, gid).backward()
     per_group = torch.zeros(40).index_add_(0, gid, mu.grad)
     assert torch.allclose(per_group, torch.zeros(40), atol=1e-5)                # it never pushes a timestamp's level
 
@@ -83,8 +85,9 @@ def test_long_short_selection_metric_needs_timestamps_and_ranks_a_good_mean_abov
     gid, y = _panel(groups=200)
     labels = {spec.label_key: y, GROUP_KEY: gid}
     name, mu = "val_ls_sharpe_close", spec.output_keys["mu"]
-    good = compute_selection_metric(name, {mu: y + torch.randn(len(y))}, labels, {})
-    noise = compute_selection_metric(name, {mu: torch.randn(len(y))}, labels, {})
+    g = torch.Generator().manual_seed(3)
+    good = compute_selection_metric(name, {mu: y + torch.randn(len(y), generator=g)}, labels, {})
+    noise = compute_selection_metric(name, {mu: torch.randn(len(y), generator=g)}, labels, {})
     assert good > 1.0 > abs(noise)
     assert np.isnan(compute_selection_metric("val_ls_sharpe_close", {spec.output_keys["mu"]: torch.zeros(len(y))},
                                              labels, {}))

@@ -23,6 +23,7 @@ import pandas as pd
 import torch
 
 from nig_timenet_torch.core.config import updated
+from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.eval import day_metrics
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.workflow import battery_run, panel_report
@@ -201,7 +202,7 @@ def render(study: dict) -> str:
                 f"[{_pct(a['win_lo'])}, {_pct(a['win_hi'])}] | {a['mean_net'] * 100:+.4f} % | "
                 f"{a['beats_every_baseline']} | {_pct(n['win_share'])} % [{_pct(n['win_lo'])}, {_pct(n['win_hi'])}] | "
                 f"{n['mean_net'] * 100:+.4f} % | {n['beats_every_baseline']} | {r['relative_rank_ic']:+.4f} | "
-                + " / ".join(f"{ic[t]:.3f}" for t in ("high", "low", "close") if t in ic) + f" | {secs:.0f} | {mem} |")
+                + " / ".join(f"{ic[t]:.3f}" for t in TARGET_COLUMNS if t in ic) + f" | {secs:.0f} | {mem} |")
     text += ["", "## Accept rule (a paired win over EVERY baseline on >= 2 seeds)", ""]
     for name, acc in study["accept"].items():
         text.append(f"- {name}: " + "; ".join(

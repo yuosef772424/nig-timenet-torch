@@ -1,5 +1,5 @@
 {
- "fingerprint": "e27ed5ff09bbab10",
+ "fingerprint": "33d0e19cf6aec8b6",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -550,6 +550,7 @@
   "nig_timenet_torch.jobs.panel.PanelConfig(artifact)": "'/content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1'",
   "nig_timenet_torch.jobs.panel.PanelConfig(base_tf)": "None",
   "nig_timenet_torch.jobs.panel.PanelConfig(batch_size)": "512",
+  "nig_timenet_torch.jobs.panel.PanelConfig(battery)": "True",
   "nig_timenet_torch.jobs.panel.PanelConfig(epochs)": "25",
   "nig_timenet_torch.jobs.panel.PanelConfig(extra_arms)": "{}",
   "nig_timenet_torch.jobs.panel.PanelConfig(lr)": "0.0003",
@@ -658,6 +659,7 @@
   "nig_timenet_torch.model.builder.DEFAULT_HEAD_TYPES.high": "['nig_regression']",
   "nig_timenet_torch.model.builder.DEFAULT_HEAD_TYPES.low": "['nig_regression']",
   "nig_timenet_torch.model.builder.NigTimeNetV2(bn_warmup)": "False",
+  "nig_timenet_torch.model.builder.NigTimeNetV2(cross_center)": "False",
   "nig_timenet_torch.model.builder.NigTimeNetV2(cross_coin_heads)": "4",
   "nig_timenet_torch.model.builder.NigTimeNetV2(cross_coin_kind)": "'attention'",
   "nig_timenet_torch.model.builder.NigTimeNetV2(cross_coin_layers)": "0",
@@ -688,6 +690,7 @@
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(bn_warmup)": "False",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(causal)": "False",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(class_head_hidden)": "64",
+  "nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_center)": "False",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_coin_heads)": "4",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_coin_kind)": "'attention'",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_coin_layers)": "0",
@@ -1018,6 +1021,7 @@
   "nig_timenet_torch.workflow.settings.ANTI_MEMORIZATION_CONFIG.num_layers": "2",
   "nig_timenet_torch.workflow.settings.ANTI_MEMORIZATION_CONFIG.stats_mode": "'symlog'",
   "nig_timenet_torch.workflow.settings.BatterySettings(cost_per_side)": "0.0008",
+  "nig_timenet_torch.workflow.settings.BatterySettings(day_metrics)": "False",
   "nig_timenet_torch.workflow.settings.BatterySettings(enabled)": "True",
   "nig_timenet_torch.workflow.settings.BatterySettings(n_variants)": "1",
   "nig_timenet_torch.workflow.settings.EvalSettings(battery)": "BatterySettings(enabled=True, cost_per_side=0.0008, n_variants=1)",

@@ -14,6 +14,7 @@ coverage the constant gives; a model whose mean is 0 everywhere has no direction
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.eval.day_metrics import absolute_days, day_summary, neutral_days
 from nig_timenet_torch.stats import metrics
 
@@ -92,7 +93,7 @@ def uncertainty_report(frame: pd.DataFrame, val: pd.DataFrame, *, cost: float = 
     """Everything above for the close head, plus ``sd_ranks_error`` and ``sharp_and_calibrated`` of the high / low
     heads when the frame carries them (``pred_<t>``, ``sigma_<t>``, ``fut_<t>``)."""
     heads = {"close": ("mu", "sigma", "y_ret")}
-    heads.update({t: (f"pred_{t}", f"sigma_{t}", f"fut_{t}") for t in ("high", "low") if f"pred_{t}" in frame.columns})
+    heads.update({t: (f"pred_{t}", f"sigma_{t}", f"fut_{t}") for t in TARGET_COLUMNS if f"pred_{t}" in frame.columns})
     return {"sd_ranks_error": {t: sd_ranks_error(frame, *cols) for t, cols in heads.items()},
             "sharp_and_calibrated": {t: sharp_and_calibrated(frame, *cols) for t, cols in heads.items()},
             "direction_bias": direction_bias(frame), "confidence_selection": confidence_selection(frame, val,
