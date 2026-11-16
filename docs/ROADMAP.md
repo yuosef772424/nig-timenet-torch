@@ -186,6 +186,10 @@ Registered options in `FitSettings` / `Trainer`, defaults reproduce today (D-nnn
   Train on a part of the data until the eval-mode train / validation gap shows memorisation, add rows, lower the lr,
   repeat; compare against equal-step baselines (all rows constant lr; all rows with the same lr decay).
 - Acceptance: the card's section 6 tests green; the per-stage table and the B1 / B2 / B3 comparison on >= 2 seeds.
+- Builder half (PR open, D-030): `trainer/staged.py` (`StageSettings`, `GROWTH`, `SignDetector`, `staged_fit` through the
+  one `Trainer`), `TrainSettings.staged` (None = today), `run.train_staged`, `workflow/staged_study.py` (staged arm + B1 / B2
+  / B3 at equal steps, accept rule), entry `staged`, jobs `staged-smoke-001` then `staged-001`. Researcher half: run them,
+  read `study.md`, write the results note under docs/results (the CPU smoke `docs/results/staged-cpu-smoke-001.md` is not a result).
 
 ### TR2 — input pipeline and step time (`feat`, S-M, builder)
 - Switches, default today with equal outputs proven (same batches, same order): pinned memory + non-blocking copy,
@@ -273,6 +277,12 @@ Acceptance: every protocol section 6 check has a value and verdict on the T8 mod
 ### F2 — walk-forward stability on pre-seal data (`feat` + `exp`, M, builder then researcher; owner decision O-2)
 - The rolling half of I4 (rolling folds over the run steps, through the one `Trainer`), then the T8 model over >= 4
   expanding folds before the time seal: does skill / T-conf / T-sharp hold across folds (seed spread per fold)?
+- Builder half (PR open, D-031): `workflow/rolling_run.py` (`run_rolling`: per fold x seed one `Run`, fold split through
+  `purge_embargo_split` + `check_split_purity`, scalers fitted on the fold's train rows, `retrain_every_k`, seeds, per-fold
+  tables, mean / spread per fold and across folds), `RollingSettings.val_share` (a fold's validation = the last 15 % of its
+  train window, purged; the test window is never read before the report), entry `rolling`, `main.ipynb` section 13b, jobs
+  `rolling-smoke-001` then `rolling-001` (spans are placeholders: check them against the artifact's date range).
+  Researcher half: the T8 model over >= 4 folds once T8 exists, then the results note under docs/results.
 
 ### F3 — model card and fresh-session docs (`docs`, S-M, builder)
 - `MODEL_CARD.md` (under docs): intended use, data and its seals, architecture, training, every target with trivial

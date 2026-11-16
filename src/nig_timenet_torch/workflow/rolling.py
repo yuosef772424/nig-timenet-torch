@@ -1,4 +1,10 @@
-"""P37: rolling-retrain loop — SEAM ONLY (the shape of the loop; no experiment is run through it in this repo).
+"""PURPOSE: Rolling / walk-forward fold geometry (P37, ROADMAP F2): purged train / test windows per fold, the inner
+    validation tail of a fold, and the callable-based loop ``run_rolling_study``; the run-step loop is rolling_run.py.
+TAGS: rolling folds, walk forward, expanding, sliding, purge embargo, inner validation, fold geometry, label end
+PITFALLS: a fold's ``plan`` has an EMPTY val (the seam contract); ``fold_with_val`` cuts the last ``val_share`` of the
+    train window as validation, purged by label end + embargo, and never reads the test window; every plan passes
+    ``check_split_purity``; folds stop when a test window would pass the last label; ``run_rolling_study`` (callbacks)
+    is the original seam, kept for its tests: real runs go through ``rolling_run.run_rolling``.
 
 Fold i (origin = earliest feature_start; cut_i = origin + train_span + i * step):
   train = samples with label_end <= cut_i   (expanding: feature_start >= origin; sliding: >= cut_i - train_span)
@@ -20,7 +26,7 @@ from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.workflow.prediction_table import write_table
 from nig_timenet_torch.workflow.settings import RollingSettings
 
-__all__ = ["RollingFold", "rolling_folds", "rolling_folds_from_times", "run_rolling_study"]
+__all__ = ["RollingFold", "rolling_folds", "rolling_folds_from_times", "fold_with_val", "run_rolling_study"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -60,6 +66,26 @@ def rolling_folds_from_times(feature_start: np.ndarray, feature_end: np.ndarray,
         folds.append(RollingFold(i, _restrict(base, train, test), train_start, cut, test_start, test_end))
         i += 1
     return folds
+
+
+def fold_with_val(fold: RollingFold, embargo, val_share: float) -> tuple[SplitPlan, pd.Timestamp]:
+    """(plan, cut_v): the fold's plan with the LAST ``val_share`` of its train window as validation. ``cut_v`` =
+    train_end - val_share * (train_end - train_start); train keeps ``label_end <= cut_v`` and validation the
+    train-window rows with ``feature_start > cut_v + embargo`` (their labels end by the fold's cut), so train -> val
+    -> test is pure (re-checked). The fold's test rows are unchanged and nothing of the test window is read."""
+    p = fold.plan
+    cut_v = fold.train_end - (fold.train_end - fold.train_start) * val_share
+    tr = p.train_idx
+    train = tr[p.label_end[tr] <= cut_v.value]
+    val = tr[p.feature_start[tr] > (cut_v + pd.Timedelta(embargo)).value]
+    if not len(train) or not len(val):
+        raise ValueError(f"fold {fold.index}: val_share {val_share} leaves {len(train)} train / {len(val)} validation "
+                         f"rows (cut_v {cut_v}); widen train_span or change val_share")
+    out = dataclasses.replace(p, train_idx=train, val_idx=val, calibration_idx=val.copy(),
+                              role_of={Role.FIT: train, Role.CALIBRATION: val.copy(), Role.SELECTION: val,
+                                       Role.REPORT: p.test_idx, Role.SEALED: np.array([], dtype=np.int64)})
+    check_split_purity(out)
+    return out, cut_v
 
 
 def rolling_folds(dataset, settings: RollingSettings) -> list[RollingFold]:

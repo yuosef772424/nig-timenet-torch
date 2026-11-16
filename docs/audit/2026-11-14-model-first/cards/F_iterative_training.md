@@ -1,8 +1,10 @@
 # Card F — Staged training: grow the data and lower the learning rate at each sign of memorisation
 
-Status: SPEC for a future session (owner request 2026-11-15). Nothing here is built yet. The session that takes it
-reads `CLAUDE.md`, `docs/STATUS.md`, `docs/RULES.md`, then this card, then
-`docs/audit/2026-11-14-model-first/NOTES.md` rows N-10, N-13, N-14, N-20 and `TRANSFORMER_HEAD_RESULTS.md`.
+Status: BUILT, builder half (ROADMAP ST1, D-030, owner request 2026-11-15). The tests of section 6 are green; the GPU
+study of section 7 is not run. Section 10 says how to run it and how to read it; the CPU smoke on E1 is
+`docs/results/staged-cpu-smoke-001.md` (a check of the machinery, not a result). A session that takes the researcher half
+reads `CLAUDE.md`, `docs/STATUS.md`, `docs/RULES.md`, this card, then
+`docs/audit/2026-11-14-model-first/NOTES.md` rows N-10, N-13, N-14, N-20, N-35 and `TRANSFORMER_HEAD_RESULTS.md`.
 
 ## 1. The idea (owner) and the question
 
@@ -133,3 +135,44 @@ section 5 in one sentence.
   4.7e-6). Start from the lr range test's region (N-14) and keep `lr_floor`.
 - The selection must use raw validation values (N-13: the smoothed tracker keeps the wrong epoch's weights).
 - Do not compare a staged run with a baseline that had fewer steps, another validation set, or another seed.
+
+## 10. How to run / how to read (built 2026-11-15)
+
+Where things are: `trainer/staged.py` (`StageSettings`, `GROWTH` arms `stride` / `coins` / `time`, `SignDetector`,
+`plan_stages`, `baseline_stages`, `staged_fit`), `TrainSettings.staged` (None = today's loop), `workflow/run.py::train_staged`,
+`workflow/staged_study.py` (one seed = the staged arm, then B1 / B2 / B3 at its number of steps, `study.json` / `study.md`),
+`workflow/staged_report.py` (tables), entry `staged` (`jobs/staged.py`), `quick_arms.py --staged JSON [--seeds 0,1]`,
+`main.ipynb` (`train.staged` in CHANGES). Tests: `tests/trainer/test_staged.py`, `tests/workflow/test_staged_study.py`,
+`tests/jobs/test_study_jobs.py`.
+
+Run:
+1. CPU look on a slice: `python docs/audit/2026-11-14-model-first/quick_arms.py ARTIFACT OUT --arms transformer:3e-4 --model
+   '{"ffn": "none"}' --staged '{}' --seeds 0,1 --rows 60000 --device cpu` (G1, 2 seeds, plus B1-B3).
+2. Colab: queue `docs/jobs/staged-smoke-001.json` (rule E5), then `docs/jobs/staged-001.json` (2 seeds, small model,
+   `steps_per_execution` 32). Outputs: `study.md`, `study.json`.
+3. Only if the verdict line says "staged training helps": G2 / G3 (`"growth": "coins"` / `"time"`), then the doctor and the battery.
+
+How to read `study.md`:
+- The verdict line is the accept rule of section 5 (>= 2 seeds, b1 and b2 present, a lower-is-better selection metric).
+  "cannot judge" is not "no gain".
+- The comparison table is only valid when every arm of a seed has the same step count (the table warns when not).
+- The stage table: `steps to sign` empty = the stage ended at its cap (no sign: at this size the model did not memorise
+  within the cap, a finding). `gap at end` = fixed validation raw loss minus the eval-mode train probe loss at the end of the
+  stage; its growth across evaluations (`history` in the summary: columns `gap`, `probe_raw_loss`, `sign`) is the quantity of
+  interest, the sign is only a threshold on it. `rank IC` is on the fixed validation rows with the stage's best weights.
+  `indep. labels` is the rough estimate of N-10 (rows x (1 - label overlap) x effective coins per timestamp).
+- The curve "steps to the sign against rows" is `steps_to_sign` against `rows` of the staged arm: flat in PASSES (steps
+  proportional to rows) means memorisation of windows, not of independent labels (section 9).
+
+Choices the card left open, decided in the code (each a line in `trainer/staged.py` PITFALLS or N-35):
+- the lambda schedules advance with `global step // steps of one pass over the FULL split`;
+- the sign compares the 3-point mean against the best smoothed value before the last `k` evaluations, and needs the probe
+  loss to have fallen by more than `min_delta` over those `k` evaluations;
+- stage 0 has no warm-up, no optimizer reset and no BatchNorm refresh (that keeps one stage over all rows equal to
+  `Trainer.fit`); later stages restart the optimizer, warm the lr over `warmup_steps` and run `bn_refresh_steps` forward-only steps;
+- B2 is one stage with the staged run's lr at the staged run's stage boundaries (no warm-up, no reset); B3 trains on the rows
+  of stage 0 only for the whole step budget;
+- the fixed validation rows are strided once (`val_max_rows`); the probe is drawn per stage from its own generator (the
+  global RNG is untouched, so a resume is exact);
+- a stage whose row share adds no row (few coins) is skipped; `stride` needs shares 1 / 2^j (nested rows).
+Not supported: a cross-section trainer (`split.cross_section`), `ema_decay`, `FitSettings.lr`.

@@ -417,7 +417,7 @@ H5 #39, H6 (this PR). Tests 515 -> 749 (`pytest -q -m "slow or not slow"`: 749 p
 | I3 | done | `workflow/run.py` steps, `jobs/baseline.py` 107 lines, battery in every run, cost per side, p_dir single direction, `notebooks/main.ipynb`, D-013 (HF-23, 29 partly) |
 | H5 | done | G2 counts declared vocabularies (honest 5, B-046), G3 exceptions carry a cap (HF-25), `tests.pin_diff` CI step (HF-31), pin scope D-014 (HF-30), manifest `base_tf` / `timeframes` D-015, `tests/jobs/`, helper modules (HF-32, 33, 34, HF-17 device mismatch refused) |
 | H6 | done (this PR) | facts refreshed; third R-REVIEW; HF-36 (NOTES re-triage) |
-| I4 | split | rolling half = ROADMAP F2 (not built), panel half parked in "Later" |
+| I4 | split | rolling half = ROADMAP F2 (builder half built, PR open: `workflow/rolling_run.py`, D-031), panel half parked in "Later" |
 | I7 | not opened | reopen only if the confidence gate fails for every method |
 
 Honest ratchet values at the end: G1 0; G2 5 (the plan target "<= 3" is not met: the widened scan found 5 comparisons on

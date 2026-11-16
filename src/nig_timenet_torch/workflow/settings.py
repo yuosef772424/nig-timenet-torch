@@ -1,14 +1,14 @@
 """PURPOSE: Settings of the workflow layer: the strict RunSettings tree of one flat single-split run, and the rolling
-    seam (RollingSettings) that the I4 package will connect to the run steps.
-TAGS: run settings, strict settings tree, split settings, train settings, evaluation settings, rolling seam
-PITFALLS: RunSettings has no rolling field (rolling and panel runs are package I4); every field is read by
-    workflow/run*.py; RollingSettings has NO defaults for the spans (the experiment card decides them). A new field's
-    default must reproduce the baseline job (tests/jobs/test_baseline_pin.py).
+    walk-forward settings (RollingSettings) that workflow/rolling.py (folds) and rolling_run.py (runs) read.
+TAGS: run settings, strict settings tree, split settings, train settings, evaluation settings, rolling settings
+PITFALLS: RunSettings has no rolling field: a rolling study is run_rolling(RunSettings, RollingSettings), one Run per
+    fold; every field is read by workflow code; RollingSettings has NO defaults for the spans (the experiment card
+    decides them). A new field's default must reproduce the baseline job (tests/jobs/test_baseline_pin.py).
 
 ``RunSettings`` is everything ``workflow.run`` needs for ONE run on ONE chronological split: the data, the split, the
 model, the training and the evaluation (health report, test report, battery). The jobs (``jobs/baseline.py``) and the
 notebooks build it (``from_dict`` / ``updated``) and call the steps; nothing else configures a run. ``RollingSettings``
-is the walk-forward seam (BUILD_PLAN.md P37) used by ``workflow/rolling.py``.
+is the walk-forward setting (BUILD_PLAN.md P37, ROADMAP F2) used by ``workflow/rolling.py`` and ``rolling_run.py``.
 """
 
 from dataclasses import dataclass, field
@@ -17,6 +17,7 @@ import pandas as pd
 
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
+from nig_timenet_torch.trainer.staged import StageSettings
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 
 __all__ = ["RollingSettings", "RunSettings", "ROLLING_MODES", "SplitSettings", "TrainSettings", "EvalSettings",
@@ -27,7 +28,7 @@ __all__ = ["RollingSettings", "RunSettings", "ROLLING_MODES", "SplitSettings", "
 #: 7.3 -> 2.7 at 10): BatchNorm moving statistics that follow the data from the first step, high / low offsets that
 #: no longer drag the close mean, train-standardised inputs. The audit also set ``nig_scale="train_std"`` (NIG heads in
 #: train-fitted label units); the run default takes the same idea from ``RUN_DEFAULT_SWITCHES["nig_scale_fit"]``
-#: (D-023) instead, the two are exclusive (D-026, owner to confirm). ``bn_warmup`` / ``order_detach_close`` agree.
+#: (D-023) instead, the two are exclusive (D-026, MG2: E1 tie, kept). ``bn_warmup`` / ``order_detach_close`` agree.
 MODEL_FIRST_FIXES = {"bn_warmup": True, "order_detach_close": True, "input_scaler": "train_std"}
 
 ROLLING_MODES = ("expanding", "sliding")
@@ -43,8 +44,14 @@ class RollingSettings:
     max_folds: int | None = None
     retrain_every_k: int = 1           # retrain on fold i iff i % k == 0, else reuse the last trained model
     seeds: tuple[int, ...] = (0,)
+    # D-031: a fold has no validation set of its own; the last ``val_share`` of its train window (by time, purged by
+    # label end + embargo) is cut off as the validation of epoch selection and early stopping. The test window is
+    # never read by training or selection.
+    val_share: float = 0.15
 
     def __post_init__(self):
+        if not 0.0 < self.val_share < 1.0:
+            raise ValueError(f"val_share must be in (0, 1), got {self.val_share!r}")
         if self.mode not in ROLLING_MODES:
             raise ValueError(f"mode must be one of {ROLLING_MODES}, not {self.mode!r}")
         for name in ("train_span", "test_span", "step", "embargo"):
@@ -120,6 +127,8 @@ class TrainSettings:
     # D-023 switches (FX2, B-060 / gate A5); defaults reproduce the run before D-023
     loss_balance: str = "none"                             # trainer.loss_balance.LOSS_BALANCERS
     kendall_init_logvar: float = 0.0                       # start value of the Kendall log-variances
+    # ST1 / D-030: None = today's epoch loop (steps.train); a StageSettings = staged training (steps.train_staged)
+    staged: StageSettings | None = None
 
     def __post_init__(self):
         for name in ("epochs", "batch_size", "steps_per_execution"):

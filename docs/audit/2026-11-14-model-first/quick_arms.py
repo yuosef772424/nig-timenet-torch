@@ -1,7 +1,11 @@
 """Small-sample arms on a contract artifact: encoder (gru | transformer) x learning rate, same rows and seed.
 
     python docs/audit/2026-11-14-model-first/quick_arms.py ARTIFACT OUT [--rows 20000] [--epochs 6] [--seed 0]
-        [--arms gru:3e-4,transformer:3e-4] [--device auto]
+        [--arms gru:3e-4,transformer:3e-4] [--device auto] [--staged JSON [--seeds 0,1]]
+
+With ``--staged '{...}'`` (StageSettings fields, ``'{}'`` = the card defaults) every arm runs the staged study of
+ROADMAP ST1 instead: per seed the staged arm and the equal-step baselines B1 / B2 / B3 (card F), writing
+OUT/<arm>_staged/study.json and study.md.
 
 One RunSettings per arm (default model = preset + MODEL_FIRST_FIXES, encoder and lr changed); prints the epoch lines
 and the test scalars, writes OUT/<arm>/{baseline_summary,test_report}.json and OUT/arms.json (one row per arm).
@@ -14,9 +18,11 @@ import json
 import pathlib
 import time
 
+from nig_timenet_torch.core.config import from_dict, updated
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.doctor.common import DoctorContext
 from nig_timenet_torch.doctor.info_flow import info_flow
+from nig_timenet_torch.trainer.staged import StageSettings
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.flat_run import epoch_line
@@ -29,6 +35,8 @@ from nig_timenet_torch.workflow.settings import (
     TrainSettings,
     default_model_settings,
 )
+from nig_timenet_torch.workflow.staged_report import eval_line
+from nig_timenet_torch.workflow.staged_study import run_staged_study
 
 
 def arm_settings(a, encoder: str, lr: float, out: pathlib.Path, head: str = "dense") -> RunSettings:
@@ -72,6 +80,8 @@ def main():
                    "ordinary shuffled batches (the control for the time-grouped batches; no cross-coin model)")
     p.add_argument("--top-coins", type=int, default=None, help="keep the N coins with the most train rows")
     p.add_argument("--selection", default="val_raw_loss", help="selection metric (e.g. val_rank_ic_reg)")
+    p.add_argument("--staged", default=None, help="JSON of StageSettings: run the staged study (ST1) per arm")
+    p.add_argument("--seeds", default=None, help="comma separated seeds of the staged study (default: --seed)")
     a = p.parse_args()
     out = pathlib.Path(a.out)
     rows = []
@@ -82,6 +92,13 @@ def main():
         folder = out / f"{name}_s{a.seed}"
         t0 = time.time()
         print(f"\n===== arm {name} =====", flush=True)
+        if a.staged is not None:
+            staged = from_dict(StageSettings, json.loads(a.staged))
+            seeds = [int(x) for x in (a.seeds or str(a.seed)).split(",")]
+            study = run_staged_study(updated(arm_settings(a, enc, float(lr), folder, head), {"train.staged": staged}),
+                                     seeds, out / f"{name}_staged", on_eval=lambda r: print(eval_line(r), flush=True))
+            print(study["verdict"], flush=True)
+            continue
         r = steps.build(steps.prepare(arm_settings(a, enc, float(lr), folder, head), folder))
         if a.random_batches:
             r.trainer.group_channel = False

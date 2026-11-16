@@ -144,13 +144,14 @@ def fit_settings_of(settings: RunSettings) -> FitSettings:
 
 @torch.no_grad()
 def predict_stage(trainer: Trainer, dataset: dict, idx: np.ndarray, x: torch.Tensor, ident: RunIdentity,
-                  device: torch.device, *, stage: str, train_end, chunk: int) -> pd.DataFrame:
-    """PredictionTable of the rows ``idx`` (inputs ``x``, aligned), in device-sized chunks."""
+                  device: torch.device, *, stage: str, train_end, chunk: int, fold: int = 0) -> pd.DataFrame:
+    """PredictionTable of the rows ``idx`` (inputs ``x``, aligned), in device-sized chunks; ``fold`` is the rolling
+    fold written into the table (0 for a single split)."""
     parts = []
     cuts = (group_chunks(row_groups(x), chunk) if trainer.group_channel
             else [slice(s, s + chunk) for s in range(0, len(idx), chunk)])
     for c in cuts:
-        meta = table_meta(dataset, idx[c], stage=stage, fold=0, train_end=train_end)
+        meta = table_meta(dataset, idx[c], stage=stage, fold=fold, train_end=train_end)
         parts.append(predict_table(trainer.model, x[c].to(device), meta, ident))
     return pd.concat(parts, ignore_index=True)
 

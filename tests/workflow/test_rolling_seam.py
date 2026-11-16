@@ -23,7 +23,7 @@ def settings(**over):
 
 
 def test_single_split_path_is_untouched_by_the_rolling_seam():
-    assert not hasattr(RunSettings, "rolling")  # rolling is package I4; the run steps are single-split only
+    assert not hasattr(RunSettings, "rolling")  # a study is run_rolling(RunSettings, RollingSettings), one Run per fold
     # the single-split path (P25) is untouched: same plan as before the seam existed
     a, b = fixture_plan(), fixture_plan()
     assert all(np.array_equal(getattr(a, f), getattr(b, f)) for f in ("train_idx", "val_idx", "test_idx"))
