@@ -62,7 +62,8 @@ def main():
     for r in rows:
         b, m1, m2 = r["direction_bias"], r["absolute"], r["neutral"]
         lines.append(f"| {r['arm']} | {r['seed']} | {r['best_epoch']} / {r['epochs_done']} | {b['share_pred_up']:.3f} "
-                     f"({b['share_real_up']:.3f}) | {b['per_coin_pred_up_min']:.2f} .. {b['per_coin_pred_up_max']:.2f} | "
+                     f"({b['share_real_up']:.3f}) | {b['per_coin_pred_up_min']:.2f} .. "
+                     f"{b['per_coin_pred_up_max']:.2f} | "
                      f"{b['one_sign_timestamps']:.2f} | {m1['win_share'] * 100:.1f} % [{m1['win_lo'] * 100:.1f}, "
                      f"{m1['win_hi'] * 100:.1f}] | {m1['mean_net'] * 100:+.4f} % | {m2['win_share'] * 100:.1f} % | "
                      f"{r['test_rank_ic']['close']:+.4f} |")
