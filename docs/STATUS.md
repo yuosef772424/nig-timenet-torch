@@ -42,13 +42,13 @@ GPU results (branch `colab-results`): `baseline-002-s0` (2026-11-08, @8451a62, e
 | ST1 | Staged training: grow the data, lower lr at each sign of memorisation (owner 2026-11-15) | merged | [#58](https://github.com/yuosef772424/nig-timenet-torch/pull/58) | D-030; `trainer/staged.py` (step loop over the one `Trainer`), `TrainSettings.staged` (None = today), `run.train_staged`, `workflow/staged_study.py` (B1 / B2 / B3 at equal steps, accept rule), entry `staged`, jobs `staged-smoke-001` -> `staged-001`; CPU smoke on E1 `docs/results/staged-cpu-smoke-001.md` (not a result); GPU study not run |
 | MG1 | Merge #51, #52, #56 into main (owner 2026-11-15) | merged | [#57](https://github.com/yuosef772424/nig-timenet-torch/pull/57) | decisions renumbered D-024..D-029; B-069 / B-070; B-071 closed in MG2: `nig_scale_fit` vs `nig_scale` tie on E1, default kept ([note](results/nig-scale-default-001.md)) |
 | TL1 | Step-closing and register-collection tools (owner 2026-11-16) | merged | [#59](https://github.com/yuosef772424/nig-timenet-torch/pull/59) | branch `ccr-33246741-nbh7ay`; `python -m tools.close_step` (MAP, pins, decision draft, STATUS row, B1 section, `--check`) and `python -m tools.collect_registers` (PR `## Friction` / `## Suggestions` -> the CSVs; weekly workflow `collect-registers`); template `.github/pull_request_template.md`; rules B1, F1, F5 changed; overlaps H7 (CSV register tooling) |
-| PN1 | Panel (multi-coin) model: audit, day metrics, E4, cross-section loss, Colab jobs (owner 2026-11-16) | in progress |  | branch `ccr-841b9809-6hngwg` |
+| PN1 | Panel (multi-coin) model: audit, day metrics, E4, cross-section loss, Colab jobs (owner 2026-11-16) | PR open | [#61](https://github.com/yuosef772424/nig-timenet-torch/pull/61) | D-032; `docs/results/panel-001.md`: no arm profitable after costs, relative inputs + rank term lift the close relative rank IC 0.06 -> 0.11; session handoff `docs/handoff/2026-11-16-panel-session.md` |
+| WF1 | Walk-forward of the single-coin model, working method, ROADMAP Now (owner 2026-11-16) | PR open | [#61](https://github.com/yuosef772424/nig-timenet-torch/pull/61) | `docs/PHILOSOPHY.md` (rules A1, A4 changed, A6, A7 new); ROADMAP "Now" N1-N7; jobs `rolling-single-smoke-001` (GPU OK) -> `rolling-single-001`, the two panel walk-forwards re-read from their checkpoints, look `single-balance-look-001`: running on Colab 2026-11-16, reports on Drive `nig_timenet_runs/<job>/out` |
 | H7 | Register and review tooling (fourth R-REVIEW) | todo | | counter derived, CSV columns, check-job vs colab-results, rmtree ratchet |
 | TR1 | Trainer switches (clip, wd groups, EMA, init, timing, train gap) | todo | | B-018, B-007, HF-37 |
 | G3r | Gates on the baseline configuration | todo | | 3 seeds |
 | M1 / M2r | Memorization study: CPU part / short GPU arms | todo | | B-038; protocol section 5; r2 shows overfit after epoch 1 |
-| TR2 | Input pipeline + step time | todo | | B-008 |
-| T5r-s1 | Baseline seed 1 | todo | | job `baseline-001-s1` |
+| TR2 / T5r-s1 | Input pipeline + step time / baseline seed 1 | todo | | B-008; job `baseline-001-s1` |
 | T6 | Switches: T6a (1-3), T6b (4-6), T6c (architecture, evidence-driven) | todo | | |
 | T7r | Gates, then baseline vs all switches (`all-001`) | todo | | needs T5r, T6 |
 | T8 | Ablate or diagnose, fix, propose default | todo | | needs T7r |
