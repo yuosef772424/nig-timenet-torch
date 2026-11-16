@@ -107,13 +107,13 @@ def test_panel_entry_runs_and_resumes(e4_dir, tmp_path, monkeypatch):
 
     monkeypatch.setenv("NIG_REPO_DIR", str(pathlib.Path(__file__).resolve().parents[2]))
     cfg = {"device": "cpu", "run_dir": str(tmp_path / "drive"), "artifact": str(e4_dir), "batch_size": 64,
-           "epochs": 1, "top_coins": 6, "seeds": [0], "arms": ["per_coin", "relative_rank_loss_ls"]}
+           "epochs": 1, "top_coins": 6, "seeds": [0], "arms": ["per_coin", "relative_rank_loss_center"]}
     (tmp_path / "c.json").write_text(json.dumps(cfg))
     for out in ("o1", "o2"):                                    # the second run reads the kept arms back
         assert panel.main(["--config", str(tmp_path / "c.json"), "--out", str(tmp_path / out), "--max-minutes",
                            "5"]) == 0
         study = json.loads((tmp_path / out / "study.json").read_text())
-        assert study["finished"] and set(study["arms"]) == {"per_coin", "relative_rank_loss_ls"}
+        assert study["finished"] and set(study["arms"]) == {"per_coin", "relative_rank_loss_center"}
         assert (tmp_path / out / "manifest.json").is_file() and (tmp_path / out / "device.json").is_file()
     frame = pd.read_parquet(tmp_path / "o2" / "per_coin_s0" / "panel_frame_test.parquet")
     assert frame["coin"].nunique() == 6                          # top_coins

@@ -33,13 +33,16 @@ from nig_timenet_torch.workflow.settings import RunSettings
 __all__ = ["ARMS", "BASELINE_ARM", "arm_settings", "run_arm", "run_panel_study", "compare", "render", "ARM_JSON"]
 
 BASELINE_ARM = "per_coin"
-#: the arms of panel-001 (docs/audit/2026-11-16-panel): the per-coin model on whole-timestamp batches (the baseline
-#: arm), + relative inputs, + the cross-section rank loss, + selection by the long / short book of day metric 2
+#: the named arms (docs/audit/2026-11-16-panel): the per-coin model on whole-timestamp batches (the baseline arm),
+#: + relative inputs, + the cross-section rank loss, + the close mean centred inside its timestamp (the four arms of
+#: panel-001); the last one selects the epoch by the long / short book of day metric 2 instead
+_REL = {"cross_input": "relative"}
 ARMS = {
     "per_coin": {},
-    "relative": {"model": {"cross_input": "relative"}},
-    "relative_rank_loss": {"model": {"cross_input": "relative"}, "train": {"cross_section_loss": "rank_ic"}},
-    "relative_rank_loss_ls": {"model": {"cross_input": "relative"},
+    "relative": {"model": _REL},
+    "relative_rank_loss": {"model": _REL, "train": {"cross_section_loss": "rank_ic"}},
+    "relative_rank_loss_center": {"model": {**_REL, "cross_center": True}, "train": {"cross_section_loss": "rank_ic"}},
+    "relative_rank_loss_ls": {"model": _REL,
                               "train": {"cross_section_loss": "rank_ic", "selection_metric": "val_ls_sharpe_close"}},
 }
 ARM_JSON = "arm.json"
