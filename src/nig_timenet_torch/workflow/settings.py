@@ -129,6 +129,13 @@ class TrainSettings:
     kendall_init_logvar: float = 0.0                       # start value of the Kendall log-variances
     # ST1 / D-030: None = today's epoch loop (steps.train); a StageSettings = staged training (steps.train_staged)
     staged: StageSettings | None = None
+    # D-032 (panel audit 2026-11-16): a loss term on the NIG means INSIDE each timestamp, on top of the NIG loss
+    # (trainer.cross_section_loss.CROSS_SECTION_LOSSES: "none" | "ic" | "rank_ic"); needs split.cross_section
+    cross_section_loss: str = "none"
+    cross_section_weight: float = 1.0                      # weight of that term (read only when it is on)
+    # D-032 (owner idea 2026-11-16): weight of a term that penalises a batch whose close predictions lean long or
+    # short (trainer.direction_balance; NIG mean and class probability of the close head); 0 = off
+    direction_balance: float = 0.0
 
     def __post_init__(self):
         for name in ("epochs", "batch_size", "steps_per_execution"):
@@ -137,8 +144,10 @@ class TrainSettings:
                 raise ValueError(f"TrainSettings.{name} must be an integer >= 1, got {v!r}")
         if self.lr <= 0 or self.weight_decay < 0 or not 0.0 <= self.label_smoothing < 1.0:
             raise ValueError("lr > 0, weight_decay >= 0, 0 <= label_smoothing < 1")
-        if min(self.class_loss_weight, self.lambda_reg_end, self.lambda_calib_end, self.beta_nll) < 0:
-            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end and beta_nll must be >= 0")
+        if min(self.class_loss_weight, self.lambda_reg_end, self.lambda_calib_end, self.beta_nll,
+               self.cross_section_weight, self.direction_balance) < 0:
+            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end, beta_nll, cross_section_weight "
+                             "and direction_balance must be >= 0")
 
 
 @dataclass(frozen=True)
@@ -147,6 +156,10 @@ class BatterySettings:
     enabled: bool = True
     cost_per_side: float = 0.0008        # charged on EVERY side of a trade: a round trip pays twice this
     n_variants: int = 1                  # variants tried so far (widens the confidence intervals)
+    # D-032: also write the day metrics of a multi-coin run (winning days of the sign portfolio and of the top /
+    # bottom book against their baselines, uncertainty use): workflow/panel_report.py; read even when ``enabled`` is
+    # False (the day metrics have their own files)
+    day_metrics: bool = False
 
     def __post_init__(self):
         if self.cost_per_side < 0 or self.n_variants < 1:

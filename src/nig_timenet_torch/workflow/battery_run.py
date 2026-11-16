@@ -6,6 +6,8 @@ TAGS: battery run, stage inputs, t-profit, battery report, adapter entry point, 
 PITFALLS: VAL thresholds are applied to TEST (no leakage), so val and test must be different stages of ONE run;
     n_variants is the number of variants tried so far and widens the CI, state it in the result file.
 
+With ``evaluation.battery.day_metrics`` (D-032, off by default) ``battery_step`` also writes the day metrics of a
+multi-coin run (``workflow.panel_report.panel_step``: ``panel_report.json`` / ``.md`` and the two frames).
 ``battery_step(run)`` (after ``workflow.run.test_step``) writes ``battery_report.txt`` (every section),
 ``battery_profit.json`` (the T-profit sections with their numbers and the verdict) and the two battery tables
 (``battery_table_val.parquet`` / ``battery_table_test.parquet``) into the run's output folder. ``battery_from_folder``
@@ -101,6 +103,10 @@ def battery_step(run) -> dict:
     """Run the battery on the val and test stage of ``run`` with the run's ``evaluation.battery`` settings; writes
     ``battery_report.txt`` and ``battery_profit.json`` to the run's output folder (when it has one)."""
     b = run.settings.evaluation.battery
+    if b.day_metrics:
+        from nig_timenet_torch.workflow.panel_report import panel_step  # it imports this module
+
+        panel_step(run)
     if not b.enabled:
         return {}
     val, test = stage_inputs(run, "val").battery_table(), stage_inputs(run, "test").battery_table()

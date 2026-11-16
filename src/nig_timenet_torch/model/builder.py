@@ -22,7 +22,7 @@ from torch import nn
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.model import label_scale
 from nig_timenet_torch.model.attn_heads import check_nig_head, nig_head_builder, reads_sequence
-from nig_timenet_torch.model.cross_coin import CROSS_INPUTS, CrossCoin, split_group
+from nig_timenet_torch.model.cross_coin import CROSS_INPUTS, CrossCoin, center_groups, split_group
 from nig_timenet_torch.model.encoders import ENCODERS, CausalConv1D, EncoderDims, tcn_n_blocks
 from nig_timenet_torch.model.heads import (
     HEAD_REGISTRY,
@@ -81,8 +81,9 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                  readout_dropout=None, nig_trunk_grad=1.0, nig_scale_fit="fixed", input_scaler="none",
                  nig_head="dense", nig_head_dropout=0.0, ffn="swiglu",
                  ffn_dim=None, cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
-                 cross_coin_kind="attention", cross_input="none"):
+                 cross_coin_kind="attention", cross_input="none", cross_center=False):
         super().__init__()
+        self.cross_center = bool(cross_center)   # D-032: the close mean is taken relative to its timestamp
         self.nig_trunk_grad = float(nig_trunk_grad)
         self.label_scale_name, fit_s = nig_scale_fit, label_scale.fitted(nig_scale_fit)   # FX2 (B-052)
         self._gid = None  # the rows' timestamp ids during one forward (cross_input reads it inside the branch)
@@ -312,6 +313,8 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             mus = {"high": mu_h, "close": mu_c, "low": mu_l}
         else:
             mus = {t: raw[t][0] for t in self.nig_targets}
+        if self.cross_center and gid is not None and "close" in mus:
+            mus["close"] = center_groups(mus["close"], gid)
         out: dict[str, torch.Tensor] = {}
         for t in self.nig_targets:
             _, nu, alpha, beta = raw[t]
@@ -365,7 +368,8 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          nig_scale_fit="fixed", input_scaler="none",
                          nig_head="dense", nig_head_dropout=0.0, ffn="swiglu", ffn_dim=None,
                          cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
-                         cross_coin_kind="attention", cross_input="none", **options) -> NigTimeNetV2:
+                         cross_coin_kind="attention", cross_input="none", cross_center=False,
+                         **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
@@ -377,7 +381,9 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
     ``ffn`` / ``ffn_dim``: the feed-forward sublayer of the transformer blocks (TransformerBlock.FFN_KINDS; "none" =
     attention only), read by the transformer and itransformer encoders. ``cross_coin_layers`` > 0 adds
     model/cross_coin.py between the trunk and the heads: the input then carries one extra channel, the row's timestamp
-    id (``workflow`` ``SplitSettings.cross_section``), and batches must hold whole timestamps."""
+    id (``workflow`` ``SplitSettings.cross_section``), and batches must hold whole timestamps. ``cross_center``
+    (D-032): the close mean leaves the model minus its mean over the rows of the timestamp (a relative move; rows
+    without the timestamp channel are left as they are)."""
     ENCODERS.entry(encoder)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
     if skip_variant(input_skip).adds_modules and not ENCODERS.entry(encoder).meta["supports_input_skip"]:
@@ -412,4 +418,4 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         nig_head=nig_head, nig_head_dropout=nig_head_dropout, ffn=ffn, ffn_dim=ffn_dim,
         cross_coin_layers=cross_coin_layers, cross_coin_heads=cross_coin_heads,
         cross_coin_peer_dropout=cross_coin_peer_dropout, cross_coin_kind=cross_coin_kind,
-        cross_input=cross_input)
+        cross_input=cross_input, cross_center=cross_center)

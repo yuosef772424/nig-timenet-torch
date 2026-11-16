@@ -17,7 +17,7 @@ import numpy as np
 __all__ = ["auc", "rank_ic", "pearson", "spearman", "wilson_interval", "pinball_loss", "ece", "ece_bins", "mae",
            "average_ranks", "r2", "confidence_error_spearman", "confidence_error_gap", "width_below_share",
            "interval_coverage", "block_bootstrap_ci", "partial_rank_ic", "rank_ic_se", "within_group_spearman",
-           "group_rank_ics", "auc_block_ci"]
+           "group_rank_ics", "auc_block_ci", "long_short_spreads"]
 
 
 def _clean(*arrays: np.ndarray) -> list[np.ndarray]:
@@ -123,6 +123,34 @@ def rank_ic_se(y_true: np.ndarray, y_pred: np.ndarray, groups: np.ndarray) -> tu
     v = np.asarray(ics)
     se = float(v.std(ddof=1) / math.sqrt(v.shape[0])) if v.shape[0] > 1 else float("nan")
     return float(v.mean()), se, int(v.shape[0])
+
+
+def long_short_spreads(y_true: np.ndarray, score: np.ndarray, groups: np.ndarray,
+                       top_share: float = 0.2) -> tuple[np.ndarray, np.ndarray]:
+    """(group ids, values): inside each group (a timestamp), the mean of ``y_true`` over the top-k rows by ``score``
+    minus the mean over the bottom-k rows, halved (half a unit long, half a unit short); k = max(1,
+    round(top_share * rows)). TRIVIAL: a score unrelated to ``y_true`` gives values centred on 0; ``score = y_true``
+    the largest value a ranking can reach. Rows with a NaN are dropped; a group with fewer than 2 k rows or a
+    constant score is left out (no ranking); none defined -> two empty arrays."""
+    if not 0.0 < top_share <= 0.5:
+        raise ValueError("top_share must be in (0, 0.5]")
+    y = np.asarray(y_true, dtype=np.float64).reshape(-1)
+    s = np.asarray(score, dtype=np.float64).reshape(-1)
+    g = np.asarray(groups).reshape(-1)
+    if not (y.shape == s.shape == g.shape):
+        raise ValueError("y_true, score and groups must have the same length")
+    keep = ~(np.isnan(y) | np.isnan(s))
+    y, s, g = y[keep], s[keep], g[keep]
+    keys, vals = [], []
+    for key, ix in zip(*_group_split(g), strict=True):
+        k = max(1, int(round(top_share * ix.shape[0])))
+        sg = s[ix]
+        if ix.shape[0] < 2 * k or sg.max() == sg.min():
+            continue
+        order = ix[np.argsort(sg, kind="stable")]
+        keys.append(key)
+        vals.append((y[order[-k:]].mean() - y[order[:k]].mean()) / 2.0)
+    return np.asarray(keys), np.asarray(vals, dtype=np.float64)
 
 
 def within_group_spearman(a: np.ndarray, b: np.ndarray, groups: np.ndarray) -> float:

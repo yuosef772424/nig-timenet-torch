@@ -139,3 +139,32 @@ def test_cross_input_model_reads_its_peers_and_keeps_the_contract():
     assert m._gid is None
     with pytest.raises(ValueError, match="cross_input"):
         build_nig_timenet_v2(32, 3, **KW, cross_input="ranks")
+
+
+def test_cross_center_makes_the_close_mean_relative_to_its_timestamp_and_is_off_by_default():
+    """D-032: with the switch the close mean of every timestamp sums to 0 (the high / low means and a row without the
+    timestamp channel are untouched); without it the model is the same graph as before."""
+    from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings, build_model
+    from nig_timenet_torch.model.cross_coin import center_groups
+    from nig_timenet_torch.model.heads import head_spec
+
+    def model(**over):
+        torch.manual_seed(0)
+        return build_model(ModelSettings("nig_timenet_v2", {**ANTI_MEMORIZATION_CONFIG, "encoder": "gru", **over}),
+                           16, 3).eval()
+
+    off, on = model(), model(cross_center=True)
+    assert not off.cross_center and [k for k, _ in off.named_parameters()] == [k for k, _ in on.named_parameters()]
+    x = 0.02 * torch.randn(12, 16, 3)
+    gid = torch.tensor([5.0] * 4 + [9.0] * 8)
+    xg = torch.cat([x, gid[:, None, None].expand(-1, 16, 1)], dim=-1)
+    mu = {t: head_spec("nig_regression", t).output_keys["mu"] for t in ("close", "high")}
+    with torch.no_grad():
+        a, b, alone = off(xg), on(xg), on(x)
+    assert torch.allclose(b[mu["close"]], center_groups(a[mu["close"]], gid.long()), atol=1e-6)
+    assert abs(float(b[mu["close"]][:4].sum())) < 1e-5 and abs(float(b[mu["close"]][4:].sum())) < 1e-5
+    assert torch.equal(b[mu["high"]], a[mu["high"]])
+    assert torch.allclose(alone[mu["close"]], off(x)[mu["close"]])          # no timestamp channel: nothing to centre
+    v = torch.arange(6.0).reshape(6, 1)
+    assert torch.allclose(center_groups(v, torch.tensor([1, 1, 1, 4, 4, 4])).flatten(),
+                          torch.tensor([-1.0, 0.0, 1.0, -1.0, 0.0, 1.0]))

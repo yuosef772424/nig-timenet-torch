@@ -1,11 +1,12 @@
-"""PURPOSE: Test environments of MODEL_DEV_PROTOCOL section 3: E2 = one global label permutation (inputs untouched),
-    E3 = a training-era slice of the real artifact (coins x months, own purged split); nig-envs writes E1 / E2 / E3.
-TAGS: e2 environment, e3 environment, shuffled labels, label permutation, real slice, training era, purged split,
-    leakage canary, gates
+"""PURPOSE: Test environments of MODEL_DEV_PROTOCOL section 3: E2 = one global label permutation, E3 = a
+    training-era slice of the real artifact, E3p = its panel form (whole timestamps); nig-envs writes E1 .. E4.
+TAGS: e2 environment, e3 environment, shuffled labels, label permutation, real slice, panel slice, whole timestamps,
+    training era, purged split, leakage canary, gates
 PITFALLS: E2 permutes the regression AND class labels with one permutation and rewrites the future columns of
     last_candles from the permuted labels (so the codec decodes them, check_decode); the oracle_* columns are dropped
     (they describe the source rows, not the permuted labels). E3 needs the full run's train end from the caller
     (workflow.run_common.split_bounds); its rows end (label_end) at or before it, the full run's train membership.
+    E3p keeps a timestamp only with EVERY chosen coin in it, so a coin with one missing bar is not chosen at all.
     ``main`` is the ``nig-envs`` console script (pyproject.toml), which is why nothing in the package imports it.
 
 Both return a NEW dataset dict (row-aligned arrays sliced or copied, everything else shared) with an ``environment``
@@ -26,7 +27,7 @@ from nig_timenet_torch.data_io.synthetic import ORACLE_PREFIX
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, codec_name, future_column
 from nig_timenet_torch.model.heads import head_spec
 
-__all__ = ["label_keys", "input_keys", "permute_labels", "real_slice", "main"]
+__all__ = ["label_keys", "input_keys", "permute_labels", "real_slice", "panel_slice", "main"]
 
 def label_keys(dataset: dict) -> list[str]:
     """The regression and class label keys of the dataset's price targets (from the head registry)."""
@@ -124,27 +125,80 @@ def real_slice(dataset: dict, *, train_end, n_coins: int = 20, months: int = 6, 
     return out
 
 
+def panel_slice(dataset: dict, *, train_end, n_coins: int = 50, max_rows: int = 60_000, train_share: float = 0.70,
+                val_share: float = 0.15) -> dict:
+    """E3p: a PANEL slice for multi-coin CPU looks. The period is the last ``max_rows // n_coins`` timestamps whose
+    label ends at or before ``train_end`` (the FULL run's train end, so the full run's validation and test rows stay
+    unseen); the coins are the ``n_coins`` with the most rows before ``train_end`` (the longest history; the artifact
+    holds no volume) among those present at EVERY timestamp of the period. Every timestamp of the slice therefore
+    holds every coin (whole cross-sections, ``SplitSettings.cross_section``). Own ``split_dates`` at the
+    ``train_share`` / ``train_share + val_share`` quantiles of the timestamps. Raises if fewer coins qualify."""
+    if n_coins < 2 or max_rows < 2 * n_coins or not 0 < train_share < train_share + val_share < 1:
+        raise ValueError("need n_coins >= 2, max_rows >= 2 * n_coins, 0 < train_share < train_share + val_share < 1")
+    end = pd.Timestamp(train_end)
+    end = end.tz_localize("UTC") if end.tzinfo is None else end.tz_convert("UTC")
+    _, _, le = sample_times(dataset)
+    last = np.asarray(dataset["last_candles"])
+    ts = last[:, TS_COL].astype(np.int64)
+    inside = le <= end.value
+    stamps = np.unique(ts[inside])[-(max_rows // n_coins):]
+    in_period = inside & (ts >= stamps[0])
+    bounds = dataset["asset_bounds"]
+    full = [i for i, b in enumerate(bounds) if int(in_period[b["start"]:b["end"]].sum()) == len(stamps)]
+    if len(full) < n_coins:
+        raise ValueError(f"only {len(full)} coins are present at all {len(stamps)} timestamps of the period "
+                         f"{_iso(int(stamps[0]))} .. {end.isoformat()}, {n_coins} requested")
+    history = [int(inside[bounds[i]["start"]:bounds[i]["end"]].sum()) for i in full]
+    chosen = sorted(full[j] for j in np.argsort(-np.asarray(history), kind="stable")[:n_coins])
+    rows, new_bounds = [], []
+    for i in chosen:
+        b = bounds[i]
+        r = b["start"] + np.flatnonzero(in_period[b["start"]:b["end"]])
+        new_bounds.append({**b, "start": len(rows) * len(stamps), "end": (len(rows) + 1) * len(stamps)})
+        rows.append(r)
+    idx = np.concatenate(rows)
+    n = _rows(dataset)
+    out = {k: (np.asarray(v)[idx] if isinstance(v, np.ndarray) and v.ndim >= 1 and len(v) == n else v)
+           for k, v in dataset.items()}
+    q = [stamps[min(len(stamps) - 1, int(len(stamps) * f))] for f in (train_share, train_share + val_share)]
+    out["asset_bounds"] = new_bounds
+    out["split_dates"] = {"train_end": _iso(q[0]), "val_end": _iso(q[1])}
+    out["environment"] = {"name": "E3p", "full_train_end": end.isoformat(),
+                          "period": [_iso(int(stamps[0])), _iso(int(le[idx].max()))], "timestamps": int(len(stamps)),
+                          "coins": [b["name"] for b in new_bounds], "rows": int(len(idx)),
+                          "max_label_end": _iso(int(le[idx].max())), "split_shares": [train_share, val_share],
+                          "selection": "present at every timestamp of the period, most rows before the train end"}
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     """``nig-envs e1 OUT [--settings JSON]`` | ``nig-envs e2 SOURCE OUT [--seed N]`` | ``nig-envs e3 SOURCE OUT
-    [--train-end ISO]``: write the environment as a contract artifact (SOURCE is read through ``load_dataset``; E3's
-    train end defaults to the full run's, ``run_common.split_bounds`` with the default SplitSettings)."""
+    [--train-end ISO]`` | ``nig-envs e3p SOURCE OUT [--train-end ISO] [--coins N] [--max-rows N]`` | ``nig-envs e4
+    OUT [--settings JSON]``: write the environment as a contract artifact (SOURCE is read through ``load_dataset``;
+    the train end of E3 / E3p defaults to the full run's, ``run_common.split_bounds`` with the default
+    SplitSettings; E4 = ``data_io.synthetic_panel``, its settings are PanelSyntheticSettings fields)."""
     from nig_timenet_torch.core.config import from_dict
     from nig_timenet_torch.data.artifact_writer import write_artifact
     from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
     from nig_timenet_torch.data_io.synthetic import SyntheticSettings, write_synthetic
+    from nig_timenet_torch.data_io.synthetic_panel import PanelSyntheticSettings, write_panel_synthetic
 
-    ap = argparse.ArgumentParser(prog="nig-envs", description="Write a gate test environment (E1 / E2 / E3).")
-    ap.add_argument("env", choices=("e1", "e2", "e3"))
-    ap.add_argument("paths", nargs="+", help="e1: OUT; e2 / e3: SOURCE OUT")
-    ap.add_argument("--settings", default="{}", help="e1: SyntheticSettings fields as JSON")
+    ap = argparse.ArgumentParser(prog="nig-envs", description="Write a test environment (E1 / E2 / E3 / E3p / E4).")
+    ap.add_argument("env", choices=("e1", "e2", "e3", "e3p", "e4"))
+    ap.add_argument("paths", nargs="+", help="e1 / e4: OUT; e2 / e3 / e3p: SOURCE OUT")
+    ap.add_argument("--settings", default="{}", help="e1: SyntheticSettings fields as JSON; e4: PanelSyntheticSettings")
     ap.add_argument("--seed", type=int, default=0, help="e2: permutation seed")
-    ap.add_argument("--train-end", default="", help="e3: the full run's train end (default: its split_bounds)")
+    ap.add_argument("--train-end", default="", help="e3 / e3p: the full run's train end (default: its split_bounds)")
+    ap.add_argument("--coins", type=int, default=50, help="e3p: coins of the panel slice")
+    ap.add_argument("--max-rows", type=int, default=60_000, help="e3p: rows of the panel slice (whole timestamps)")
     ap.add_argument("--overwrite", action="store_true")
     a = ap.parse_args(argv)
-    if len(a.paths) != (1 if a.env == "e1" else 2):
-        ap.error(f"{a.env} takes {'OUT' if a.env == 'e1' else 'SOURCE OUT'}")
-    if a.env == "e1":
-        man = write_synthetic(a.paths[0], from_dict(SyntheticSettings, json.loads(a.settings)), overwrite=a.overwrite)
+    synthetic = {"e1": (SyntheticSettings, write_synthetic), "e4": (PanelSyntheticSettings, write_panel_synthetic)}
+    if len(a.paths) != (1 if a.env in synthetic else 2):
+        ap.error(f"{a.env} takes {'OUT' if a.env in synthetic else 'SOURCE OUT'}")
+    if a.env in synthetic:
+        settings_type, write = synthetic[a.env]
+        man = write(a.paths[0], from_dict(settings_type, json.loads(a.settings)), overwrite=a.overwrite)
     else:
         src = load_dataset(LoaderSettings(name=a.paths[0], local_dir=""))
         ds = src.dataset
@@ -153,7 +207,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             from nig_timenet_torch.workflow.run_common import split_bounds
             from nig_timenet_torch.workflow.settings import SplitSettings
-            env = real_slice(ds, train_end=a.train_end or split_bounds(ds, SplitSettings())[0])
+            train_end = a.train_end or split_bounds(ds, SplitSettings())[0]
+            env = (real_slice(ds, train_end=train_end) if a.env == "e3"
+                   else panel_slice(ds, train_end=train_end, n_coins=a.coins, max_rows=a.max_rows))
         env["environment"]["source_fingerprint"] = src.manifest.data_fingerprint
         man = write_artifact(env, a.paths[1], source_commit=src.manifest.source_commit, overwrite=a.overwrite,
                              producer=f"nig_timenet_torch.data_io.environments:{a.env}")
