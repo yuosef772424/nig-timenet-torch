@@ -12,6 +12,8 @@ BUILD_PLAN.md P22). A metric's definition never depends on loss weights or lambd
 loss-weighted raw loss by construction.
 
 Each entry's obj is ``fn(outputs, labels, logs) -> float`` (numpy/torch arrays; ``logs`` = eval_step's loss logs).
+``val_ls_sharpe_close`` (D-032) is the per-timestamp Sharpe of the top / bottom 20 % book ranked by the close mean
+(day metric 2 of ``eval/day_metrics.py`` on the validation rows; a cross-section run only).
 Registered: val_raw_loss, and for every price target t in (high, low, close):
 ``val_auc_{t}_class`` (stats.metrics.auc of y_{t}_class vs the head's probability) and ``val_pinball_{t}_reg``
 (stats.metrics.pinball_loss at quantile 0.5 of y_{t}_reg vs the NIG mean y_{t}; the NIG head predicts a mean, and
@@ -78,6 +80,26 @@ SELECTION_METRICS.register("val_rank_ic_reg", _rank_ic_fn(TARGET_COLUMNS), versi
 for _t in TARGET_COLUMNS:
     SELECTION_METRICS.register(f"val_rank_ic_{_t}_reg", _rank_ic_fn((_t,)), version=1, higher_is_better=True,
                                selectable=True)
+
+
+def _ls_sharpe_fn(target):
+    """The market-neutral book of day metric 2 on the validation rows, in label units: per timestamp the top 20 % /
+    bottom 20 % spread of the label ranked by the NIG mean (``stats.metrics.long_short_spreads``); the value is its
+    mean over timestamps divided by its sd (a per-timestamp Sharpe). Needs the timestamps (a cross-section run)."""
+    spec = head_spec("nig_regression", target)
+
+    def fn(outputs, labels, logs) -> float:
+        if GROUP_KEY not in labels:
+            raise ValueError(f"val_ls_sharpe_{target} needs whole timestamps: run with SplitSettings.cross_section")
+        _, v = metrics.long_short_spreads(_np(labels[spec.label_key]), _np(outputs[spec.output_keys["mu"]]),
+                                          _np(labels[GROUP_KEY]))
+        sd = float(v.std(ddof=1)) if v.size > 1 else 0.0
+        return float(v.mean() / sd) if sd > 0 else float("nan")
+    return fn
+
+
+SELECTION_METRICS.register("val_ls_sharpe_close", _ls_sharpe_fn("close"), version=1, higher_is_better=True,
+                           selectable=True)
 SELECTION_METRICS.register("val_raw_loss", _val_raw_loss, version=1, higher_is_better=False, selectable=True)
 for _t in TARGET_COLUMNS:
     SELECTION_METRICS.register(f"val_auc_{_t}_class", _auc_fn(_t), version=1, higher_is_better=True,

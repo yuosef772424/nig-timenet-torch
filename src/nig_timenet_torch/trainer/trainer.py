@@ -25,6 +25,7 @@ import torch
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.trainer import checkpoint
+from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES, cross_section_loss
 from nig_timenet_torch.trainer.groups import group_batches, group_chunks, row_groups
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
 from nig_timenet_torch.trainer.log_groups import GroupedLogs, tensor_logs
@@ -184,6 +185,12 @@ class Trainer:
             self.uncertainty_layer.to(first.device)
         if loss_cfg["all_constraints"]:
             raise NotImplementedError("output constraints are not ported yet")
+        #: D-032: the cross-section term ("none" = no term) and its weight; needs ``group_channel``
+        self.cross_section, self.cross_section_weight = loss_cfg["cross_section"], float(
+            loss_cfg["cross_section_weight"])
+        if self.cross_section not in CROSS_SECTION_LOSSES:
+            raise ValueError(f"loss 'cross_section' must be one of {tuple(CROSS_SECTION_LOSSES)}, "
+                             f"not {self.cross_section!r}")
         self.optimizer = self._attach_optimizer(optimizer)
 
     def _attach_optimizer(self, optimizer):
@@ -201,11 +208,29 @@ class Trainer:
         if self.uncertainty_layer is not None:
             yield from self.uncertainty_layer.parameters()
 
-    def compute_losses(self, x, y, sample_weight=None, training: bool = False, outputs: dict | None = None):
-        return compute_losses(self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights,
-                              self.uncertainty_layer, self.kendall_task_names, self.fixed_task_names,
-                              sample_weight=sample_weight, training=training, outputs=outputs,
-                              multipliers=self.balancer.multipliers())
+    def compute_losses(self, x, y, sample_weight=None, training: bool = False, outputs: dict | None = None,
+                       groups: torch.Tensor | None = None):
+        """``compute_losses`` with this trainer's config; with a cross-section term (D-032) it is added to the total
+        and the raw loss and logged as the stat ``cross_section_loss``. ``groups``: the rows' timestamp ids when
+        ``x`` is not given (``evaluate``); else they are read from the group channel of ``x``."""
+        if self.cross_section == "none":
+            return compute_losses(self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights,
+                                  self.uncertainty_layer, self.kendall_task_names, self.fixed_task_names,
+                                  sample_weight=sample_weight, training=training, outputs=outputs,
+                                  multipliers=self.balancer.multipliers())
+        if groups is None and not (self.group_channel and x is not None):
+            raise ValueError(f"the cross-section loss {self.cross_section!r} needs whole-timestamp batches: run with "
+                             f"SplitSettings.cross_section (the group channel)")
+        outputs = self.model(x) if outputs is None else outputs
+        total, raw, per_target, stats, cons = compute_losses(
+            self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights, self.uncertainty_layer,
+            self.kendall_task_names, self.fixed_task_names, sample_weight=sample_weight, training=training,
+            outputs=outputs, multipliers=self.balancer.multipliers())
+        term = cross_section_loss(self.cross_section, outputs, y, self.targets_cfg,
+                                  row_groups(x) if groups is None else groups)
+        stats["cross_section_loss"] = term.detach().to(torch.float32)
+        term = self.cross_section_weight * term
+        return total + term, raw + term, per_target, stats, cons
 
     @staticmethod
     def batch_indices(n: int, batch_size: int, shuffle: bool = True) -> list[torch.Tensor]:
@@ -264,7 +289,8 @@ class Trainer:
             parts = [self.model(xb.to(dev)) for xb in x.split(batch_size)]
         outputs = {k: torch.cat([p[k] for p in parts]) for k in parts[0]}
         y = {k: v.to(dev) for k, v in y.items()}
-        total, raw, per_target, stats, _ = self.compute_losses(None, y, outputs=outputs)
+        total, raw, per_target, stats, _ = self.compute_losses(None, y, outputs=outputs,
+                                                               groups=None if gid is None else gid.to(dev))
         logs = self._logs(total, raw, per_target, stats)
         labels = y if gid is None else {**y, GROUP_KEY: gid}  # a rank metric reads the timestamps
         logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, labels, logs)

@@ -129,6 +129,10 @@ class TrainSettings:
     kendall_init_logvar: float = 0.0                       # start value of the Kendall log-variances
     # ST1 / D-030: None = today's epoch loop (steps.train); a StageSettings = staged training (steps.train_staged)
     staged: StageSettings | None = None
+    # D-032 (panel audit 2026-11-16): a loss term on the NIG means INSIDE each timestamp, on top of the NIG loss
+    # (trainer.cross_section_loss.CROSS_SECTION_LOSSES: "none" | "ic" | "rank_ic"); needs split.cross_section
+    cross_section_loss: str = "none"
+    cross_section_weight: float = 1.0                      # weight of that term (read only when it is on)
 
     def __post_init__(self):
         for name in ("epochs", "batch_size", "steps_per_execution"):
@@ -137,8 +141,10 @@ class TrainSettings:
                 raise ValueError(f"TrainSettings.{name} must be an integer >= 1, got {v!r}")
         if self.lr <= 0 or self.weight_decay < 0 or not 0.0 <= self.label_smoothing < 1.0:
             raise ValueError("lr > 0, weight_decay >= 0, 0 <= label_smoothing < 1")
-        if min(self.class_loss_weight, self.lambda_reg_end, self.lambda_calib_end, self.beta_nll) < 0:
-            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end and beta_nll must be >= 0")
+        if min(self.class_loss_weight, self.lambda_reg_end, self.lambda_calib_end, self.beta_nll,
+               self.cross_section_weight) < 0:
+            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end, beta_nll and cross_section_weight "
+                             "must be >= 0")
 
 
 @dataclass(frozen=True)

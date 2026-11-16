@@ -44,20 +44,10 @@ def absolute_days(frame: pd.DataFrame, score, cost: float = 0.0, min_rows: int =
 
 
 def _timestamp_spread(frame: pd.DataFrame, score, top_share: float) -> pd.Series:
-    """Per timestamp: (mean y of the top-k coins - mean y of the bottom-k coins) / 2 by ``score``; k =
-    max(1, round(top_share * coins)); NaN when fewer than 2 k coins have a score or the score is constant."""
-    df = pd.DataFrame({"t": frame["time"].to_numpy(), "s": np.asarray(score, dtype=np.float64),
-                       "y": frame["y_ret"].to_numpy(np.float64)}).dropna()
-    out = {}
-    for t, g in df.groupby("t", sort=True):
-        k = max(1, int(round(top_share * len(g))))
-        s = g["s"].to_numpy()
-        if len(g) < 2 * k or s.max() == s.min():
-            continue
-        order = np.argsort(s, kind="stable")
-        y = g["y"].to_numpy()
-        out[t] = (y[order[-k:]].mean() - y[order[:k]].mean()) / 2.0
-    return pd.Series(out, dtype=np.float64)
+    """Per timestamp: ``stats.metrics.long_short_spreads`` of ``score`` against the realised return."""
+    keys, vals = metrics.long_short_spreads(frame["y_ret"].to_numpy(np.float64), score,
+                                            frame["time"].to_numpy().astype("datetime64[ns]"), top_share)
+    return pd.Series(vals, index=pd.DatetimeIndex(keys), dtype=np.float64)
 
 
 def neutral_days(frame: pd.DataFrame, score, top_share: float = 0.2, cost: float = 0.0,
@@ -153,7 +143,8 @@ def day_report(frame: pd.DataFrame, val: pd.DataFrame | None = None, *, cost: fl
                top_share: float = 0.2, level: float = 0.95, seed: int = 0) -> dict:
     """Both metrics of one stage for the model (``mu``) and every baseline: per score the gross and net day summary
     and, for a baseline, the paired model-minus-baseline comparison on the gross days. Keys: ``absolute``,
-    ``neutral`` ({score name: {...}}), ``relative_rank_ic`` ({score name: value}), ``settings``."""
+    ``neutral`` ({score name: {...}}), ``absolute_relative_sign`` (metric 1 with the sign of ``mu`` minus its
+    timestamp mean; information), ``relative_rank_ic`` ({score name: value}), ``settings``."""
     missing = [c for c in FRAME_COLUMNS if c not in frame.columns]
     if missing:
         raise KeyError(f"day_report: the frame lacks {missing}")
@@ -161,7 +152,12 @@ def day_report(frame: pd.DataFrame, val: pd.DataFrame | None = None, *, cost: fl
     mu = frame["mu"].to_numpy(np.float64)
     absolute = {"model": mu, **{k: base[k] for k in ABSOLUTE_BASELINES}}
     neutral = {"model": mu, **{k: base[k] for k in NEUTRAL_BASELINES}}
+    rel = mu - pd.Series(mu).groupby(frame["time"].to_numpy().astype(np.int64)).transform("mean").to_numpy()
     return {"absolute": _section(frame, absolute, "model", absolute_days, cost, level, seed),
+            # information only (not the pre-registered model score): the sign of the mean RELATIVE to its timestamp,
+            # i.e. the same equal-weight book made market-neutral by construction
+            "absolute_relative_sign": {"gross": day_summary(absolute_days(frame, rel), level, seed=seed),
+                                       "net": day_summary(absolute_days(frame, rel, cost=cost), level, seed=seed)},
             "neutral": _section(frame, neutral, "model",
                                 lambda f, s, cost: neutral_days(f, s, top_share=top_share, cost=cost), cost, level,
                                 seed),
@@ -206,6 +202,8 @@ def render(report: dict, title: str = "") -> str:
                   "| score | days | winning days, gross [CI] | mean day, gross | mean day, net [CI] | "
                   "model - this, winning days [CI] |", "|---|---|---|---|---|---|"]
         lines += [_row(k, v) for k, v in report[metric].items()]
+        if metric == "absolute":
+            lines.append(_row("model, sign of (mean - timestamp mean) (information)", report["absolute_relative_sign"]))
         lines.append("")
     ic = ", ".join(f"{k} {v:+.4f}" for k, v in report["relative_rank_ic"].items())
     lines.append(f"Cross-sectional rank IC of the relative move: {ic}.")
