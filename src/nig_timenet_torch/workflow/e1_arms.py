@@ -182,8 +182,15 @@ def summary_line(name: str, runs: list[dict]) -> str:
         parts.append(f"{t} ratio {g(lambda r, t=t: r['mu'][t]['mean_ratio']):.2f} "
                      f"slope {g(lambda r, t=t: r['mu'][t]['slope_oracle_on_mu']):.2f} "
                      f"corr {g(lambda r, t=t: r['mu'][t]['corr']):+.3f} Tsharp {tsharp:.2f}")
-    parts.append(f"fails {g(_fails):.1f}")
+    parts.append(f"val_raw_loss {g(_best_val):.4f}")
+    parts.append(f"fails {g(_fails):.1f} ({', '.join(str(_fails(r)) for r in runs)})")
     return " | ".join(parts)
+
+
+def _best_val(res: dict) -> float | None:
+    """Best (lowest) ``val_raw_loss`` over the run's epochs; None when the history has none."""
+    vals = [h["val_raw_loss"] for h in res.get("history") or [] if h.get("val_raw_loss") is not None]
+    return min(vals) if vals else None
 
 
 def main(argv=None) -> dict:
