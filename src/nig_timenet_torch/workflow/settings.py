@@ -153,6 +153,10 @@ class BatterySettings:
     enabled: bool = True
     cost_per_side: float = 0.0008        # charged on EVERY side of a trade: a round trip pays twice this
     n_variants: int = 1                  # variants tried so far (widens the confidence intervals)
+    # D-032: also write the day metrics of a multi-coin run (winning days of the sign portfolio and of the top /
+    # bottom book against their baselines, uncertainty use): workflow/panel_report.py; read even when ``enabled`` is
+    # False (the day metrics have their own files)
+    day_metrics: bool = False
 
     def __post_init__(self):
         if self.cost_per_side < 0 or self.n_variants < 1:

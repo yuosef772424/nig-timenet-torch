@@ -11,8 +11,9 @@ PITFALLS: exploratory (rule C5); the split is always a cross-section (``cross_se
 Config (``PanelConfig``): ``device``, ``run_dir`` (required), ``seeds`` (default 0, 1), ``arms`` (names of
 ``workflow.panel_study.ARMS``; default all), ``extra_arms`` ({name: {"model": {...}, "train": {...}}}), ``artifact``,
 ``base_tf``, ``max_rows`` (smoke mode: whole timestamps, evenly strided), ``top_coins``, ``batch_size``, ``lr``,
-``epochs``, ``patience``, ``selection_metric``, ``model_overrides`` (every arm), ``train`` (other TrainSettings
-fields, every arm), ``split`` (other SplitSettings fields). Outputs: ``study.json``, ``study.md``, one folder per arm
+``epochs``, ``patience``, ``selection_metric``, ``battery`` (the evaluation battery per arm, default on),
+``model_overrides`` (every arm), ``train`` (other TrainSettings fields, every arm), ``split`` (other SplitSettings
+fields). Outputs: ``study.json``, ``study.md``, one folder per arm
 x seed.
 """
 
@@ -51,6 +52,7 @@ class PanelConfig:
     epochs: int = 25
     patience: int = 6
     selection_metric: str = "val_rank_ic_reg"
+    battery: bool = True               # also the evaluation battery per arm (T-profit sections; n_variants = arms)
     model_overrides: dict = field(default_factory=lambda: {"encoder": "gru"})
     train: dict = field(default_factory=dict)
     split: dict = field(default_factory=dict)
@@ -90,8 +92,10 @@ def run_settings(cfg: PanelConfig, code_sha: str = "") -> RunSettings:
                          train={**cfg.train, "epochs": cfg.epochs, "selection_metric": cfg.selection_metric,
                                 "early_stop": EarlyStopSettings(patience=cfg.patience)},
                          split={**cfg.split, "cross_section": True, "top_coins": cfg.top_coins})
-    # the day metrics replace the battery here (the battery's own table is per row, not per day)
-    return replace(s, evaluation=EvalSettings(battery=BatterySettings(enabled=False)))
+    # the study writes the day metrics itself (it needs their numbers); the battery adds its per-row T-profit
+    # sections, its CIs widened by the number of arms tried
+    return replace(s, evaluation=EvalSettings(battery=BatterySettings(enabled=cfg.battery,
+                                                                      n_variants=len(arms_of(cfg)))))
 
 
 def _code_sha() -> str:

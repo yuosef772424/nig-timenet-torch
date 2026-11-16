@@ -11,7 +11,7 @@ PITFALLS: exploratory (rule C5): a CPU run is a look; the accept rule needs >= 2
 
 An arm = ``{"model": {model overrides}, "train": {TrainSettings fields}}`` over the study's base settings (which must
 set ``split.cross_section``). Outputs in ``out``: ``study.json``, ``study.md`` and one folder per arm x seed with the
-summary, the test report, the panel report and the two frames.
+summary, the test report, the panel report, the two frames and, when the settings enable it, the battery report.
 """
 
 import json
@@ -25,7 +25,7 @@ import torch
 from nig_timenet_torch.core.config import updated
 from nig_timenet_torch.eval import day_metrics
 from nig_timenet_torch.model.architectures import ModelSettings
-from nig_timenet_torch.workflow import panel_report
+from nig_timenet_torch.workflow import battery_run, panel_report
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.settings import RunSettings
 
@@ -43,7 +43,7 @@ ARMS = {
 }
 ARM_JSON = "arm.json"
 _KEPT = (panel_report.REPORT_JSON, panel_report.REPORT_MD, "panel_frame_val.parquet", "panel_frame_test.parquet",
-         steps.SUMMARY, steps.TEST_REPORT)
+         steps.SUMMARY, steps.TEST_REPORT, battery_run.REPORT_TXT, battery_run.PROFIT_JSON)
 
 
 def arm_settings(settings: RunSettings, arm: dict, seed: int, run_dir) -> RunSettings:
@@ -90,6 +90,9 @@ def run_arm(settings: RunSettings, name: str, arm: dict, seed: int, out, *, ckpt
     row["test_rank_ic"] = {t: rep["targets"][t]["skill"]["rank_ic_by_timestamp"] for t in r.targets}
     row.update(panel_report.headline(panel_report.panel_step(r)))
     steps.write_summary(r)
+    verdict = steps.battery_step(r).get("verdict")      # {} when the settings switch the battery off
+    if verdict is not None:
+        row["battery_tradeable"] = verdict.get("tradeable")
     row["seconds"] = time.monotonic() - t0
     keep.mkdir(parents=True, exist_ok=True)
     for f in _KEPT:

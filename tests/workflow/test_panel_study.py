@@ -117,3 +117,18 @@ def test_panel_entry_runs_and_resumes(e4_dir, tmp_path, monkeypatch):
         assert (tmp_path / out / "manifest.json").is_file() and (tmp_path / out / "device.json").is_file()
     frame = pd.read_parquet(tmp_path / "o2" / "per_coin_s0" / "panel_frame_test.parquet")
     assert frame["coin"].nunique() == 6                          # top_coins
+    for out in ("o1", "o2"):                                    # the battery ran per arm and its report is kept
+        assert (tmp_path / out / "per_coin_s0" / "battery_report.txt").is_file()
+    assert "battery_tradeable" in study["arms"]["per_coin"][0]
+
+
+def test_battery_step_writes_the_day_metrics_when_asked(e4_dir, tmp_path):
+    s = updated(base(e4_dir, tmp_path), {"evaluation.battery.day_metrics": True})
+    r = steps.train(steps.build(steps.prepare(s, tmp_path / "out")))
+    steps.test_step(r)
+    assert steps.battery_step(r) == {}                           # the battery itself is off in ``base``
+    assert (tmp_path / "out" / "panel_report.md").is_file() and "absolute" in r.extra["panel"]
+    off = steps.train(steps.build(steps.prepare(base(e4_dir, tmp_path / "b"), tmp_path / "out_b")))
+    steps.test_step(off)
+    steps.battery_step(off)
+    assert not (tmp_path / "out_b" / "panel_report.md").exists()  # off by default
