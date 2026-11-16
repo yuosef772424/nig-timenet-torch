@@ -1,0 +1,284 @@
+"""End-of-step bookkeeping in one run: MAP and pins, decision record, STATUS row, the PR's B1 section.
+
+PURPOSE:  Regenerate MAP and stale pins, draft or update the PR's decision record, set the step's STATUS row and
+  write the B1 PR section; --check changes nothing and fails on anything stale, missing or unfinished.
+TAGS:     tools, close, step, bookkeeping, map, pins, decisions, status, pr, description, check
+PITFALLS: Run from the repo root on the PR branch with origin/main fetched. Pin files are regenerated only when their
+  test fails (so float noise never rewrites them). A TODO in a drafted decision fails pin_diff and --check.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime
+import os
+import re
+import subprocess
+import sys
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from tests import defaults_pin as dp
+from tests import pin_diff
+from tools import decision_draft as dd
+from tools import status_row
+from tools._git import ToolError, git, merge_base
+
+ROOT = Path(__file__).resolve().parent.parent
+MAP_REL = "docs/MAP.md"
+STATUS_REL = "docs/STATUS.md"
+OUT_REL = ".close_step/behaviour_changes.md"
+PINS_DIR = "tests/pins"
+#: pin files that are the output of a test: (file, test file that checks it, env var that makes the test rewrite it)
+PYTEST_PINS = (
+    ("tests/pins/baseline_fixture.json", "tests/jobs/test_baseline_pin.py", "PIN_UPDATE"),
+    ("tests/pins/model_assembly.json", "tests/model/test_assembly_pins.py", "UPDATE_MODEL_PINS"),
+    ("tests/pins/trainer_config.json", "tests/trainer/test_trainer_config_pins.py", "UPDATE_TRAINER_PINS"),
+)
+FREE_TEXT_MARK = "FREE-TEXT-BEHAVIOUR-CHANGES"
+
+
+def _real_pytest(root: Path, target: str, env_var: str | None) -> int:
+    env = {k: v for k, v in os.environ.items() if k not in {p[2] for p in PYTEST_PINS}}
+    if env_var:
+        env[env_var] = "1"
+    cmd = [sys.executable, "-m", "pytest", "-q", "-m", "slow or not slow", "-p", "no:cacheprovider", target]
+    return subprocess.run(cmd, cwd=root, env=env, capture_output=True, text=True).returncode
+
+
+def _real_map() -> str:
+    from tests import build_map
+
+    return build_map.build()
+
+
+def _real_defaults() -> dict[str, str]:
+    return dp.collect_defaults()
+
+
+@dataclass
+class Hooks:
+    """The slow or global parts, replaceable in tests."""
+
+    defaults: Callable[[], dict[str, str]] = _real_defaults
+    map_text: Callable[[], str] = _real_map
+    pytest: Callable[[Path, str, str | None], int] = _real_pytest
+    today: Callable[[], str] = lambda: datetime.date.today().isoformat()  # noqa: E731
+
+
+@dataclass
+class Report:
+    messages: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    section: str = ""
+
+
+# ------------------------------------------------------------------------------------------------ pins and map
+def defaults_pin_problem(root: Path, current: dict[str, str]) -> str | None:
+    """Why ``tests/pins/defaults.json`` is stale (keys of the code it lacks, or a wrong fingerprint), else None."""
+    import json
+
+    path = root / dd.PIN_REL
+    if not path.exists():
+        return f"{dd.PIN_REL} is missing"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    missing = sorted(set(current) - set(data["defaults"]))
+    if missing:
+        return f"{dd.PIN_REL} lacks {len(missing)} default(s) of the code, e.g. {missing[0]}"
+    if data.get("fingerprint") != dp.fingerprint(data["defaults"]):
+        return f"{dd.PIN_REL}: its fingerprint does not match its defaults"
+    return None
+
+
+def regenerate(root: Path, hooks: Hooks, current: dict[str, str], skip_pin_tests: bool) -> list[str]:
+    """Write MAP and the stale pins; returns what was rewritten."""
+    done = []
+    text = hooks.map_text()
+    path = root / MAP_REL
+    if not path.exists() or path.read_text(encoding="utf-8") != text:
+        path.write_text(text, encoding="utf-8")
+        done.append(MAP_REL)
+    if defaults_pin_problem(root, current):
+        dp.write_additions(current, root / dd.PIN_REL)
+        done.append(dd.PIN_REL)
+    if skip_pin_tests:
+        return done
+    for rel, test, env_var in PYTEST_PINS:
+        if hooks.pytest(root, test, None) == 0:
+            continue
+        hooks.pytest(root, test, env_var)  # the test rewrites the pin file
+        if hooks.pytest(root, test, None) != 0:
+            raise ToolError(f"{test} still fails after regenerating {rel}: this is not a stale pin, read its output "
+                            f"(python -m pytest -q {test})")
+        done.append(rel)
+    return done
+
+
+# ------------------------------------------------------------------------------------------------ B1 section
+def behaviour_section(root: Path, mb: str, added: list[Path]) -> str:
+    rows = [(key, old, new, f"D-{dd.decision_number(p.name):03d}")
+            for p in added for key, old, new in dp.parse_decision(p)]
+    out = ["## Behaviour changes (rule B1)",
+           "<!-- generated by `python -m tools.close_step` from docs/decisions; do not edit the table -->"]
+    if rows:
+        out += ["", "| Default | Old (in force before this PR) | New | Decision |", "|---|---|---|---|"]
+        out += [f"| `{k}` | {'(new default)' if o == dp.ADDED else f'`{o}`'} | "
+                f"{'(removed)' if n == dd.REMOVED else f'`{n}`'} | {d} |" for k, o, n, d in rows]
+    else:
+        out += ["", "No pinned default is new, changed or removed (`python -m tests.pin_diff` is clean)."]
+    names = set((git(root, "diff", "--name-only", mb, "--", PINS_DIR) or "").split())
+    names |= set((git(root, "ls-files", "--others", "--exclude-standard", "--", PINS_DIR) or "").split())
+    changed = sorted(names - {dd.PIN_REL})
+    if changed:
+        out += ["", "Pinned outputs regenerated (a behaviour change of the model or the run; say which):"]
+        out += [f"- `{n}`" for n in changed]
+    out += ["", f"- Other behaviour changes (free text, the session writes this; write `none` if there are none): "
+                f"<!-- {FREE_TEXT_MARK} -->", ""]
+    return "\n".join(out)
+
+
+# ------------------------------------------------------------------------------------------------------ write
+def repo_url(root: Path, override: str | None) -> str | None:
+    url = override or (git(root, "remote", "get-url", "origin", check=False) or "").strip()
+    m = re.search(r"github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?/?$", url)
+    return f"https://github.com/{m.group(1)}" if m else None
+
+
+def current_branch(root: Path) -> str | None:
+    name = (git(root, "rev-parse", "--abbrev-ref", "HEAD", check=False) or "").strip()
+    return name if name and name != "HEAD" else None
+
+
+def close(root: Path, args: argparse.Namespace, hooks: Hooks) -> Report:
+    rep = Report()
+    mb = merge_base(root, args.base)
+    status_path = root / STATUS_REL
+    status_new = status_row.update_status(
+        status_path.read_text(encoding="utf-8"), args.step, branch=current_branch(root), pr=args.pr, state=args.state,
+        title=args.title, repo_url=repo_url(root, args.repo))  # first: a missing row or a long file stops the run
+    current = hooks.defaults()
+    rep.messages += [f"rewrote {rel}" for rel in regenerate(root, hooks, current, args.no_pin_tests)]
+
+    added = dd.pr_added_decisions(root, mb)
+    target = dd.pick_target(root, added, args.decision)
+    other = [p for p in added if p != target]
+    folder = dd.decisions_dir(root)
+    other_eff = dp.apply_decisions(dd.load_pin(root), folder, frozenset({target.name} if target else ()))
+    lines = dd.draft_lines(current, dd.base_effective(root, mb), other_eff, dd.keys_of(other))
+    if lines:
+        target = _write_record(root, target, lines, args, hooks, rep)
+        added = sorted({*other, target})
+    elif target:
+        rep.messages.append(f"{target.name}: no default differs from the base any more; its decision lines are kept "
+                            "as they are, delete the file by hand if it is not needed")
+    status_path.write_text(status_new, encoding="utf-8")
+    rep.messages.append(f"updated the {args.step} row of {STATUS_REL}")
+    rep.section = behaviour_section(root, mb, added)
+    out = root / OUT_REL
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(rep.section, encoding="utf-8")
+    rep.messages.append(f"wrote {OUT_REL} (paste it into the PR description)")
+    return rep
+
+
+def _write_record(root: Path, target: Path | None, lines: list[dd.Line], args: argparse.Namespace, hooks: Hooks,
+                  rep: Report) -> Path:
+    remote = dd.remote_decision_files(root)
+    if target is None:
+        slug = args.slug or f"{args.step.lower().replace(' ', '').replace('/', '-')}-defaults"
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
+            raise ToolError(f"--slug {slug!r} must be lowercase letters, digits and hyphens")
+        number = dd.next_number(root, args.number)
+        target = dd.decisions_dir(root) / f"D-{number:03d}-{slug}.md"
+        title = args.title or slug.replace("-", " ")
+        target.write_text(dd.draft_text(number, title, hooks.today(), lines), encoding="utf-8")
+        rep.messages.append(f"drafted {target.name} with {len(lines)} line(s): fill in every TODO")
+    else:
+        text = dd.rewrite_lines(target.read_text(encoding="utf-8"), lines)
+        target.write_text(text, encoding="utf-8")
+        rep.messages.append(f"updated the decision lines of {target.name} in place ({len(lines)} line(s))")
+    rep.warnings += dd.clash_warnings(dd.decision_number(target.name), target.name, remote)
+    return target
+
+
+# ------------------------------------------------------------------------------------------------------ check
+def check(root: Path, base: str, hooks: Hooks, *, step: str | None = None, skip_pin_tests: bool = False) -> list[str]:
+    """Everything ``close`` would change or the PR still owes, as a list of problems (empty = clean). Writes nothing."""
+    problems: list[str] = []
+    map_path = root / MAP_REL
+    if not map_path.exists() or map_path.read_text(encoding="utf-8") != hooks.map_text():
+        problems.append(f"{MAP_REL} is stale: run `python -m tools.close_step --step <id>`")
+    current = hooks.defaults()
+    pin = dd.load_pin(root)
+    if problem := defaults_pin_problem(root, current):
+        problems.append(problem)
+    if not skip_pin_tests:
+        problems += [f"{rel} is stale (`pytest {test}` fails)" for rel, test, _ in PYTEST_PINS
+                     if hooks.pytest(root, test, None) != 0]
+    mb = merge_base(root, base)
+    added = dd.pr_added_decisions(root, mb)
+    try:
+        effective = dp.apply_decisions(pin, dd.decisions_dir(root))
+    except ValueError as exc:
+        problems.append(f"a decision line is wrong: {exc}")
+    else:
+        for key, (old, new) in sorted(dp.compare(current, effective)[0].items()):
+            problems.append(f"decision line missing or wrong for `{key}`: in force {old!r}, the code has {new!r}")
+    base_eff = dd.base_effective(root, mb)
+    problems += [f"no decision line in this PR for `{k}` (differs from the base)"
+                 for k in pin_diff.undocumented(base_eff, current, dd.keys_of(added))]
+    problems += [f"{p.name} still has a TODO placeholder: fill it in" for p in added
+                 if dp.UNFINISHED.search(p.read_text(encoding="utf-8"))]
+    status = (root / STATUS_REL).read_text(encoding="utf-8")
+    if len(status.splitlines()) >= status_row.STATUS_MAX:
+        problems.append(f"{STATUS_REL} has {len(status.splitlines())} lines, the limit is < {status_row.STATUS_MAX}")
+    if step and not status_row.find_rows(status.split("\n"), step):
+        problems.append(f"{STATUS_REL} has no row for step {step!r}")
+    return problems
+
+
+# --------------------------------------------------------------------------------------------------------- CLI
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="python -m tools.close_step", description=__doc__.split("\n\n")[0])
+    p.add_argument("--step", help="step id of your STATUS row (required unless --check)")
+    p.add_argument("--title", help="row title (creates the row when missing) and the heading of a new decision")
+    p.add_argument("--pr", type=int, help="PR number for the row's PR cell")
+    p.add_argument("--state", help="row state: in progress / PR open / merged / ...")
+    p.add_argument("--base", default="origin/main", help="PR base ref (default origin/main; its merge-base is used)")
+    p.add_argument("--decision", help="update this decision record of the PR (D-NNN) instead of the only/new one")
+    p.add_argument("--slug", help="slug of a new decision file (default <step>-defaults)")
+    p.add_argument("--number", type=int, help="number of a new decision (default: the next free local number)")
+    p.add_argument("--repo", help="repository URL for PR links (default: from git remote origin)")
+    p.add_argument("--no-pin-tests", action="store_true", help="do not run or regenerate the pytest-made pin files")
+    p.add_argument("--check", action="store_true", help="change nothing; exit 1 on anything stale or unfinished")
+    p.add_argument("--skip-pin-tests", action="store_true", help="with --check: skip the pin tests (CI runs them)")
+    return p
+
+
+def main(argv: list[str] | None = None, root: Path = ROOT, hooks: Hooks | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    hooks = hooks or Hooks()
+    try:
+        if args.check:
+            problems = check(root, args.base, hooks, step=args.step, skip_pin_tests=args.skip_pin_tests)
+            for p in problems:
+                print(f"STALE: {p}", file=sys.stderr)
+            print("close_step --check: " + (f"{len(problems)} problem(s)" if problems else "clean"))
+            return 1 if problems else 0
+        if not args.step:
+            raise ToolError("--step <id> is required (the id of your row in docs/STATUS.md)")
+        rep = close(root, args, hooks)
+    except ToolError as exc:
+        print(f"close_step: {exc}", file=sys.stderr)
+        return 1
+    for line in rep.messages:
+        print(line)
+    for line in rep.warnings:
+        print(line, file=sys.stderr)
+    print("\n" + rep.section)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,6 +1,7 @@
 """CI check for rule B1 (HF-31): every key added, changed or removed in ``tests/pins/defaults.json`` versus the PR base
 appears on a line of a decision file that the PR adds. Without it a PR could edit the pin file instead of writing a
-decision. Run in CI as ``python -m tests.pin_diff origin/<base branch>``; exit code 1 lists the undocumented keys.
+decision. Run in CI as ``python -m tests.pin_diff origin/<base branch>``; exit code 1 lists the undocumented keys
+and the decision files of the PR that still hold a ``TODO`` placeholder (``python -m tools.close_step`` drafts them).
 """
 
 import json
@@ -29,12 +30,16 @@ def main(base: str) -> int:
     added = _git("diff", "--name-only", "--diff-filter=A", f"{base}...HEAD", "--", "docs/decisions").split()
     documented = {key for rel in added if rel.endswith(".md") and dp.DECISION_NAME.match(rel.rsplit("/", 1)[-1])
                   for key, _, _ in dp.parse_decision(dp.ROOT / rel)}
+    unfinished = [rel for rel in added
+                  if rel.endswith(".md") and dp.UNFINISHED.search((dp.ROOT / rel).read_text(encoding="utf-8"))]
+    for rel in unfinished:
+        print(f"decision file with a TODO left: {rel} (fill in the owner decision and the why)")
     missing = undocumented(base_pin, dp.load_pin(), documented)
     for key in missing:
         print(f"pin key without a decision line in this PR: {key}")
     if missing:
         print(f"{len(missing)} key(s): write docs/decisions/D-nnn-*.md in this PR (rule B1)")
-    return 1 if missing else 0
+    return 1 if missing or unfinished else 0
 
 
 if __name__ == "__main__":

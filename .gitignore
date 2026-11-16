@@ -3,3 +3,4 @@
 upstream/
 __pycache__/
 *.egg-info/
+.close_step/

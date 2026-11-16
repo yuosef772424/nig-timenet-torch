@@ -57,3 +57,14 @@ def test_cli_runs_an_arm_and_writes_rows_calibration_and_readout(e1, capsys):
     assert all("_class" not in k and -1.0 <= v <= 1.0 for k, v in probe["centred"].items())
     assert (e1 / "out" / "res_tiny.json").is_file()
     assert capsys.readouterr().out.splitlines()[-1].startswith("tiny")
+
+
+def test_summary_line_prints_the_best_val_loss_and_the_fails_of_every_seed():
+    def run(fails, losses):
+        rows = [{"gate": "B", "check": "x", "head": "high", "blocking": True, "verdict": "fail"}] * fails
+        mu = {"high": {"mean_ratio": 1.0, "slope_oracle_on_mu": 1.0, "corr": 0.5}}
+        return {"rows": rows, "mu": mu, "history": [{"val_raw_loss": v} for v in losses]}
+
+    line = e1_arms.summary_line("arm", [run(2, [-5.0, -5.5]), run(3, [-5.2, -5.1])])
+    assert "val_raw_loss -5.3500" in line
+    assert "fails 2.5 (2, 3)" in line

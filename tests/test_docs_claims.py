@@ -108,3 +108,17 @@ def test_every_rule_has_an_enforcement_cell():
     for ln in rows:
         cells = [c.strip() for c in ln.strip().strip("|").split("|")]
         assert cells[-1], f"{cells[0]}: empty 'Enforced by' cell"
+
+
+def test_session_instructions_use_the_pr_sections_not_the_csvs():
+    """Owner 2026-11-16: obstacles and suggestions go in the PR description; tools/collect_registers.py appends them to
+    the CSVs. The live docs must not tell a session to edit the registers by hand, and must name both tools."""
+    claude, rules = _read("CLAUDE.md"), _read("docs/RULES.md")
+    assert "python -m tools.close_step" in claude and "python -m tools.collect_registers" in claude
+    for text in (claude, rules, _read("docs/STATUS.md")):
+        assert "append real obstacles" not in text.lower() and "appends real obstacles" not in text.lower()
+    assert "appends to `docs/suggestions.csv`" not in rules
+    template = _read(".github/pull_request_template.md")
+    for heading in ("## Behaviour changes (rule B1)", "## Friction", "## Suggestions"):
+        assert heading in template, f"the PR template lost {heading!r}"
+    assert (ROOT / ".github" / "workflows" / "collect-registers.yml").is_file()

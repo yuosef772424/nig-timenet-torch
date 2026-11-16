@@ -24,8 +24,11 @@ jobs:
       - name: Pin changes are documented (rule B1)
         if: github.event_name == 'pull_request'
         run: python -m tests.pin_diff origin/${{ github.base_ref }}
+      # `python -m tools.close_step --check` is NOT a separate step: CI already covers each of its parts (MAP above,
+      # pin_diff above incl. the TODO-in-a-decision check, the pin tests and tests/test_decisions.py in the test step,
+      # the STATUS length in tests/test_docs_claims.py). It exists for the session's local run before pushing.
       - name: Lint
-        run: ruff check src tests
+        run: ruff check src tests tools
       - name: Test (fast + slow; time budget of rule E3 enforced by tests/conftest.py)
         env:
           CARD_REQUIRE_BASE: "1"   # a missing PR base fails test_cards instead of skipping
