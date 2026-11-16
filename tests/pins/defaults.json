@@ -546,7 +546,7 @@
   "nig_timenet_torch.jobs.gates.GatesConfig(train)": "{}",
   "nig_timenet_torch.jobs.gates.run_settings(code_sha)": "''",
   "nig_timenet_torch.jobs.panel.CONFIG": "<class 'nig_timenet_torch.jobs.panel.PanelConfig'>",
-  "nig_timenet_torch.jobs.panel.PanelConfig(arms)": "('per_coin', 'relative', 'relative_rank_loss', 'relative_rank_loss_ls')",
+  "nig_timenet_torch.jobs.panel.PanelConfig(arms)": "('per_coin', 'relative', 'relative_rank_loss', 'relative_rank_loss_center', 'relative_rank_loss_ls')",
   "nig_timenet_torch.jobs.panel.PanelConfig(artifact)": "'/content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1'",
   "nig_timenet_torch.jobs.panel.PanelConfig(base_tf)": "None",
   "nig_timenet_torch.jobs.panel.PanelConfig(batch_size)": "512",
