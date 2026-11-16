@@ -1,10 +1,8 @@
 # STATUS
 > Read this first, then `docs/RULES.md` once, then ONLY your step in `docs/ROADMAP.md` (port batches below are done; `BUILD_PLAN.md` section 0b) — within it, every step in order,
-> each step's own tests green before the next step starts. Update your row in the same PR. Append real obstacles
-> to `friction_log.csv`. Keep this file under 60 lines.
-Port done: B1-B10 merged ([#2](https://github.com/yuosef772424/nig-timenet-torch/pull/2)-[#11](https://github.com/yuosef772424/nig-timenet-torch/pull/11); per-batch table and notes in `docs/BUILD_PLAN.md` section 0b and git history of this file); M2 and M3 gates green, both oracle suites green. Open judgment calls: `friction_log.csv` rows marked "owner to confirm".
-
-States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`.
+> each step's own tests green before the next step starts. Update your row in the same PR (`python -m tools.close_step`);
+> obstacles go under `## Friction` of the PR description. Keep this file under 60 lines.
+Port done: B1-B10 merged ([#2](https://github.com/yuosef772424/nig-timenet-torch/pull/2)-[#11](https://github.com/yuosef772424/nig-timenet-torch/pull/11); per-batch table and notes in `docs/BUILD_PLAN.md` section 0b and git history of this file); M2 and M3 gates green, both oracle suites green. Open judgment calls: `friction_log.csv` rows marked "owner to confirm". States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`.
 
 ## Hardening 2026-11 (`docs/hardening/PLAN.md`, final order at its end; findings `docs/hardening/AUDIT-2026-11.md`)
 CAMPAIGN DONE (all rows merged). Outcome per package: `docs/hardening/PLAN.md` "Outcome"; tests 515 -> 749; ratchets G1 0, G2 5 (honest, B-046), G3 0, G4 0, G7 0, C2 0, G8 1 (`model/panel.py`).
@@ -43,6 +41,7 @@ GPU results (branch `colab-results`): `baseline-002-s0` (2026-11-08, @8451a62, e
 | MF1 | Model-first audit: fitted scalers as default, model doctor (owner 2026-11-14) | merged | [#56](https://github.com/yuosef772424/nig-timenet-torch/pull/56) (replaced #55) | `docs/audit/2026-11-14-model-first/` (NOTES, NEXT, cards A-E); `python -m nig_timenet_torch.doctor`; default model = preset + `MODEL_FIRST_FIXES` (D-026); E1 gate fails 7.7 -> 2.7; real-data slice: high IC 0.315 -> 0.338; close has no input signal (N-08); third session: `TRANSFORMER_HEAD_RESULTS.md` (outputs go around the encoder N-20; switches `ffn`, encoder `conv_transformer`, head `linear`, card A block use; defaults unchanged); fourth session (branch `claude/audit-models-output-layer-90e1uu`): multi-coin block `cross_coin_layers` + `split.cross_section` (D-028, N-26..N-30) |
 | ST1 | Staged training: grow the data, lower lr at each sign of memorisation (owner 2026-11-15) | merged | [#58](https://github.com/yuosef772424/nig-timenet-torch/pull/58) | D-030; `trainer/staged.py` (step loop over the one `Trainer`), `TrainSettings.staged` (None = today), `run.train_staged`, `workflow/staged_study.py` (B1 / B2 / B3 at equal steps, accept rule), entry `staged`, jobs `staged-smoke-001` -> `staged-001`; CPU smoke on E1 `docs/results/staged-cpu-smoke-001.md` (not a result); GPU study not run |
 | MG1 | Merge #51, #52, #56 into main (owner 2026-11-15) | merged | [#57](https://github.com/yuosef772424/nig-timenet-torch/pull/57) | decisions renumbered D-024..D-029; B-069 / B-070; B-071 closed in MG2: `nig_scale_fit` vs `nig_scale` tie on E1, default kept ([note](results/nig-scale-default-001.md)) |
+| TL1 | Step-closing and register-collection tools (owner 2026-11-16) | in progress |  | branch `ccr-33246741-nbh7ay`; `python -m tools.close_step` (MAP, pins, decision draft, STATUS row, B1 section, `--check`) and `python -m tools.collect_registers` (PR `## Friction` / `## Suggestions` -> the CSVs; weekly workflow `collect-registers`); template `.github/pull_request_template.md`; rules B1, F1, F5 changed; overlaps H7 (CSV register tooling) |
 | H7 | Register and review tooling (fourth R-REVIEW) | todo | | counter derived, CSV columns, check-job vs colab-results, rmtree ratchet |
 | TR1 | Trainer switches (clip, wd groups, EMA, init, timing, train gap) | todo | | B-018, B-007, HF-37 |
 | G3r | Gates on the baseline configuration | todo | | 3 seeds |

@@ -242,3 +242,13 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `notebooks/colab_nig_timenet_torch.ipynb`: notebook runner
 - `notebooks/data_pipeline.ipynb`: notebook runner
 - `notebooks/main.ipynb`: notebook runner
+
+## Repo tools (`tools/`, run from the repo root as `python -m tools.<name>`)
+
+| module | what it is for | tags |
+|---|---|---|
+| `tools/_git.py` | One place that runs ``git -C <root> ...`` and returns text, so every tool fails the same way and the tests can point it at a temporary repository. | tools, git, subprocess, helper |
+| `tools/close_step.py` | Regenerate MAP and stale pins, draft or update the PR's decision record, set the step's STATUS row and write the B1 PR section; --check changes nothing and fails on anything stale, missing or unfinished. | tools, close, step, bookkeeping, map, pins, decisions, status, pr, description, check |
+| `tools/collect_registers.py` | Parse the `## Friction` and `## Suggestions` sections of merged PR bodies (format: the PR template), validate every row and append a good PR's rows to the two CSV registers once; a bad or missing section is reported. | tools, registers, friction, suggestions, csv, pull, request, collector, idempotent |
+| `tools/decision_draft.py` | For every default new, changed or removed since the PR base, compute the line `key: old -> new` (old = value in force after the existing decisions), number the record, warn on clashes, write or update the decision file. | tools, decisions, defaults, pin, base, number, clash, draft, rule, b1 |
+| `tools/status_row.py` | Set a step's state, PR link and branch in its STATUS table row, or add the row, and refuse any result that is not under the 60-line limit; fails loudly when the row is missing (and no --title to create it). | tools, status, row, roadmap, table, pr, state, branch |
