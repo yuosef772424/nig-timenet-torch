@@ -41,6 +41,19 @@ def test_rolling_entry_runs_the_study(tmp_path, art, monkeypatch):  # noqa: F811
     assert (tmp_path / "ro_run" / "fold_000_seed_0" / "ckpt" / "checkpoint.pt").is_file()
 
 
+def test_rolling_entry_pools_the_day_metrics_of_its_folds(tmp_path, art, monkeypatch):  # noqa: F811
+    out = run_entry(rolling, tmp_path, "rd", art, monkeypatch, day_metrics=True, split={"cross_section": True},
+                    rolling={"train_span": "20D", "test_span": "7D", "step": "10D", "embargo": "1D", "max_folds": 2},
+                    train={"epochs": 1})
+    assert (out / "fold_001_seed_0" / "panel_report.md").is_file()
+    pooled = json.loads((out / "pooled_days_seed_0" / "panel_report.json").read_text())
+    folds = [json.loads((out / f"fold_00{i}_seed_0" / "panel_report.json").read_text()) for i in (0, 1)]
+    assert pooled["test"]["settings"]["rows"] == sum(f["test"]["settings"]["rows"] for f in folds)
+    with pytest.raises(ValueError, match="step >= test_span"):
+        rolling.CONFIG(device="cpu", run_dir="x", day_metrics=True,
+                       rolling={"train_span": "20D", "test_span": "7D", "step": "5D", "embargo": "1D"})
+
+
 def test_configs_are_strict():
     ok = {"device": "cpu", "run_dir": "x"}
     with pytest.raises(ValueError, match="unknown key"):

@@ -26,7 +26,7 @@ from nig_timenet_torch.eval import day_metrics, uncertainty_use
 from nig_timenet_torch.workflow import battery_run, flat_run, run_common
 
 __all__ = ["trailing_return", "stage_frame", "oracle_frame", "panel_report", "panel_step", "panel_from_folder",
-           "frame_path", "REPORT_JSON", "REPORT_MD"]
+           "panel_from_folders", "frame_path", "REPORT_JSON", "REPORT_MD"]
 
 REPORT_JSON, REPORT_MD = "panel_report.json", "panel_report.md"
 _KEEP = ("mu", "sigma", "p_dir", "y_ret", "coin", "pred_high", "pred_low", "fut_high", "fut_low", "sigma_high",
@@ -156,4 +156,23 @@ def panel_from_folder(folder, *, cost: float = 0.0008, top_share: float = 0.2, o
     if out_dir is not None:
         Path(out_dir).mkdir(parents=True, exist_ok=True)
         _write(Path(out_dir), report, "Panel report")
+    return report
+
+
+def panel_from_folders(folders, *, cost: float = 0.0008, top_share: float = 0.2, out_dir=None) -> dict:
+    """ONE panel report over the frames of several run folders whose test windows do not overlap (the folds of a
+    rolling study, ``workflow/rolling_run.py``): the TEST frames are concatenated (every day of every fold is scored
+    by the model that was trained before it), and so are the VAL frames (they orient the asymmetry baseline and fit
+    the confidence thresholds). Folders without frames are skipped; none with frames raises."""
+    have = [f for f in folders if frame_path(f, "test").is_file() and frame_path(f, "val").is_file()]
+    if not have:
+        raise FileNotFoundError("no folder holds panel frames (run with evaluation.battery.day_metrics)")
+    val, test = (pd.concat([pd.read_parquet(frame_path(f, st)) for f in have], ignore_index=True)
+                 for st in ("val", "test"))
+    if test.duplicated(["time", "coin"]).any():
+        raise ValueError("the test frames overlap (a row is scored twice): pool only folds with disjoint test windows")
+    report = panel_report(val, test, cost=cost, top_share=top_share)
+    if out_dir is not None:
+        Path(out_dir).mkdir(parents=True, exist_ok=True)
+        _write(Path(out_dir), report, f"Panel report, {len(have)} folders pooled")
     return report
