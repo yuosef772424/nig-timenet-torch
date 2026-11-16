@@ -1,8 +1,8 @@
 # ROADMAP — from a verified port to a finished, honestly evaluated model (owner 2026-11-02; rewritten H0c 2026-11-07)
 
-Read `docs/STATUS.md` first, then `docs/RULES.md` once, then ONLY your step below. A step that touches the model,
-the trainer, the targets or a training job also reads `docs/MODEL_DEV_PROTOCOL.md` (rule C6: gates before any full
-training). The port (`docs/BUILD_PLAN.md`, B1-B10) is done; R0-T4 are done (their text is in git history, STATUS rows
+Read `docs/STATUS.md` first, then `docs/RULES.md` once, then ONLY your step below ("Now" is the current order). A step
+that touches the model, the trainer, the targets or a training job also reads `docs/PHILOSOPHY.md` (how the work is
+done) and `docs/MODEL_DEV_PROTOCOL.md` (rule C6: gates before any full training). The port (`docs/BUILD_PLAN.md`, B1-B10) is done; R0-T4 are done (their text is in git history, STATUS rows
 link the PRs).
 
 Goal: IMPROVE the model, then FINISH it professionally: meaningful confidence, sharp uncertainty, skill kept or
@@ -45,11 +45,32 @@ PyTorch. The TF project (`yuosef772424/crypto-signal-prediction`) is the frozen 
   is never evidence and never a selection metric. Direction is judged on the close head only, next to its trivial
   baselines (shuffled, constant, momentum sign, reversal sign).
 
+## Now: the order of work after the panel audit (owner tasks 2026-11-16; this block comes before the blocks below)
+
+Where the model stands (all exploratory, rule C5): on the flat split no arm is profitable after costs
+(`docs/results/panel-001.md`); relative inputs plus the cross-section rank term raise the close head's relative rank
+IC from 0.06 to 0.11 beyond the seed spread, and that gain does not reach the day P&L because the gross edge of a 4 h
+book is under half of its cost (B-074). The steps, in order; each follows the loop of `docs/PHILOSOPHY.md` section 2:
+
+| # | Step | What | Done when |
+|---|---|---|---|
+| N1 | Read the three walk-forwards (`exp`, researcher) | `rolling-single-001` (the single-coin model), `panel-rolling-base-001` (per_coin on whole timestamps), `panel-rolling-001` (relative + rank term): 7 expanding folds x 2 seeds, the test days of all folds pooled per seed (about 1260 days). Reports on Drive `nig_timenet_runs/<job>/out` | the results note walk-forward-001 under docs/results: per fold and pooled, next to the baselines; does the IC gain hold in every fold, does any arm beat every baseline on the pooled days |
+| N2 | Direction balance in the single-coin model (owner request; `exp`) | the look `single-balance-look-001` (E4 and the real long slice, weights 1 and 5, seeds 0 and 1; `docs/audit/2026-11-16-panel/single_coin_balance_look.py`) | read; only if the bias falls on both seeds without losing rank IC: a walk-forward arm with `train.direction_balance` on the folds of N1 |
+| N3 | The cost wall, model-free first (`exp`, researcher; B-074) | on the full artifact's TRAIN / VAL rows, a ridge on relative features at label horizons 2, 6, 12 and 42 bars and at a daily rebalance: gross edge per unit of turnover against 0.16 % | a table horizon x rebalance -> gross edge / cost; the horizon whose edge exceeds its cost (or the statement that none does) decides the label of the next training |
+| N4 | Card: a single-coin trainer that treats sudden moves differently (owner request; `docs`) | pumps, crashes and news bars are a small share of rows and a large share of the loss; a card (hypothesis, measurement that separates the cases, arms, accept rule) BEFORE any code; one uniform penalty is the thing to avoid (owner) | the card is merged; its first step is a measurement, not a switch |
+| N5 | More than one timeframe for the panel model (owner request; `feat` then `exp`) | the run steps refuse an artifact with more than one timeframe (`input_key` in `workflow/run_common.py`); the data preset `hourly_4h_closed` exists | builder: the run steps read a two-timeframe artifact (default unchanged); then look arms one vs two timeframes on E3p, 2 seeds |
+| N6 | Encoders with relative inputs and the rank term (owner request; `exp`) | the look of 2026-11-16 (conv_transformer, transformer without ffn, tcn, itransformer against gru) was lost with the runtime | the look rerun with its outputs on Drive, 2 seeds, E4 and the real long slice |
+| N7 | Close PN1 (`docs`) | reports A and B of `docs/audit/2026-11-16-panel/` still hold table placeholders (their look outputs are lost) | placeholders filled from a rerun or replaced by the panel-001 numbers; the PR of PN1 merged |
+
+N3 is the step that decides T-profit; N2, N5 and N6 change the IC, which the cost wall currently hides. Steps of the
+blocks below that no N step needs stay parked until an R-REVIEW or the owner reorders them.
+
 ## Approach
 Every improvement is a registered switch whose default reproduces today (rule B1, decision file for every new
 default). Before any full training the configuration passes the protocol gates (gradient, confidence, uncertainty) on
-synthetic, shuffled-label and small real data, 3 seeds. One full run compares the baseline vs all switches on; if the
-targets improve, ablate one switch at a time; if not, ablate plus diagnose (model doctor). Tests stay fast (E3).
+synthetic, shuffled-label and small real data, 3 seeds. A comparison is named arms (the baseline arm among them) x
+>= 2 seeds on one commit, then the same arms walk-forward (`docs/PHILOSOPHY.md` section 2); a gain is ablated one
+switch at a time, a failure is diagnosed (model doctor) before anything is changed. Tests stay fast (E3).
 
 Step header: change type, size (S < ~150 changed lines, M ~150-500, L more), agent kind (**builder** = clear spec,
 the cheaper agent model suffices; **researcher** = open question, a stronger agent model, says why). `r` = a Colab run
