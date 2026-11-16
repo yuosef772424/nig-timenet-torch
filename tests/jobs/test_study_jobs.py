@@ -56,8 +56,8 @@ def test_configs_are_strict():
         rolling.CONFIG(**ok)                      # the rolling spans have no defaults
 
 
-@pytest.mark.parametrize("name", ["staged-smoke-001", "staged-001", "rolling-smoke-001", "rolling-001", "panel-smoke-001",
-                                  "panel-001"])
+@pytest.mark.parametrize("name", ["staged-smoke-001", "staged-001", "rolling-smoke-001", "rolling-001",
+                                  "panel-smoke-001", "panel-001"])
 def test_job_files_are_valid(name):
     job = parse_job((ROOT / "docs" / "jobs" / f"{name}.json").read_text())
     assert job["entry"] == name.split("-")[0] and job["device"] == "cuda" and job["needs_drive"]

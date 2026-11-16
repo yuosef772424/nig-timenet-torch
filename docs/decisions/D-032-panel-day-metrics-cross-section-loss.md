@@ -1,0 +1,103 @@
+# D-032 — Panel (multi-coin) model: audit, day metrics, E4, cross-section loss, Colab jobs (owner 2026-11-16)
+
+Date: 2026-11-16
+Owner decision: TODO: cite the owner's instruction (step prompt or message) that decided this
+Why: TODO: why (the incident or measurement that justifies each line below)
+
+## What changes behaviour
+- TODO: why, in words, per line below
+
+- `nig_timenet_torch.data_io.environments.panel_slice(max_rows)`: `<new>` -> `60000`
+- `nig_timenet_torch.data_io.environments.panel_slice(n_coins)`: `<new>` -> `50`
+- `nig_timenet_torch.data_io.environments.panel_slice(train_share)`: `<new>` -> `0.7`
+- `nig_timenet_torch.data_io.environments.panel_slice(val_share)`: `<new>` -> `0.15`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(base_tf)`: `<new>` -> `'4h'`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(beta_dispersion)`: `<new>` -> `0.3`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(beta_mean)`: `<new>` -> `1.0`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(burn_in_bars)`: `<new>` -> `128`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(horizon)`: `<new>` -> `2`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(label_codec)`: `<new>` -> `'logret_close'`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(market_sigma)`: `<new>` -> `0.012`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(n_bars)`: `<new>` -> `2400`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(n_coins)`: `<new>` -> `50`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(reg_target_scale)`: `<new>` -> `1.0`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(seed)`: `<new>` -> `0`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(signal_bars)`: `<new>` -> `3`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(specific_ic)`: `<new>` -> `0.15`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(specific_sigma_dispersion)`: `<new>` -> `0.25`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(specific_sigma_median)`: `<new>` -> `0.01`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(start)`: `<new>` -> `'2023-01-01T00:00:00+00:00'`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(substeps)`: `<new>` -> `48`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(vol_persistence)`: `<new>` -> `0.97`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(vol_sd)`: `<new>` -> `0.35`
+- `nig_timenet_torch.data_io.synthetic_panel.PanelSyntheticSettings(window)`: `<new>` -> `32`
+- `nig_timenet_torch.data_io.synthetic_panel.build_panel_synthetic(settings)`: `<new>` -> `None`
+- `nig_timenet_torch.data_io.synthetic_panel.write_panel_synthetic(overwrite)`: `<new>` -> `False`
+- `nig_timenet_torch.data_io.synthetic_panel.write_panel_synthetic(settings)`: `<new>` -> `None`
+- `nig_timenet_torch.data_io.synthetic_panel.write_panel_synthetic(source_commit)`: `<new>` -> `''`
+- `nig_timenet_torch.eval.day_metrics.absolute_days(cost)`: `<new>` -> `0.0`
+- `nig_timenet_torch.eval.day_metrics.absolute_days(min_rows)`: `<new>` -> `3`
+- `nig_timenet_torch.eval.day_metrics.baseline_scores(val)`: `<new>` -> `None`
+- `nig_timenet_torch.eval.day_metrics.day_report(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.eval.day_metrics.day_report(level)`: `<new>` -> `0.95`
+- `nig_timenet_torch.eval.day_metrics.day_report(seed)`: `<new>` -> `0`
+- `nig_timenet_torch.eval.day_metrics.day_report(top_share)`: `<new>` -> `0.2`
+- `nig_timenet_torch.eval.day_metrics.day_report(val)`: `<new>` -> `None`
+- `nig_timenet_torch.eval.day_metrics.day_summary(block_days)`: `<new>` -> `5`
+- `nig_timenet_torch.eval.day_metrics.day_summary(level)`: `<new>` -> `0.95`
+- `nig_timenet_torch.eval.day_metrics.day_summary(seed)`: `<new>` -> `0`
+- `nig_timenet_torch.eval.day_metrics.neutral_days(cost)`: `<new>` -> `0.0`
+- `nig_timenet_torch.eval.day_metrics.neutral_days(min_rows)`: `<new>` -> `1`
+- `nig_timenet_torch.eval.day_metrics.neutral_days(top_share)`: `<new>` -> `0.2`
+- `nig_timenet_torch.eval.day_metrics.paired_days(block_days)`: `<new>` -> `5`
+- `nig_timenet_torch.eval.day_metrics.paired_days(level)`: `<new>` -> `0.95`
+- `nig_timenet_torch.eval.day_metrics.paired_days(seed)`: `<new>` -> `0`
+- `nig_timenet_torch.eval.day_metrics.render(title)`: `<new>` -> `''`
+- `nig_timenet_torch.eval.uncertainty_use.confidence_selection(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.eval.uncertainty_use.confidence_selection(keep)`: `<new>` -> `0.2`
+- `nig_timenet_torch.eval.uncertainty_use.confidence_selection(top_share)`: `<new>` -> `0.2`
+- `nig_timenet_torch.eval.uncertainty_use.sd_ranks_error(mu)`: `<new>` -> `'mu'`
+- `nig_timenet_torch.eval.uncertainty_use.sd_ranks_error(sigma)`: `<new>` -> `'sigma'`
+- `nig_timenet_torch.eval.uncertainty_use.sd_ranks_error(y)`: `<new>` -> `'y_ret'`
+- `nig_timenet_torch.eval.uncertainty_use.sharp_and_calibrated(mu)`: `<new>` -> `'mu'`
+- `nig_timenet_torch.eval.uncertainty_use.sharp_and_calibrated(sigma)`: `<new>` -> `'sigma'`
+- `nig_timenet_torch.eval.uncertainty_use.sharp_and_calibrated(y)`: `<new>` -> `'y_ret'`
+- `nig_timenet_torch.eval.uncertainty_use.uncertainty_report(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.jobs.panel.CONFIG`: `<new>` -> `<class 'nig_timenet_torch.jobs.panel.PanelConfig'>`
+- `nig_timenet_torch.jobs.panel.PanelConfig(arms)`: `<new>` -> `('per_coin', 'relative', 'relative_rank_loss', 'relative_rank_loss_ls')`
+- `nig_timenet_torch.jobs.panel.PanelConfig(artifact)`: `<new>` -> `'/content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1'`
+- `nig_timenet_torch.jobs.panel.PanelConfig(base_tf)`: `<new>` -> `None`
+- `nig_timenet_torch.jobs.panel.PanelConfig(batch_size)`: `<new>` -> `512`
+- `nig_timenet_torch.jobs.panel.PanelConfig(epochs)`: `<new>` -> `25`
+- `nig_timenet_torch.jobs.panel.PanelConfig(extra_arms)`: `<new>` -> `{}`
+- `nig_timenet_torch.jobs.panel.PanelConfig(lr)`: `<new>` -> `0.0003`
+- `nig_timenet_torch.jobs.panel.PanelConfig(max_rows)`: `<new>` -> `None`
+- `nig_timenet_torch.jobs.panel.PanelConfig(model_overrides)`: `<new>` -> `{'encoder': 'gru'}`
+- `nig_timenet_torch.jobs.panel.PanelConfig(patience)`: `<new>` -> `6`
+- `nig_timenet_torch.jobs.panel.PanelConfig(seeds)`: `<new>` -> `(0, 1)`
+- `nig_timenet_torch.jobs.panel.PanelConfig(selection_metric)`: `<new>` -> `'val_rank_ic_reg'`
+- `nig_timenet_torch.jobs.panel.PanelConfig(split)`: `<new>` -> `{}`
+- `nig_timenet_torch.jobs.panel.PanelConfig(top_coins)`: `<new>` -> `100`
+- `nig_timenet_torch.jobs.panel.PanelConfig(train)`: `<new>` -> `{}`
+- `nig_timenet_torch.jobs.panel.run_settings(code_sha)`: `<new>` -> `''`
+- `nig_timenet_torch.stats.metrics.long_short_spreads(top_share)`: `<new>` -> `0.2`
+- `nig_timenet_torch.trainer.targets.LOSS_DEFAULTS.cross_section`: `<new>` -> `'none'`
+- `nig_timenet_torch.trainer.targets.LOSS_DEFAULTS.cross_section_weight`: `<new>` -> `1.0`
+- `nig_timenet_torch.workflow.panel_report.panel_from_folder(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.workflow.panel_report.panel_from_folder(out_dir)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.panel_report.panel_from_folder(top_share)`: `<new>` -> `0.2`
+- `nig_timenet_torch.workflow.panel_report.panel_report(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.workflow.panel_report.panel_report(seed)`: `<new>` -> `0`
+- `nig_timenet_torch.workflow.panel_report.panel_report(top_share)`: `<new>` -> `0.2`
+- `nig_timenet_torch.workflow.panel_report.panel_step(top_share)`: `<new>` -> `0.2`
+- `nig_timenet_torch.workflow.panel_report.render(title)`: `<new>` -> `''`
+- `nig_timenet_torch.workflow.panel_study.compare(baseline)`: `<new>` -> `'per_coin'`
+- `nig_timenet_torch.workflow.panel_study.run_arm(ckpt_root)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.panel_study.run_arm(deadline)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.panel_study.run_arm(on_epoch)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.panel_study.run_panel_study(ckpt_root)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.panel_study.run_panel_study(deadline)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.panel_study.run_panel_study(on_epoch)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.settings.RunSettings(train)`: `TrainSettings(epochs=5, batch_size=256, seed=0, lr=0.001, weight_decay=0.0001, label_smoothing=0.1, selection_metric='val_raw_loss', early_stop=EarlyStopSettings(patience=15, min_delta=0.0001, smoothing='window', window=3, ema_beta=0.7, restore_best_weights=True), device='auto', trace_representative=False, steps_per_execution=1, grad_clip_norm=None, ema_decay=None, init='torch', weight_decay_groups='all_params', uncertainty_weighting=True, class_loss_weight=1.0, lambda_reg_end=0.05, lambda_calib_end=0.1, beta_nll=0.0, beta_nll_normalize=False, loss_balance='none', kendall_init_logvar=0.0, staged=None)` -> `TrainSettings(epochs=5, batch_size=256, seed=0, lr=0.001, weight_decay=0.0001, label_smoothing=0.1, selection_metric='val_raw_loss', early_stop=EarlyStopSettings(patience=15, min_delta=0.0001, smoothing='window', window=3, ema_beta=0.7, restore_best_weights=True), device='auto', trace_representative=False, steps_per_execution=1, grad_clip_norm=None, ema_decay=None, init='torch', weight_decay_groups='all_params', uncertainty_weighting=True, class_loss_weight=1.0, lambda_reg_end=0.05, lambda_calib_end=0.1, beta_nll=0.0, beta_nll_normalize=False, loss_balance='none', kendall_init_logvar=0.0, staged=None, cross_section_loss='none', cross_section_weight=1.0)`
+- `nig_timenet_torch.workflow.settings.TrainSettings(cross_section_loss)`: `<new>` -> `'none'`
+- `nig_timenet_torch.workflow.settings.TrainSettings(cross_section_weight)`: `<new>` -> `1.0`
