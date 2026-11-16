@@ -12,11 +12,13 @@ artifacts from it through its own tools.
 ## A. Sessions and context
 | # | Rule | Why (incident) | Enforced by |
 |---|---|---|---|
-| A1 | One step = one fresh session = one branch = one PR. The session reads `CLAUDE.md`, `docs/STATUS.md`, then ONLY its step in `docs/ROADMAP.md`. | the TF planner conversation grew to 600k tokens | manual |
+| A1 | One ROADMAP step = one fresh session = one branch = one PR. The session reads `CLAUDE.md`, `docs/STATUS.md`, then ONLY its step in `docs/ROADMAP.md`. An owner task (the owner's message is the task) may hold several parts in one session: it keeps its context small by delegating the reading (A4) and writes a handoff (A6). | the TF planner conversation grew to 600k tokens; 2026-11: the sessions that moved the model were owner tasks, not single steps | manual |
 | A2 | Plans, STATUS and rules are merged to `main` BEFORE any step session starts. | TF S01: the plan existed only on a side branch; the step session could not find it | manual (STATUS says so in line 3) |
 | A3 | A step session ends with a short report: what changed, behaviour changes, checks run with results, what was NOT verified. | long reports cost context; unverified claims passed as facts | manual |
-| A4 | No subagents in step sessions unless the owner asks. | owner, 2026-11-02 | manual |
+| A4 | Subagents do the work that is mostly reading or mechanical (a past session's transcript, Drive run folders, many report files, a repetitive edit with a test), on a cheaper model, in their own `git worktree`, without pushing; the lead session checks their output against its source before using or pushing it. A subagent never decides what to try, judges a result or designs a model / trainer change. (Changed 2026-11-16; before: "no subagents unless the owner asks", owner 2026-11-02.) | owner, 2026-11-16: agents exist to keep the lead's context for decisions and to save tokens; the owner cancelled a subagent campaign that did the audits themselves (panel audit) | manual |
 | A5 | Reply to the owner in Arabic; code, docs, prompts in English. | owner | manual |
+| A6 | Commit and push after every finished unit (a feature with its test, a report, a job file). A session with several parts, or one that leaves a job running, pushes `docs/handoff/<date>-<topic>.md` before the long wait: what was asked, what runs where (job id, `run_dir`, how to poll), what was decided, what is next. No secret (bridge token, tunnel URL) in any file. | 2026-11-16: the panel session ended in a failed turn with hours of work unpushed; an agent rebuilt it from the transcript | manual |
+| A7 | Model work (changing or training the model, reading a result to decide the next experiment) is led by the strongest model the owner has and follows `docs/PHILOSOPHY.md` (the loop: pre-register, known answer, small real look, smoke, arms x seeds, walk-forward, read against baselines, record). | owner, 2026-11-16: the sessions led that way made the measurable progress, sessions on other models walking a checklist did not | manual |
 
 ## B. Changes and defaults
 | # | Rule | Why | Enforced by |

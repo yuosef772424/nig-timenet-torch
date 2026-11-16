@@ -1,13 +1,23 @@
 # Working instructions (nig-timenet-torch)
 
-Start of every session: read `docs/STATUS.md`, then `docs/RULES.md` (once), then ONLY your step in `docs/ROADMAP.md`.
+Start of every session: read `docs/STATUS.md`, then `docs/RULES.md` (once), then your task. A ROADMAP step reads ONLY
+its step in `docs/ROADMAP.md` ("Now" at its top is the current plan). An owner task (the owner's message is the task)
+reads what the message points to. Model work (anything that changes or trains the model, or reads a result to decide
+what comes next) first reads `docs/PHILOSOPHY.md` (how the work is done, in what order) and then
+`docs/MODEL_DEV_PROTOCOL.md` (the gates and the metrics).
 The port record is `docs/BUILD_PLAN.md` (done; read a section only when a step points to it).
 The reference TF project is `yuosef772424/crypto-signal-prediction` (frozen for model work; read-only except what
 ROADMAP allows).
 
 - Navigate: `docs/MAP.md` -> the module's card -> the symbol (grep, then read by line range). A module you change gets a card (rule B7).
 - Reply to the owner in Arabic; code, docs and prompts in English.
-- No subagents unless the owner asks.
+- Model work is led by the strongest model the owner has; the lead decides, reads the results and reviews what is
+  pushed (owner 2026-11-16, `docs/PHILOSOPHY.md` section 1).
+- Subagents take the work that is mostly reading or mechanical (a past session's transcript, Drive run folders, many
+  report files, a repetitive edit with a test), on a cheaper model (Sonnet), in their own `git worktree`, without
+  pushing; the lead checks their output before using it. No subagent decides what to try or judges a result (rule A4).
+- Commit and push after every finished unit; a session that leaves a job running pushes a handoff note first
+  (`docs/handoff/`, rule A6). Colab steps: `docs/COLAB_OPS.md`; never write the bridge token or tunnel URL to a file.
 - Tests: `pytest -q` (fast suite). Run the tests of what you touched; CI runs everything. Lint: `ruff check src tests tools`.
 - `docs/STATUS.md` stays under 60 lines (checked by `tests/test_docs_claims.py`).
 - Before finishing: run `python -m tools.close_step --step <your id> [--title ...] [--pr N --state "PR open"]` (it
