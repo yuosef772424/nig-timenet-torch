@@ -67,7 +67,8 @@ def confidence_selection(frame: pd.DataFrame, val: pd.DataFrame, keep: float = 0
                          top_share: float = 0.2) -> dict:
     """Winning days of metric 1 and 2 on (a) all rows, (b) the rows whose confidence |mu| / sd is at least the VAL
     quantile ``1 - keep``, (c) the rows whose sd is at most the VAL quantile ``keep``; (d) the rows whose |mu| is at
-    least the VAL quantile ``1 - keep`` (a rule that needs no uncertainty: what (b) must beat to be worth having)."""
+    least the VAL quantile ``1 - keep`` (a rule that needs no uncertainty: what (b) must beat to be worth having);
+    (e) all rows, the book of metric 2 ranked by mu / sd instead of mu."""
     def conf(f):
         return (f["mu"].abs() / f["sigma"].where(f["sigma"] > 0)).to_numpy(np.float64)
     rules = {"all_rows": np.ones(len(frame), bool),
@@ -75,9 +76,12 @@ def confidence_selection(frame: pd.DataFrame, val: pd.DataFrame, keep: float = 0
              "low_sd": frame["sigma"].to_numpy() <= np.nanquantile(val["sigma"].to_numpy(), keep),
              "top_abs_mu": frame["mu"].abs().to_numpy() >= np.nanquantile(val["mu"].abs().to_numpy(), 1.0 - keep)}
     out = {}
-    for name, mask in rules.items():
-        score = np.where(mask, frame["mu"].to_numpy(np.float64), np.nan)
-        out[name] = {"rows_share": float(mask.mean()),
+    scores = {name: np.where(mask, frame["mu"].to_numpy(np.float64), np.nan) for name, mask in rules.items()}
+    # every row trades, but the book of metric 2 is ranked by mu / sd (a small move of a calm coin counts as much as
+    # a large move of a wild one): the use of the sd that keeps the whole cross-section
+    scores["ranked_by_mu_over_sd"] = conf(frame) * np.sign(frame["mu"].to_numpy(np.float64))
+    for name, score in scores.items():
+        out[name] = {"rows_share": float(np.isfinite(score).mean()),
                      "absolute_gross": day_summary(absolute_days(frame, score)),
                      "absolute_net": day_summary(absolute_days(frame, score, cost=cost)),
                      "neutral_gross": day_summary(neutral_days(frame, score, top_share=top_share))}

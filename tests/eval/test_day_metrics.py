@@ -101,4 +101,7 @@ def test_uncertainty_use_reads_a_useful_sd_and_fits_thresholds_on_val():
     sel = r["confidence_selection"]
     assert sel["all_rows"]["rows_share"] == 1.0 and 0.1 < sel["top_confidence"]["rows_share"] < 0.3
     assert 0.1 < sel["low_sd"]["rows_share"] < 0.3 and "neutral_gross" in sel["top_abs_mu"]
+    ranked = sel["ranked_by_mu_over_sd"]
+    assert ranked["rows_share"] == 1.0 and ranked["absolute_gross"] == sel["all_rows"]["absolute_gross"]   # same signs
+    assert ranked["neutral_gross"]["win_share"] > 0.8
     assert "T-sharp" in uu.render(r) and "top_confidence" in uu.render(r)
