@@ -26,6 +26,7 @@ from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES, cross_section_loss
+from nig_timenet_torch.trainer.direction_balance import direction_balance_loss
 from nig_timenet_torch.trainer.groups import group_batches, group_chunks, row_groups
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
 from nig_timenet_torch.trainer.log_groups import GroupedLogs, tensor_logs
@@ -191,6 +192,13 @@ class Trainer:
         if self.cross_section not in CROSS_SECTION_LOSSES:
             raise ValueError(f"loss 'cross_section' must be one of {tuple(CROSS_SECTION_LOSSES)}, "
                              f"not {self.cross_section!r}")
+        #: D-032: weight of the direction-balance term (0 = no term) and the two-sided targets it reads
+        self.direction_balance = float(loss_cfg["direction_balance"])
+        self.balance_targets = list(loss_cfg["direction_balance_targets"])
+        unknown = sorted(set(self.balance_targets) - set(self.targets_cfg))
+        if self.direction_balance < 0 or unknown or (self.direction_balance > 0 and not self.balance_targets):
+            raise ValueError(f"loss 'direction_balance' must be >= 0 and name targets of the config "
+                             f"('direction_balance_targets'; unknown: {unknown})")
         self.optimizer = self._attach_optimizer(optimizer)
 
     def _attach_optimizer(self, optimizer):
@@ -210,15 +218,17 @@ class Trainer:
 
     def compute_losses(self, x, y, sample_weight=None, training: bool = False, outputs: dict | None = None,
                        groups: torch.Tensor | None = None):
-        """``compute_losses`` with this trainer's config; with a cross-section term (D-032) it is added to the total
-        and the raw loss and logged as the stat ``cross_section_loss``. ``groups``: the rows' timestamp ids when
-        ``x`` is not given (``evaluate``); else they are read from the group channel of ``x``."""
-        if CROSS_SECTION_LOSSES[self.cross_section] is None:
+        """``compute_losses`` with this trainer's config; the D-032 terms that are switched on (the cross-section
+        term, the direction-balance term) are added to the total and the raw loss and logged as the stats
+        ``cross_section_loss`` / ``direction_balance_loss``. ``groups``: the rows' timestamp ids when ``x`` is not
+        given (``evaluate``); else they are read from the group channel of ``x``."""
+        cross = CROSS_SECTION_LOSSES[self.cross_section] is not None
+        if not cross and not self.direction_balance:
             return compute_losses(self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights,
                                   self.uncertainty_layer, self.kendall_task_names, self.fixed_task_names,
                                   sample_weight=sample_weight, training=training, outputs=outputs,
                                   multipliers=self.balancer.multipliers())
-        if groups is None and not (self.group_channel and x is not None):
+        if cross and groups is None and not (self.group_channel and x is not None):
             raise ValueError(f"the cross-section loss {self.cross_section!r} needs whole-timestamp batches: run with "
                              f"SplitSettings.cross_section (the group channel)")
         outputs = self.model(x) if outputs is None else outputs
@@ -226,11 +236,18 @@ class Trainer:
             self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights, self.uncertainty_layer,
             self.kendall_task_names, self.fixed_task_names, sample_weight=sample_weight, training=training,
             outputs=outputs, multipliers=self.balancer.multipliers())
-        term = cross_section_loss(self.cross_section, outputs, y, self.targets_cfg,
-                                  row_groups(x) if groups is None else groups)
-        stats["cross_section_loss"] = term.detach().to(torch.float32)
-        term = self.cross_section_weight * term
-        return total + term, raw + term, per_target, stats, cons
+        extra = []
+        if cross:
+            term = cross_section_loss(self.cross_section, outputs, y, self.targets_cfg,
+                                      row_groups(x) if groups is None else groups)
+            stats["cross_section_loss"] = term.detach().to(torch.float32)
+            extra.append(self.cross_section_weight * term)
+        if self.direction_balance:
+            term = direction_balance_loss(outputs, self.targets_cfg, self.balance_targets)
+            stats["direction_balance_loss"] = term.detach().to(torch.float32)
+            extra.append(self.direction_balance * term)
+        add = torch.stack(extra).sum()
+        return total + add, raw + add, per_target, stats, cons
 
     @staticmethod
     def batch_indices(n: int, batch_size: int, shuffle: bool = True) -> list[torch.Tensor]:

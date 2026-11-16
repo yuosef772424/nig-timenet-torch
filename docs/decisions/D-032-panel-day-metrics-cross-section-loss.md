@@ -116,14 +116,20 @@ added to on the real slice (0.065 / 0.030 -> 0.092 per-coin, 0.082 / 0.065 -> 0.
 - `nig_timenet_torch.jobs.panel.PanelConfig(top_coins)`: `<new>` -> `100`
 - `nig_timenet_torch.jobs.panel.PanelConfig(train)`: `<new>` -> `{}`
 - `nig_timenet_torch.jobs.panel.run_settings(code_sha)`: `<new>` -> `''`
+- `nig_timenet_torch.jobs.rolling.RollingConfig(day_metrics)`: `<new>` -> `False`
 - `nig_timenet_torch.model.builder.NigTimeNetV2(cross_center)`: `<new>` -> `False`
 - `nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_center)`: `<new>` -> `False`
 - `nig_timenet_torch.stats.metrics.long_short_spreads(top_share)`: `<new>` -> `0.2`
 - `nig_timenet_torch.trainer.targets.LOSS_DEFAULTS.cross_section`: `<new>` -> `'none'`
 - `nig_timenet_torch.trainer.targets.LOSS_DEFAULTS.cross_section_weight`: `<new>` -> `1.0`
+- `nig_timenet_torch.trainer.targets.LOSS_DEFAULTS.direction_balance`: `<new>` -> `0.0`
+- `nig_timenet_torch.trainer.targets.LOSS_DEFAULTS.direction_balance_targets`: `<new>` -> `[]`
 - `nig_timenet_torch.workflow.panel_report.panel_from_folder(cost)`: `<new>` -> `0.0008`
 - `nig_timenet_torch.workflow.panel_report.panel_from_folder(out_dir)`: `<new>` -> `None`
 - `nig_timenet_torch.workflow.panel_report.panel_from_folder(top_share)`: `<new>` -> `0.2`
+- `nig_timenet_torch.workflow.panel_report.panel_from_folders(cost)`: `<new>` -> `0.0008`
+- `nig_timenet_torch.workflow.panel_report.panel_from_folders(out_dir)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.panel_report.panel_from_folders(top_share)`: `<new>` -> `0.2`
 - `nig_timenet_torch.workflow.panel_report.panel_report(cost)`: `<new>` -> `0.0008`
 - `nig_timenet_torch.workflow.panel_report.panel_report(seed)`: `<new>` -> `0`
 - `nig_timenet_torch.workflow.panel_report.panel_report(top_share)`: `<new>` -> `0.2`
@@ -139,6 +145,7 @@ added to on the real slice (0.065 / 0.030 -> 0.092 per-coin, 0.082 / 0.065 -> 0.
 - `nig_timenet_torch.workflow.settings.BatterySettings(day_metrics)`: `<new>` -> `False`
 - `nig_timenet_torch.workflow.settings.EvalSettings(battery)`: `BatterySettings(enabled=True, cost_per_side=0.0008, n_variants=1)` -> `BatterySettings(enabled=True, cost_per_side=0.0008, n_variants=1, day_metrics=False)`
 - `nig_timenet_torch.workflow.settings.RunSettings(evaluation)`: `EvalSettings(chunk=20000, health_max_rows=100000, battery=BatterySettings(enabled=True, cost_per_side=0.0008, n_variants=1))` -> `EvalSettings(chunk=20000, health_max_rows=100000, battery=BatterySettings(enabled=True, cost_per_side=0.0008, n_variants=1, day_metrics=False))`
-- `nig_timenet_torch.workflow.settings.RunSettings(train)`: `TrainSettings(epochs=5, batch_size=256, seed=0, lr=0.001, weight_decay=0.0001, label_smoothing=0.1, selection_metric='val_raw_loss', early_stop=EarlyStopSettings(patience=15, min_delta=0.0001, smoothing='window', window=3, ema_beta=0.7, restore_best_weights=True), device='auto', trace_representative=False, steps_per_execution=1, grad_clip_norm=None, ema_decay=None, init='torch', weight_decay_groups='all_params', uncertainty_weighting=True, class_loss_weight=1.0, lambda_reg_end=0.05, lambda_calib_end=0.1, beta_nll=0.0, beta_nll_normalize=False, loss_balance='none', kendall_init_logvar=0.0, staged=None)` -> `TrainSettings(epochs=5, batch_size=256, seed=0, lr=0.001, weight_decay=0.0001, label_smoothing=0.1, selection_metric='val_raw_loss', early_stop=EarlyStopSettings(patience=15, min_delta=0.0001, smoothing='window', window=3, ema_beta=0.7, restore_best_weights=True), device='auto', trace_representative=False, steps_per_execution=1, grad_clip_norm=None, ema_decay=None, init='torch', weight_decay_groups='all_params', uncertainty_weighting=True, class_loss_weight=1.0, lambda_reg_end=0.05, lambda_calib_end=0.1, beta_nll=0.0, beta_nll_normalize=False, loss_balance='none', kendall_init_logvar=0.0, staged=None, cross_section_loss='none', cross_section_weight=1.0)`
+- `nig_timenet_torch.workflow.settings.RunSettings(train)`: `TrainSettings(epochs=5, batch_size=256, seed=0, lr=0.001, weight_decay=0.0001, label_smoothing=0.1, selection_metric='val_raw_loss', early_stop=EarlyStopSettings(patience=15, min_delta=0.0001, smoothing='window', window=3, ema_beta=0.7, restore_best_weights=True), device='auto', trace_representative=False, steps_per_execution=1, grad_clip_norm=None, ema_decay=None, init='torch', weight_decay_groups='all_params', uncertainty_weighting=True, class_loss_weight=1.0, lambda_reg_end=0.05, lambda_calib_end=0.1, beta_nll=0.0, beta_nll_normalize=False, loss_balance='none', kendall_init_logvar=0.0, staged=None)` -> `TrainSettings(epochs=5, batch_size=256, seed=0, lr=0.001, weight_decay=0.0001, label_smoothing=0.1, selection_metric='val_raw_loss', early_stop=EarlyStopSettings(patience=15, min_delta=0.0001, smoothing='window', window=3, ema_beta=0.7, restore_best_weights=True), device='auto', trace_representative=False, steps_per_execution=1, grad_clip_norm=None, ema_decay=None, init='torch', weight_decay_groups='all_params', uncertainty_weighting=True, class_loss_weight=1.0, lambda_reg_end=0.05, lambda_calib_end=0.1, beta_nll=0.0, beta_nll_normalize=False, loss_balance='none', kendall_init_logvar=0.0, staged=None, cross_section_loss='none', cross_section_weight=1.0, direction_balance=0.0)`
 - `nig_timenet_torch.workflow.settings.TrainSettings(cross_section_loss)`: `<new>` -> `'none'`
 - `nig_timenet_torch.workflow.settings.TrainSettings(cross_section_weight)`: `<new>` -> `1.0`
+- `nig_timenet_torch.workflow.settings.TrainSettings(direction_balance)`: `<new>` -> `0.0`

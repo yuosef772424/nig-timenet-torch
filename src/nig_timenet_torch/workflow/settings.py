@@ -133,6 +133,9 @@ class TrainSettings:
     # (trainer.cross_section_loss.CROSS_SECTION_LOSSES: "none" | "ic" | "rank_ic"); needs split.cross_section
     cross_section_loss: str = "none"
     cross_section_weight: float = 1.0                      # weight of that term (read only when it is on)
+    # D-032 (owner idea 2026-11-16): weight of a term that penalises a batch whose close predictions lean long or
+    # short (trainer.direction_balance; NIG mean and class probability of the close head); 0 = off
+    direction_balance: float = 0.0
 
     def __post_init__(self):
         for name in ("epochs", "batch_size", "steps_per_execution"):
@@ -142,9 +145,9 @@ class TrainSettings:
         if self.lr <= 0 or self.weight_decay < 0 or not 0.0 <= self.label_smoothing < 1.0:
             raise ValueError("lr > 0, weight_decay >= 0, 0 <= label_smoothing < 1")
         if min(self.class_loss_weight, self.lambda_reg_end, self.lambda_calib_end, self.beta_nll,
-               self.cross_section_weight) < 0:
-            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end, beta_nll and cross_section_weight "
-                             "must be >= 0")
+               self.cross_section_weight, self.direction_balance) < 0:
+            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end, beta_nll, cross_section_weight "
+                             "and direction_balance must be >= 0")
 
 
 @dataclass(frozen=True)

@@ -93,3 +93,28 @@ def test_long_short_selection_metric_needs_timestamps_and_ranks_a_good_mean_abov
                                              labels, {}))
     with pytest.raises(ValueError, match="cross_section"):
         compute_selection_metric("val_ls_sharpe_close", {spec.output_keys["mu"]: y}, {spec.label_key: y}, {})
+
+
+def test_direction_balance_term_is_zero_for_a_balanced_batch_and_off_by_default():
+    from nig_timenet_torch.trainer.direction_balance import direction_balance_loss
+
+    assert LOSS_DEFAULTS["direction_balance"] == 0.0 and TrainSettings().direction_balance == 0.0
+    assert "direction_balance" not in trainer_config(TARGET_COLUMNS, 0.1, TrainSettings())["loss"]   # config pinned
+    on = trainer_config(TARGET_COLUMNS, 0.1, TrainSettings(direction_balance=2.0))["loss"]
+    reg, cls = head_spec("nig_regression", "close"), head_spec("binary_classification", "close")
+    assert on["direction_balance"] == 2.0 and on["direction_balance_targets"] == [reg.name, cls.name]   # close only
+    cfg = resolve_targets(trainer_config(TARGET_COLUMNS, 0.1, TrainSettings(direction_balance=2.0)))
+    mu_key, p_key = reg.output_keys["mu"], cls.output_keys["logits"]
+    mu = torch.randn(2000, generator=torch.Generator().manual_seed(4))
+    mu = mu - mu.mean()
+    names = on["direction_balance_targets"]
+    balanced = direction_balance_loss({mu_key: mu, p_key: torch.full((2000,), 0.5)}, cfg, names)
+    leaning = direction_balance_loss({mu_key: mu.abs(), p_key: torch.full((2000,), 0.7)}, cfg, names)
+    assert float(balanced) < 1e-3 < 0.1 < float(leaning)
+    scaled = direction_balance_loss({mu_key: 100.0 * mu.abs(), p_key: torch.full((2000,), 0.7)}, cfg, names)
+    assert torch.allclose(scaled, leaning)                         # shrinking every mean does not meet the term
+    lean = (mu.abs() * 0.01).requires_grad_()
+    direction_balance_loss({mu_key: lean, p_key: torch.full((2000,), 0.5)}, cfg, names).backward()
+    assert float(lean.grad.sum()) > 0                              # the gradient pushes the long lean down
+    with pytest.raises(ValueError, match="direction_balance"):
+        TrainSettings(direction_balance=-1.0)
