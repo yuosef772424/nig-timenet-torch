@@ -1,6 +1,5 @@
-"""PURPOSE: The panel (multi-coin) study of the owner task 2026-11-16: named arms x seeds through the run steps on
-    whole-timestamp batches, each scored with the day metrics; arms compared with the baseline arm on paired days;
-    resumable arm by arm and inside an arm.
+"""PURPOSE: The panel (multi-coin) study: named arms x seeds through the run steps on whole-timestamp batches, each
+    scored with the day metrics and compared with the baseline arm on paired days; resumable arm by arm.
 TAGS: panel study, multi coin arms, cross section, day metrics, winning days, paired days, accept rule, resumable,
     deadline, arm overrides, study json
 PITFALLS: exploratory (rule C5): a CPU run is a look; the accept rule needs >= 2 seeds (rule C4) and is the

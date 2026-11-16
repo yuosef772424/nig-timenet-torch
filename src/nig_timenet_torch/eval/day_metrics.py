@@ -1,6 +1,5 @@
-"""PURPOSE: The owner's day metrics of a multi-coin model (2026-11-16): the share of winning DAYS of (1) the
-    equal-weight sign portfolio and (2) the market-neutral top-k / bottom-k portfolio, gross and after cost, with
-    their trivial baselines, CIs over days and a paired, dependence-aware comparison.
+"""PURPOSE: The owner's day metrics of a multi-coin model: the share of winning DAYS of the equal-weight sign
+    portfolio and of the market-neutral top / bottom book, gross and net, with baselines, CIs and paired tests.
 TAGS: winning days, day portfolio, absolute direction, market neutral, long short, top k, relative rank ic,
     baselines, always long, market sign, momentum, reversal, paired block bootstrap, t-profit
 PITFALLS: a frame is ONE stage of ONE run with the columns of ``FRAME_COLUMNS``; a day is the UTC calendar day of the

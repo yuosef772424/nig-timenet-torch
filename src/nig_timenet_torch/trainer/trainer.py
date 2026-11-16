@@ -213,7 +213,7 @@ class Trainer:
         """``compute_losses`` with this trainer's config; with a cross-section term (D-032) it is added to the total
         and the raw loss and logged as the stat ``cross_section_loss``. ``groups``: the rows' timestamp ids when
         ``x`` is not given (``evaluate``); else they are read from the group channel of ``x``."""
-        if self.cross_section == "none":
+        if CROSS_SECTION_LOSSES[self.cross_section] is None:
             return compute_losses(self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights,
                                   self.uncertainty_layer, self.kendall_task_names, self.fixed_task_names,
                                   sample_weight=sample_weight, training=training, outputs=outputs,

@@ -1,6 +1,5 @@
-"""PURPOSE: The panel step of a finished run: the day-metric frame of a stage (battery table + the trailing 24 h
-    return and the last-bar asymmetry read from the artifact), and panel_step, which writes the day metrics, the
-    uncertainty-use report and the two frames.
+"""PURPOSE: The panel step of a finished run: the day-metric frame of a stage (battery table + trailing 24 h return
+    + last-bar asymmetry) and panel_step, which writes the day metrics, the uncertainty report and the frames.
 TAGS: panel report, day metrics frame, winning days, trailing return, last bar asymmetry, uncertainty use, oracle
     frame, run step, panel frame parquet
 PITFALLS: the trailing return of a row is read from the FULL artifact (the coin's close ``bars_per_day`` bars before),

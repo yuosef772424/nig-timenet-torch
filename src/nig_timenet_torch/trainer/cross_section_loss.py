@@ -1,6 +1,5 @@
-"""PURPOSE: The cross-section loss term of a multi-coin run (D-032, off by default): 1 - the mean over timestamps of
-    the Pearson correlation, inside the timestamp, of every NIG mean with its label (kind "ic") or with the label's
-    rank inside the timestamp (kind "rank_ic").
+"""PURPOSE: The cross-section loss term of a multi-coin run (D-032, off by default): 1 - the correlation, inside
+    each timestamp, of every NIG mean with its label ("ic") or with the label's rank ("rank_ic").
 TAGS: cross section loss, ic loss, rank ic loss, relative move, timestamp groups, auxiliary loss, multi coin, panel
 PITFALLS: needs batches of WHOLE timestamps (``SplitSettings.cross_section``; the trainer raises without the group
     channel); a timestamp with fewer than ``MIN_ROWS`` rows or a constant label is left out; the term is invariant to
@@ -57,16 +56,16 @@ def group_correlation(a: torch.Tensor, b: torch.Tensor, gid: torch.Tensor) -> to
     return (cov[ok] / torch.sqrt(va[ok] * vb[ok] + 1e-12)).mean()
 
 
-def _ic(mu, y, gid):
+def _value_term(mu, y, gid):
     return 1.0 - group_correlation(mu, y, gid)
 
 
-def _rank_ic(mu, y, gid):
+def _rank_term(mu, y, gid):
     return 1.0 - group_correlation(mu, group_ranks(y, gid), gid)
 
 
 #: loss ``cross_section`` -> fn(mean (n,), label (n,), group id (n,)) -> scalar (None = no term)
-CROSS_SECTION_LOSSES = {"none": None, "ic": _ic, "rank_ic": _rank_ic}
+CROSS_SECTION_LOSSES = {"none": None, "ic": _value_term, "rank_ic": _rank_term}
 
 
 def cross_section_loss(kind: str, outputs: dict, y: dict, targets_cfg: dict, gid: torch.Tensor) -> torch.Tensor:

@@ -1,6 +1,5 @@
-"""PURPOSE: Is the predicted uncertainty USEFUL on a panel (owner task 2026-11-16, auditor B): does the predictive sd
-    rank the absolute error across coins and across time, is it sharp and calibrated, is the predicted direction
-    biased, and does selecting trades by confidence raise the share of winning days.
+"""PURPOSE: Is the predicted uncertainty USEFUL on a panel: does the sd rank the absolute error across coins and
+    across time, is it sharp and calibrated, is the direction biased, does selecting by confidence win more days.
 TAGS: uncertainty use, sd ranks error, across coins, across time, t-sharp, calibration, direction bias, confidence
     selection, winning days, panel diagnostics
 PITFALLS: works on the day-metric frame (``eval.day_metrics.FRAME_COLUMNS``; one stage of one run); a confidence

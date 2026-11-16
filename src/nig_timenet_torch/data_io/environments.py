@@ -1,6 +1,5 @@
-"""PURPOSE: Test environments of MODEL_DEV_PROTOCOL section 3: E2 = one global label permutation (inputs untouched),
-    E3 = a training-era slice of the real artifact (coins x months, own purged split), E3p = its panel form (whole
-    timestamps of the longest-listed coins); nig-envs writes E1 / E2 / E3 / E3p / E4.
+"""PURPOSE: Test environments of MODEL_DEV_PROTOCOL section 3: E2 = one global label permutation, E3 = a
+    training-era slice of the real artifact, E3p = its panel form (whole timestamps); nig-envs writes E1 .. E4.
 TAGS: e2 environment, e3 environment, shuffled labels, label permutation, real slice, panel slice, whole timestamps,
     training era, purged split, leakage canary, gates
 PITFALLS: E2 permutes the regression AND class labels with one permutation and rewrites the future columns of
@@ -174,28 +173,32 @@ def panel_slice(dataset: dict, *, train_end, n_coins: int = 50, max_rows: int = 
 
 def main(argv: list[str] | None = None) -> int:
     """``nig-envs e1 OUT [--settings JSON]`` | ``nig-envs e2 SOURCE OUT [--seed N]`` | ``nig-envs e3 SOURCE OUT
-    [--train-end ISO]`` | ``nig-envs e3p SOURCE OUT [--train-end ISO] [--coins N] [--max-rows N]``: write the
-    environment as a contract artifact (SOURCE is read through ``load_dataset``; the train end of E3 / E3p defaults to
-    the full run's, ``run_common.split_bounds`` with the default SplitSettings)."""
+    [--train-end ISO]`` | ``nig-envs e3p SOURCE OUT [--train-end ISO] [--coins N] [--max-rows N]`` | ``nig-envs e4
+    OUT [--settings JSON]``: write the environment as a contract artifact (SOURCE is read through ``load_dataset``;
+    the train end of E3 / E3p defaults to the full run's, ``run_common.split_bounds`` with the default
+    SplitSettings; E4 = ``data_io.synthetic_panel``, its settings are PanelSyntheticSettings fields)."""
     from nig_timenet_torch.core.config import from_dict
     from nig_timenet_torch.data.artifact_writer import write_artifact
     from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
     from nig_timenet_torch.data_io.synthetic import SyntheticSettings, write_synthetic
+    from nig_timenet_torch.data_io.synthetic_panel import PanelSyntheticSettings, write_panel_synthetic
 
-    ap = argparse.ArgumentParser(prog="nig-envs", description="Write a test environment (E1 / E2 / E3 / E3p).")
-    ap.add_argument("env", choices=("e1", "e2", "e3", "e3p"))
-    ap.add_argument("paths", nargs="+", help="e1: OUT; e2 / e3 / e3p: SOURCE OUT")
-    ap.add_argument("--settings", default="{}", help="e1: SyntheticSettings fields as JSON")
+    ap = argparse.ArgumentParser(prog="nig-envs", description="Write a test environment (E1 / E2 / E3 / E3p / E4).")
+    ap.add_argument("env", choices=("e1", "e2", "e3", "e3p", "e4"))
+    ap.add_argument("paths", nargs="+", help="e1 / e4: OUT; e2 / e3 / e3p: SOURCE OUT")
+    ap.add_argument("--settings", default="{}", help="e1: SyntheticSettings fields as JSON; e4: PanelSyntheticSettings")
     ap.add_argument("--seed", type=int, default=0, help="e2: permutation seed")
     ap.add_argument("--train-end", default="", help="e3 / e3p: the full run's train end (default: its split_bounds)")
     ap.add_argument("--coins", type=int, default=50, help="e3p: coins of the panel slice")
     ap.add_argument("--max-rows", type=int, default=60_000, help="e3p: rows of the panel slice (whole timestamps)")
     ap.add_argument("--overwrite", action="store_true")
     a = ap.parse_args(argv)
-    if len(a.paths) != (1 if a.env == "e1" else 2):
-        ap.error(f"{a.env} takes {'OUT' if a.env == 'e1' else 'SOURCE OUT'}")
-    if a.env == "e1":
-        man = write_synthetic(a.paths[0], from_dict(SyntheticSettings, json.loads(a.settings)), overwrite=a.overwrite)
+    synthetic = {"e1": (SyntheticSettings, write_synthetic), "e4": (PanelSyntheticSettings, write_panel_synthetic)}
+    if len(a.paths) != (1 if a.env in synthetic else 2):
+        ap.error(f"{a.env} takes {'OUT' if a.env in synthetic else 'SOURCE OUT'}")
+    if a.env in synthetic:
+        settings_type, write = synthetic[a.env]
+        man = write(a.paths[0], from_dict(settings_type, json.loads(a.settings)), overwrite=a.overwrite)
     else:
         src = load_dataset(LoaderSettings(name=a.paths[0], local_dir=""))
         ds = src.dataset
