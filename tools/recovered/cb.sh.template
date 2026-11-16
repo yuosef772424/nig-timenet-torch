@@ -1,0 +1,4 @@
+# Recovered: scratchpad/cb.sh of the past session. Source it before any colab_ops / bridge call.
+# The URL is the quick-tunnel URL of ONE Colab runtime (it changes every runtime); the token is the BRIDGE_TOKEN printed by the bridge cell.
+export CB_URL=https://<TUNNEL>.trycloudflare.com
+export COLAB_BRIDGE_TOKEN='<BRIDGE_TOKEN>'
