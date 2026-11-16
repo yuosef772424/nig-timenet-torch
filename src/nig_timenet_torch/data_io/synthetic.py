@@ -39,7 +39,7 @@ from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["SyntheticSettings", "ORACLE_PREFIX", "oracle_keys", "build_synthetic", "write_synthetic",
-           "oracle_summary", "bar_kappa", "LABEL_CODECS"]
+           "oracle_summary", "bar_kappa", "LABEL_CODECS", "dataset_from_rows", "sim_rows"]
 
 ORACLE_PREFIX = "oracle_"
 _HAR_LAGS = (1, 6)                 # plus the whole window
@@ -165,6 +165,11 @@ def _simulate(s: SyntheticSettings) -> dict:
     return {**bars, **blocks, "log_close": log_close, "log_sigma_c": log_sc, "kappa": kappa}
 
 
+def sim_rows(s, sim: dict) -> dict:
+    """Public name of ``_rows`` for the other generators of this package (E4)."""
+    return _rows(s, sim)
+
+
 def _rows(s: SyntheticSettings, sim: dict) -> dict:
     """Row-aligned arrays (coin-major): inputs, last_candles and block parameters of every written row."""
     h, w = s.horizon, s.window
@@ -198,7 +203,14 @@ def build_synthetic(settings: SyntheticSettings | None = None) -> dict:
     block); ``write_synthetic`` writes it as a contract artifact."""
     s = settings or SyntheticSettings()
     sim = _simulate(s)
-    r = _rows(s, sim)
+    return dataset_from_rows(s, _rows(s, sim), sim["kappa"], "nig_timenet_torch.data_io.synthetic")
+
+
+def dataset_from_rows(s, r: dict, kappa: float, generator: str) -> dict:
+    """The dataset dict of simulated rows ``r`` (``_rows``: X, last, base, sigma = per-bar sd, mu = per-step drift,
+    z_sig, rows_per_coin; every bar of a row's horizon is ``substeps`` iid Gaussian steps with that drift and sd, so
+    the oracle moments are exact). ``s`` carries the fields of ``SyntheticSettings`` that describe the rows (E1 and
+    the panel environment E4, ``data_io.synthetic_panel``, share this)."""
     targets = list(TARGET_COLUMNS)
     moments_fn, norm_mode = LABEL_CODECS[s.label_codec]
     ds = {"base_params": r["base"].astype(np.float32), "last_candles": r["last"], "mode": "direction_robust",
@@ -228,8 +240,7 @@ def build_synthetic(settings: SyntheticSettings | None = None) -> dict:
     for t, (mean, sd) in moments_fn(params, s.reg_target_scale).items():
         ds[oracle_keys(t)[0]], ds[oracle_keys(t)[1]] = mean, sd
     ds[f"{ORACLE_PREFIX}sigma"], ds[f"{ORACLE_PREFIX}signal"] = r["sigma"], r["z_sig"]
-    ds["synthetic"] = {"generator": "nig_timenet_torch.data_io.synthetic", "settings": asdict(s),
-                       "kappa": sim["kappa"], "codec_state": state}
+    ds["synthetic"] = {"generator": generator, "settings": asdict(s), "kappa": kappa, "codec_state": state}
     ds["synthetic"]["summary"] = oracle_summary(ds)
     return ds
 
