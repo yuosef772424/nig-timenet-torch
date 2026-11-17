@@ -95,16 +95,29 @@ class FilePrices(PriceSource):
 
 
 class _Http:
+    """GET with up to ``tries`` attempts (backoff 2, 4, 8 s) on connection errors; a 404 is None (no such file)."""
+
+    def __init__(self, tries: int = 4):
+        self.tries = tries
+
     def get_bytes(self, url: str) -> bytes | None:
+        import time
         import urllib.error
         import urllib.request
-        try:
-            with urllib.request.urlopen(url, timeout=60) as r:
-                return r.read()
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                return None
-            raise
+        for attempt in range(self.tries):
+            try:
+                with urllib.request.urlopen(url, timeout=60) as r:
+                    return r.read()
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    return None
+                if attempt == self.tries - 1 or exc.code < 500:
+                    raise
+            except (urllib.error.URLError, ConnectionError, TimeoutError):
+                if attempt == self.tries - 1:
+                    raise
+            time.sleep(2 ** (attempt + 1))
+        return None
 
 
 def _zip_frame(blob: bytes | None) -> pd.DataFrame:
