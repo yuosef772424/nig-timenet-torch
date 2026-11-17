@@ -10,7 +10,7 @@ import torch
 from nig_timenet_torch.eval.influence_report import (
     group_attribution,
     influence_summary,
-    split_half_reliability,
+    spearman_brown,
     top_steps,
     write_influence_report,
 )
@@ -157,7 +157,7 @@ def test_probe_rows_halves_are_disjoint_and_grouped_draws_keep_whole_groups():
 
 
 def test_guards():
-    assert split_half_reliability(0.5) == pytest.approx(2 / 3)
+    assert spearman_brown(0.5) == pytest.approx(2 / 3)
     with pytest.raises(ValueError):
         InfluenceSettings(probe_rows=2)
     x, y = _nig_data(64, 0)

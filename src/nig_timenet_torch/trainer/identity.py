@@ -134,7 +134,7 @@ def build_run_identity(fit_settings, model_settings, trainer_config, optimizer, 
                        seed=int(payload["fit"]["seed"]), data_fingerprint=data_fingerprint, code_sha=code_sha)
 
 
-#: FitSettings switches of D-021 and D-035 (batch_by) with their defaults (left out of the hash at the default)
+#: FitSettings switches of D-021 and D-034 (batch_by) with their defaults (left out of the hash at the default)
 FIT_SWITCH_DEFAULTS = {"grad_clip_norm": None, "ema_decay": None, "init": "torch", "batch_by": "rows"}
 
 

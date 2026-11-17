@@ -1,4 +1,4 @@
-"""D-035 batch_by: one batch = all training rows of one timestamp / one UTC day, the batches shuffled (not the rows);
+"""D-034 batch_by: one batch = all training rows of one timestamp / one UTC day, the batches shuffled (not the rows);
 "rows" (the default) is unchanged, and the run identity is unchanged at the default."""
 
 import dataclasses

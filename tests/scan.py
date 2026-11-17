@@ -312,6 +312,12 @@ METRIC_WORDS = ("auc", "rank_ic", "pearson", "spearman", "ece", "mae", "rmse", "
 METRIC_FUNCTION = re.compile(rf"(^|_)({'|'.join(METRIC_WORDS)})($|_)")
 #: external implementations that would be a second copy of a metric
 METRIC_IMPORTS = ("sklearn.metrics", "scipy.stats")
+#: function names that contain a metric word but are NOT a copy of that metric, with the reason (IF1 suggestion
+#: 2026-11-17: the word match forced a rename of the Spearman-Brown formula); every entry must name a real function
+METRIC_NAME_EXCEPTIONS = {
+    "spearman_brown": "eval/influence_report.py: the Spearman-Brown prophecy formula 2r / (1 + r) on ONE given "
+                      "correlation (split-half reliability); it computes no rank correlation",
+}
 
 
 def _calls_metrics_module(fn: ast.AST) -> bool:
@@ -327,7 +333,7 @@ def metric_definitions_outside_stats() -> list[str]:
             continue
         for node in ast.walk(tree):
             if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and METRIC_FUNCTION.search(node.name)
-                    and not _calls_metrics_module(node)):
+                    and node.name not in METRIC_NAME_EXCEPTIONS and not _calls_metrics_module(node)):
                 found.append(f"{rel}:{node.lineno}: def {node.name}")
             elif isinstance(node, ast.ImportFrom) and node.module and node.module.startswith(METRIC_IMPORTS):
                 found.append(f"{rel}:{node.lineno}: from {node.module} import ...")

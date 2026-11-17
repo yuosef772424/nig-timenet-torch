@@ -24,10 +24,10 @@ import pandas as pd
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["excess_delta", "influence_summary", "group_attribution", "top_steps", "render_markdown",
-           "write_influence_report", "split_half_reliability"]
+           "write_influence_report", "spearman_brown"]
 
 
-def split_half_reliability(r: float) -> float:
+def spearman_brown(r: float) -> float:
     """Reliability of the whole probe from the correlation r of its two halves: 2 r / (1 + r) (NaN stays NaN)."""
     return float(2.0 * r / (1.0 + r)) if np.isfinite(r) and r > -1.0 else float("nan")
 
@@ -46,7 +46,7 @@ def _split_half(frame: pd.DataFrame, pre: str, window: int) -> dict:
     a, b = frame[f"{pre}delta_a"], frame[f"{pre}delta_b"]
     raw = metrics.pearson(a.to_numpy(), b.to_numpy())
     det = metrics.pearson((a - _trend(a, window)).to_numpy(), (b - _trend(b, window)).to_numpy())
-    return {"raw_r": raw, "detrended_r": det, "reliability": split_half_reliability(det)}
+    return {"raw_r": raw, "detrended_r": det, "reliability": spearman_brown(det)}
 
 
 def influence_summary(frame: pd.DataFrame, *, window: int = 9) -> dict:

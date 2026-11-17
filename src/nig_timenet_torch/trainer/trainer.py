@@ -68,7 +68,7 @@ class FitSettings:
     # Keras ``steps_per_execution``: the logs of this many consecutive steps are read back from the device together
     # (one host sync per group instead of one per step). Speed only: the updates are the same ones, in the same order.
     steps_per_execution: int = 1
-    # D-035 (owner 2026-11-17): what one batch is. "rows" = shuffled rows cut into batch_size (as before); a grouping
+    # D-034 (owner 2026-11-17): what one batch is. "rows" = shuffled rows cut into batch_size (as before); a grouping
     # name (BATCHINGS) = every batch holds ALL rows of one group (one timestamp / one UTC day) and the ORDER of the
     # groups is shuffled, not the rows; ``fit`` then needs ``batch_groups`` (the group id of every training row)
     batch_by: str = "rows"

@@ -137,7 +137,7 @@ class TrainSettings:
     # D-032 (owner idea 2026-11-16): weight of a term that penalises a batch whose close predictions lean long or
     # short (trainer.direction_balance; NIG mean and class probability of the close head); 0 = off
     direction_balance: float = 0.0
-    # D-035 (owner 2026-11-17): what one batch is: "rows" = shuffled rows in batch_size chunks (as before),
+    # D-034 (owner 2026-11-17): what one batch is: "rows" = shuffled rows in batch_size chunks (as before),
     # "timestamp" / "day" = ALL training rows of one timestamp / one UTC day form one batch and the batches (not the
     # rows) are shuffled (trainer.trainer.BATCHINGS); batch_size is then not used; not with split.cross_section
     batch_by: str = "rows"
