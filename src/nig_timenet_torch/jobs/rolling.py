@@ -22,9 +22,9 @@ from dataclasses import dataclass, field
 
 from nig_timenet_torch.colab import contract
 from nig_timenet_torch.colab.device import EXPECTED as DEVICES
-from nig_timenet_torch.core.config import from_dict
+from nig_timenet_torch.core.config import from_dict, updated
 from nig_timenet_torch.jobs.baseline import DEFAULT_ARTIFACT
-from nig_timenet_torch.workflow import rolling_run
+from nig_timenet_torch.workflow import panel_report, rolling_run
 from nig_timenet_torch.workflow.settings import RollingSettings, RunSettings
 from nig_timenet_torch.workflow.study_settings import job_run_settings
 
@@ -44,20 +44,26 @@ class RollingConfig:
     model_overrides: dict = field(default_factory=dict)
     train: dict = field(default_factory=dict)
     split: dict = field(default_factory=dict)
+    day_metrics: bool = False          # D-032: every fold also writes the day metrics; the study pools their days
 
     def __post_init__(self):
         if self.device not in DEVICES:
             raise ValueError(f"RollingConfig.device must be one of {DEVICES}, got {self.device!r}")
-        run_settings(self), rolling_settings(self)  # the sections check their own values
+        run_settings(self)                              # the sections check their own values
+        r = rolling_settings(self)
+        if self.day_metrics and r.step < r.test_span:
+            raise ValueError("RollingConfig.day_metrics pools the folds' test days: it needs step >= test_span "
+                             "(test windows that do not overlap)")
 
 
 CONFIG = RollingConfig
 
 
 def run_settings(cfg: RollingConfig, code_sha: str = "") -> RunSettings:
-    return job_run_settings(device=cfg.device, run_dir=cfg.run_dir, artifact=cfg.artifact, base_tf=cfg.base_tf,
-                            max_rows=cfg.max_rows, batch_size=cfg.batch_size, lr=cfg.lr,
-                            model_overrides=cfg.model_overrides, train=cfg.train, split=cfg.split, code_sha=code_sha)
+    s = job_run_settings(device=cfg.device, run_dir=cfg.run_dir, artifact=cfg.artifact, base_tf=cfg.base_tf,
+                         max_rows=cfg.max_rows, batch_size=cfg.batch_size, lr=cfg.lr,
+                         model_overrides=cfg.model_overrides, train=cfg.train, split=cfg.split, code_sha=code_sha)
+    return updated(s, {"evaluation.battery.day_metrics": cfg.day_metrics})
 
 
 def rolling_settings(cfg: RollingConfig) -> RollingSettings:
@@ -75,6 +81,10 @@ def main(argv: list[str] | None = None) -> int:
     contract.write_device_json(out, cfg.device)
     summary = rolling_run.run_rolling(run_settings(cfg, _code_sha()), rolling_settings(cfg), out,
                                       ckpt_root=cfg.run_dir)
+    if cfg.day_metrics:        # the days of every fold's test window, pooled per seed (the folds do not overlap)
+        for seed in rolling_settings(cfg).seeds:
+            folders = [rolling_run.fold_dir(out, f, seed) for f in range(summary["n_folds"])]
+            panel_report.panel_from_folders(folders, out_dir=out / f"pooled_days_seed_{seed}")
     contract.write_manifest(out, config, input_fingerprint=summary["data_fingerprint"], started=started)
     print(f"rolling OK: {summary['n_folds']} folds")
     return 0

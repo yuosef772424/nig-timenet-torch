@@ -5,15 +5,18 @@ PITFALLS: the group of a row (its timestamp id) arrives as ONE EXTRA INPUT CHANN
     (``split_group``; float32 holds ids up to 2^24 exactly). An input without that channel = every row alone (the block
     then only sees the row itself). The block is exact only when a batch holds WHOLE timestamps: training batches and
     evaluation chunks must be cut at group borders (trainer/groups.py). A row's output depends on the other rows of
-    its timestamp, by design. Improves on model/panel.py (the TF port, parked): same NIG / class heads and output
-    contract as the per-coin model, no (day, pos) grid from the caller, starts as the per-coin model exactly.
+    its timestamp, by design. ``center_groups`` (model option ``cross_center``) makes the close mean a RELATIVE
+    move: its sign is no longer a bet on the market, and the high / low means are not centred (the ordered-means
+    relation low <= close <= high then holds only up to that shift). Improves on model/panel.py (the TF port,
+    parked): same NIG / class heads and output contract as the per-coin model, no (day, pos) grid from the caller,
+    starts as the per-coin model exactly.
 """
 
 import torch
 from torch import nn
 
 __all__ = ["CrossCoinBlock", "CrossSectionPool", "CROSS_COIN_KINDS", "CrossCoin", "RelativeInputs",
-           "CROSS_INPUTS", "split_group", "group_grid"]
+           "CROSS_INPUTS", "split_group", "group_grid", "center_groups"]
 
 
 def split_group(x: torch.Tensor, n_features: int) -> tuple[torch.Tensor, torch.Tensor | None]:
@@ -35,6 +38,15 @@ def group_grid(gid: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int, int]
     pos = torch.empty_like(inv)
     pos[order] = torch.arange(len(inv), device=inv.device) - starts[inv[order]]
     return inv, pos, int(counts.numel()), int(counts.max())
+
+
+def center_groups(v: torch.Tensor, gid: torch.Tensor) -> torch.Tensor:
+    """``v`` (B, ...) minus its mean over the rows of the same group (``cross_center``: a mean that says how a coin
+    moves AGAINST its timestamp; the timestamp's own move, which no input predicts, is left at 0)."""
+    inv, _, n_groups, _ = group_grid(gid)
+    n = torch.bincount(inv, minlength=n_groups).to(v.dtype).reshape(-1, *[1] * (v.dim() - 1))
+    mean = v.new_zeros(n_groups, *v.shape[1:]).index_add_(0, inv, v) / n
+    return v - mean[inv]
 
 
 class RelativeInputs(nn.Module):

@@ -273,3 +273,15 @@ def test_trivial_baseline_auc_block_ci(rng):
     assert one[1] == pytest.approx(metrics.auc(y[rows], s[rows]), abs=1e-12)
     assert np.isnan(metrics.auc_block_ci(y, s, np.zeros(N))[1]), "one block: no interval"
     assert np.isnan(metrics.auc_block_ci(np.ones(N), s, days)[0]), "one class: undefined"
+
+
+def test_trivial_baseline_long_short_spreads(rng):
+    y, groups = rng.normal(size=N), np.repeat(np.arange(N // 20), 20)
+    assert metrics.long_short_spreads(y, np.zeros(N), groups)[1].size == 0, "a constant score ranks nothing"
+    _, noise = metrics.long_short_spreads(y, rng.normal(size=N), groups)
+    assert abs(noise.mean()) < 3.5 * noise.std() / np.sqrt(len(noise)), "an unrelated score has a spread around 0"
+    keys, best = metrics.long_short_spreads(y, y, groups)
+    assert len(keys) == N // 20 and best.min() > 0 and best.mean() > 10 * abs(noise.mean())
+    assert np.allclose(metrics.long_short_spreads(y, -y, groups)[1], -best)       # the reversed ranking loses it
+    with pytest.raises(ValueError, match="top_share"):
+        metrics.long_short_spreads(y, y, groups, top_share=0.6)

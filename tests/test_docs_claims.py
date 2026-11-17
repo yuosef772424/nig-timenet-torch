@@ -122,3 +122,30 @@ def test_session_instructions_use_the_pr_sections_not_the_csvs():
     for heading in ("## Behaviour changes (rule B1)", "## Friction", "## Suggestions"):
         assert heading in template, f"the PR template lost {heading!r}"
     assert (ROOT / ".github" / "workflows" / "collect-registers.yml").is_file()
+
+
+#: rule C7 (docs/PHILOSOPHY.md section 3): the headings of the failure reading, in order
+FAILURE_READING = ("## What the model learned", "## Where it is right and where it fails",
+                   "## The samples it failed on", "## Bias", "## Selective use", "## Why it failed",
+                   "## Next hypotheses")
+#: results notes written before rule C7 (2026-11-16): the list only shrinks (a note that gains the reading leaves it)
+BEFORE_C7 = {"baseline-001.md", "deep-side-001.md", "e1-fixes-001.md", "gates-fixes-001.md",
+             "nig-scale-default-001.md", "panel-001.md", "rolling-cpu-smoke-001.md", "staged-cpu-smoke-001.md"}
+NOT_APPLICABLE = "Failure reading: not applicable ("
+
+
+def test_results_notes_hold_the_failure_reading():
+    """Rule C7 (owner 2026-11-16): a results note holds the seven headings of the failure reading, in order, or says in
+    one line why none applies (``Failure reading: not applicable (<reason>)``: a smoke run, an arm that passed)."""
+    notes = {p.name: p.read_text(encoding="utf-8") for p in (ROOT / "docs" / "results").glob("*.md")}
+    assert BEFORE_C7 <= set(notes), f"remove from BEFORE_C7 (file gone): {sorted(BEFORE_C7 - set(notes))}"
+    philosophy = _read("docs/PHILOSOPHY.md")
+    for heading in FAILURE_READING:
+        assert f"`{heading}`" in philosophy, f"docs/PHILOSOPHY.md section 3 lost the heading {heading!r}"
+    for name, text in sorted(notes.items()):
+        if name in BEFORE_C7 or NOT_APPLICABLE in text:
+            continue
+        at = [text.find("\n" + h + "\n") for h in FAILURE_READING]
+        assert min(at) >= 0 and at == sorted(at), (
+            f"docs/results/{name}: the failure reading (rule C7) needs these headings in order: {FAILURE_READING}; "
+            f"or the line '{NOT_APPLICABLE}<reason>)'")

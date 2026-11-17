@@ -10,7 +10,13 @@ import pytest
 from nig_timenet_torch.core.schema import LAST_COLUMNS
 from nig_timenet_torch.data.artifact_writer import write_artifact
 from nig_timenet_torch.data_io import npy_dir
-from nig_timenet_torch.data_io.environments import input_keys, label_keys, permute_labels, real_slice
+from nig_timenet_torch.data_io.environments import (
+    input_keys,
+    label_keys,
+    panel_slice,
+    permute_labels,
+    real_slice,
+)
 from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
 from nig_timenet_torch.data_io.split_plan import sample_times
 from nig_timenet_torch.data_io.synthetic import ORACLE_PREFIX
@@ -139,3 +145,23 @@ def test_nig_envs_command_writes_e1_e2_e3(tmp_path, capsys):
     assert ds["e3"]["environment"]["source_fingerprint"] == ds["e2"]["environment"]["source_fingerprint"]
     with pytest.raises(SystemExit):
         main(["e2", str(e1)])
+
+
+def test_e3p_panel_slice_holds_whole_timestamps_of_the_training_era(e1, tmp_path):
+    train_end, _ = run_common.split_bounds(e1, SplitSettings())
+    e3p = panel_slice(e1, train_end=train_end, n_coins=8, max_rows=2400)
+    ts = np.asarray(e3p["last_candles"])[:, 3].astype(np.int64)
+    stamps, counts = np.unique(ts, return_counts=True)
+    assert len(stamps) == 300 and set(counts) == {8} and len(ts) == 2400          # every timestamp holds every coin
+    assert sample_times(e3p)[2].max() <= pd.Timestamp(train_end).value             # inside the full run's train era
+    bounds = e3p["asset_bounds"]
+    assert bounds[0]["start"] == 0 and bounds[-1]["end"] == len(ts) and len(bounds) == 8
+    assert e3p["environment"]["name"] == "E3p" and e3p["environment"]["timestamps"] == 300
+    write_artifact(e3p, tmp_path / "e3p.dataset", source_commit=SHA)
+    ds = load_dataset(LoaderSettings(directory=str(tmp_path), name="e3p.dataset", local_dir="")).dataset
+    (tr, va, te), _ = run_common.make_plan(ds, SplitSettings(cross_section=True))
+    assert len(tr) and len(va) and len(te) and all(len(part) % 8 == 0 for part in (tr, va, te))
+    with pytest.raises(ValueError, match="present at all"):
+        panel_slice(e1, train_end=train_end, n_coins=len(e1["asset_bounds"]) + 1, max_rows=60_000)
+    with pytest.raises(ValueError, match="n_coins >= 2"):
+        panel_slice(e1, train_end=train_end, n_coins=1)

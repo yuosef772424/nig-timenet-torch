@@ -32,6 +32,7 @@ __all__ = ["HEAD_KINDS", "LAMBDA_SCHEDULES", "anchors_by_name", "flat_inputs", "
            "make_trainer", "fit_settings_of", "predict_stage", "epoch_line", "row_coins", "batch_set"]
 
 HEAD_KINDS = ("nig_regression", "binary_classification")
+BALANCED_TARGET = "close"   # the price target whose label has both signs (a high / low move has one)
 LAMBDA_SCHEDULES = {"lambda_reg": {"start": 0.0, "end": 0.05, "warmup_epochs": 5, "schedule": "linear"},
                     "lambda_calib": {"start": 0.0, "end": 0.1, "warmup_epochs": 5, "schedule": "cosine"}}
 
@@ -113,6 +114,11 @@ def trainer_config(targets, label_smoothing: float, train: TrainSettings | None 
         loss["balance"] = t.loss_balance
     if t.kendall_init_logvar != TrainSettings.kendall_init_logvar:
         loss["kendall_init_logvar"] = t.kendall_init_logvar
+    if t.cross_section_loss != TrainSettings.cross_section_loss:      # D-032: only when set (config pinned)
+        loss.update(cross_section=t.cross_section_loss, cross_section_weight=t.cross_section_weight)
+    if t.direction_balance != TrainSettings.direction_balance:        # D-032: the close heads are the two-sided ones
+        loss.update(direction_balance=t.direction_balance, direction_balance_targets=[
+            head_spec(kind, c).name for c in targets if c == BALANCED_TARGET for kind in HEAD_KINDS])
     return {"targets": targets_config({t_: list(HEAD_KINDS) for t_ in targets}, options_by_kind=options),
             "loss": loss, "constraints": []}
 
