@@ -6,7 +6,8 @@ PITFALLS: the probe loss is the trainer's RAW loss with the loss schedules froze
     means the same thing in every epoch and the step deltas telescope: their sum = last probe loss - first); the exact
     delta also holds the BatchNorm moving-statistics update of the batch, the first-order estimate only the parameter
     update; the monitor never draws from torch's RNG and never touches the optimizer, so training is unchanged (tested
-    bitwise on CPU); with a group channel the probe holds whole timestamps.
+    bitwise on CPU); with a group channel the probe holds whole timestamps; group-level TracIn costs one backward per
+    group every ``group_every`` steps (keep the groups few: months, or the largest coins).
 
 Method (chosen 2026-11-17, owner task "the effect of each batch"; the candidates are compared in
 docs/INFLUENCE.md): the exact one-step change of the probe loss, L_probe(theta_{t+1}) -
@@ -39,15 +40,20 @@ _TAGS = {"loss": "delta", "a": "delta_a", "b": "delta_b"}   # column of a probe 
 class InfluenceSettings:
     """``probe_rows``: rows per probe (both halves together); ``first_order_every``: 0 = exact deltas only, k = also
     the first-order terms on every k-th step (one probe forward + backward each); ``seed``: the probe draw (numpy,
-    never torch's RNG); ``keep_rows``: store every batch's row indices (for the composition analysis)."""
+    never torch's RNG); ``keep_rows``: store every batch's row indices (for the composition analysis);
+    ``group_every``: 0 = off, k = on every k-th step the gradient of every row GROUP (``BatchInfluence(groups=...)``,
+    e.g. a coin or a month of training rows) is compared with the primary probe's gradient (group-level TracIn: one
+    backward per group); ``group_rows``: rows drawn per group for that gradient."""
     probe_rows: int = 512
     first_order_every: int = 0
     seed: int = 0
     keep_rows: bool = True
+    group_every: int = 0
+    group_rows: int = 256
 
     def __post_init__(self):
-        if self.probe_rows < 4 or self.first_order_every < 0:
-            raise ValueError("probe_rows must be >= 4 and first_order_every >= 0")
+        if self.probe_rows < 4 or self.first_order_every < 0 or self.group_every < 0 or self.group_rows < 4:
+            raise ValueError("probe_rows >= 4, group_rows >= 4, first_order_every >= 0 and group_every >= 0")
 
 
 def probe_rows(n: int, size: int, seed: int, groups: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
@@ -68,11 +74,11 @@ def probe_rows(n: int, size: int, seed: int, groups: np.ndarray | None = None) -
 class _Probe:
     """One named probe: its two halves on the model's device (rows contiguous by group when grouped)."""
 
-    def __init__(self, name: str, x: torch.Tensor, y: dict, settings: InfluenceSettings, grouped: bool, salt: int):
+    def __init__(self, name: str, x: torch.Tensor, y: dict, size: int, seed: int, grouped: bool):
         groups = row_groups(x).numpy() if grouped else None
         self.name, self.grouped = name, grouped
         self.halves = []
-        for rows in probe_rows(len(x), settings.probe_rows, settings.seed + salt, groups):
+        for rows in probe_rows(len(x), size, seed, groups):
             rows = torch.as_tensor(rows, dtype=torch.long)
             self.halves.append((x[rows], {k: v[rows] for k, v in y.items()}))
         if min(len(h[0]) for h in self.halves) < 2:
@@ -101,12 +107,19 @@ class BatchInfluence:
     around every optimizer step. ``probes``: {name: (x, y)} (inputs and labels as the trainer gets them); the FIRST
     probe is the primary one (first-order terms, the report's headline), normally validation rows."""
 
-    def __init__(self, probes: dict, settings: InfluenceSettings | None = None, *, group_channel: bool = False):
+    def __init__(self, probes: dict, settings: InfluenceSettings | None = None, *, group_channel: bool = False,
+                 groups: dict | None = None):
         if not probes:
             raise ValueError("at least one probe (name -> (x, y)) is needed")
-        self.settings = settings = settings or InfluenceSettings()
-        self.probes = [_Probe(n, x, y, settings, group_channel, salt)
+        self.settings = s = settings or InfluenceSettings()
+        self.probes = [_Probe(n, x, y, s.probe_rows, s.seed + salt, group_channel)
                        for salt, (n, (x, y)) in enumerate(probes.items())]
+        #: ``groups``: {name: (x, y)} training rows of each group (group-level TracIn on every group_every-th step)
+        self.groups = [_Probe(str(n), x, y, s.group_rows, s.seed + 1000 + i, group_channel)
+                       for i, (n, (x, y)) in enumerate((groups or {}).items())]
+        if s.group_every and not self.groups:
+            raise ValueError("group_every needs groups={name: (x, y)} of training rows")
+        self.group_records: list[dict] = []
         self.records: list[dict] = []
         self.batch_rows: list[np.ndarray] = []
         self._last: dict | None = None     # probe losses after the last step (= before the next one)
@@ -135,6 +148,7 @@ class BatchInfluence:
         """Fix the probe's loss definition (the schedules' start values) and measure the starting point."""
         dev = trainer._device()
         self.probes = [p.to(dev) for p in self.probes]
+        self.groups = [g.to(dev) for g in self.groups]
         self._vars = {n: float(s.start) for n, s in trainer.schedules.items()}
         was = trainer.model.training
         trainer.model.eval()
@@ -142,9 +156,36 @@ class BatchInfluence:
         self.start_losses = {k: v["loss"] for k, v in self._last.items()}
         trainer.model.train(was)
 
-    def _first_order_due(self) -> bool:
-        k = self.settings.first_order_every
+    def _due(self, k: int) -> bool:
         return k > 0 and self._step % k == 0
+
+    def _grad(self, trainer, probe: _Probe, named) -> list[torch.Tensor]:
+        """The gradient of ``probe``'s loss (mean of its halves) on the parameters ``named``, eval mode, schedules
+        frozen; the parameters' .grad is left empty."""
+        trainer.optimizer.zero_grad(set_to_none=True)
+        live = trainer.scheduled_vars
+        trainer.scheduled_vars = self._vars
+        try:   # eval-mode backward: cuDNN RNNs refuse it on the GPU (PRs #21-#23), so cuDNN is off for this pass
+            with torch.backends.cudnn.flags(enabled=False):
+                raws, _ = probe.losses(trainer, grad=True)
+                (0.5 * (raws[0] + raws[1])).backward()
+        finally:
+            trainer.scheduled_vars = live
+        grads = [torch.zeros_like(p) if p.grad is None else p.grad.detach().clone() for _, p in named]
+        trainer.optimizer.zero_grad(set_to_none=True)
+        return grads
+
+    def _group_alignment(self, trainer, named, g_probe: list[torch.Tensor]) -> None:
+        """Group-level TracIn: per group, g_probe . g_group (> 0 = a descent step on the group lowers the probe
+        loss: the group helps) and their cosine."""
+        gp_sq = sum(float((g * g).sum()) for g in g_probe)
+        for grp in self.groups:
+            gg = self._grad(trainer, grp, named)
+            dot = sum(float((a * b).sum()) for a, b in zip(g_probe, gg, strict=True))
+            gg_sq = sum(float((b * b).sum()) for b in gg)
+            den = (gp_sq * gg_sq) ** 0.5
+            self.group_records.append({"epoch": self._cur["epoch"], "step": self._step, "group": grp.name,
+                                       "dot": dot, "cos": dot / den if den > 0 else float("nan")})
 
     def before_step(self, trainer, epoch: int, ix: torch.Tensor) -> None:
         """Remember the batch; on a first-order step, the primary probe's gradient and the weights before the step."""
@@ -154,23 +195,17 @@ class BatchInfluence:
         if self.settings.keep_rows:
             self.batch_rows.append(np.asarray(ix, dtype=np.int64))
         self._fo = None
-        if not self._first_order_due():
+        fo_due, group_due = self._due(self.settings.first_order_every), self._due(self.settings.group_every)
+        if not (fo_due or group_due):
             return
         named = [(n, p) for n, p in trainer.model.named_parameters() if p.requires_grad]
         trainer.model.eval()
-        trainer.optimizer.zero_grad(set_to_none=True)
-        live = trainer.scheduled_vars
-        trainer.scheduled_vars = self._vars
-        try:   # eval-mode backward: cuDNN RNNs refuse it on the GPU (PRs #21-#23), so cuDNN is off for this pass
-            with torch.backends.cudnn.flags(enabled=False):
-                raws, _ = self.probes[0].losses(trainer, grad=True)
-                (0.5 * (raws[0] + raws[1])).backward()
-        finally:
-            trainer.scheduled_vars = live
-        self._fo = {"names": [n for n, _ in named],
-                    "grad": [torch.zeros_like(p) if p.grad is None else p.grad.detach().clone() for _, p in named],
-                    "before": [p.detach().clone() for _, p in named]}
-        trainer.optimizer.zero_grad(set_to_none=True)
+        g_probe = self._grad(trainer, self.probes[0], named)
+        if group_due:
+            self._group_alignment(trainer, named, g_probe)
+        if fo_due:
+            self._fo = {"names": [n for n, _ in named], "grad": g_probe,
+                        "before": [p.detach().clone() for _, p in named]}
 
     def after_step(self, trainer, logs: dict) -> None:
         """Measure every probe after the step; store the exact deltas (and the first-order terms when due)."""
@@ -222,6 +257,10 @@ class BatchInfluence:
         delta_b, delta_<target>, <probe>_delta..., and fo_* / grad_alignment / update_norm on first-order steps)."""
         return pd.DataFrame(self.records)
 
+    def group_frame(self) -> pd.DataFrame:
+        """Group-level TracIn: one row per (group step, group): epoch, step, group, dot, cos."""
+        return pd.DataFrame(self.group_records, columns=["epoch", "step", "group", "dot", "cos"])
+
     def rows_of_steps(self) -> tuple[np.ndarray, np.ndarray]:
         """(step id per stored row index, row indices into the training rows): every batch's composition."""
         if not self.batch_rows:
@@ -230,9 +269,12 @@ class BatchInfluence:
         return steps, np.concatenate(self.batch_rows)
 
     def save(self, out) -> None:
-        """``batch_influence.csv`` (the frame) and ``batch_rows.npz`` (step, row) under the folder ``out``."""
+        """``batch_influence.csv`` (the frame), ``batch_rows.npz`` (step, row) and, with groups,
+        ``group_alignment.csv`` under the folder ``out``."""
         out = Path(out)
         out.mkdir(parents=True, exist_ok=True)
         self.frame().to_csv(out / "batch_influence.csv", index=False)
         steps, rows = self.rows_of_steps()
         np.savez_compressed(out / "batch_rows.npz", step=steps, row=rows)
+        if self.group_records:
+            self.group_frame().to_csv(out / "group_alignment.csv", index=False)

@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from nig_timenet_torch.eval.influence_report import (
+    group_alignment,
     group_attribution,
     influence_summary,
     spearman_brown,
@@ -166,3 +167,22 @@ def test_guards():
         m.before_step(_nig_trainer(), 0, torch.arange(4))
     with pytest.raises(ValueError):
         influence_summary(pd.DataFrame())
+
+
+def test_group_tracin_flags_the_planted_group_and_only_it(tmp_path):
+    x, y, group = _lin_data(2048, 0, bad_groups=(3,))
+    xv, yv, _ = _lin_data(512, 1)
+    groups = {g: (x[torch.as_tensor(group == g)], {"y": y["y"][torch.as_tensor(group == g)]}) for g in range(16)}
+    t = _lin_trainer()
+    m = BatchInfluence({"val": (xv, yv)}, InfluenceSettings(probe_rows=256, group_every=8, group_rows=64),
+                       groups=groups)
+    t.fit(x, y, xv, yv, FitSettings(epochs=4, batch_size=32, early_stop=KEEP_LAST), batch_monitor=m)
+    gf = m.group_frame()
+    assert len(gf) == 16 * (4 * 2048 // 32) // 8 and set(gf["group"]) == {str(g) for g in range(16)}
+    a = group_alignment(gf).set_index("group")
+    assert a.loc["3", "flag"] == "harmful" and a.loc["3", "mean_cos"] < 0
+    assert (a.drop(index="3")["flag"] != "harmful").all() and (a.drop(index="3")["mean_dot"] > 0).all()
+    res = write_influence_report(tmp_path, m.frame(), *m.rows_of_steps(), group, n_perm=50, gframe=gf)
+    assert res["alignment"] and "## Group gradient alignment" in (tmp_path / "batch_influence_report.md").read_text()
+    with pytest.raises(ValueError, match="groups"):
+        BatchInfluence({"val": (xv, yv)}, InfluenceSettings(group_every=2))

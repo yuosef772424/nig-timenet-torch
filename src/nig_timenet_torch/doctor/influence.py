@@ -19,7 +19,9 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import torch
 
 from nig_timenet_torch.data_io.synthetic import SyntheticSettings, write_synthetic
 from nig_timenet_torch.doctor.common import make_context, row_times, stride
@@ -28,28 +30,50 @@ from nig_timenet_torch.eval.influence_report import write_influence_report
 from nig_timenet_torch.trainer.batch_influence import BatchInfluence, InfluenceSettings
 from nig_timenet_torch.workflow import flat_run
 
-__all__ = ["monitor_for", "batch_reports", "importance_reports", "main"]
+__all__ = ["monitor_for", "group_sets", "batch_reports", "importance_reports", "main"]
 
 
-def monitor_for(run, settings: InfluenceSettings, train_probe: bool = True) -> BatchInfluence:
-    """The monitor of a built Run: the primary probe on VAL rows, a second one on TRAINING rows (memorisation)."""
+def _train_labels(run) -> dict[str, np.ndarray]:
+    """{grouping: the label of every TRAINING row}: its coin and its month (UTC)."""
+    idx = run.idx["train"]
+    return {"coin": flat_run.row_coins(run.dataset, idx).astype(str),
+            "month": pd.to_datetime(row_times(run.dataset, idx), utc=True).strftime("%Y-%m").to_numpy()}
+
+
+def group_sets(run, group_by: str, max_groups: int = 60) -> dict:
+    """{group: (x, y)} of the training rows per coin or per month, for group-level TracIn; with more than
+    ``max_groups`` groups the ones with the most rows are kept (ties: first by name)."""
+    labels = _train_labels(run)[group_by]
+    names, counts = np.unique(labels, return_counts=True)
+    keep = names[np.argsort(-counts, kind="stable")[:max_groups]]
+    out = {}
+    for g in sorted(keep):
+        rows = torch.as_tensor(np.flatnonzero(labels == g))
+        out[str(g)] = (run.x["train"][rows], {k: v[rows] for k, v in run.y["train"].items()})
+    return out
+
+
+def monitor_for(run, settings: InfluenceSettings, train_probe: bool = True, group_by: str | None = None,
+                max_groups: int = 60) -> BatchInfluence:
+    """The monitor of a built Run: the primary probe on VAL rows, a second one on TRAINING rows (memorisation) and,
+    with ``group_by`` ("coin" / "month") and ``settings.group_every``, the group-level TracIn groups."""
     probes = {"val": (run.x["val"], run.y["val"])}
     if train_probe:
         probes["train"] = (run.x["train"], run.y["train"])
-    return BatchInfluence(probes, settings, group_channel=run.settings.split.cross_section)
+    groups = group_sets(run, group_by, max_groups) if group_by is not None else None
+    return BatchInfluence(probes, settings, group_channel=run.settings.split.cross_section, groups=groups)
 
 
 def batch_reports(out, run, monitor: BatchInfluence, n_perm: int = 1000) -> dict:
-    """Save the record and write the report grouped by coin (``out``) and by month of the training row
-    (``out/by_month``); returns the coin report."""
+    """Save the record and write the report grouped by coin (``out``, with the group-level TracIn table when the
+    monitor had groups) and by month of the training row (``out/by_month``); returns the coin report."""
     out = Path(out)
     monitor.save(out)
     frame, (steps, rows) = monitor.frame(), monitor.rows_of_steps()
-    idx = run.idx["train"]
-    coins = flat_run.row_coins(run.dataset, idx).astype(str)
-    months = pd.to_datetime(row_times(run.dataset, idx), utc=True).strftime("%Y-%m").to_numpy()
-    res = write_influence_report(out, frame, steps, rows, coins, n_perm=n_perm, title="Batch influence by coin")
-    write_influence_report(out / "by_month", frame, steps, rows, months, n_perm=n_perm,
+    labels, gframe = _train_labels(run), monitor.group_frame()
+    res = write_influence_report(out, frame, steps, rows, labels["coin"], n_perm=n_perm,
+                                 title="Batch influence by coin", gframe=gframe)
+    write_influence_report(out / "by_month", frame, steps, rows, labels["month"], n_perm=n_perm,
                            title="Batch influence by month")
     return res
 
@@ -95,6 +119,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--trained", action="store_true", help="restore --run-dir's best weights: importance only")
     ap.add_argument("--probe-rows", type=int, default=1024)
     ap.add_argument("--first-order-every", type=int, default=10)
+    ap.add_argument("--group-by", choices=("month", "coin"), default="month",
+                    help="group-level TracIn groups of the training rows (--group-every 0 switches it off)")
+    ap.add_argument("--group-every", type=int, default=20, help="steps between group gradients (0 = off)")
+    ap.add_argument("--group-rows", type=int, default=256)
+    ap.add_argument("--max-groups", type=int, default=60)
     ap.add_argument("--n-perm", type=int, default=1000)
     ap.add_argument("--repeats", type=int, default=5)
     ap.add_argument("--fi-rows", type=int, default=50_000, help="VAL rows of the feature importance")
@@ -105,11 +134,13 @@ def main(argv: list[str] | None = None) -> int:
     if artifact.lower() == "e1":
         artifact = str(out / "e1_artifact")
         write_synthetic(artifact, SyntheticSettings(n_coins=16, n_bars=2000), overwrite=True)
-    bi = InfluenceSettings(probe_rows=a.probe_rows, first_order_every=a.first_order_every, seed=a.seed)
+    use_groups = a.group_every > 0
+    bi = InfluenceSettings(probe_rows=a.probe_rows, first_order_every=a.first_order_every, seed=a.seed,
+                           group_every=a.group_every if use_groups else 0, group_rows=a.group_rows)
     monitors = []
 
     def monitor_of(r):
-        monitors.append(monitor_for(r, bi))
+        monitors.append(monitor_for(r, bi, group_by=a.group_by if use_groups else None, max_groups=a.max_groups))
         return monitors[-1]
 
     t0 = time.monotonic()

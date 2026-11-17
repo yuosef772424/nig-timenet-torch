@@ -35,6 +35,12 @@ How it is made reliable:
   shuffles of the excess deltas within each epoch, Bonferroni over groups. With random batches the shares vary
   little, so this is conservative: "not flagged" means "not shown", not "harmless".
 - **A second probe on training rows** shows memorisation steps (helped the training rows, hurt validation).
+- **Group-level TracIn** (`group_every`, IF1 suggestion applied): every k steps the gradient of each row group (a coin
+  or a month of training rows, `group_rows` rows each) is compared with the probe gradient; the mean of
+  g_probe . g_group over the sampled steps (> 0 = training on that group lowers the validation loss) with its t and
+  Bonferroni. It evaluates EVERY group at every sampled step, so it has far more power than the batch-composition
+  attribution: on the planted test |t| 10-12 for the bad group against a composition z of ~4.4 (seeds 11, 22, 33),
+  the bad group the only one flagged each time.
 
 Known-answer tests (`tests/trainer/test_batch_influence.py`): on a linear model, label-shuffled batches raise the
 validation loss and clean ones lower it (>= 80 % each); one coin of 16 with sign-flipped labels is the ONLY group
@@ -45,6 +51,17 @@ Found while building it: on the NIG heads of the tiny model the per-step delta i
 uncertainty-parameter layer (`fo_nig` carries ~90 % of the first-order variance), and an outlier label barely moves
 the evidential loss (Student-t NLL has a bounded gradient for large residuals). Both are properties of the heads, not
 of the monitor; read the per-head and per-module columns before the total.
+
+## 1b. Training switch `batch_by` (owner 2026-11-17, D-034)
+
+`train.batch_by` says what one batch is: `rows` (default, unchanged) = shuffled rows in `batch_size` chunks;
+`timestamp` = all training rows of one timestamp form one batch; `day` = all rows of one UTC day. The ORDER of the
+batches is shuffled every epoch (the same seeded RNG as the row shuffle), never the rows inside a batch; `batch_size`
+is not used. It is for the single-coin (flat) model; a cross-section run (`split.cross_section`) already batches whole
+timestamps and staged training has its own loop, so both refuse it. A non-default value changes the run identity
+(a new run); the default keeps it. The model never sees the group id. Notebook: `"train.batch_by"` in `CHANGES`.
+On E1 (16 coins): `timestamp` = 799 batches of 16 rows per epoch, `day` = 267 batches. With the monitor on, the batch
+report then reads as "which DATES help or hurt", one step per date.
 
 ## 2. Effect of each input feature
 
@@ -79,7 +96,8 @@ REVERSED link scores below 0).
 
 ```
 python -m nig_timenet_torch.doctor.influence <artifact | e1> --out influence_out --epochs 3 --max-rows 60000 \
-    --probe-rows 1024 --first-order-every 10 --within-time
+    --probe-rows 1024 --first-order-every 10 --group-by month --group-every 20 --within-time
+python -m nig_timenet_torch.doctor.influence <artifact> --train '{"batch_by": "day"}' --out by_day   # one batch per day
 python -m nig_timenet_torch.doctor.influence <artifact> --run-dir <finished run> --trained --out fi_out   # importance only
 ```
 
@@ -98,4 +116,4 @@ importance is groups x repeats forward passes over the VAL rows.
   (the close drift comes from the last closes, the volatility from the 1 / 6 / 32-bar ranges).
 
 Not yet done: the real artifact on the GPU (the smoke job first, rule E5), drop-column confirmation of the top
-features, group-level TracIn (one gradient per coin group at sampled steps, more power than batch composition).
+features, a walk-forward comparison of `batch_by` arms against `rows` (2+ seeds, rule C4).

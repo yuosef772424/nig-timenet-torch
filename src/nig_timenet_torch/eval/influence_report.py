@@ -23,7 +23,7 @@ import pandas as pd
 
 from nig_timenet_torch.stats import metrics
 
-__all__ = ["excess_delta", "influence_summary", "group_attribution", "top_steps", "render_markdown",
+__all__ = ["excess_delta", "influence_summary", "group_attribution", "group_alignment", "top_steps", "render_markdown",
            "write_influence_report", "spearman_brown"]
 
 
@@ -126,6 +126,24 @@ def group_attribution(frame: pd.DataFrame, steps: np.ndarray, rows: np.ndarray, 
                         ).sort_values("z", ascending=False, ignore_index=True)
 
 
+def group_alignment(gframe: pd.DataFrame, *, alpha: float = 0.05) -> pd.DataFrame:
+    """Group-level TracIn per group (``BatchInfluence.group_frame``): the mean over the sampled steps of
+    g_probe . g_group (> 0 = training on the group lowers the probe loss: it helps), its t over the steps, the
+    two-sided p (normal tail), the mean cosine and ``flag`` = helpful / harmful when p < alpha / n_groups
+    (Bonferroni), else "". Steps a few apart are not independent: the t is a screening number, read with the cosine."""
+    rows = []
+    for g, d in gframe.groupby("group", sort=False):
+        n, mean, sd = len(d), float(d["dot"].mean()), float(d["dot"].std(ddof=1)) if len(d) > 1 else float("nan")
+        t = mean / (sd / math.sqrt(n)) if n > 1 and sd > 0 else float("nan")
+        rows.append({"group": g, "steps": n, "mean_dot": mean, "t": t,
+                     "p": math.erfc(abs(t) / math.sqrt(2.0)) if np.isfinite(t) else 1.0,
+                     "mean_cos": float(d["cos"].mean())})
+    out = pd.DataFrame(rows, columns=["group", "steps", "mean_dot", "t", "p", "mean_cos"])
+    cut = alpha / max(len(out), 1)
+    out["flag"] = np.where(out["p"] < cut, np.where(out["t"] > 0, "helpful", "harmful"), "")
+    return out.sort_values("t", ignore_index=True)
+
+
 def top_steps(frame: pd.DataFrame, steps: np.ndarray, rows: np.ndarray, row_group: np.ndarray | None = None, *,
               k: int = 10, window: int = 9) -> pd.DataFrame:
     """The ``k`` most harmful and ``k`` most helpful steps by excess delta, with their batch composition (number of
@@ -156,7 +174,7 @@ def _table(df: pd.DataFrame) -> list[str]:
 
 
 def render_markdown(summary: dict, groups: pd.DataFrame | None = None, top: pd.DataFrame | None = None,
-                    title: str = "Batch influence") -> str:
+                    title: str = "Batch influence", alignment: pd.DataFrame | None = None) -> str:
     """The report as markdown: headline, reliability, first-order check, epochs, modules, groups, top steps."""
     sh = summary["split_half"]
     lines = [f"# {title}", "",
@@ -192,6 +210,11 @@ def render_markdown(summary: dict, groups: pd.DataFrame | None = None, top: pd.D
         show = pd.concat([groups.head(10), groups.tail(5)]).drop_duplicates("group")
         lines += [f"| {r.group} | {r.weight:.3g} | {r.score:.3g} | {r.z:.2f} | {r.p:.3g} | {r.flag} |"
                   for r in show.itertuples()]
+    if alignment is not None and len(alignment):
+        flagged = alignment[alignment["flag"] != ""]
+        lines += ["", f"## Group gradient alignment (group-level TracIn; flagged at Bonferroni: {len(flagged)})", "",
+                  "mean g_probe . g_group over the sampled steps: > 0 = training on the group lowers the probe loss",
+                  "", *_table(pd.concat([alignment.head(10), alignment.tail(5)]).drop_duplicates("group"))]
     if top is not None and len(top):
         lines += ["", "## Most harmful / helpful steps (excess delta)", "", *_table(top)]
     return "\n".join(lines) + "\n"
@@ -199,17 +222,19 @@ def render_markdown(summary: dict, groups: pd.DataFrame | None = None, top: pd.D
 
 def write_influence_report(out, frame: pd.DataFrame, steps: np.ndarray, rows: np.ndarray,
                            row_group: np.ndarray | None = None, *, window: int = 9, n_perm: int = 1000,
-                           title: str = "Batch influence") -> dict:
-    """Write ``batch_influence_report.md`` / ``.json`` (summary, groups, top steps) under ``out``; returns the
-    summary with the groups and top steps as records."""
+                           title: str = "Batch influence", gframe: pd.DataFrame | None = None) -> dict:
+    """Write ``batch_influence_report.md`` / ``.json`` (summary, groups, top steps, and the group gradient alignment
+    of ``gframe`` = ``BatchInfluence.group_frame()`` when given) under ``out``; returns the summary with the groups,
+    the top steps and the alignment as records."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     summary = influence_summary(frame, window=window)
     groups = (group_attribution(frame, steps, rows, row_group, window=window, n_perm=n_perm)
               if row_group is not None and len(steps) else None)
     top = top_steps(frame, steps, rows, row_group, window=window)
-    (out / "batch_influence_report.md").write_text(render_markdown(summary, groups, top, title))
+    align = group_alignment(gframe) if gframe is not None and len(gframe) else None
+    (out / "batch_influence_report.md").write_text(render_markdown(summary, groups, top, title, align))
     res = {**summary, "groups": None if groups is None else groups.to_dict("records"),
-           "top_steps": top.to_dict("records")}
+           "top_steps": top.to_dict("records"), "alignment": None if align is None else align.to_dict("records")}
     (out / "batch_influence_report.json").write_text(json.dumps(res, indent=1, default=str))
     return res
