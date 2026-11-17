@@ -20,10 +20,11 @@ __all__ = ["write_report", "md_table", "plot_curves"]
 
 
 def md_table(frame: pd.DataFrame, digits: int = 4) -> str:
+    """A markdown table (no tabulate dependency); a '|' inside a cell is escaped."""
     if frame is None or frame.empty:
         return "(none)"
     def f(v):
-        return f"{v:.{digits}g}" if isinstance(v, (float, np.floating)) else str(v)
+        return f"{v:.{digits}g}" if isinstance(v, (float, np.floating)) else str(v).replace("|", "\\|")
     head = "| " + " | ".join(map(str, frame.columns)) + " |"
     rows = ["| " + " | ".join(f(v) for v in r) + " |" for r in frame.itertuples(index=False)]
     return "\n".join([head, "|" + "---|" * len(frame.columns), *rows])

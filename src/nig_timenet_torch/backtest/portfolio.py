@@ -91,8 +91,8 @@ def summary(trades: pd.DataFrame, risk: float, max_open: int | None = None) -> d
            "final_equity": float(curve["equity"].iloc[-1]) if len(curve) else 1.0,
            "max_drawdown": float(curve["drawdown"].min()) if len(curve) else 0.0,
            "days": int(len(days)), "positive_days": float((days["ret"] > 0).mean()) if len(days) else float("nan"),
-           "by_exit": by_group(traded, "exit_reason"), "by_side": by_group(traded, np.where(
-               traded["side"] > 0, "long", "short")) if len(traded) else pd.DataFrame()}
+           "by_exit": by_group(traded, "exit_reason"), "by_side": by_group(traded, pd.Series(np.where(
+               traded["side"] > 0, "long", "short"), index=traded.index, name="side"))}
     if "stage" in traded:
         out["by_stage"] = by_group(traded, "stage")
     out["curve"], out["daily"] = curve, days
