@@ -36,12 +36,12 @@ class TradeBook:
         return len(self.trades)
 
     def where(self, *, coins=None, outcome: str | None = None, direction_right: bool | None = None,
-              label_right: bool | None = None, exit_reason=None, side: str | None = None, stage=None, start=None,
+              label_right: bool | None = None, exit_reason=None, side: str | None = None, period=None, start=None,
               end=None, min_net=None, max_net=None, query: str | None = None) -> "TradeBook":
         """Trades that meet every given condition: ``outcome`` "win" / "loss" (net > 0 / <= 0), ``direction_right``
         (gross > 0), ``label_right`` (the model's label went the traded way; needs y_true), ``exit_reason`` (one or
-        several of take_profit / stop_loss / time / data_end), ``side`` "long" / "short", ``stage``, entry time in
-        [start, end), net in [min_net, max_net], and a pandas ``query``."""
+        several of take_profit / stop_loss / time / data_end), ``side`` "long" / "short", ``period`` (train / val /
+        test), entry time in [start, end), net in [min_net, max_net], and a pandas ``query``."""
         t = self.trades
         m = np.ones(len(t), dtype=bool)
         if coins is not None:
@@ -60,8 +60,8 @@ class TradeBook:
             m &= t["exit_reason"].isin([exit_reason] if isinstance(exit_reason, str) else list(exit_reason)).to_numpy()
         if side is not None:
             m &= (t["side"].to_numpy() > 0) == (side == "long")
-        if stage is not None:
-            m &= t["stage"].isin([stage] if isinstance(stage, str) else list(stage)).to_numpy()
+        if period is not None:
+            m &= t["period"].isin([period] if isinstance(period, str) else list(period)).to_numpy()
         if start is not None:
             m &= (t["entry_time"] >= pd.Timestamp(start)).to_numpy()
         if end is not None:

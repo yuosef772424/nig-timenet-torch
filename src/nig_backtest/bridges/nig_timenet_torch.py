@@ -15,10 +15,11 @@ import numpy as np
 import pandas as pd
 
 from nig_backtest.contract import SignalSet, check_signals
+from nig_backtest.periods import Periods
 from nig_backtest.prices import FramePrices
 
 __all__ = ["KIND", "from_battery_table", "signals_from_folder", "signals_from_run", "run_on_coins", "horizon_of",
-           "artifact_prices", "signal_set"]
+           "artifact_prices", "signal_set", "periods_of", "alignment_reference"]
 
 KIND = "return"
 
@@ -121,3 +122,31 @@ def artifact_prices(dataset: dict, coins=None) -> FramePrices:
 def signal_set(signals: pd.DataFrame, meta: dict, **kw) -> SignalSet:
     """A SignalSet of bridge output with its kind and horizon."""
     return SignalSet(frame=signals, kind=meta["kind"], horizon=meta["horizon"], **kw)
+
+
+def periods_of(run) -> Periods:
+    """The run's split dates (train_end, val_end) as backtest periods (UTC, naive)."""
+    def naive(t):
+        t = pd.Timestamp(t)
+        return str(t.tz_convert("UTC").tz_localize(None) if t.tzinfo else t)
+    return Periods(naive(run.bounds[0]), naive(run.bounds[1]))
+
+
+def alignment_reference(dataset: dict, coins=None) -> pd.DataFrame:
+    """Per sample the last candle and the target as kept BEFORE encoding (``last_candles``), for
+    ``nig_backtest.align.check_alignment``: coin, time (the last bar's open), last high / low / close, future close /
+    max high / min low."""
+    from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TS_COL
+    lc = np.asarray(dataset["last_candles"])
+    parts = []
+    for b in dataset["asset_bounds"]:
+        if coins is not None and b["name"] not in coins:
+            continue
+        part = lc[b["start"]:b["end"]]
+        f = pd.DataFrame({k: part[:, LAST_COLUMN_INDEX[k]] for k in ("last_high", "last_low", "last_close",
+                                                                     "future_close", "future_high_max",
+                                                                     "future_low_min")})
+        f.insert(0, "time", pd.to_datetime(part[:, TS_COL].astype("int64")))
+        f.insert(0, "coin", b["name"])
+        parts.append(f)
+    return pd.concat(parts, ignore_index=True)

@@ -75,7 +75,7 @@ nig-backtest from-battery RUN_FOLDER signals.parquet        # a finished run's o
 
 **`run` writes:**
 - the trades (`trades.parquet`);
-- the summary, with the rule trace and the tables by exit reason, side, stage, month and coin;
+- the summary per period, with the rule trace and the tables by exit reason, side, month and coin;
 - the equity and drawdown chart;
 - galleries of the worst and best trades on raw candles.
 
@@ -86,7 +86,7 @@ nig-backtest from-battery RUN_FOLDER signals.parquet        # a finished run's o
 - win / loss;
 - `direction_right`;
 - `label_right`;
-- exit reason, side, stage or time;
+- exit reason, side, period or time;
 - a pandas `query`.
 
 `.plot` and `.gallery` draw the trades.
@@ -103,10 +103,64 @@ res = bt.run_backtest(bridge.signal_set(signals, meta), prices, strategy)
 - `signals_from_run(run, stage, coins)` gives the close head's decoded return (kind `return`), its confidence head,
   sigma, p_dir, the label, and the prediction time.
 - `signals_from_folder(folder)` reads a finished run's battery tables, for example a run folder on Drive.
+- `periods_of(run)` gives the run's split dates; `alignment_reference(dataset)` gives the reference of the alignment
+  check.
 - Artifact candles are one per window: with a stride larger than 1 they are that many bars apart. Full or finer
   candles come from the archive.
 
-## 5. Training data and large tables
+## 5. Periods and the protocol (owner 2026-11-17)
+
+**Periods.**
+- A row's period comes from its `stage` column, or from the split dates (`SignalSet(periods=Periods(train_end,
+  val_end))`, CLI `--train-end` / `--val-end`; the bridge's `periods_of(run)`), else it is `all`.
+- Every summary, table and chart is made per period: train shows train profit, val shows val profit, test shows test
+  profit.
+- Val and test can also be shown merged (`merge_val_test`, CLI `--merge-val-test`). Train is never merged with
+  anything.
+
+**Protocol** (`impact.Protocol`, on by default). `compare`, `ladder` and `leave_one_out` choose the variant with the
+best `metric` on VAL and show TEST only for that variant; the other variants read "hidden". Turn it off for
+exploration (`Protocol(enabled=False)`, CLI `--no-protocol`); the table then says it is exploratory.
+
+## 6. Prices: separate from the model, one compressed store
+
+- The candles are raw prices, never decoded.
+- `nig-backtest store build FILE --prices SOURCE --coins A,B,...` (or `--coins @list.txt`) writes ONE compressed
+  parquet of every coin, from the archive, files or the artifact.
+- `--prices store:FILE` (`StorePrices`) reads it once, keeping the chosen coins.
+- `store info FILE` shows the interval, the coins and the coins that were missing.
+
+**Alignment with the training data.**
+- `nig-backtest align --reference REF.parquet --prices SOURCE --horizon 8h --interval 4h` compares the candles with
+  the last candle and the target kept per sample before encoding. The bridge's `alignment_reference(dataset)` writes
+  the reference: last high / low / close, future close / max high / min low.
+- It gives the share that matches at shifts -1 / 0 / +1 bar, and the worst mismatches. A match at another shift means
+  the two sources disagree on bar time.
+
+## 7. Costs, overlap, missing coins, ranked outputs
+
+- **Costs** (`costs.mode`, COST_MODES):
+  - `none`;
+  - `fixed`: fee + slippage per side;
+  - `move`: fixed + `move_share` x |the trade's realised move|.
+- **Overlap** (book):
+  - `per_coin` sets the open trades allowed per coin (1 = one at a time; None = every signal);
+  - `max_open` sets the open trades allowed in all;
+  - `admit` picks which of the trades opening together get the places: `first`, `strongest`, or your own registered
+    rule.
+- **Missing coins.** Signals of coins without candles (e.g. delisted) are counted and named. The report opens with a
+  warning. `max_missing_share` stops the run above a share.
+- **Ranked outputs on real prices.** The direction is a side rule (SIDE_RULES):
+  - `score`, `long`, `short`, `p_up`;
+  - `quantile`: per time, long the top q and short the bottom q;
+  - or any rule you register as code. Filters work as for every output.
+
+## 8. The report and the charts
+
+The summary covers every chosen coin, per period. The charts are drawn per batch of coins (`--batch-coins`, folders
+`batch_NNN/`): the equity per period and the worst / best trades of that batch.
+
+## 9. Training data and large tables
 
 - **Training data.** Pass the training rows (`stage = "train"`). With score = y_true (kind `return`) the label is the
   oracle of that data.

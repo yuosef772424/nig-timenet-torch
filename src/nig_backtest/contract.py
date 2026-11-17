@@ -17,6 +17,7 @@ from pathlib import Path
 import pandas as pd
 
 from nig_backtest.kinds import OUTPUT_KINDS, decode, is_absolute
+from nig_backtest.periods import Periods, assign
 
 __all__ = ["REQUIRED", "OPTIONAL", "FREE_PREFIX", "SignalSet", "check_signals", "describe", "to_utc_naive"]
 
@@ -74,16 +75,17 @@ def check_signals(frame: pd.DataFrame) -> pd.DataFrame:
 @dataclass
 class SignalSet:
     """The signals of one backtest: from a frame (``frame``) or a parquet file (``path``, read per coin batch).
-    ``use`` = the optional features to keep (None = every one present); ``stages`` = the stages to read (None = all);
+    ``use`` = the optional features to keep (None = every one present); ``stages`` = the periods to read (None = all);
     ``kind`` = what ``score`` means (``kinds.OUTPUT_KINDS``: absolute kinds decode to a predicted move, the others
     give a direction and a ranking only); ``horizon`` = the model's prediction horizon (e.g. "8h"; an exit
-    ``hold: "horizon"`` uses it)."""
+    ``hold: "horizon"`` uses it); ``periods`` = the split dates (``periods.Periods``) when the table has no stage."""
     frame: pd.DataFrame | None = None
     path: str | None = None
     use: tuple | None = None
     stages: tuple | None = None
     kind: str = "score"
     horizon: str | None = None
+    periods: Periods | None = None
 
     def __post_init__(self):
         if (self.frame is None) == (self.path is None):
@@ -101,8 +103,8 @@ class SignalSet:
                 raise ValueError(f"SignalSet.use asks for {missing}, absent from the signal table (present: {present})")
         self.present = present
         self.enabled = present if self.use is None else tuple(c for c in present if c in self.use)
-        if self.stages is not None and "stage" not in self.enabled:
-            raise ValueError("SignalSet.stages needs the 'stage' column (present and enabled)")
+        if self.stages is not None and "stage" not in self.enabled and self.periods is None:
+            raise ValueError("SignalSet.stages needs the 'stage' column (present and enabled) or periods (dates)")
         need = [c for c in OUTPUT_KINDS.entry(self.kind).meta["needs"] if c not in self.enabled]
         if need:
             raise ValueError(f"output kind {self.kind!r} needs the features {need} (present and enabled)")
@@ -127,11 +129,13 @@ class SignalSet:
         else:
             filters = None if coins is None else [("coin", "in", list(coins))]
             out = check_signals(pd.read_parquet(self.path, filters=filters))
-        if self.stages is not None:
-            out = out[out["stage"].isin(list(self.stages))]
         drop = [c for c in self.present if c not in self.enabled]
         out = out.drop(columns=drop).sort_values(["coin", "time"], kind="stable").reset_index(drop=True)
-        return decode(out, self.kind)
+        out = decode(out, self.kind)
+        out["period"] = assign(out, self.periods)
+        if self.stages is not None:
+            out = out[out["period"].isin(list(self.stages))].reset_index(drop=True)
+        return out
 
     def batches(self, size: int = 50, coins=None):
         """Yield (coins, rows) per batch of ``size`` coins: the memory bound of a large backtest."""

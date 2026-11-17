@@ -1,24 +1,40 @@
-"""PURPOSE: The effect of each strategy decision on the portfolio: several strategies side by side, a ladder that adds
-    one rule at a time to a base, and leave-one-out (each rule removed from the full strategy), on the same signals.
-TAGS: rule impact, strategy comparison, ablation, ladder, leave one out, multiple testing, portfolio effect, backtest
-PITFALLS: every variant runs on the SAME SignalSet and PriceSource (candles are cached, so the variants cost little
-    more than one run); a change is a dotted key of the strategy (``"exit.take_profit": 1.5``); the table counts the
-    variants tried: a best variant picked from many is a hypothesis for unseen data, not a result.
+"""PURPOSE: The effect of each strategy decision on the portfolio, per period: strategies side by side, a ladder that
+    adds one rule at a time, leave-one-out, under a switchable protocol: choose on VAL, judge the chosen one on TEST.
+TAGS: rule impact, strategy comparison, ablation, ladder, leave one out, protocol, choose on val, judge on test,
+    multiple testing, periods
+PITFALLS: every variant runs on the SAME signals and candles (cached). With the protocol on (default), the TEST
+    numbers of the variants NOT chosen on VAL are hidden, so nobody picks a rule by looking at TEST; turning it off
+    shows everything (exploration) and the table says so. Train is reported on its own (in-sample) and never merged.
+    The table counts the variants tried.
 """
 
 import dataclasses
+from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from nig_backtest.contract import SignalSet
 from nig_backtest.engine import Backtest, run_backtest
-from nig_backtest.portfolio import summary
+from nig_backtest.periods import TEST, VAL, VAL_TEST
+from nig_backtest.portfolio import by_period
 from nig_backtest.prices import PriceSource
 from nig_backtest.rules import Strategy, strategy_from_dict, strategy_to_dict
 
-__all__ = ["apply_changes", "compare", "ladder", "leave_one_out", "ROW_KEYS"]
+__all__ = ["Protocol", "apply_changes", "compare", "ladder", "leave_one_out", "ROW_KEYS"]
 
-ROW_KEYS = ("trades", "final_equity", "max_drawdown", "positive_days")
+ROW_KEYS = ("trades", "final_equity", "max_drawdown", "positive_days", "mean_cost")
+
+
+@dataclass(frozen=True)
+class Protocol:
+    """``enabled``: choose the variant with the best ``metric`` on ``select_on`` and show ``judge_on`` only for it;
+    off = every number of every variant is shown (the table is then marked exploratory)."""
+    enabled: bool = True
+    select_on: str = VAL
+    judge_on: str = TEST
+    metric: str = "final_equity"
+    merge_val_test: bool = False
 
 
 def apply_changes(base: Strategy, changes: dict, name: str | None = None) -> Strategy:
@@ -39,37 +55,67 @@ def apply_changes(base: Strategy, changes: dict, name: str | None = None) -> Str
     return strategy_from_dict(d)
 
 
-def _row(name: str, bt: Backtest) -> dict:
-    s = summary(bt.trades, bt.strategy.book.risk_per_trade, bt.strategy.book.max_open)
-    pt = s["per_trade"]
-    return {"variant": name, **{k: s[k] for k in ROW_KEYS}, "win_rate": pt.get("win_rate"),
-            "mean_net": pt.get("mean"), "sharpe_per_trade": pt.get("sharpe"), "profit_factor": pt.get("profit_factor")}
+def _rows(name: str, bt: Backtest, merge: bool) -> list[dict]:
+    out = []
+    for period, s in by_period(bt.trades, bt.strategy.book.risk_per_trade, merge).items():
+        pt = s["per_trade"]
+        out.append({"variant": name, "period": period, **{k: s[k] for k in ROW_KEYS},
+                    "win_rate": pt.get("win_rate"), "mean_net": pt.get("mean"), "sharpe_per_trade": pt.get("sharpe"),
+                    "profit_factor": pt.get("profit_factor")})
+    return out
 
 
-def compare(signals: SignalSet, prices: PriceSource, strategies: dict) -> tuple[pd.DataFrame, dict]:
-    """(table, {name: Backtest}) for named strategies on the same signals and candles."""
+def _apply_protocol(table: pd.DataFrame, protocol: Protocol) -> pd.DataFrame:
+    if not protocol.enabled:
+        table.attrs["protocol"] = "off: every period of every variant is shown (exploratory)"
+        return table
+    sel = table[table["period"] == protocol.select_on]
+    if sel.empty:
+        raise ValueError(f"protocol: no {protocol.select_on!r} period in the signals (give stages or split dates, or "
+                         f"switch the protocol off)")
+    chosen = str(sel.loc[sel[protocol.metric].astype(float).idxmax(), "variant"])
+    judged = table["period"].isin([protocol.judge_on, VAL_TEST]) if protocol.judge_on == TEST else \
+        table["period"] == protocol.judge_on
+    hide = judged & (table["variant"] != chosen)
+    cols = [c for c in table.columns if c not in ("variant", "period")]
+    table = table.astype({c: object for c in cols})
+    table.loc[hide, cols] = "hidden"
+    table["chosen"] = np.where(table["variant"] == chosen, "<- chosen on " + protocol.select_on, "")
+    table.attrs["protocol"] = (f"on: chosen by {protocol.metric} on {protocol.select_on}; {protocol.judge_on} shown "
+                               f"for the chosen variant only")
+    table.attrs["chosen"] = chosen
+    return table
+
+
+def compare(signals: SignalSet, prices: PriceSource, strategies: dict, protocol: Protocol | None = None
+            ) -> tuple[pd.DataFrame, dict]:
+    """(table, {name: Backtest}): one row per variant x period, under ``protocol``."""
+    protocol = protocol or Protocol()
     runs = {name: run_backtest(signals, prices, s) for name, s in strategies.items()}
-    table = pd.DataFrame([_row(n, bt) for n, bt in runs.items()])
+    table = pd.DataFrame([r for n, bt in runs.items() for r in _rows(n, bt, protocol.merge_val_test)])
+    table = _apply_protocol(table, protocol)
     table.attrs["variants_tried"] = len(runs)
     return table, runs
 
 
-def ladder(signals: SignalSet, prices: PriceSource, base: Strategy, steps: list) -> tuple[pd.DataFrame, dict]:
-    """Add one decision at a time: ``steps`` = [(label, {dotted key: value}), ...]; row i = base + steps[:i]."""
+def ladder(signals: SignalSet, prices: PriceSource, base: Strategy, steps: list, protocol: Protocol | None = None
+           ) -> tuple[pd.DataFrame, dict]:
+    """Add one decision at a time: ``steps`` = [(label, {dotted key: value}), ...]; variant i = base + steps[:i]."""
     variants, current = {"base": base}, base
     for label, changes in steps:
         current = apply_changes(current, changes, name=label)
         variants[label] = current
-    table, runs = compare(signals, prices, variants)
-    table.insert(1, "added", ["-"] + [", ".join(f"{k}={v}" for k, v in ch.items()) for _, ch in steps])
+    table, runs = compare(signals, prices, variants, protocol)
+    added = {"base": "-", **{lab: ", ".join(f"{k}={v}" for k, v in ch.items()) for lab, ch in steps}}
+    table.insert(1, "added", table["variant"].map(added))
     return table, runs
 
 
-def leave_one_out(signals: SignalSet, prices: PriceSource, full: Strategy, removals: list) -> tuple[pd.DataFrame,
-                                                                                                    dict]:
-    """The full strategy, then the full strategy with ONE decision undone: ``removals`` = [(label, {key: value
-    that switches it off}), ...]: what each rule contributes when all the others stay."""
+def leave_one_out(signals: SignalSet, prices: PriceSource, full: Strategy, removals: list,
+                  protocol: Protocol | None = None) -> tuple[pd.DataFrame, dict]:
+    """The full strategy, then the full strategy with ONE decision undone: ``removals`` = [(label, {key: value that
+    switches it off}), ...]."""
     variants = {"full": full}
     for label, changes in removals:
         variants[f"without {label}"] = apply_changes(full, changes, name=f"without {label}")
-    return compare(signals, prices, variants)
+    return compare(signals, prices, variants, protocol)

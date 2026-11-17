@@ -16,7 +16,7 @@ __all__ = ["OUTPUT_KINDS", "decode", "is_absolute", "DECODED"]
 
 #: name -> fn(rows) -> (direction +1 / -1 / 0, strength >= 0, predicted move or NaN); meta absolute, needs
 OUTPUT_KINDS = Registry("output_kind", required_meta=("absolute", "needs"))
-DECODED = ("dir", "strength", "pred_move")
+DECODED = ("dir", "strength", "pred_move", "period")
 
 
 def _nan(n):

@@ -92,9 +92,11 @@ def test_data_end_one_per_coin_and_the_open_cap():
     res = _run(frames, rows, exit={"max_bars": 3})
     assert res.skipped["overlap"] == 1                   # A at bar 21 opens while A from bar 20 is held
     assert set(res.trades["exit_reason"]) == {"time", "data_end"}
-    assert len(bt.cap_open(res.trades, 1)) == 2          # B opens at the same time as A: skipped
-    res2 = _run(frames, rows, entry={"one_per_coin": False}, exit={"max_bars": 3})
+    assert len(_run(frames, rows, exit={"max_bars": 3}, book={"max_open": 1}).trades) == 2   # B opens with A
+    res2 = _run(frames, rows, book={"per_coin": None}, exit={"max_bars": 3})
     assert len(res2.trades) == 4 and res2.skipped["overlap"] == 0
+    res3 = _run(frames, rows, book={"per_coin": 2}, exit={"max_bars": 3})    # two A trades may overlap
+    assert len(res3.trades) == 4
 
 
 def test_contract_and_optional_features():
@@ -150,13 +152,16 @@ def test_the_training_label_as_a_signal_is_an_oracle_and_the_explorer_filters_it
     book = bt.TradeBook(res.trades)
     assert len(book) == len(rows) and book.trades["direction_right"].all() and book.trades["label_right"].all()
     assert len(book.where(coins="A")) == len(rows) // 3 and len(book.where(outcome="loss")) == 0
-    assert len(book.where(exit_reason="time", side="short", stage="train")) == int((sig["score"] < 0).sum())
+    assert len(book.where(exit_reason="time", side="short", period="train")) == int((sig["score"] < 0).sum())
     assert set(book.by("coin")["coin"]) == {"A", "B", "C"}
     path = book.plot(0, bt.FramePrices(frames), tmp_path)
     assert path.is_file()
-    summ = bt.write_report(res, tmp_path / "rep", prices=bt.FramePrices(frames), gallery=2)
-    assert summ["final_equity"] > 1 and (tmp_path / "rep" / "summary.md").is_file()
-    assert len(list((tmp_path / "rep" / "worst").glob("*.png"))) == 2
+    periods = bt.write_report(res, tmp_path / "rep", prices=bt.FramePrices(frames), gallery=2, batch_coins=2)
+    assert list(periods) == ["train"] and periods["train"]["final_equity"] > 1
+    assert (tmp_path / "rep" / "summary.md").is_file()
+    for batch in ("batch_000", "batch_001"):              # coins A, B | C: the charts are drawn per batch
+        assert len(list((tmp_path / "rep" / batch / "worst").glob("*.png"))) == 2
+        assert (tmp_path / "rep" / batch / "equity.png").is_file()
 
 
 def test_ladder_compare_and_unknown_change_keys():
@@ -164,11 +169,14 @@ def test_ladder_compare_and_unknown_change_keys():
     frames = {"A": _bars(closes, rng=0.3)}
     sig = bt.SignalSet(frame=_signals([("A", T0 + i * H4, 1.0) for i in range(20, 100, 4)]))
     base = bt.strategy_from_dict({"exit": {"max_bars": 3}})
+    off = bt.Protocol(enabled=False)
     table, runs = bt.ladder(sig, bt.FramePrices(frames), base,
-                            [("tp", {"exit.take_profit": 0.5}), ("stop", {"exit.stop_loss": 0.5})])
+                            [("tp", {"exit.take_profit": 0.5}), ("stop", {"exit.stop_loss": 0.5})], off)
     assert list(table["variant"]) == ["base", "tp", "stop"] and table.attrs["variants_tried"] == 3
+    assert set(table["period"]) == {"all"} and table.attrs["protocol"].startswith("off")
     assert runs["stop"].strategy.exit.take_profit == 0.5 and runs["stop"].strategy.exit.stop_loss == 0.5
-    loo, _ = bt.leave_one_out(sig, bt.FramePrices(frames), runs["stop"].strategy, [("stop", {"exit.stop_loss": None})])
+    loo, _ = bt.leave_one_out(sig, bt.FramePrices(frames), runs["stop"].strategy, [("stop", {"exit.stop_loss": None})],
+                              off)
     assert list(loo["variant"]) == ["full", "without stop"]
     with pytest.raises(KeyError):
         bt.apply_changes(base, {"exit.target": 1})
@@ -192,7 +200,8 @@ def test_parquet_signals_in_batches_and_the_cli(tmp_path):
     assert len(pd.read_parquet(tmp_path / "o" / "trades.parquet")) == 15
     (tmp_path / "steps.json").write_text(json.dumps([["tp", {"exit.take_profit": 0.01}]]))
     main(["ladder", "--signals", str(path), "--prices", f"files:{root}:{{coin}}.parquet", "--strategy",
-          str(tmp_path / "s.json"), "--steps", str(tmp_path / "steps.json"), "--out", str(tmp_path / "l")])
+          str(tmp_path / "s.json"), "--steps", str(tmp_path / "steps.json"), "--out", str(tmp_path / "l"),
+          "--no-protocol"])
     assert "tp" in (tmp_path / "l" / "comparison.md").read_text()
 
 

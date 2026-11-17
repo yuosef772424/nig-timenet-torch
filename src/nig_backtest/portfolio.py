@@ -1,35 +1,18 @@
-"""PURPOSE: What a backtest's trades do to a portfolio: the open-position cap, the equity and drawdown when each
-    trade risks a share of the capital (booked at its exit), the daily book and the summary tables.
-TAGS: portfolio, equity curve, drawdown, max open positions, daily pnl, tearsheet, summary by group, backtest
+"""PURPOSE: What a backtest's trades do to a portfolio, PER PERIOD: the equity and drawdown when each trade risks a
+    share of the capital (booked at its exit), the daily book and the summary tables; train is never mixed with others.
+TAGS: portfolio, equity curve, drawdown, daily pnl, tearsheet, summary by group, periods, train val test, backtest
 PITFALLS: a trade is booked at its EXIT time with the capital it was given at its ENTRY (risk_per_trade x the equity
-    then), so open trades never compound on each other; ``max_open`` skips later entries (it does not close earlier
-    trades); the tearsheet is ``eval.legacy_reports.tearsheet`` (one implementation).
+    then), so open trades never compound on each other; the book's admission (per coin / max open) happened in the
+    engine; ``by_period`` makes one summary per period (val + test merged only on request, train always alone).
 """
-
-import heapq
 
 import numpy as np
 import pandas as pd
 
 from nig_backtest._base import tearsheet
+from nig_backtest.periods import groups
 
-__all__ = ["cap_open", "equity", "daily", "summary", "by_group"]
-
-
-def cap_open(trades: pd.DataFrame, max_open: int | None) -> pd.DataFrame:
-    """Drop the trades that would open while ``max_open`` trades are already open (entry-time order)."""
-    if max_open is None or trades.empty:
-        return trades
-    order = trades.sort_values(["entry_time", "coin"], kind="stable")
-    open_exits: list = []
-    keep = []
-    for i, (t_in, t_out) in zip(order.index, zip(order["entry_time"], order["exit_time"], strict=True), strict=True):
-        while open_exits and open_exits[0] <= t_in:
-            heapq.heappop(open_exits)
-        if len(open_exits) < max_open:
-            heapq.heappush(open_exits, t_out)
-            keep.append(i)
-    return trades.loc[keep]
+__all__ = ["equity", "daily", "summary", "by_group", "by_period"]
 
 
 def equity(trades: pd.DataFrame, risk: float, start: float = 1.0) -> pd.DataFrame:
@@ -80,20 +63,25 @@ def by_group(trades: pd.DataFrame, key) -> pd.DataFrame:
     return out.reset_index()
 
 
-def summary(trades: pd.DataFrame, risk: float, max_open: int | None = None) -> dict:
-    """The portfolio numbers of a trade list: per-trade tearsheet, final equity / max drawdown of the book, days,
-    share of positive days, and the tables by exit reason, side and stage."""
-    traded = cap_open(trades, max_open)
-    curve = equity(traded, risk)
+def summary(trades: pd.DataFrame, risk: float) -> dict:
+    """The portfolio numbers of ONE period's trades: per-trade tearsheet, final equity / max drawdown of the book,
+    days, share of positive days, cost paid, and the tables by exit reason and side."""
+    curve = equity(trades, risk)
     days = daily(curve)
-    out = {"trades": int(len(traded)), "skipped_max_open": int(len(trades) - len(traded)),
-           "per_trade": tearsheet(traded["net"].to_numpy()) if len(traded) else {"n": 0},
+    out = {"trades": int(len(trades)),
+           "per_trade": tearsheet(trades["net"].to_numpy(), risk) if len(trades) else {"n": 0},
            "final_equity": float(curve["equity"].iloc[-1]) if len(curve) else 1.0,
            "max_drawdown": float(curve["drawdown"].min()) if len(curve) else 0.0,
            "days": int(len(days)), "positive_days": float((days["ret"] > 0).mean()) if len(days) else float("nan"),
-           "by_exit": by_group(traded, "exit_reason"), "by_side": by_group(traded, pd.Series(np.where(
-               traded["side"] > 0, "long", "short"), index=traded.index, name="side"))}
-    if "stage" in traded:
-        out["by_stage"] = by_group(traded, "stage")
+           "mean_cost": float(trades["cost"].mean()) if "cost" in trades and len(trades) else 0.0,
+           "by_exit": by_group(trades, "exit_reason"), "by_side": by_group(trades, pd.Series(np.where(
+               trades["side"] > 0, "long", "short"), index=trades.index, name="side"))}
     out["curve"], out["daily"] = curve, days
     return out
+
+
+def by_period(trades: pd.DataFrame, risk: float, merge_val_test: bool = False) -> dict:
+    """{period: summary}: one book per period (train / val / test / all), plus "val+test" when ``merge_val_test``;
+    train is never merged with another period."""
+    labels = trades["period"].to_numpy() if "period" in trades else np.full(len(trades), "all", dtype=object)
+    return {name: summary(trades[mask], risk) for name, mask in groups(labels, merge_val_test).items()}

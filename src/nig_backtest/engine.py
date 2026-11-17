@@ -19,14 +19,14 @@ import pandas as pd
 from nig_backtest._base import OHLCV as OHLCV_COLUMNS
 from nig_backtest.contract import SignalSet
 from nig_backtest.prices import PriceSource, atr, bar_interval
-from nig_backtest.rules import Strategy, check_strategy, level_fraction, select_entries
+from nig_backtest.rules import ADMISSION, Strategy, check_strategy, level_fraction, select_entries, trade_cost
 
-__all__ = ["Backtest", "simulate_coin", "run_backtest", "hold_bars", "TRADE_COLUMNS", "EXIT_REASONS"]
+__all__ = ["Backtest", "simulate_coin", "run_backtest", "hold_bars", "admit", "TRADE_COLUMNS", "EXIT_REASONS"]
 
 EXIT_REASONS = ("take_profit", "stop_loss", "time", "data_end")
-TRADE_COLUMNS = ("coin", "time", "side", "score", "entry_time", "entry_price", "exit_time", "exit_price",
-                 "exit_reason", "bars_held", "gross", "net", "mfe", "mae", "atr_entry", "target_frac", "stop_frac",
-                 "win", "direction_right")
+TRADE_COLUMNS = ("coin", "time", "period", "side", "score", "entry_time", "entry_price", "exit_time", "exit_price",
+                 "exit_reason", "bars_held", "gross", "cost", "net", "mfe", "mae", "atr_entry", "target_frac",
+                 "stop_frac", "win", "direction_right")
 
 
 @dataclass
@@ -140,27 +140,42 @@ def simulate_coin(rows: pd.DataFrame, bars: pd.DataFrame, s: Strategy, horizon: 
     out = rows.copy()
     out = out.assign(entry_time=t[i0], entry_price=entry, exit_time=t[np.minimum(i0 + k, len(t) - 1)] + dt,
                      exit_price=exit_px, exit_reason=reason, bars_held=k + 1, gross=gross,
-                     net=gross - 2 * (s.costs.fee_per_side + s.costs.slippage_per_side),
+                     cost=trade_cost(gross, s.costs), net=gross - trade_cost(gross, s.costs),
                      mfe=np.where(side > 0, hi / entry - 1, 1 - lo / entry),
                      mae=np.where(side > 0, lo / entry - 1, 1 - hi / entry), atr_entry=atr_e, target_frac=tgt,
-                     stop_frac=stp, _exit_bar=i0 + k, _entry_bar=i0)
-    if s.entry.one_per_coin:
-        out, skipped["overlap"] = _one_per_coin(out)
+                     stop_frac=stp)
     out["held"] = out["exit_time"] - out["entry_time"]
     out["win"] = out["net"] > 0
     out["direction_right"] = out["gross"] > 0
     if "y_true" in out:      # did the LABEL the model was trained on go the traded way (whatever the exit did)?
         out["label_right"] = np.sign(out["y_true"].to_numpy()) == out["side"].to_numpy()
-    return out.drop(columns=["_exit_bar", "_entry_bar"]), skipped
+    return out, skipped
 
 
-def _one_per_coin(trades: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    keep, last_exit = [], -1
-    for i, (a, b) in enumerate(zip(trades["_entry_bar"].to_numpy(), trades["_exit_bar"].to_numpy(), strict=True)):
-        if a > last_exit:
+def admit(trades: pd.DataFrame, book) -> pd.DataFrame:
+    """The trades the book takes: in the ADMISSION order (by entry time, ties per ``book.admit``), a trade enters when
+    its coin has fewer than ``book.per_coin`` open trades and the book fewer than ``book.max_open`` (None = no limit);
+    a trade is open from its entry until its exit (a trade exiting at t frees its place for one entering at t)."""
+    if trades.empty or (book.per_coin is None and book.max_open is None):
+        return trades
+    import heapq
+    order = ADMISSION.get(book.admit)(trades)
+    open_all: list = []
+    open_coin: dict[str, list] = {}
+    keep = []
+    for i in order:
+        t_in, t_out, coin = trades.at[i, "entry_time"], trades.at[i, "exit_time"], trades.at[i, "coin"]
+        while open_all and open_all[0] <= t_in:
+            heapq.heappop(open_all)
+        mine = open_coin.setdefault(coin, [])
+        while mine and mine[0] <= t_in:
+            heapq.heappop(mine)
+        if (book.per_coin is None or len(mine) < book.per_coin) and (book.max_open is None
+                                                                       or len(open_all) < book.max_open):
+            heapq.heappush(open_all, t_out)
+            heapq.heappush(mine, t_out)
             keep.append(i)
-            last_exit = b
-    return trades.iloc[keep].reset_index(drop=True), len(trades) - len(keep)
+    return trades.loc[sorted(keep)]
 
 
 def run_backtest(signals: SignalSet, prices: PriceSource, strategy: Strategy, *, coins=None,
@@ -171,7 +186,7 @@ def run_backtest(signals: SignalSet, prices: PriceSource, strategy: Strategy, *,
     rows = signals.read(coins)
     picked = select_entries(rows, strategy)
     trace = picked.attrs.get("rule_trace", [])
-    parts, skipped = [], {"no_bars": 0, "overlap": 0, "no_prices": 0}
+    parts, skipped = [], {"no_bars": 0, "overlap": 0, "no_prices": 0, "coins_without_prices": []}
     names = sorted(picked["coin"].unique())
     for b in range(0, len(names), max(1, batch_coins)):
         for coin in names[b:b + batch_coins]:
@@ -180,6 +195,7 @@ def run_backtest(signals: SignalSet, prices: PriceSource, strategy: Strategy, *,
                 bars = prices.bars(coin)
             except KeyError:
                 skipped["no_prices"] += len(sub)
+                skipped["coins_without_prices"].append(coin)
                 continue
             trades, sk = simulate_coin(sub, bars, strategy, signals.horizon)
             for key, v in sk.items():
@@ -187,6 +203,14 @@ def run_backtest(signals: SignalSet, prices: PriceSource, strategy: Strategy, *,
             parts.append(trades)
         if progress is not None:
             progress(min(b + batch_coins, len(names)), len(names))
+    skipped["missing_share"] = skipped["no_prices"] / max(len(picked), 1)
+    if strategy.max_missing_share is not None and skipped["missing_share"] > strategy.max_missing_share:
+        raise ValueError(f"{skipped['no_prices']} of {len(picked)} selected signals ({skipped['missing_share']:.1%}) "
+                         f"have no candles (coins {skipped['coins_without_prices'][:10]}...): above max_missing_share "
+                         f"{strategy.max_missing_share}; a result without them is biased (delisted coins)")
     trades = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=list(TRADE_COLUMNS))
+    simulated = len(trades)
+    trades = admit(trades, strategy.book)
+    skipped["overlap"] = simulated - len(trades)
     trades = trades.sort_values(["entry_time", "coin"], kind="stable").reset_index(drop=True)
-    return Backtest(strategy, trades, trace + [("traded", len(trades))], skipped)
+    return Backtest(strategy, trades, trace + [("simulated", simulated), ("admitted", len(trades))], skipped)

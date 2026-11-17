@@ -15,33 +15,39 @@ import pandas as pd
 
 from nig_backtest._base import Registry, from_dict, to_dict
 
-__all__ = ["Entry", "Exit", "Costs", "Book", "Strategy", "ENTRY_FILTERS", "SIDES", "UNITS", "check_strategy",
-           "select_entries", "level_fraction", "strategy_from_dict", "strategy_to_dict"]
+__all__ = ["Entry", "Exit", "Costs", "Book", "Strategy", "ENTRY_FILTERS", "SIDE_RULES", "COST_MODES", "ADMISSION",
+           "UNITS", "check_strategy", "select_entries", "level_fraction", "trade_cost", "strategy_from_dict",
+           "strategy_to_dict"]
 
-SIDES = ("score", "long", "short", "p_up")
 UNITS = ("atr", "pct", "sigma", "pred", "move")
 ENTRY_PRICES = ("next_open", "signal_close")
 BOTH_HIT = ("stop_first", "target_first")
 #: name -> fn(rows: DataFrame, params: dict) -> bool array (True = keep); register your own rule here
 ENTRY_FILTERS = Registry("entry_filter", required_meta=("needs",))
+#: name -> fn(rows, params) -> side per row (+1 long, -1 short, 0 = no trade); a ranked output's direction rule is one
+SIDE_RULES = Registry("side_rule", required_meta=("needs",))
+#: name -> fn(gross: array, costs: Costs) -> cost per trade (a fraction of the entry price, round trip)
+COST_MODES = Registry("cost_mode", required_meta=())
+#: name -> fn(trades) -> the order in which trades that open together ask for a place in the book
+ADMISSION = Registry("admission", required_meta=())
 
 
 @dataclass(frozen=True)
 class Entry:
-    side: str = "score"                    # score: the output's direction (kinds); long / short: one side; p_up: > 0.5
+    side: str = "score"                    # a SIDE_RULES name: score (the output's direction), long, short, p_up,
+    side_params: dict = field(default_factory=dict)  # quantile (top / bottom q per time) or your own rule
     min_strength: float = 0.0              # keep strength >= this (strength: kinds, e.g. |predicted move|)
-    top_share: float | None = None         # keep the strongest share of the rows of each stage
+    top_share: float | None = None         # keep the strongest share of the rows of each period (train / val / test)
     score_over_sigma: float | None = None  # keep strength > k sigma (needs sigma)
     min_confidence: float | None = None    # keep confidence >= this (needs confidence)
-    confidence_top_share: float | None = None  # keep the most confident share of each stage (needs confidence)
+    confidence_top_share: float | None = None  # keep the most confident share of each period (needs confidence)
     per_time_top_k: int | None = None      # cross-section: per time keep the k strongest of each side
     coins: tuple = ()                      # only these coins (empty = all)
     exclude_coins: tuple = ()
-    stages: tuple = ()                     # only these stages (empty = all; needs stage)
+    stages: tuple = ()                     # only these periods (train / val / test; empty = all)
     filters: tuple = ()                    # names of ENTRY_FILTERS, applied in order
     filter_params: dict = field(default_factory=dict)  # {filter name: {param: value}}
     entry_price: str = "next_open"         # next_open: first bar opening at / after time; signal_close: close at time
-    one_per_coin: bool = True              # skip a signal while the coin's previous trade is still open
 
 
 @dataclass(frozen=True)
@@ -62,14 +68,18 @@ class Exit:
 
 @dataclass(frozen=True)
 class Costs:
-    fee_per_side: float = 0.0008
+    mode: str = "fixed"                    # a COST_MODES name: none / fixed (fee + slippage per side) / move (fixed +
+    fee_per_side: float = 0.0008           #   move_share x |the trade's realised move|)
     slippage_per_side: float = 0.0
+    move_share: float = 0.0
 
 
 @dataclass(frozen=True)
 class Book:
     risk_per_trade: float = 0.02           # share of the capital put on one trade
-    max_open: int | None = None            # at most this many trades open at once (later ones are skipped)
+    per_coin: int | None = 1               # at most this many open trades per coin (None = no limit, every signal)
+    max_open: int | None = None            # at most this many open trades in all (None = no limit)
+    admit: str = "first"                   # an ADMISSION name: which of the trades opening together gets the place
 
 
 @dataclass(frozen=True)
@@ -79,10 +89,19 @@ class Strategy:
     exit: Exit = field(default_factory=Exit)
     costs: Costs = field(default_factory=Costs)
     book: Book = field(default_factory=Book)
+    max_missing_share: float | None = None  # stop when more than this share of the selected signals has no candles
 
     def __post_init__(self):
-        e, x = self.entry, self.exit
-        for name, value, allowed in (("entry.side", e.side, SIDES), ("entry.entry_price", e.entry_price, ENTRY_PRICES),
+        e, x, b = self.entry, self.exit, self.book
+        SIDE_RULES.entry(e.side)
+        COST_MODES.entry(self.costs.mode)
+        ADMISSION.entry(b.admit)
+        for name, v in (("book.per_coin", b.per_coin), ("book.max_open", b.max_open)):
+            if v is not None and v < 1:
+                raise ValueError(f"{name} must be >= 1 or None, got {v}")
+        if self.max_missing_share is not None and not 0 <= self.max_missing_share <= 1:
+            raise ValueError("max_missing_share must be in [0, 1]")
+        for name, value, allowed in (("entry.entry_price", e.entry_price, ENTRY_PRICES),
                                      ("exit.take_profit_unit", x.take_profit_unit, UNITS),
                                      ("exit.stop_loss_unit", x.stop_loss_unit, UNITS),
                                      ("exit.both_hit", x.both_hit, BOTH_HIT)):
@@ -125,8 +144,7 @@ def _needs(s: Strategy) -> set[str]:
     need = set()
     need |= {"sigma"} if e.score_over_sigma is not None else set()
     need |= {"confidence"} if e.min_confidence is not None or e.confidence_top_share is not None else set()
-    need |= {"p_up"} if e.side == "p_up" else set()
-    need |= {"stage"} if e.stages else set()
+    need |= set(SIDE_RULES.entry(e.side).meta["needs"])
     for value, unit in ((x.take_profit, x.take_profit_unit), (x.stop_loss, x.stop_loss_unit)):
         if value is not None and unit == "sigma":
             need.add("sigma")
@@ -168,12 +186,72 @@ def _rank_share(values: np.ndarray, groups: np.ndarray, share: float) -> np.ndar
     return keep
 
 
-def _side(rows: pd.DataFrame, side: str) -> np.ndarray:
-    if side == "score":
-        return rows["dir"].to_numpy()
-    if side == "p_up":
-        return np.where(rows["p_up"].to_numpy() > 0.5, 1.0, -1.0)
-    return np.full(len(rows), 1.0 if side == "long" else -1.0)
+def _side_score(rows, params):
+    return rows["dir"].to_numpy()
+
+
+def _side_long(rows, params):
+    return np.where(rows["dir"].to_numpy() > 0, 1.0, 0.0)
+
+
+def _side_short(rows, params):
+    return np.where(rows["dir"].to_numpy() < 0, -1.0, 0.0)
+
+
+def _side_p_up(rows, params):
+    return np.where(rows["p_up"].to_numpy() > 0.5, 1.0, -1.0)
+
+
+def _side_quantile(rows, params):
+    """Per time: long the top ``q`` of ``score``, short the bottom ``q`` (a ranked output on real prices)."""
+    q = float(params.get("q", 0.2))
+    pct = pd.Series(rows["score"].to_numpy()).groupby(rows["time"].to_numpy()).rank(pct=True).to_numpy()
+    return np.where(pct > 1 - q, 1.0, np.where(pct <= q, -1.0, 0.0))
+
+
+SIDE_RULES.register("score", _side_score, needs=())
+SIDE_RULES.register("long", _side_long, needs=())
+SIDE_RULES.register("short", _side_short, needs=())
+SIDE_RULES.register("p_up", _side_p_up, needs=("p_up",))
+SIDE_RULES.register("quantile", _side_quantile, needs=())
+
+
+def _cost_none(gross, c):
+    return np.zeros(len(gross))
+
+
+def _cost_fixed(gross, c):
+    return np.full(len(gross), 2 * (c.fee_per_side + c.slippage_per_side))
+
+
+def _cost_move(gross, c):
+    return _cost_fixed(gross, c) + c.move_share * np.abs(np.asarray(gross, dtype=float))
+
+
+COST_MODES.register("none", _cost_none)
+COST_MODES.register("fixed", _cost_fixed)
+COST_MODES.register("move", _cost_move)
+
+
+def trade_cost(gross, costs: Costs) -> np.ndarray:
+    """Round-trip cost per trade of ``costs.mode`` (a fraction of the entry price)."""
+    return COST_MODES.get(costs.mode)(np.asarray(gross, dtype=float), costs)
+
+
+def _admit_first(trades):
+    return trades.sort_values(["entry_time", "coin"], kind="stable").index
+
+
+def _admit_strongest(trades):
+    return trades.sort_values(["entry_time", "strength"], ascending=[True, False], kind="stable").index
+
+
+ADMISSION.register("first", _admit_first)
+ADMISSION.register("strongest", _admit_strongest)
+
+
+def _side(rows: pd.DataFrame, s: Strategy) -> np.ndarray:
+    return np.asarray(SIDE_RULES.get(s.entry.side)(rows, dict(s.entry.side_params)), dtype=float)
 
 
 def select_entries(rows: pd.DataFrame, s: Strategy) -> pd.DataFrame:
@@ -181,11 +259,9 @@ def select_entries(rows: pd.DataFrame, s: Strategy) -> pd.DataFrame:
     ``attrs`` (rows kept after each rule, in order: what each decision removed)."""
     e = s.entry
     strength = rows["strength"].to_numpy()
-    stage = rows["stage"].to_numpy() if "stage" in rows else np.zeros(len(rows))
-    side = _side(rows, e.side)
+    stage = rows["period"].to_numpy()
+    side = _side(rows, s)
     keep = side != 0
-    if e.side in ("long", "short"):
-        keep &= rows["dir"].to_numpy() == side
     trace = [("signals", len(rows)), ("side", int(keep.sum()))]
 
     def step(name, mask):
@@ -198,7 +274,7 @@ def select_entries(rows: pd.DataFrame, s: Strategy) -> pd.DataFrame:
     if e.exclude_coins:
         step("exclude_coins", ~rows["coin"].isin(e.exclude_coins).to_numpy())
     if e.stages:
-        step("stages", rows["stage"].isin(e.stages).to_numpy())
+        step("stages", rows["period"].isin(e.stages).to_numpy())
     if e.min_strength > 0:
         step("min_strength", strength >= e.min_strength)
     if e.score_over_sigma is not None:
