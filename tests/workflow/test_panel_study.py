@@ -135,6 +135,7 @@ def test_battery_step_writes_the_day_metrics_when_asked(e4_dir, tmp_path):
     assert not (tmp_path / "out_b" / "panel_report.md").exists()  # off by default
 
 
+@pytest.mark.slow
 def test_logret_std_arm_trains_with_the_rank_loss_and_decodes_to_label_units(e4_dir, tmp_path):
     """The owner arm of 2026-11-17: train-standardised inputs + per-head standardised labels (model.target_norm) with
     the relative inputs and the cross-section rank term; the fitted state is the TRAIN label mean / std and the

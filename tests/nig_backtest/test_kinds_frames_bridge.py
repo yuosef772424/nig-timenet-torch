@@ -107,6 +107,7 @@ def test_vision_klines_on_a_fake_archive():
     assert len(f) == 24 and f.index[0] == pd.Timestamp("2026-03-10") and f["close"].iloc[0] == 1.5
 
 
+@pytest.mark.slow
 def test_bridge_runs_the_model_on_one_coin_and_reads_the_artifact_candles(art, tmp_path):  # noqa: F811
     from nig_backtest.bridges import nig_timenet_torch as bridge
     from nig_timenet_torch.core.config import updated

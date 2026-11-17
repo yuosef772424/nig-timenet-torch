@@ -136,6 +136,7 @@ def test_entry_rules_trace_top_share_per_stage_and_custom_filters():
         bt.strategy_from_dict({"entry": {"filters": ["no_such_rule"]}})
 
 
+@pytest.mark.slow
 def test_the_training_label_as_a_signal_is_an_oracle_and_the_explorer_filters_it(tmp_path):
     pytest.importorskip("matplotlib")
     rng = np.random.default_rng(1)

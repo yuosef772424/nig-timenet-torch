@@ -93,6 +93,7 @@ def test_extreme_samples_are_the_largest_losses_and_gains():
     assert list(ext["best"]["net"]) == sorted(tr["net"])[::-1][:5]
 
 
+@pytest.mark.slow
 def test_workflow_writes_report_figures_and_a_samples_csv_sample_charts_reads(tmp_path):
     pytest.importorskip("matplotlib")
     for stage, seed in (("val", 1), ("test", 2)):
