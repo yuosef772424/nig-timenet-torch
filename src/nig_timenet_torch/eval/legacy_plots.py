@@ -1,6 +1,5 @@
-"""PURPOSE: The figures of the TF evaluation (``evaluation/plots.py``) over a battery table: equity and drawdown of the
-    trades and of the daily portfolio, calibration curve, sd against error, error distribution, actual against
-    predicted, lag scan, batch hit rate, and the best / worst coins and samples.
+"""PURPOSE: The figures of the TF evaluation over a battery table: equity / drawdown of the trades and of the daily
+    portfolio, calibration curve, errors, lag scan, batch hit rate, best / worst coins and samples.
 TAGS: legacy plots, equity chart, portfolio chart, drawdown, calibration curve, best worst predictions, lag plot,
     matplotlib, figures
 PITFALLS: matplotlib is an optional dependency (extra ``plots``): it is imported inside ``figures`` only, with the Agg

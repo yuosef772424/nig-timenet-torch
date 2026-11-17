@@ -10,12 +10,14 @@ PITFALLS: reads ``battery_table_{val,test}.parquet`` (written by ``workflow.batt
 """
 
 import argparse
+import dataclasses
 import json
 from pathlib import Path
 
 import pandas as pd
 
 from nig_timenet_torch.eval import legacy_reports as lr
+from nig_timenet_torch.eval import sample_charts
 from nig_timenet_torch.workflow.battery_run import table_path
 
 __all__ = ["stage_report", "legacy_report", "legacy_from_folder", "render", "REPORT_MD", "REPORT_JSON", "SAMPLES_CSV",
@@ -100,7 +102,7 @@ def _samples_csv(reports: dict) -> pd.DataFrame:
                 rows.append({"coin": r["coin"], "date": pd.Timestamp(r["end_time"]).isoformat(),
                              "side": "long" if r["side"] > 0 else "short", "pnl": 100 * r["net"],
                              "source": f"{stage} {key} trade", "note": f"mu {r['mu']:+.4f}", "time": True})
-    return pd.DataFrame(rows, columns=["coin", "date", "side", "pnl", "source", "note", "time"])
+    return pd.DataFrame(rows, columns=[f.name for f in dataclasses.fields(sample_charts.Sample)])
 
 
 def legacy_report(tables: dict, out_dir=None, *, cost: float = 0.0008, top_share: float = lr.TOP_SHARE,

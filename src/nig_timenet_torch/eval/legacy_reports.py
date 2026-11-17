@@ -1,6 +1,5 @@
-"""PURPOSE: The TF evaluation reports that had no counterpart here, over a battery table: tearsheet with the equity /
-    drawdown of the trades and of the daily portfolio, integrity (lag scan, naive baselines, bias), confidence
-    calibration, output-conditioned hit rates, per-coin best / worst and the worst / best single samples.
+"""PURPOSE: The TF evaluation reports that had no port, over a battery table: tearsheet, trade and daily-portfolio
+    equity / drawdown, lag scan, naive baselines, calibration, conditioned hit rates, best / worst coins and samples.
 TAGS: legacy reports, tearsheet, equity curve, portfolio, drawdown, sortino, lag scan, calibration, brier, best worst,
     output conditioned, tf parity
 PITFALLS: pure functions of a battery table (``eval/battery_adapter.BATTERY_COLUMNS``: mu / y_ret in return units,

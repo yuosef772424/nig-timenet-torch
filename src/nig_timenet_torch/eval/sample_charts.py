@@ -18,6 +18,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.core.schema import OHLCV_COLUMNS
+
 __all__ = ["Sample", "facts", "plot_sample", "WINDOW_BARS", "HORIZON_BARS", "load_candles", "read_samples", "run",
            "main"]
 
@@ -103,7 +105,7 @@ def facts(sample: Sample, c4: pd.DataFrame) -> dict:
 
 def _candles(ax, frame: pd.DataFrame, width: float) -> None:
     x = frame.index.to_pydatetime()
-    o, h, lo, c = (frame[k].to_numpy() for k in ("open", "high", "low", "close"))
+    o, h, lo, c = (frame[k].to_numpy() for k in OHLCV_COLUMNS[:4])
     colors = np.where(c >= o, "#2a9d8f", "#e76f51")
     ax.vlines(x, lo, h, colors=colors, linewidth=0.8)
     ax.bar(x, np.abs(c - o) + 1e-12 * np.maximum(c, 1e-12), bottom=np.minimum(o, c), width=width, color=colors,
