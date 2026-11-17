@@ -3,10 +3,13 @@ reports by coin and by month, and the feature importance files."""
 
 import json
 
+import pytest
+
 from nig_timenet_torch.data_io.synthetic import SyntheticSettings, write_synthetic
 from nig_timenet_torch.doctor import influence
 
 
+@pytest.mark.slow   # rule E3: the fast suite reached 304.7 s on CI; it still runs in CI's slow step
 def test_main_writes_every_report(tmp_path):
     art = tmp_path / "e1"
     write_synthetic(art, SyntheticSettings(n_coins=4, n_bars=800), overwrite=True)
