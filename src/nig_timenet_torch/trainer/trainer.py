@@ -318,15 +318,21 @@ class Trainer:
         first = next(iter(self.model.parameters()), None)
         return torch.device("cpu") if first is None else first.device
 
-    def _train_epoch(self, x, y, settings: FitSettings, ema: EmaWeights | None = None) -> dict[str, float]:
+    def _train_epoch(self, x, y, settings: FitSettings, ema: EmaWeights | None = None, monitor=None,
+                     epoch: int = 0) -> dict[str, float]:
         """One shuffled pass; the mean of every log, weighted by batch size; ``ema`` is updated after every step.
-        The logs of ``settings.steps_per_execution`` steps are read back together (one host sync per group)."""
+        The logs of ``settings.steps_per_execution`` steps are read back together (one host sync per group).
+        ``monitor`` (a ``trainer.batch_influence.BatchInfluence``, log-only) is called around every step."""
         logs, dev = GroupedLogs(settings.steps_per_execution), self._device()
         batches = (group_batches(row_groups(x), settings.batch_size) if self.group_channel
                    else self.batch_indices(len(x), settings.batch_size))
         for ix in batches:
+            if monitor is not None:
+                monitor.before_step(self, epoch, ix)
             step = self.train_step(x[ix].to(dev), {k: v[ix].to(dev) for k, v in y.items()},
                                    grad_clip_norm=settings.grad_clip_norm, as_tensors=True)
+            if monitor is not None:
+                monitor.after_step(self, step)
             if ema is not None:
                 ema.update(self.model)
             logs.add(len(ix), step)
@@ -389,7 +395,7 @@ class Trainer:
 
     def fit(self, x_train, y_train, x_val, y_val, settings: FitSettings, *, run_dir=None,
             identity: RunIdentity | None = None, resume: bool = True,
-            deadline: float | None = None, on_epoch=None, trace_batches=None) -> FitResult:
+            deadline: float | None = None, on_epoch=None, trace_batches=None, batch_monitor=None) -> FitResult:
         """Epoch loop with lambda / LR schedules, early stopping and best weights chosen by ``selection_metric``.
 
         With ``run_dir`` the state is saved after every epoch (checkpoint.py) and a run folder that already holds a
@@ -404,7 +410,9 @@ class Trainer:
         rows (``trainer.batch_set.representative_batches``); the trace is then the mean over them instead of the first
         ``batch_size`` rows (log-only either way). D-021 switches: ``settings.init`` re-initialises the model at the
         start of a fresh fit (not on resume); ``grad_clip_norm`` clips every step; with ``ema_decay`` the EMA copy is
-        what validation, selection, the best weights and the model at the end hold (the checkpoint keeps both)."""
+        what validation, selection, the best weights and the model at the end hold (the checkpoint keeps both).
+        ``batch_monitor`` (default None = none): a ``trainer.batch_influence.BatchInfluence`` that measures every
+        step's effect on its probe sets; log-only, the training is the same with and without it."""
         if self.optimizer is None:
             raise RuntimeError("Trainer has no optimizer")
         if run_dir is not None and identity is None:
@@ -429,6 +437,8 @@ class Trainer:
             apply_init(settings.init, self.model)       # "torch" (default) changes nothing
             ema = None if settings.ema_decay is None else EmaWeights(self.model, settings.ema_decay)
         longest = 0.0
+        if batch_monitor is not None:
+            batch_monitor.start(self)
         for epoch in range(len(history), settings.epochs):
             if tracker.should_stop():
                 break
@@ -437,7 +447,8 @@ class Trainer:
             t0 = time.monotonic()
             lr = self._begin_epoch(epoch, settings, self.schedules)
             row = {"epoch": epoch + 1, "lr": lr}
-            row.update({f"train_{k}": v for k, v in self._train_epoch(x_train, y_train, settings, ema).items()})
+            train_logs = self._train_epoch(x_train, y_train, settings, ema, batch_monitor, epoch)
+            row.update({f"train_{k}": v for k, v in train_logs.items()})
             val = self._evaluate_with(None if ema is None else ema.shadow, x_val, y_val, settings.batch_size)
             row.update({f"val_{k}": v for k, v in val.items()})
             if settings.trace:

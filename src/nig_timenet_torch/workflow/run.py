@@ -154,8 +154,9 @@ def build(run: Run) -> Run:
     return run
 
 
-def train(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
-    """Fit (resumes a run folder that holds a checkpoint). ``deadline`` is a ``time.monotonic()`` value."""
+def train(run: Run, *, deadline: float | None = None, on_epoch=None, batch_monitor=None) -> Run:
+    """Fit (resumes a run folder that holds a checkpoint). ``deadline`` is a ``time.monotonic()`` value;
+    ``batch_monitor``: a ``trainer.batch_influence.BatchInfluence`` (log-only; None = none)."""
     _need(run, "trainer", "build")
     n = {k: int(len(v)) for k, v in run.idx.items()}
     print(f"data: {n['train']} train / {n['val']} val / {n['test']} test windows "
@@ -166,7 +167,7 @@ def train(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
                      if run.settings.train.trace_representative else None)
     run.result = run.trainer.fit(run.x["train"], run.y["train"], run.x["val"], run.y["val"], run.fit_settings,
                                  run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline,
-                                 on_epoch=on_epoch, trace_batches=trace_batches)
+                                 on_epoch=on_epoch, trace_batches=trace_batches, batch_monitor=batch_monitor)
     _copy_best_weights(run)
     return run
 
