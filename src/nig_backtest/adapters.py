@@ -10,7 +10,7 @@ PITFALLS: ``end_time`` of a battery table is the prediction time (the close of t
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.backtest.contract import check_signals
+from nig_backtest.contract import check_signals
 
 __all__ = ["from_battery_table"]
 

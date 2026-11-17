@@ -2,7 +2,7 @@
     equity / drawdown chart, the tables by coin / month / exit, and galleries of the worst and best trades.
 TAGS: backtest report, trades parquet, summary markdown, equity chart, rule trace, gallery, report writer
 PITFALLS: charts need matplotlib (extra ``plots``) and, for the galleries, the PriceSource of the run; ``gallery``
-    0 writes no trade charts. Exploratory (rule C5): one strategy on one signal set is a look.
+    0 writes no trade charts. Exploratory: one strategy on one signal set is a look.
 """
 
 import json
@@ -11,10 +11,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.backtest.engine import Backtest
-from nig_timenet_torch.backtest.explorer import TradeBook
-from nig_timenet_torch.backtest.portfolio import summary
-from nig_timenet_torch.backtest.rules import strategy_to_dict
+from nig_backtest.engine import Backtest
+from nig_backtest.explorer import TradeBook
+from nig_backtest.portfolio import summary
+from nig_backtest.rules import strategy_to_dict
 
 __all__ = ["write_report", "md_table", "plot_curves"]
 

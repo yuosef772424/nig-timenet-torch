@@ -15,10 +15,10 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.backtest.contract import SignalSet
-from nig_timenet_torch.backtest.prices import PriceSource, atr, bar_interval
-from nig_timenet_torch.backtest.rules import Strategy, check_strategy, level_fraction, select_entries
-from nig_timenet_torch.core.schema import OHLCV_COLUMNS
+from nig_backtest._base import OHLCV as OHLCV_COLUMNS
+from nig_backtest.contract import SignalSet
+from nig_backtest.prices import PriceSource, atr, bar_interval
+from nig_backtest.rules import Strategy, check_strategy, level_fraction, select_entries
 
 __all__ = ["Backtest", "simulate_coin", "run_backtest", "TRADE_COLUMNS", "EXIT_REASONS"]
 

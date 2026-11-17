@@ -11,7 +11,7 @@ import heapq
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.eval.legacy_reports import tearsheet
+from nig_backtest._base import tearsheet
 
 __all__ = ["cap_open", "equity", "daily", "summary", "by_group"]
 

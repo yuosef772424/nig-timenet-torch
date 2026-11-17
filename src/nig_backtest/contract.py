@@ -7,7 +7,7 @@ PITFALLS: ``time`` is the moment the signal is KNOWN (the close of the last inpu
     trades). An optional feature that is absent or switched off is dropped before any rule sees it, and a rule that
     needs it raises (no silent default). A parquet source is read per coin batch with a filter, never whole.
 
-The backtest is a separate system: it never imports the model, the trainer or the run steps. Any model (or a
+The backtest is a separate package: it never imports a host project (only its bridges do). Any model (or a
 hand-written rule, or the training labels themselves) reaches it only through this table.
 """
 
@@ -129,7 +129,7 @@ def _parquet_columns(path) -> list[str]:
 
 
 def describe() -> str:
-    """The contract as text (what ``python -m nig_timenet_torch.backtest contract`` prints)."""
+    """The contract as text (what ``python -m nig_backtest contract`` prints)."""
     lines = ["required columns:"] + [f"  {k}: {v}" for k, v in REQUIRED.items()]
     lines += ["optional features (absent = off; present = on unless SignalSet.use leaves them out):"]
     lines += [f"  {k}: {v}" for k, v in OPTIONAL.items()]

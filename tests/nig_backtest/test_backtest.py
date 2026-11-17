@@ -3,15 +3,17 @@ take-profit / stop in ATR and % (gap fills, stop first), one trade per coin, the
 (unknown columns, optional features absent / switched off), custom rules by name, the explorer, the rule ladder,
 parquet batches, the training labels as an oracle signal, the CLI and the battery adapter."""
 
+import ast
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from nig_timenet_torch import backtest as bt
-from nig_timenet_torch.backtest.__main__ import main
-from nig_timenet_torch.core.registry import UnknownNameError
+import nig_backtest as bt
+from nig_backtest.__main__ import main
+from nig_backtest._base import UnknownNameError
 
 T0 = pd.Timestamp("2026-01-01")
 H4 = pd.Timedelta(hours=4)
@@ -203,9 +205,24 @@ def test_battery_adapter_maps_the_columns():
     assert (sig["pred_high"] >= 0).all() and (sig["pred_low"] <= 0).all()
 
 
-def test_the_backtest_is_a_separate_system():
-    """Rule G7: backtest/ imports only core, stats, data and eval, and no lower layer imports it."""
-    from tests import scan
-    found = [v for v in scan.layer_import_violations() if "backtest" in v]
-    assert not found, found
-    assert scan.ALLOWED_IMPORTS["backtest"] == {"core", "stats", "data", "eval"}
+def _imports(path, top_level_only: bool):
+    tree = ast.parse(path.read_text())
+    nodes = tree.body if top_level_only else list(ast.walk(tree))
+    out = set()
+    for n in nodes:
+        if isinstance(n, ast.ImportFrom) and n.module and n.level == 0:
+            out.add(n.module.split(".")[0])
+        elif isinstance(n, ast.Import):
+            out |= {a.name.split(".")[0] for a in n.names}
+    return out
+
+
+def test_the_backtest_is_a_separate_package():
+    """nig_backtest moves to any project as a folder: no module imports nig_timenet_torch except the bridges, and
+    those only inside their functions; nig_timenet_torch never imports nig_backtest."""
+    src = Path(bt.__file__).parent
+    for path in src.rglob("*.py"):
+        bridge = "bridges" in path.relative_to(src).parts
+        assert "nig_timenet_torch" not in _imports(path, top_level_only=bridge), path
+    host = src.parent / "nig_timenet_torch"
+    assert not [p for p in host.rglob("*.py") if "nig_backtest" in _imports(p, top_level_only=False)]

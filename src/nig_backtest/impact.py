@@ -3,18 +3,18 @@
 TAGS: rule impact, strategy comparison, ablation, ladder, leave one out, multiple testing, portfolio effect, backtest
 PITFALLS: every variant runs on the SAME SignalSet and PriceSource (candles are cached, so the variants cost little
     more than one run); a change is a dotted key of the strategy (``"exit.take_profit": 1.5``); the table counts the
-    variants tried: a best variant picked from many is a hypothesis for unseen data, not a result (rule C5).
+    variants tried: a best variant picked from many is a hypothesis for unseen data, not a result.
 """
 
 import dataclasses
 
 import pandas as pd
 
-from nig_timenet_torch.backtest.contract import SignalSet
-from nig_timenet_torch.backtest.engine import Backtest, run_backtest
-from nig_timenet_torch.backtest.portfolio import summary
-from nig_timenet_torch.backtest.prices import PriceSource
-from nig_timenet_torch.backtest.rules import Strategy, strategy_from_dict, strategy_to_dict
+from nig_backtest.contract import SignalSet
+from nig_backtest.engine import Backtest, run_backtest
+from nig_backtest.portfolio import summary
+from nig_backtest.prices import PriceSource
+from nig_backtest.rules import Strategy, strategy_from_dict, strategy_to_dict
 
 __all__ = ["apply_changes", "compare", "ladder", "leave_one_out", "ROW_KEYS"]
 

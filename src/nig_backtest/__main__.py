@@ -12,14 +12,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from nig_timenet_torch.backtest.adapters import from_battery_table
-from nig_timenet_torch.backtest.contract import SignalSet, describe
-from nig_timenet_torch.backtest.engine import run_backtest
-from nig_timenet_torch.backtest.impact import compare, ladder
-from nig_timenet_torch.backtest.portfolio import cap_open, equity
-from nig_timenet_torch.backtest.prices import ArchivePrices, FilePrices
-from nig_timenet_torch.backtest.report import md_table, plot_curves, write_report
-from nig_timenet_torch.backtest.rules import strategy_from_dict
+from nig_backtest.adapters import from_battery_table
+from nig_backtest.contract import SignalSet, describe
+from nig_backtest.engine import run_backtest
+from nig_backtest.impact import compare, ladder
+from nig_backtest.portfolio import cap_open, equity
+from nig_backtest.prices import ArchivePrices, FilePrices
+from nig_backtest.report import md_table, plot_curves, write_report
+from nig_backtest.rules import strategy_from_dict
 
 __all__ = ["main", "price_source"]
 
@@ -64,7 +64,7 @@ def _common(p):
 
 
 def main(argv=None) -> None:
-    ap = argparse.ArgumentParser(prog="python -m nig_timenet_torch.backtest")
+    ap = argparse.ArgumentParser(prog="python -m nig_backtest")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("contract")
     r = sub.add_parser("run")

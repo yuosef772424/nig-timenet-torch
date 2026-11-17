@@ -13,8 +13,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.config import from_dict, to_dict
-from nig_timenet_torch.core.registry import Contract, Registry
+from nig_backtest._base import Registry, from_dict, to_dict
 
 __all__ = ["Entry", "Exit", "Costs", "Book", "Strategy", "ENTRY_FILTERS", "SIDES", "UNITS", "check_strategy",
            "select_entries", "level_fraction", "strategy_from_dict", "strategy_to_dict"]
@@ -24,7 +23,7 @@ UNITS = ("atr", "pct", "sigma", "pred")
 ENTRY_PRICES = ("next_open", "signal_close")
 BOTH_HIT = ("stop_first", "target_first")
 #: name -> fn(rows: DataFrame, params: dict) -> bool array (True = keep); register your own rule here
-ENTRY_FILTERS = Registry("entry_filter", Contract("entry_filter", required_meta=("needs",)))
+ENTRY_FILTERS = Registry("entry_filter", required_meta=("needs",))
 
 
 @dataclass(frozen=True)

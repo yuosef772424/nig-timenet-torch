@@ -10,10 +10,20 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.backtest.portfolio import by_group
-from nig_timenet_torch.backtest.prices import PriceSource, bar_interval
+from nig_backtest.portfolio import by_group
+from nig_backtest.prices import PriceSource, bar_interval
 
 __all__ = ["TradeBook"]
+
+
+def _draw_candles(ax, frame: pd.DataFrame, width: float) -> None:
+    """Candlesticks of ``frame`` on ``ax``; ``width`` in days."""
+    x = frame.index.to_pydatetime()
+    o, h, lo, c = (frame[k].to_numpy() for k in ("open", "high", "low", "close"))
+    colors = np.where(c >= o, "#2a9d8f", "#e76f51")
+    ax.vlines(x, lo, h, colors=colors, linewidth=0.8)
+    ax.bar(x, np.abs(c - o) + 1e-12 * np.maximum(c, 1e-12), bottom=np.minimum(o, c), width=width, color=colors,
+           edgecolor=colors, linewidth=0.5)
 
 
 class TradeBook:
@@ -82,14 +92,13 @@ class TradeBook:
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
-        from nig_timenet_torch.eval.sample_charts import draw_candles
 
         tr = self.trades.iloc[i]
         bars = prices.bars(tr["coin"])
         dt = bar_interval(bars)
         w = bars[(bars.index >= tr["entry_time"] - context_bars * dt) & (bars.index < tr["exit_time"] + 4 * dt)]
         fig, ax = plt.subplots(figsize=(12, 5))
-        draw_candles(ax, w, width=dt / pd.Timedelta(days=1) * 0.7)
+        _draw_candles(ax, w, width=dt / pd.Timedelta(days=1) * 0.7)
         ax.axvspan(tr["entry_time"], tr["exit_time"], color="#ffd166", alpha=0.25)
         ax.scatter([tr["entry_time"]], [tr["entry_price"]], marker="^" if tr["side"] > 0 else "v", s=80,
                    color="#264653", zorder=5, label="entry")

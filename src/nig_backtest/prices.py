@@ -13,10 +13,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.backtest.contract import to_utc_naive
-from nig_timenet_torch.core.schema import OHLCV_COLUMNS
+from nig_backtest._base import OHLCV as OHLCV_COLUMNS
+from nig_backtest.contract import to_utc_naive
 
-__all__ = ["PriceSource", "FramePrices", "FilePrices", "ArchivePrices", "atr", "bar_interval"]
+__all__ = ["PriceSource", "FramePrices", "FilePrices", "ArchivePrices", "atr", "bar_interval", "vision_klines",
+           "VISION"]
+
+VISION = "https://data.binance.vision"
+_KLINE_COLUMNS = ("open_time", "open", "high", "low", "close", "volume", "close_time", "quote_volume", "trades")
 
 _OHLC = OHLCV_COLUMNS[:4]
 
@@ -90,8 +94,57 @@ class FilePrices(PriceSource):
         return f.set_index(t)
 
 
+class _Http:
+    def get_bytes(self, url: str) -> bytes | None:
+        import urllib.error
+        import urllib.request
+        try:
+            with urllib.request.urlopen(url, timeout=60) as r:
+                return r.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            raise
+
+
+def _zip_frame(blob: bytes | None) -> pd.DataFrame:
+    if blob is None:
+        return pd.DataFrame(columns=list(_KLINE_COLUMNS))
+    import io
+    import zipfile
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        text = z.read(z.namelist()[0]).decode("utf-8")
+    rows = [r.split(",")[:len(_KLINE_COLUMNS)] for r in text.splitlines() if r[:1].isdigit()]
+    return pd.DataFrame(rows, columns=list(_KLINE_COLUMNS))
+
+
+def vision_klines(symbol: str, interval: str, start, end, http=None) -> pd.DataFrame:
+    """Candles of a USDT-perpetual from the public Binance archive (monthly zips, daily zips for a month without
+    one) with bar open time in [start, end), indexed by that time (naive UTC). ``http`` = an object with
+    ``get_bytes(url) -> bytes | None`` (tests pass a fake)."""
+    http = http or _Http()
+    lo, hi = (pd.Timestamp(t).tz_localize(None) if pd.Timestamp(t).tzinfo else pd.Timestamp(t) for t in (start, end))
+    parts = []
+    for month in pd.period_range(lo, hi - pd.Timedelta(microseconds=1), freq="M"):
+        tag = f"{symbol}-{interval}-{month.year:04d}-{month.month:02d}"
+        blob = http.get_bytes(f"{VISION}/data/futures/um/monthly/klines/{symbol}/{interval}/{tag}.zip")
+        if blob is not None:
+            parts.append(_zip_frame(blob))
+            continue
+        for day in pd.date_range(month.start_time, month.end_time.normalize(), freq="D"):
+            url = f"{VISION}/data/futures/um/daily/klines/{symbol}/{interval}/{tag}-{day.day:02d}.zip"
+            parts.append(_zip_frame(http.get_bytes(url)))
+    f = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=list(_KLINE_COLUMNS))
+    t = pd.to_datetime(f["open_time"].astype("int64"), unit="ms")
+    f = f.assign(t=t).drop_duplicates("t").sort_values("t")
+    f = f[(f["t"] >= lo) & (f["t"] < hi)]
+    out = f[["open", "high", "low", "close", "volume", "quote_volume", "trades"]].astype(float)
+    out.index = pd.DatetimeIndex(f["t"].to_numpy())
+    return out
+
+
 class ArchivePrices(PriceSource):
-    """The public Binance futures archive (``data.fetch.vision_klines``) between ``start`` and ``end``, cached as
+    """The public Binance futures archive (``vision_klines``) between ``start`` and ``end``, cached as
     parquet under ``cache_dir`` (None = memory only)."""
 
     def __init__(self, interval: str = "4h", start="2020-01-01", end=None, cache_dir=None, http=None, **kw):
@@ -104,7 +157,6 @@ class ArchivePrices(PriceSource):
         path = None if self.cache_dir is None else self.cache_dir / f"{coin}.parquet"
         if path is not None and path.exists():
             return pd.read_parquet(path)
-        from nig_timenet_torch.data.fetch import vision_klines
         frame = vision_klines(coin, self.interval, self.start, self.end, self.http)
         if path is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
