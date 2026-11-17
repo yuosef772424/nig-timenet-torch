@@ -228,10 +228,14 @@ ALLOWED_IMPORTS: dict[str, set[str] | None] = {
     "workflow": None,
     "colab": None,
     "jobs": None,
+    # the backtest is a separate system: it reads model outputs only through its signal contract
+    "backtest": {"core", "stats", "data", "eval"},
 }
 #: T3: the Colab layers sit on top; nothing below them imports them (colab/ and jobs/ may import everything)
 _ON_TOP = {"workflow", "colab", "jobs", "data"}
-FORBIDDEN_IMPORTS = {"model": _ON_TOP, "trainer": _ON_TOP, "data_io": {"colab", "jobs"}, "eval": {"colab", "jobs"}}
+FORBIDDEN_IMPORTS = {"model": _ON_TOP | {"backtest"}, "trainer": _ON_TOP | {"backtest"},
+                     "data_io": {"colab", "jobs", "backtest"}, "eval": {"colab", "jobs", "backtest"},
+                     "data": {"backtest"}, "stats": {"backtest"}}
 
 
 def layer_import_violations() -> list[str]:

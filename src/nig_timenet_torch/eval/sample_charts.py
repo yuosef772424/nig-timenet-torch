@@ -20,7 +20,8 @@ import pandas as pd
 
 from nig_timenet_torch.core.schema import OHLCV_COLUMNS
 
-__all__ = ["Sample", "facts", "plot_sample", "WINDOW_BARS", "HORIZON_BARS", "load_candles", "read_samples", "run",
+__all__ = ["Sample", "facts", "plot_sample", "draw_candles", "WINDOW_BARS", "HORIZON_BARS", "load_candles",
+           "read_samples", "run",
            "main"]
 
 WINDOW_BARS = 64     # 4h bars of context drawn before the event day (about the TF input window)
@@ -103,7 +104,8 @@ def facts(sample: Sample, c4: pd.DataFrame) -> dict:
     return out
 
 
-def _candles(ax, frame: pd.DataFrame, width: float) -> None:
+def draw_candles(ax, frame: pd.DataFrame, width: float) -> None:
+    """Candlesticks of ``frame`` (open / high / low / close by bar open time) on ``ax``; ``width`` in days."""
     x = frame.index.to_pydatetime()
     o, h, lo, c = (frame[k].to_numpy() for k in OHLCV_COLUMNS[:4])
     colors = np.where(c >= o, "#2a9d8f", "#e76f51")
@@ -129,10 +131,10 @@ def plot_sample(sample: Sample, candles: dict[str, pd.DataFrame], out_dir, extra
     w1 = c1[(c1.index >= start - pd.Timedelta(days=1)) & (c1.index < end + pd.Timedelta(days=1))]
     f = {**facts(sample, c4), **(extra or {})}
     fig, axes = plt.subplots(3, 1, figsize=(13, 10), gridspec_kw={"height_ratios": [3, 1, 3]})
-    _candles(axes[0], w4, width=4 / 24 * 0.7)
+    draw_candles(axes[0], w4, width=4 / 24 * 0.7)
     axes[1].bar(w4.index.to_pydatetime(), w4["quote_volume"].to_numpy(), width=4 / 24 * 0.7, color="#6c757d")
     if len(w1):
-        _candles(axes[2], w1, width=1 / 24 * 0.7)
+        draw_candles(axes[2], w1, width=1 / 24 * 0.7)
     axes[0].set_yscale("log")
     axes[2].set_yscale("log")
     for ax in axes:

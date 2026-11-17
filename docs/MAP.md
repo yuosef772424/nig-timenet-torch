@@ -6,6 +6,21 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 ## Modules (`src/nig_timenet_torch/`)
 
+### backtest
+
+| module | what it is for | tags |
+|---|---|---|
+| `backtest/__main__.py` | Command line of the backtest: print the input contract, run one strategy, compare strategies, ladder the rules of a strategy, and turn a run's battery tables into a signal table. | backtest cli, run strategy, compare strategies, rule ladder, contract, battery to signals, command line |
+| `backtest/adapters.py` | The only bridge from this project's outputs to the backtest contract: a battery table (mu, sigma, p_dir, y_ret, coin, end_time, optional predicted extremes) becomes a signal table; any other model writes the contract. | backtest adapter, battery table, signal table, model outputs, stage column, predicted extremes |
+| `backtest/contract.py` | The ONE input of the backtest: a signal table (coin, time, score + optional features) checked against a declared contract; a SignalSet reads it from a frame or a parquet file, coin batches on demand, features on / off. | backtest contract, signal table, input tunnel, optional features, feature toggle, lazy parquet, coin batches, stages, validation |
+| `backtest/engine.py` | Turn selected signal rows into trades on RAW candles: entry after the signal time, exit at the first of take-profit / stop / N bars (vectorised per coin), costs, excursions; coins loaded in batches, one at a time. | backtest engine, trade simulation, take profit, stop loss, time exit, gap fill, excursion, per coin, batches, no lookahead |
+| `backtest/explorer.py` | Look at the trades: filter them (coins, winners / losers, right / wrong direction, exit reason, side, stage, time, size of the result), group them, and draw any trade on its raw candles with entry, exit, target and stop. | trade explorer, trade filter, winners, losers, accurate trades, trade chart, gallery, candles, backtest |
+| `backtest/impact.py` | The effect of each strategy decision on the portfolio: several strategies side by side, a ladder that adds one rule at a time to a base, and leave-one-out (each rule removed from the full strategy), on the same signals. | rule impact, strategy comparison, ablation, ladder, leave one out, multiple testing, portfolio effect, backtest |
+| `backtest/portfolio.py` | What a backtest's trades do to a portfolio: the open-position cap, the equity and drawdown when each trade risks a share of the capital (booked at its exit), the daily book and the summary tables. | portfolio, equity curve, drawdown, max open positions, daily pnl, tearsheet, summary by group, backtest |
+| `backtest/prices.py` | Where the backtest gets RAW candles: an in-memory dict, a folder of per-coin files (the TF raw layout or parquet) or the public Binance archive with a disk cache; every source loads one coin on demand and caches it. | price source, raw candles, ohlcv, lazy load, cache, binance archive, csv layout, atr, true range |
+| `backtest/report.py` | Write a backtest to a folder: the trades (parquet), the summary (markdown + JSON), the rule trace, the equity / drawdown chart, the tables by coin / month / exit, and galleries of the worst and best trades. | backtest report, trades parquet, summary markdown, equity chart, rule trace, gallery, report writer |
+| `backtest/rules.py` | A strategy as strict data (Entry, Exit, Costs, Book): which signal rows become trades and how a trade leaves (after N bars, at a take-profit / stop in ATR, %, sigma or predicted-move units); custom rules by name. | strategy, entry rules, exit rules, take profit, stop loss, atr multiple, time exit, registry, custom filter, strict config, feature check |
+
 ### colab
 
 | module | what it is for | tags |
@@ -221,6 +236,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | calibrator | `CALIBRATORS` | `eval/calibrator.py` | `isotonic` |
 | custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` | `ath_distance`, `calendar`, `crash_rebound`, `direction_consistency`, `fisher`, `fractal`, `jump`, `mean_reversion`, `position_in_range`, `psar`, `range_rel`, `returns`, `risk_adj_momentum`, `rsi_divergence`, `rvi`, `supertrend`, `trend_age`, `vol_asymmetry`, `vol_estimators`, `vol_ratio`, `vol_term_structure`, `volume_z` |
 | encoder | `ENCODERS` | `model/encoders.py` | `conv_transformer`, `gru`, `itransformer`, `tcn`, `transformer` |
+| entry_filter | `ENTRY_FILTERS` | `backtest/rules.py` | `min_column` |
 | growth | `GROWTH` | `trainer/staged.py` | `coins`, `stride`, `time` |
 | head | `HEAD_REGISTRY` | `model/heads.py` | `binary_classification`, `multiclass_classification`, `nig_regression` |
 | init | `INITS` | `trainer/switches.py` | `keras`, `torch` |
@@ -238,6 +254,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 ## Entry points
 
+- `backtest/__main__.py`: runnable (`python -m nig_timenet_torch.backtest`)
 - `colab/__main__.py`: runnable (`python -m nig_timenet_torch.colab`)
 - `colab_ops/__main__.py`: runnable (`python -m nig_timenet_torch.colab_ops`)
 - `colab_ops/scripts/run_models.py`: runnable (`python -m nig_timenet_torch.colab_ops.scripts.run_models`)
