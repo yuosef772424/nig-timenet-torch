@@ -161,9 +161,10 @@ class BatchInfluence:
         trainer.optimizer.zero_grad(set_to_none=True)
         live = trainer.scheduled_vars
         trainer.scheduled_vars = self._vars
-        try:
-            raws, _ = self.probes[0].losses(trainer, grad=True)
-            (0.5 * (raws[0] + raws[1])).backward()
+        try:   # eval-mode backward: cuDNN RNNs refuse it on the GPU (PRs #21-#23), so cuDNN is off for this pass
+            with torch.backends.cudnn.flags(enabled=False):
+                raws, _ = self.probes[0].losses(trainer, grad=True)
+                (0.5 * (raws[0] + raws[1])).backward()
         finally:
             trainer.scheduled_vars = live
         self._fo = {"names": [n for n, _ in named],
