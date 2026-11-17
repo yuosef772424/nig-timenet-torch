@@ -9,7 +9,7 @@ PITFALLS: the probe loss is the trainer's RAW loss with the loss schedules froze
     bitwise on CPU); with a group channel the probe holds whole timestamps.
 
 Method (chosen 2026-11-17, owner task "the effect of each batch"; the candidates are compared in
-docs/results/batch-feature-influence-001.md): the exact one-step change of the probe loss, L_probe(theta_{t+1}) -
+docs/INFLUENCE.md): the exact one-step change of the probe loss, L_probe(theta_{t+1}) -
 L_probe(theta_t), is measured after EVERY step (one forward of the probe per step, since L before step t+1 is L after
 step t). It is the ground truth of what that batch's update did to the probe, in the order it really happened
 (first-order In-Run Data Shapley / TracIn-Ideal is its linear approximation). The probe is split into two random halves:

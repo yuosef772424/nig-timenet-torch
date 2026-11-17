@@ -1,6 +1,6 @@
 """PURPOSE: Which input features (and which bars of the window) a trained model uses: grouped permutation importance on
-    held-out rows, the change of the trainer's own loss per head and of the rank IC, with time-block CIs, Bonferroni
-    and a split-half check.
+    held-out rows, the change of the trainer's loss per head and of the rank IC, time-block CIs, Bonferroni and a
+    split-half check.
 TAGS: feature importance, permutation importance, grouped permutation, correlated features, clusters, within time,
     cross section, time blocks, block bootstrap, bonferroni, split half, model doctor, attribution
 PITFALLS: run it on rows the model was NOT trained on (validation), or it measures memorisation; a feature that is
@@ -12,7 +12,7 @@ PITFALLS: run it on rows the model was NOT trained on (validation), or it measur
     permuted values are as useless as the real ones), only a REVERSED link scores below 0 (``hurts``).
 
 Method (chosen 2026-11-17, owner task "the effect of each feature"; candidates compared in
-docs/results/batch-feature-influence-001.md): for each group of input channels (one feature, a cluster of correlated
+docs/INFLUENCE.md): for each group of input channels (one feature, a cluster of correlated
 features, or every feature over one block of bars) the same random row permutation replaces those channels over the
 whole window (the within-window time pattern of the channel is kept, only its link to the label and to the other
 channels is broken), the model predicts again, and the trainer's raw loss (and each head's loss, and each regression
