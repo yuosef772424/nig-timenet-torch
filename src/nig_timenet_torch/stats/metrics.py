@@ -17,7 +17,7 @@ import numpy as np
 __all__ = ["auc", "rank_ic", "pearson", "spearman", "wilson_interval", "pinball_loss", "ece", "ece_bins", "mae",
            "average_ranks", "r2", "confidence_error_spearman", "confidence_error_gap", "width_below_share",
            "interval_coverage", "block_bootstrap_ci", "partial_rank_ic", "rank_ic_se", "within_group_spearman",
-           "group_rank_ics", "auc_block_ci", "long_short_spreads", "brier"]
+           "group_rank_ics", "auc_block_ci", "long_short_spreads", "brier", "spearman_matrix"]
 
 
 def _clean(*arrays: np.ndarray) -> list[np.ndarray]:
@@ -43,6 +43,21 @@ def average_ranks(x: np.ndarray) -> np.ndarray:
     for s, e in zip(starts, ends, strict=True):
         ranks[order[s:e]] = 0.5 * (s + e - 1) + 1.0
     return ranks
+
+
+def spearman_matrix(a: np.ndarray) -> np.ndarray:
+    """(k, k) Spearman rho between the k COLUMNS of ``a`` (n, k): Pearson on the columns' average ranks; rows with a
+    NaN anywhere are dropped; a constant column gives NaN in its row and column. TRIVIAL: independent columns give
+    off-diagonal values around 0 (sd ~ 1 / sqrt(n)); a column with itself (the diagonal) is 1."""
+    a = np.asarray(a, dtype=np.float64)
+    a = a[~np.isnan(a).any(axis=1)]
+    if a.shape[0] < 2:
+        return np.full((a.shape[1], a.shape[1]), np.nan)
+    r = np.column_stack([average_ranks(a[:, j]) for j in range(a.shape[1])])
+    r -= r.mean(axis=0)
+    sd = np.sqrt((r * r).sum(axis=0))
+    z = np.divide(r, sd, out=np.full_like(r, np.nan), where=sd > 0)
+    return z.T @ z
 
 
 def auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
