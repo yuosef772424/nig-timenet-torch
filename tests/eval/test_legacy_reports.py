@@ -100,7 +100,7 @@ def test_workflow_writes_report_figures_and_a_samples_csv_sample_charts_reads(tm
     reps = legacy_report.legacy_from_folder(tmp_path)
     assert set(reps) == {"val", "test"}
     md = (tmp_path / legacy_report.REPORT_MD).read_text()
-    assert "## VAL" in md and "## TEST" in md and "Lag scan" in md and "Worst trades" in md
+    assert "## VAL" in md and "## TEST" in md and "Lag scan" in md and "Worst trades" in md and "k sigma" in md
     assert (tmp_path / legacy_report.REPORT_JSON).is_file()
     figs = sorted(p.name for p in (tmp_path / "figures").iterdir())
     assert "test_equity.png" in figs and "val_best_worst_coins.png" in figs and len(figs) == 12
@@ -108,3 +108,10 @@ def test_workflow_writes_report_figures_and_a_samples_csv_sample_charts_reads(tm
     assert len(samples) == 40 and all(s.time for s in samples) and {s.side for s in samples} <= {"long", "short"}
     with pytest.raises(FileNotFoundError):
         legacy_report.legacy_from_folder(tmp_path / "empty")
+
+
+def test_move_over_sd_keeps_fewer_rows_as_k_grows():
+    t = _table(signal=0.4)
+    sel = lr.move_over_sd(t, 0.0008)
+    assert list(sel["k"]) == [0.25, 0.5, 1.0] and sel["kept_share"].is_monotonic_decreasing
+    assert (sel["kept_share"] <= 1).all() and sel["n"].iloc[0] == int((np.abs(t["mu"]) > 0.25 * t["sigma"]).sum())

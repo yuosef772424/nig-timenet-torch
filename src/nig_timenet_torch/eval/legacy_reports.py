@@ -24,7 +24,7 @@ from nig_timenet_torch.eval.battery_lib import round_trip
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["trades", "tearsheet", "equity_curve", "daily_portfolio", "lag_scan", "integrity", "calibration",
-           "conditioned", "coin_ranking", "extreme_samples", "TOP_SHARE", "RISK_PER_TRADE"]
+           "conditioned", "coin_ranking", "extreme_samples", "move_over_sd", "TOP_SHARE", "RISK_PER_TRADE"]
 
 TOP_SHARE = 0.10        # share of rows traded: the strongest |mu| (the battery's top-|mu| rule)
 RISK_PER_TRADE = 0.02   # capital share risked per trade in the trade equity curve (TF tearsheet used 0.02 - 0.1)
@@ -194,3 +194,18 @@ def extreme_samples(trade_rows: pd.DataFrame, n: int = 10) -> dict:
     cols = [c for c in ("coin", "end_time", "side", "mu", "sigma", "p_dir", "y_ret", "net") if c in trade_rows]
     srt = trade_rows.sort_values("net", kind="stable")
     return {"worst": srt.head(n)[cols].reset_index(drop=True), "best": srt.tail(n)[cols][::-1].reset_index(drop=True)}
+
+
+def move_over_sd(table: pd.DataFrame, cost: float, ks: tuple = (0.25, 0.5, 1.0)) -> pd.DataFrame:
+    """TF trade selection (``select_and_rank_trades``): trade only the rows whose predicted move exceeds ``k`` times
+    the predicted sd (|mu| > k sigma), side from p_dir, net of the round trip; one tearsheet row per k plus the
+    share of rows kept (the battery's section 6 keeps LOW sigma instead)."""
+    rows = []
+    for k in ks:
+        keep = table[np.abs(table["mu"]) > k * table["sigma"]]
+        net = np.where(keep["p_dir"] > 0.5, 1.0, -1.0) * keep["y_ret"].to_numpy() - round_trip(cost)
+        ts = tearsheet(net)
+        rows.append({"k": k, "kept_share": len(keep) / max(len(table), 1), "days": int(
+            pd.to_datetime(keep["end_time"]).dt.floor("D").nunique()) if len(keep) else 0,
+            **{c: ts.get(c, math.nan) for c in ("n", "win_rate", "mean", "sharpe", "profit_factor")}})
+    return pd.DataFrame(rows)

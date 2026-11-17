@@ -33,7 +33,8 @@ def stage_report(table: pd.DataFrame, cost: float, top_share: float = lr.TOP_SHA
     return {"trade_rows": tr, "daily": daily, "tearsheet_trades": lr.tearsheet(tr["net"].to_numpy()),
             "tearsheet_days": lr.tearsheet(daily["ret"].to_numpy(), risk=1.0), "integrity": lr.integrity(table),
             "calibration": lr.calibration(table), "conditioned": lr.conditioned(table),
-            "coins": lr.coin_ranking(table), "extremes": lr.extreme_samples(tr, n_samples)}
+            "coins": lr.coin_ranking(table), "extremes": lr.extreme_samples(tr, n_samples),
+            "move_over_sd": lr.move_over_sd(table, cost)}
 
 
 def _jsonable(rep: dict) -> dict:
@@ -81,6 +82,7 @@ def render(reports: dict, cost: float, top_share: float) -> str:
                   f"{_fmt(cal['brier_base_rate'])}), AUC {_fmt(cal['auc'])}, rows {cal['rows']}", ""]
         for key, frame in rep["conditioned"].items():
             lines += [f"Hit rate {key.replace('_', ' ')}:", "", _md(frame), ""]
+        lines += ["Trade selection |mu| > k sigma (TF select_and_rank_trades):", "", _md(rep["move_over_sd"]), ""]
         coins = rep["coins"]
         lines += [f"Best coins (of {len(coins)}):", "", _md(coins.head(5)), "",
                   "Worst coins:", "", _md(coins.tail(5)), ""]
