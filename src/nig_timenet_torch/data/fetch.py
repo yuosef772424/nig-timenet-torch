@@ -32,7 +32,7 @@ from nig_timenet_torch.data.settings import SourceSettings
 from nig_timenet_torch.data.timeframe import tf_timedelta
 
 __all__ = ["CSV_HEADER", "Http", "kline_row", "fmt_dt", "raw_path", "fetch_symbol", "fetch_all", "update_registry",
-           "file_stats", "read_registry"]
+           "file_stats", "read_registry", "vision_klines"]
 
 CSV_HEADER = ["timestamp", "datetime_utc", *OHLCV_COLUMNS, "quote_volume", "trades",
               "taker_buy_volume", "taker_buy_quote_volume"]
@@ -142,6 +142,22 @@ def _vision_rows(http: Http, symbol: str, interval: str, lo: int, hi: int) -> li
             blob = http.get_bytes(f"{VISION}/data/futures/um/daily/klines/{symbol}/{interval}/{tag}-{day.day:02d}.zip")
             rows.extend(_zip_rows(blob))
     return rows
+
+
+def vision_klines(symbol: str, interval: str, start, end, http: Http | None = None) -> pd.DataFrame:
+    """Candles of ``symbol`` from the public archive between ``start`` and ``end`` (anything ``pd.Timestamp`` reads,
+    UTC) as a frame indexed by the bar OPEN time with float OHLCV + quote_volume / trades (no file is written)."""
+    def ms(t) -> int:
+        t = pd.Timestamp(t)
+        return int((t.tz_localize("UTC") if t.tzinfo is None else t).timestamp() * 1000)
+
+    lo, hi = ms(start), ms(end)
+    rows = _vision_rows(http or Http(), symbol, interval, lo, hi)
+    frame = pd.DataFrame(rows, columns=CSV_HEADER).drop_duplicates("timestamp").sort_values("timestamp")
+    frame = frame[(frame["timestamp"] >= lo) & (frame["timestamp"] < hi)]
+    out = frame[[*OHLCV_COLUMNS, "quote_volume", "trades"]].astype(float)
+    out.index = pd.to_datetime(frame["timestamp"].astype("int64"), unit="ms", utc=True)
+    return out
 
 
 def fetch_symbol(s: SourceSettings, name: str, http: Http | None = None) -> int:

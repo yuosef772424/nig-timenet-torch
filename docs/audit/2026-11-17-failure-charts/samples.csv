@@ -1,0 +1,13 @@
+coin,date,side,pnl,source,note
+AIOTUSDT,2026-04-02,short,-172,baseline-001.md:217,VAL SHORT top5% |mu| worst trade (label clip)
+HIGHUSDT,2026-04-18,short,-172,baseline-001.md:217,VAL SHORT top5% |mu| worst trade (label clip)
+DAMUSDT,2026-04-27,short,-158,baseline-001.md:217,VAL SHORT top5% |mu| worst trade
+PORTALUSDT,2026-05-31,short,-147,baseline-001.md:217,VAL SHORT top5% |mu| worst trade; worst-day coin (-284)
+LSKUSDT,2026-09-12,short,-172,baseline-001.md:226,TEST SHORT top5% |mu| worst trade (label clip); worst-day coin (-296)
+TAIKOUSDT,2026-07-01,short,-172,baseline-001.md:226,TEST SHORT top5% |mu| worst trade (label clip)
+BTRUSDT,2026-08-26,short,-172,baseline-001.md:226,TEST SHORT top5% |mu| worst trade; worst-day coin (-407)
+SIRENUSDT,2026-03-22,short,-217,baseline-001.md:219,VAL worst day coin (sum over the day's trades)
+STOUSDT,2026-04-01,short,-234,baseline-001.md:219,VAL worst day coin (sum over the day's trades)
+POWERUSDT,2026-03-03,short,184,baseline-001.md:220,VAL best day coin (contrast: best sample)
+VELVETUSDT,2026-06-12,short,156,baseline-001.md:220,VAL best day coin (contrast: best sample)
+TAIKOUSDT,2026-07-02,short,168,baseline-001.md:228,TEST best day coin (contrast: day after its worst trade)
