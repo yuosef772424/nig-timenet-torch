@@ -124,8 +124,10 @@ def fit_scalers(model: nn.Module, x_train, y_train: dict) -> dict:
         state[name] = mod.fit(x)
     scales = [m for m in model.modules() if isinstance(m, FittedScale)]
     if scales:
+        from nig_timenet_torch.model.target_norm import normalized_labels
         keys = [head_spec("nig_regression", t).label_key for t in model.nig_targets]
-        s = label_scale(y_train, keys)
+        z = normalized_labels(model, {t: y_train[k] for t, k in zip(model.nig_targets, keys, strict=True)})
+        s = label_scale({k: z[t] for t, k in zip(model.nig_targets, keys, strict=True)}, keys)
         for m in scales:
             m.set(s)
         state["nig_label_scale"] = s

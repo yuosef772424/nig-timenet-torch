@@ -285,3 +285,11 @@ def test_trivial_baseline_long_short_spreads(rng):
     assert np.allclose(metrics.long_short_spreads(y, -y, groups)[1], -best)       # the reversed ranking loses it
     with pytest.raises(ValueError, match="top_share"):
         metrics.long_short_spreads(y, y, groups, top_share=0.6)
+
+
+def test_trivial_baseline_brier(rng):
+    y = (rng.random(N) < 0.3).astype(float)
+    assert metrics.brier(y, np.full(N, 0.5)) == pytest.approx(0.25), "a coin flip scores 0.25 whatever the labels"
+    base = metrics.brier(y, np.full(N, y.mean()))
+    assert base == pytest.approx(y.mean() * (1 - y.mean())), "the base rate scores p (1 - p), the bar to beat"
+    assert metrics.brier(y, y) == 0.0 and np.isnan(metrics.brier(np.array([]), np.array([])))

@@ -7,6 +7,7 @@ import time
 import numpy as np
 import pandas as pd
 import pytest
+import torch
 
 from nig_timenet_torch.core.config import updated
 from nig_timenet_torch.data.artifact_writer import write_artifact
@@ -94,7 +95,7 @@ def test_study_and_arms_are_strict(e4_dir, tmp_path):
     with pytest.raises(ValueError, match="unknown key"):
         panel_study.arm_settings(s, {"train": {"cross_section_los": "ic"}}, 0, "x")
     ok = {"device": "cpu", "run_dir": "x"}
-    assert list(panel.arms_of(panel.CONFIG(**ok))) == list(panel_study.ARMS)
+    assert list(panel.arms_of(panel.CONFIG(**ok))) == list(panel_study.PANEL_001_ARMS)
     assert panel.run_settings(panel.CONFIG(**ok)).split.cross_section
     for bad in ({"arms": ["nope"]}, {"split": {"cross_section": False}}, {"train": {"epochs": 3}},
                 {"extra_arms": {"per_coin": {}}}, {"extra_arms": {"x": {"train": {"bogus": 1}}}}, {"seeds": []}):
@@ -132,3 +133,25 @@ def test_battery_step_writes_the_day_metrics_when_asked(e4_dir, tmp_path):
     steps.test_step(off)
     steps.battery_step(off)
     assert not (tmp_path / "out_b" / "panel_report.md").exists()  # off by default
+
+
+@pytest.mark.slow
+def test_logret_std_arm_trains_with_the_rank_loss_and_decodes_to_label_units(e4_dir, tmp_path):
+    """The owner arm of 2026-11-17: train-standardised inputs + per-head standardised labels (model.target_norm) with
+    the relative inputs and the cross-section rank term; the fitted state is the TRAIN label mean / std and the
+    outputs (the frames the day metrics read) are back in label units."""
+    arm = panel_study.ARMS["relative_rank_loss_logret_std"]
+    assert arm["model"]["target_norm"] == "logret_std" and arm["train"]["cross_section_loss"] == "rank_ic"
+    assert "relative_rank_loss_logret_std" not in panel.PanelConfig(device="cpu", run_dir="x").arms
+    r = steps.build(steps.prepare(panel_study.arm_settings(base(e4_dir, tmp_path), arm, 0, tmp_path / "ck"),
+                                  tmp_path / "o"))
+    state = r.extra["target_norm"]
+    for t in r.targets:
+        y = torch.as_tensor(r.y["train"][f"y_{t}_reg"]).double().numpy()
+        assert state[t]["mean"] == pytest.approx(float(y.mean()), rel=1e-6, abs=1e-9)
+        assert state[t]["std"] == pytest.approx(float(y.std()), rel=1e-6)
+    row = panel_study.run_arm(base(e4_dir, tmp_path), "relative_rank_loss_logret_std", arm, 0, tmp_path / "out")
+    assert row["finished"] and np.isfinite(row["test_rank_ic"]["close"])
+    frame = pd.read_parquet(panel_report.frame_path(tmp_path / "out" / "relative_rank_loss_logret_std_s0", "test"))
+    y_sd = float(torch.as_tensor(r.y["train"]["y_close_reg"]).double().std())
+    assert np.isfinite(frame["mu"]).all() and float(np.std(frame["mu"])) < 5 * y_sd   # label units, not z units

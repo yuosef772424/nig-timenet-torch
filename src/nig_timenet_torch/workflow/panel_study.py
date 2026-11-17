@@ -30,7 +30,8 @@ from nig_timenet_torch.workflow import battery_run, panel_report
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.settings import RunSettings
 
-__all__ = ["ARMS", "BASELINE_ARM", "arm_settings", "run_arm", "run_panel_study", "compare", "render", "ARM_JSON"]
+__all__ = ["ARMS", "PANEL_001_ARMS", "BASELINE_ARM", "arm_settings", "run_arm", "run_panel_study", "compare", "render",
+           "ARM_JSON"]
 
 BASELINE_ARM = "per_coin"
 #: the named arms (docs/audit/2026-11-16-panel): the per-coin model on whole-timestamp batches (the baseline arm),
@@ -44,7 +45,14 @@ ARMS = {
     "relative_rank_loss_center": {"model": {**_REL, "cross_center": True}, "train": {"cross_section_loss": "rank_ic"}},
     "relative_rank_loss_ls": {"model": _REL,
                               "train": {"cross_section_loss": "rank_ic", "selection_metric": "val_ls_sharpe_close"}},
+    # owner 2026-11-17: the TF logret_std normalisation in full (train-standardised inputs AND per-head standardised
+    # labels, model.target_norm) with the relative inputs and the rank term; the rank term is invariant to the
+    # per-head affine map, so it reads the same ranking while the NIG heads start centred on each label
+    "relative_rank_loss_logret_std": {"model": {**_REL, "input_scaler": "train_std", "target_norm": "logret_std"},
+                                      "train": {"cross_section_loss": "rank_ic"}},
 }
+#: the arms of panel-001 (the job's default list; later arms are opted into by name)
+PANEL_001_ARMS = ("per_coin", "relative", "relative_rank_loss", "relative_rank_loss_center", "relative_rank_loss_ls")
 ARM_JSON = "arm.json"
 _KEPT = (panel_report.REPORT_JSON, panel_report.REPORT_MD, "panel_frame_val.parquet", "panel_frame_test.parquet",
          steps.SUMMARY, steps.TEST_REPORT, battery_run.REPORT_TXT, battery_run.PROFIT_JSON)

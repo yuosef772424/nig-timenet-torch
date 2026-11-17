@@ -114,7 +114,10 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `eval/deep_side.py` | The 'deep side' hypothesis: is the side where price goes deeper over the horizon (log high + log low vs the last close) ranked by mu_high + mu_low beyond the close head, last-bar and volatility baselines, on VAL and TEST with day-block CIs? | deep side, derived target, direction hypothesis, rank ic, auc, baselines, partial rank ic, volatility buckets, near ties, label clip, day block bootstrap |
 | `eval/error_map.py` | Where the model itself errs: per head, error (\|mu - y\|, NIG NLL), rank IC, bias, coverage, interval width and value over the HAR baseline, split by liquidity proxy, coin age, volatility regime, month, market day and hour. | error analysis, error map, buckets, bias, coverage, interval width, har baseline, worst cases, model improvement |
 | `eval/gates.py` | Gates B (confidence), C (uncertainty), rule D (information) and the leakage canary of MODEL_DEV_PROTOCOL section 2 as check rows per env x seed from a stage's table and target_report; per gate the AND over seeds. | gates, gate report, gate b, gate c, rule d, leakage canary, oracle relative, day block ci, verdicts, e1 e2 e3 |
+| `eval/legacy_plots.py` | The figures of the TF evaluation over a battery table: equity / drawdown of the trades and of the daily portfolio, calibration curve, errors, lag scan, batch hit rate, best / worst coins and samples. | legacy plots, equity chart, portfolio chart, drawdown, calibration curve, best worst predictions, lag plot, matplotlib, figures |
+| `eval/legacy_reports.py` | The TF evaluation reports that had no port, over a battery table: tearsheet, trade and daily-portfolio equity / drawdown, lag scan, naive baselines, calibration, conditioned hit rates, best / worst coins and samples. | legacy reports, tearsheet, equity curve, portfolio, drawdown, sortino, lag scan, calibration, brier, best worst, output conditioned, tf parity |
 | `eval/nig_floor.py` | T4 NIG floor-hit shares: how often each NIG parameter of each head sits on its floor; floors are read from the model's own ``head_modules()`` (architecture-neutral). | nig floor, floor hit, t4 diagnostics, head modules, nu alpha beta, health report |
+| `eval/sample_charts.py` | Charts and numeric facts of single samples on RAW candles (before any normalisation): the input window of 4h bars, the event day in 1h bars and the volume, so a person (or a cheaper model) can see why a prediction failed. | sample chart, raw candles, before normalisation, failure sample, best worst samples, candlestick, volume, facts |
 | `eval/strategy_book.py` | Every use of the model outputs as a trade rule over a battery table (direction, top-\|mu\| grid, limit at mu, limit at the predicted extreme, take-profit), each with trivial controls, on VAL and TEST with a day-block CI. | t-profit, strategy book, trade rules, trivial controls, volatility baseline, day block bootstrap, val and test |
 | `eval/strategy_diagnosis.py` | Deep diagnosis of one strategy's trades: payoff vs break-even win rate, hits vs misses, tail losses, adverse excursion, worst trades, day concentration, link to the market day, calibration of the predicted move. | strategy diagnosis, break even win rate, payoff, tail losses, adverse excursion, day concentration, market beta, calibration |
 | `eval/target_report.py` | T4/T4b target report for one stage of one run: T-skill, T-conf, T-sharp (per head, std vs the head's own predicted move from the last close) and 80 % coverage. | target report, t-sharp, coverage, uncertainty, evaluation, nig head |
@@ -152,6 +155,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `model/probe.py` | Per-layer ridge-probe report: forward-hook activations of named modules fitted to a label with time-ordered folds (AUC for binary y, else R^2), the raw input scored next to every layer. | probe, layer probe, ridge, activations, forward hook, health report |
 | `model/scalers.py` | The train-fitted scaling state kept INSIDE the model (buffers): InputScaler (per-channel input standardisation) and the fitted NIG label scale; fit_scalers() is the ONE place either is fitted. | input scaler, train statistics, standardisation, label scale, fitted state, buffers, logret_std, unfitted |
 | `model/taps.py` | Inspection-only taps: record the output of every (or chosen) named module of ANY architecture into a dict during a forward pass, per-layer summaries, and a signal trace (ridge R^2 of a known signal per layer). | taps, layer outputs, inspection, diagnostics, forward hook, signal trace, dead units, model doctor |
+| `model/target_norm.py` | TARGET_NORMS, the registered target normalisation of the NIG heads (rule B4): ``none`` (labels as they are) or ``logret_std`` (per head z = (y - mean_h) / std_h with TRAIN statistics, TF LogretStd's target half). | target normalisation, label standardisation, logret_std, per head mean std, learned state, fit on train, inverse, registry, model buffer |
 
 ### stats
 
@@ -194,6 +198,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `workflow/flat_run.py` | The flat model (one row per coin window, NIG regression + binary class head per price target) as run steps: inputs, anchors, model settings, trainer, fit settings, one chunked predict per stage. | flat run, run steps, trainer config, stage inputs, anchors by name, head kinds, predict stage |
 | `workflow/gate_run.py` | The gate run: E1 -> E2 -> E3 x seeds through the run steps, gate A before / after each short run, gates B / C / canary on the test split, one report keyed by the configuration hash; gate_check refuses an ungated run. | gate run, gate report, gate job, e1 e2 e3, seeds, configuration hash, job-side check, baseline arm, refusal |
 | `workflow/health_report.py` | T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer trace) as JSON and markdown next to the checkpoint. | health report, diagnostics, t-sharp, probe, trainer trace, markdown report |
+| `workflow/legacy_report.py` | The TF evaluation reports and charts that had no counterpart here, for a finished run: reads the run's battery tables (VAL, TEST), writes legacy_report.md / .json, the figures and the worst / best samples as a sample_charts CSV. | legacy report, tf evaluation, tearsheet, equity chart, portfolio chart, best worst predictions, calibration, lag scan, report writer, cli |
 | `workflow/panel_report.py` | The panel step of a finished run: the day-metric frame of a stage (battery table + trailing 24 h return + last-bar asymmetry) and panel_step, which writes the day metrics, the uncertainty report and the frames. | panel report, day metrics frame, winning days, trailing return, last bar asymmetry, uncertainty use, oracle frame, run step, panel frame parquet |
 | `workflow/panel_study.py` | The panel (multi-coin) study: named arms x seeds through the run steps on whole-timestamp batches, each scored with the day metrics and compared with the baseline arm on paired days; resumable arm by arm. | panel study, multi coin arms, cross section, day metrics, winning days, paired days, accept rule, resumable, deadline, arm overrides, study json |
 | `workflow/prediction_table.py` | The one batched predict that turns a model and its inputs into the canonical PredictionTable, with one writer and one validating reader. | prediction table, batched predict, table meta, table writer, table reader |
@@ -226,6 +231,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | selection_metric | `SELECTION_METRICS` | `trainer/selection_metric.py` | `val_auc_close_class`, `val_auc_high_class`, `val_auc_low_class`, `val_ls_sharpe_close`, `val_pinball_close_reg`, `val_pinball_high_reg`, `val_pinball_low_reg`, `val_rank_ic_close_reg`, `val_rank_ic_high_reg`, `val_rank_ic_low_reg`, `val_rank_ic_reg`, `val_raw_loss` |
 | source | `SOURCES` | `data/sources.py` | `files`, `synthetic` |
 | target_codec | `TARGET_CODECS` | `data_io/target_codec.py` | `logret_close`, `return` |
+| target_norm | `TARGET_NORMS` | `model/target_norm.py` | `logret_std`, `none` |
 | target_raw | `TARGET_RAW` | `data/targets.py` | `entry_range`, `magnitude`, `return`, `return_close`, `scaled`, `volnorm`, `window_scale` |
 | task | `TASK_REGISTRY` | `trainer/tasks.py` | `classification`, `evidential`, `regression` |
 | weight_decay_groups | `WEIGHT_DECAY_GROUPS` | `trainer/switches.py` | `all_params`, `exclude_norm_bias` |
@@ -241,6 +247,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `data_io/vision_slice.py`: runnable (`python -m nig_timenet_torch.data_io.vision_slice`)
 - `doctor/__main__.py`: runnable (`python -m nig_timenet_torch.doctor`)
 - `doctor/readiness.py`: runnable (`python -m nig_timenet_torch.doctor.readiness`)
+- `eval/sample_charts.py`: runnable (`python -m nig_timenet_torch.eval.sample_charts`)
 - `jobs/baseline.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/device_smoke.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/gates.py`: job entry (`docs/jobs/*.json` name it)
@@ -248,6 +255,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `jobs/rolling.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/staged.py`: job entry (`docs/jobs/*.json` name it)
 - `workflow/e1_arms.py`: runnable (`python -m nig_timenet_torch.workflow.e1_arms`)
+- `workflow/legacy_report.py`: runnable (`python -m nig_timenet_torch.workflow.legacy_report`)
 - `notebooks/colab_nig_timenet_torch.ipynb`: notebook runner
 - `notebooks/data_pipeline.ipynb`: notebook runner
 - `notebooks/main.ipynb`: notebook runner

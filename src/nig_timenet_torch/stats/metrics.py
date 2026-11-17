@@ -17,7 +17,7 @@ import numpy as np
 __all__ = ["auc", "rank_ic", "pearson", "spearman", "wilson_interval", "pinball_loss", "ece", "ece_bins", "mae",
            "average_ranks", "r2", "confidence_error_spearman", "confidence_error_gap", "width_below_share",
            "interval_coverage", "block_bootstrap_ci", "partial_rank_ic", "rank_ic_se", "within_group_spearman",
-           "group_rank_ics", "auc_block_ci", "long_short_spreads"]
+           "group_rank_ics", "auc_block_ci", "long_short_spreads", "brier"]
 
 
 def _clean(*arrays: np.ndarray) -> list[np.ndarray]:
@@ -206,6 +206,13 @@ def ece(y_true: np.ndarray, y_prob: np.ndarray, n_bins: int = 10) -> float:
         return float("nan")
     nz = counts > 0
     return float((counts[nz] / total * np.abs(mean_y[nz] - mean_p[nz])).sum())
+
+
+def brier(y_true: np.ndarray, y_prob: np.ndarray) -> float:
+    """Brier score, mean (p - y)^2 for a binary label y in {0, 1} and a probability p (clipped to [0, 1]). NaN if no
+    rows."""
+    y, p = _clean(y_true, y_prob)
+    return float(np.square(np.clip(p, 0.0, 1.0) - y).mean()) if y.shape[0] else float("nan")
 
 
 def mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:

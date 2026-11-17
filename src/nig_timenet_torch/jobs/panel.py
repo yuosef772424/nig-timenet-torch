@@ -9,12 +9,11 @@ PITFALLS: exploratory (rule C5); the split is always a cross-section (``cross_se
     model class; a winner is gated before it becomes a default).
 
 Config (``PanelConfig``): ``device``, ``run_dir`` (required), ``seeds`` (default 0, 1), ``arms`` (names of
-``workflow.panel_study.ARMS``; default all), ``extra_arms`` ({name: {"model": {...}, "train": {...}}}), ``artifact``,
-``base_tf``, ``max_rows`` (smoke mode: whole timestamps, evenly strided), ``top_coins``, ``batch_size``, ``lr``,
-``epochs``, ``patience``, ``selection_metric``, ``battery`` (the evaluation battery per arm, default on),
-``model_overrides`` (every arm), ``train`` (other TrainSettings fields, every arm), ``split`` (other SplitSettings
-fields). Outputs: ``study.json``, ``study.md``, one folder per arm
-x seed.
+``workflow.panel_study.ARMS``; default ``PANEL_001_ARMS``, the five arms of panel-001), ``extra_arms`` ({name:
+{"model": {...}, "train": {...}}}), ``artifact``, ``base_tf``, ``max_rows`` (smoke mode: whole timestamps, evenly
+strided), ``top_coins``, ``batch_size``, ``lr``, ``epochs``, ``patience``, ``selection_metric``, ``battery`` (the
+evaluation battery per arm, default on), ``model_overrides`` (every arm), ``train`` (other TrainSettings fields, every
+arm), ``split`` (other SplitSettings fields). Outputs: ``study.json``, ``study.md``, one folder per arm x seed.
 """
 
 import os
@@ -41,7 +40,7 @@ class PanelConfig:
     device: str
     run_dir: str
     seeds: tuple = (0, 1)
-    arms: tuple = tuple(panel_study.ARMS)
+    arms: tuple = panel_study.PANEL_001_ARMS
     extra_arms: dict = field(default_factory=dict)
     artifact: str = DEFAULT_ARTIFACT
     base_tf: str | None = None

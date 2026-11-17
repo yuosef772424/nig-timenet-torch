@@ -50,6 +50,7 @@ from nig_timenet_torch.model.nig_layers import ConfidenceHead, NIGHead, NIGUncer
 from nig_timenet_torch.model.oracle_weights import OracleWeights, keras_to_torch_value, torch_param_name  # noqa: F401
 from nig_timenet_torch.model.parts import INPUT_SKIP_VARIANTS, skip_variant
 from nig_timenet_torch.model.scalers import INPUT_SCALERS
+from nig_timenet_torch.model.target_norm import TARGET_NORMS
 
 __all__ = ["DEFAULT_HEAD_TYPES", "NigTimeNetV2", "build_nig_timenet_v2", "torch_param_name", "CausalConv1D",
            "tcn_n_blocks"]
@@ -81,7 +82,7 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                  readout_dropout=None, nig_trunk_grad=1.0, nig_scale_fit="fixed", input_scaler="none",
                  nig_head="dense", nig_head_dropout=0.0, ffn="swiglu",
                  ffn_dim=None, cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
-                 cross_coin_kind="attention", cross_input="none", cross_center=False):
+                 cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none"):
         super().__init__()
         self.cross_center = bool(cross_center)   # D-032: the close mean is taken relative to its timestamp
         self.nig_trunk_grad = float(nig_trunk_grad)
@@ -157,6 +158,9 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                 raise NotImplementedError("cross_coin_layers needs one timeframe and a head that reads the trunk")
             self.cross_coin = CrossCoin(h_dim, int(cross_coin_layers), cross_coin_heads, dropout,
                                         cross_coin_peer_dropout, cross_coin_kind)
+        self.target_norm_kind = target_norm  # owner 2026-11-17: per-head label standardisation (model.target_norm)
+        if TARGET_NORMS.entry(target_norm).meta["fitted"]:
+            self.target_norm = TARGET_NORMS.get(target_norm)(self.nig_targets)
         self.apply_order = enforce_order and set(TARGET_COLUMNS) <= set(self.nig_targets)
         if self.apply_order:
             self.ordered_means = OrderedMeans(nig_scale, order_detach_close, fitted_scale=fit_s)
@@ -313,11 +317,16 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             mus = {"high": mu_h, "close": mu_c, "low": mu_l}
         else:
             mus = {t: raw[t][0] for t in self.nig_targets}
+        betas = {t: raw[t][3] for t in self.nig_targets}
+        if hasattr(self, "target_norm"):  # the heads work in z = (y - mean) / std: back to label units
+            for t in self.nig_targets:
+                mus[t], betas[t] = self.target_norm.inverse(mus[t], betas[t], t)
         if self.cross_center and gid is not None and "close" in mus:
             mus["close"] = center_groups(mus["close"], gid)
         out: dict[str, torch.Tensor] = {}
         for t in self.nig_targets:
-            _, nu, alpha, beta = raw[t]
+            _, nu, alpha, _ = raw[t]
+            beta = betas[t]
             epi, ale = getattr(self, f"unc_{t}")(nu, alpha, beta)
             out.update(nig_outputs(self.head_specs[t], mus[t], nu, alpha, beta, epi, ale,
                                    getattr(self, f"conf_{t}")(h, nu, alpha, beta)))
@@ -368,7 +377,7 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          nig_scale_fit="fixed", input_scaler="none",
                          nig_head="dense", nig_head_dropout=0.0, ffn="swiglu", ffn_dim=None,
                          cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
-                         cross_coin_kind="attention", cross_input="none", cross_center=False,
+                         cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none",
                          **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
@@ -383,8 +392,11 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
     model/cross_coin.py between the trunk and the heads: the input then carries one extra channel, the row's timestamp
     id (``workflow`` ``SplitSettings.cross_section``), and batches must hold whole timestamps. ``cross_center``
     (D-032): the close mean leaves the model minus its mean over the rows of the timestamp (a relative move; rows
-    without the timestamp channel are left as they are)."""
-    ENCODERS.entry(encoder)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
+    without the timestamp channel are left as they are). ``target_norm`` (a name of ``target_norm.TARGET_NORMS``,
+    owner 2026-11-17): ``logret_std`` makes the NIG heads work on per-head train-standardised labels and maps their
+    outputs back to label units (call ``target_norm.fit_target_norm`` before the label scale is fitted)."""
+    ENCODERS.entry(encoder)
+    TARGET_NORMS.entry(target_norm)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
     if skip_variant(input_skip).adds_modules and not ENCODERS.entry(encoder).meta["supports_input_skip"]:
         raise NotImplementedError(f"input_skip={input_skip!r} is defined on the transformer encoder only (P34)")
@@ -418,4 +430,4 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         nig_head=nig_head, nig_head_dropout=nig_head_dropout, ffn=ffn, ffn_dim=ffn_dim,
         cross_coin_layers=cross_coin_layers, cross_coin_heads=cross_coin_heads,
         cross_coin_peer_dropout=cross_coin_peer_dropout, cross_coin_kind=cross_coin_kind,
-        cross_input=cross_input, cross_center=cross_center)
+        cross_input=cross_input, cross_center=cross_center, target_norm=target_norm)
