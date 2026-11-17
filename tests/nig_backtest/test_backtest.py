@@ -200,7 +200,8 @@ def test_battery_adapter_maps_the_columns():
     table = pd.DataFrame({"mu": [0.01, -0.02], "sigma": [0.02, 0.03], "p_dir": [0.6, 0.3], "y_ret": [0.01, 0.0],
                           "coin": ["A", "B"], "end_time": [T0, T0], "pred_high": [0.03, 0.01],
                           "pred_low": [-0.01, -0.04]})
-    sig = bt.from_battery_table(table, stage="test")
+    from nig_backtest.bridges.nig_timenet_torch import from_battery_table
+    sig = from_battery_table(table, stage="test")
     assert list(sig["score"]) == [0.01, -0.02] and list(sig["p_up"]) == [0.6, 0.3] and set(sig["stage"]) == {"test"}
     assert (sig["pred_high"] >= 0).all() and (sig["pred_low"] <= 0).all()
 

@@ -18,14 +18,16 @@ Use:
     bt.write_report(run, "out", prices=px)
     table, _ = bt.ladder(sig, px, s, [("tp 1.5 atr", {"exit.take_profit": 1.5}), ("stop 1 atr", {"exit.stop_loss": 1})])
 
-Command line: ``python -m nig_backtest {contract,run,compare,ladder,from-battery} ...``.
+Command line: ``nig-backtest {contract,run,compare,ladder,from-battery} ...``. Host projects connect through
+``nig_backtest.bridges.<project>`` (here ``bridges.nig_timenet_torch``: run outputs, the model on chosen coins,
+the artifact's candles).
 """
 
-from nig_backtest.adapters import from_battery_table
 from nig_backtest.contract import OPTIONAL, REQUIRED, SignalSet, check_signals, describe
 from nig_backtest.engine import Backtest, run_backtest, simulate_coin
 from nig_backtest.explorer import TradeBook
 from nig_backtest.impact import apply_changes, compare, ladder, leave_one_out
+from nig_backtest.kinds import OUTPUT_KINDS, decode, is_absolute
 from nig_backtest.portfolio import by_group, cap_open, daily, equity, summary
 from nig_backtest.prices import ArchivePrices, FilePrices, FramePrices, PriceSource, atr
 from nig_backtest.report import write_report
@@ -40,8 +42,8 @@ from nig_backtest.rules import (
     strategy_to_dict,
 )
 
-__all__ = ["from_battery_table", "OPTIONAL", "REQUIRED", "SignalSet", "check_signals", "describe", "Backtest",
+__all__ = ["OPTIONAL", "REQUIRED", "SignalSet", "check_signals", "describe", "Backtest",
            "run_backtest", "simulate_coin", "TradeBook", "apply_changes", "compare", "ladder", "leave_one_out",
            "by_group", "cap_open", "daily", "equity", "summary", "ArchivePrices", "FilePrices", "FramePrices",
            "PriceSource", "atr", "write_report", "ENTRY_FILTERS", "Book", "Costs", "Entry", "Exit", "Strategy",
-           "strategy_from_dict", "strategy_to_dict"]
+           "strategy_from_dict", "strategy_to_dict", "OUTPUT_KINDS", "decode", "is_absolute"]

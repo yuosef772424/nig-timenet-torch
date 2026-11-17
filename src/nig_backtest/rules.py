@@ -19,7 +19,7 @@ __all__ = ["Entry", "Exit", "Costs", "Book", "Strategy", "ENTRY_FILTERS", "SIDES
            "select_entries", "level_fraction", "strategy_from_dict", "strategy_to_dict"]
 
 SIDES = ("score", "long", "short", "p_up")
-UNITS = ("atr", "pct", "sigma", "pred")
+UNITS = ("atr", "pct", "sigma", "pred", "move")
 ENTRY_PRICES = ("next_open", "signal_close")
 BOTH_HIT = ("stop_first", "target_first")
 #: name -> fn(rows: DataFrame, params: dict) -> bool array (True = keep); register your own rule here
@@ -28,10 +28,10 @@ ENTRY_FILTERS = Registry("entry_filter", required_meta=("needs",))
 
 @dataclass(frozen=True)
 class Entry:
-    side: str = "score"                    # score: sign of score; long / short: one side only; p_up: p_up > 0.5
-    min_abs_score: float = 0.0             # keep |score| >= this
-    top_share: float | None = None         # keep the strongest |score| share of the rows of each stage
-    score_over_sigma: float | None = None  # keep |score| > k sigma (needs sigma)
+    side: str = "score"                    # score: the output's direction (kinds); long / short: one side; p_up: > 0.5
+    min_strength: float = 0.0              # keep strength >= this (strength: kinds, e.g. |predicted move|)
+    top_share: float | None = None         # keep the strongest share of the rows of each stage
+    score_over_sigma: float | None = None  # keep strength > k sigma (needs sigma)
     min_confidence: float | None = None    # keep confidence >= this (needs confidence)
     confidence_top_share: float | None = None  # keep the most confident share of each stage (needs confidence)
     per_time_top_k: int | None = None      # cross-section: per time keep the k strongest of each side
@@ -46,12 +46,17 @@ class Entry:
 
 @dataclass(frozen=True)
 class Exit:
-    max_bars: int = 2                      # time exit at the close of the N-th bar held (the target "after N candles")
+    max_bars: int = 2                      # time exit at the close of the N-th PRICE bar held ("after N candles")
+    hold: str | None = None                # or a duration ("8h"; "horizon" = SignalSet.horizon): replaces max_bars,
+                                           #   so a 4h model runs on 1h candles with the same holding time
     take_profit: float | None = None       # distance in take_profit_unit (None = no target)
     take_profit_unit: str = "atr"          # atr: x ATR at entry; pct: fraction of the entry price; sigma: x sigma;
-    stop_loss: float | None = None         #   pred: x the predicted extreme (pred_high long / pred_low short)
+    stop_loss: float | None = None         #   pred: x the predicted extreme (pred_high / pred_low); move: x the
+                                           #   decoded predicted move (absolute output kinds only)
     stop_loss_unit: str = "atr"
     atr_bars: int = 14
+    atr_timeframe: str | None = None       # ATR on candles resampled to this frame (e.g. the model's "4h"); None = the
+                                           #   price candles' own frame
     both_hit: str = "stop_first"           # a bar that touches target and stop: which one counts (no intrabar data)
 
 
@@ -85,6 +90,11 @@ class Strategy:
                 raise ValueError(f"{name} must be one of {allowed}, not {value!r}")
         if x.max_bars < 1 or x.atr_bars < 1:
             raise ValueError("exit.max_bars and exit.atr_bars must be >= 1")
+        if x.atr_timeframe == "horizon":
+            raise ValueError("exit.atr_timeframe takes a duration, not 'horizon'")
+        for name, v in (("exit.hold", x.hold), ("exit.atr_timeframe", x.atr_timeframe)):
+            if v is not None and v != "horizon" and pd.Timedelta(v) <= pd.Timedelta(0):
+                raise ValueError(f"{name} must be a positive duration, got {v!r}")
         for name, v in (("top_share", e.top_share), ("confidence_top_share", e.confidence_top_share)):
             if v is not None and not 0 < v <= 1:
                 raise ValueError(f"entry.{name} must be in (0, 1], got {v}")
@@ -127,12 +137,22 @@ def _needs(s: Strategy) -> set[str]:
     return need
 
 
-def check_strategy(s: Strategy, enabled_features) -> None:
-    """Raise when a rule needs an optional feature that the signal set does not have (absent or switched off)."""
+def check_strategy(s: Strategy, enabled_features, absolute: bool = False, horizon: str | None = None) -> None:
+    """Raise when a rule needs an optional feature that the signal set does not have (absent or switched off), a
+    'move' exit is asked of an output that does not decode to a price without loss, or ``hold: "horizon"`` has no
+    horizon."""
     missing = sorted(_needs(s) - set(enabled_features))
     if missing:
         raise ValueError(f"strategy {s.name!r} needs the features {missing}, which the signals do not provide or "
                          f"SignalSet.use switched off (enabled: {sorted(enabled_features)})")
+    x = s.exit
+    moves = [u for v, u in ((x.take_profit, x.take_profit_unit), (x.stop_loss, x.stop_loss_unit)) if v is not None]
+    if "move" in moves and not absolute:
+        raise ValueError(f"strategy {s.name!r}: an exit in 'move' units needs an absolute output kind (return, "
+                         f"log_return, price); this output gives a direction and a ranking only (use atr / pct / "
+                         f"sigma units)")
+    if x.hold == "horizon" and horizon is None:
+        raise ValueError(f"strategy {s.name!r}: exit.hold 'horizon' needs SignalSet(horizon=...)")
 
 
 def _rank_share(values: np.ndarray, groups: np.ndarray, share: float) -> np.ndarray:
@@ -150,7 +170,7 @@ def _rank_share(values: np.ndarray, groups: np.ndarray, share: float) -> np.ndar
 
 def _side(rows: pd.DataFrame, side: str) -> np.ndarray:
     if side == "score":
-        return np.sign(rows["score"].to_numpy())
+        return rows["dir"].to_numpy()
     if side == "p_up":
         return np.where(rows["p_up"].to_numpy() > 0.5, 1.0, -1.0)
     return np.full(len(rows), 1.0 if side == "long" else -1.0)
@@ -160,12 +180,12 @@ def select_entries(rows: pd.DataFrame, s: Strategy) -> pd.DataFrame:
     """The rows that become trades, with their ``side`` (+1 long / -1 short) and the ``rule_trace`` counts in
     ``attrs`` (rows kept after each rule, in order: what each decision removed)."""
     e = s.entry
-    score = rows["score"].to_numpy()
+    strength = rows["strength"].to_numpy()
     stage = rows["stage"].to_numpy() if "stage" in rows else np.zeros(len(rows))
     side = _side(rows, e.side)
     keep = side != 0
     if e.side in ("long", "short"):
-        keep &= np.sign(score) == side
+        keep &= rows["dir"].to_numpy() == side
     trace = [("signals", len(rows)), ("side", int(keep.sum()))]
 
     def step(name, mask):
@@ -179,17 +199,17 @@ def select_entries(rows: pd.DataFrame, s: Strategy) -> pd.DataFrame:
         step("exclude_coins", ~rows["coin"].isin(e.exclude_coins).to_numpy())
     if e.stages:
         step("stages", rows["stage"].isin(e.stages).to_numpy())
-    if e.min_abs_score > 0:
-        step("min_abs_score", np.abs(score) >= e.min_abs_score)
+    if e.min_strength > 0:
+        step("min_strength", strength >= e.min_strength)
     if e.score_over_sigma is not None:
-        step("score_over_sigma", np.abs(score) > e.score_over_sigma * rows["sigma"].to_numpy())
+        step("score_over_sigma", strength > e.score_over_sigma * rows["sigma"].to_numpy())
     if e.min_confidence is not None:
         step("min_confidence", rows["confidence"].to_numpy() >= e.min_confidence)
     for name in e.filters:
         fn = ENTRY_FILTERS.get(name)
         step(f"filter:{name}", np.asarray(fn(rows, dict(e.filter_params.get(name, {}))), dtype=bool))
     if e.top_share is not None:
-        step("top_share", _rank_share(np.where(keep, np.abs(score), -np.inf), stage, e.top_share) & keep)
+        step("top_share", _rank_share(np.where(keep, strength, -np.inf), stage, e.top_share) & keep)
     if e.confidence_top_share is not None:
         conf = np.where(keep, rows["confidence"].to_numpy(), -np.inf)
         step("confidence_top_share", _rank_share(conf, stage, e.confidence_top_share) & keep)
@@ -202,8 +222,8 @@ def select_entries(rows: pd.DataFrame, s: Strategy) -> pd.DataFrame:
 
 
 def _per_time(rows: pd.DataFrame, side: np.ndarray, keep: np.ndarray, k: int) -> np.ndarray:
-    """Per time and side, the k largest |score| rows (an equal-count long / short book)."""
-    frame = pd.DataFrame({"t": rows["time"].to_numpy(), "side": side, "a": np.abs(rows["score"].to_numpy()),
+    """Per time and side, the k strongest rows (an equal-count long / short book)."""
+    frame = pd.DataFrame({"t": rows["time"].to_numpy(), "side": side, "a": rows["strength"].to_numpy(),
                           "keep": keep})
     frame = frame[frame["keep"]]
     rank = frame.groupby(["t", "side"])["a"].rank(ascending=False, method="first")
@@ -215,8 +235,8 @@ def _per_time(rows: pd.DataFrame, side: np.ndarray, keep: np.ndarray, k: int) ->
 def level_fraction(rows: pd.DataFrame, value: float | None, unit: str, atr_at_entry: np.ndarray,
                    entry_price: np.ndarray, kind: str) -> np.ndarray:
     """The distance of a target / stop from the entry as a FRACTION of the entry price, per trade (NaN = none).
-    ``kind`` "target" or "stop"; 'pred' uses the predicted extreme of the trade's direction for a target and of the
-    opposite direction for a stop."""
+    ``kind`` "target" or "stop"; 'move' uses the decoded predicted move; 'pred' uses the predicted extreme of the
+    trade's direction for a target and of the opposite direction for a stop."""
     n = len(rows)
     if value is None:
         return np.full(n, np.nan)
@@ -226,6 +246,8 @@ def level_fraction(rows: pd.DataFrame, value: float | None, unit: str, atr_at_en
         return value * atr_at_entry / entry_price
     if unit == "sigma":
         return value * rows["sigma"].to_numpy()
+    if unit == "move":
+        return value * np.abs(rows["pred_move"].to_numpy())
     side = rows["side"].to_numpy()
     up, down = rows["pred_high"].to_numpy(), -rows["pred_low"].to_numpy()
     toward = (side > 0) == (kind == "target")

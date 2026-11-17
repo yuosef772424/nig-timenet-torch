@@ -10,9 +10,6 @@ import argparse
 import json
 from pathlib import Path
 
-import pandas as pd
-
-from nig_backtest.adapters import from_battery_table
 from nig_backtest.contract import SignalSet, describe
 from nig_backtest.engine import run_backtest
 from nig_backtest.impact import compare, ladder
@@ -48,7 +45,8 @@ def _signals(a) -> SignalSet:
     def split(v):
         return tuple(x for x in v.split(",") if x) if v else None
 
-    return SignalSet(path=a.signals, use=split(a.use) if a.use is not None else None, stages=split(a.stages))
+    return SignalSet(path=a.signals, use=split(a.use) if a.use is not None else None, stages=split(a.stages),
+                     kind=a.kind, horizon=a.horizon)
 
 
 def _strategy(path):
@@ -61,6 +59,8 @@ def _common(p):
     p.add_argument("--out", required=True)
     p.add_argument("--use", help="optional features to keep, comma separated ('' = none); default all present")
     p.add_argument("--stages", help="stages to read, comma separated; default all")
+    p.add_argument("--kind", default="score", help="what score means (nig-backtest contract lists the kinds)")
+    p.add_argument("--horizon", help="the model's horizon, e.g. 8h (for exit.hold 'horizon')")
 
 
 def main(argv=None) -> None:
@@ -86,10 +86,10 @@ def main(argv=None) -> None:
         print(describe())
         return
     if a.cmd == "from-battery":
-        parts = [from_battery_table(pd.read_parquet(Path(a.folder) / f"battery_table_{st}.parquet"), stage=st)
-                 for st in ("val", "test") if (Path(a.folder) / f"battery_table_{st}.parquet").is_file()]
-        pd.concat(parts, ignore_index=True).to_parquet(a.out, index=False)
-        print(f"wrote {sum(map(len, parts))} signals to {a.out}")
+        from nig_backtest.bridges.nig_timenet_torch import signals_from_folder
+        signals = signals_from_folder(a.folder)
+        signals.to_parquet(a.out, index=False)
+        print(f"wrote {len(signals)} signals to {a.out} (kind 'return'; pass --kind return)")
         return
     sig, px, out = _signals(a), price_source(a.prices), Path(a.out)
     if a.cmd == "run":

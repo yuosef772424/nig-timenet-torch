@@ -3,11 +3,12 @@
 TAGS: backtest engine, trade simulation, take profit, stop loss, time exit, gap fill, excursion, per coin, batches,
     no lookahead
 PITFALLS: entry is the open of the first bar that opens at or after ``time`` (``next_open``) or the close of the bar
-    that closes at ``time`` (``signal_close``, which must exist exactly); ATR is read at the bar before the path; a
-    bar touching target and stop counts per ``exit.both_hit`` (no intrabar data); a gap through a level fills at the
-    bar's open (better for a target, worse for a stop); a path cut by the end of the data exits at its last close
-    with reason ``data_end``. Cross-section rules (top_share, per_time_top_k) need every coin, so selection runs on the
-    whole signal table and only the candles are loaded per coin.
+    that closes at ``time`` (``signal_close``, which must exist exactly); ATR is known at entry (the bar before, or
+    the last ``atr_timeframe`` bar closed by then); a bar touching target and stop counts per ``exit.both_hit``; a gap
+    through a level fills at the bar's open (better for a target, worse for a stop); a path cut by the end of the
+    data exits at its last close (``data_end``). The candles may be FINER than the model's frame (``exit.hold`` as a
+    duration): finer candles order target and stop inside the model's bar. Cross-section rules (top_share,
+    per_time_top_k) see every coin: selection runs on the whole signal table, only the candles load per coin.
 """
 
 from dataclasses import dataclass, field
@@ -20,7 +21,7 @@ from nig_backtest.contract import SignalSet
 from nig_backtest.prices import PriceSource, atr, bar_interval
 from nig_backtest.rules import Strategy, check_strategy, level_fraction, select_entries
 
-__all__ = ["Backtest", "simulate_coin", "run_backtest", "TRADE_COLUMNS", "EXIT_REASONS"]
+__all__ = ["Backtest", "simulate_coin", "run_backtest", "hold_bars", "TRADE_COLUMNS", "EXIT_REASONS"]
 
 EXIT_REASONS = ("take_profit", "stop_loss", "time", "data_end")
 TRADE_COLUMNS = ("coin", "time", "side", "score", "entry_time", "entry_price", "exit_time", "exit_price",
@@ -72,17 +73,46 @@ def _hits(side, entry, tgt, stp, H, L):
     return _first(hit_tp), _first(hit_sl), tp_px, sl_px
 
 
-def simulate_coin(rows: pd.DataFrame, bars: pd.DataFrame, s: Strategy) -> tuple[pd.DataFrame, dict]:
-    """Trades of one coin (``rows`` = its selected signals with ``side``) on its candles; returns (trades, skipped)."""
-    x, n = s.exit, s.exit.max_bars
+def hold_bars(s: Strategy, bars: pd.DataFrame, horizon: str | None = None) -> int:
+    """How many PRICE bars a trade is held: ``exit.max_bars``, or ``exit.hold`` (a duration, or "horizon") divided by
+    the candles' interval, which must divide it (a 4h model on 1h candles: "8h" = 8 bars)."""
+    hold = s.exit.hold
+    if hold is None:
+        return s.exit.max_bars
+    dur = pd.Timedelta(horizon if hold == "horizon" else hold)
+    step = bar_interval(bars)
+    n, rest = divmod(dur, step)
+    if rest != pd.Timedelta(0) or n < 1:
+        raise ValueError(f"exit.hold {dur} is not a whole number of the candles' {step} bars")
+    return int(n)
+
+
+def _atr_at_entry(bars: pd.DataFrame, i0: np.ndarray, x) -> np.ndarray:
+    """ATR known when the trade opens: of the price bar before the entry bar, or (``atr_timeframe``) of the last bar of
+    that frame that closed at or before the entry bar's open (candles resampled, left-closed)."""
+    if x.atr_timeframe is None:
+        return atr(bars, x.atr_bars)[np.maximum(i0 - 1, 0)]
+    tf = pd.Timedelta(x.atr_timeframe)
+    coarse = bars.resample(tf, label="left", closed="left").agg(
+        {"open": "first", "high": "max", "low": "min", "close": "last"}).dropna()
+    a = atr(coarse, x.atr_bars)
+    closes = (coarse.index + tf).to_numpy()
+    j = np.searchsorted(closes, bars.index.to_numpy()[i0], side="right") - 1
+    return np.where(j >= 0, a[np.maximum(j, 0)], np.nan)
+
+
+def simulate_coin(rows: pd.DataFrame, bars: pd.DataFrame, s: Strategy, horizon: str | None = None
+                  ) -> tuple[pd.DataFrame, dict]:
+    """Trades of one coin (``rows`` = its selected signals with ``side``) on its candles; returns (trades, skipped).
+    The candles may be finer than the model's frame: the entry is the first bar opening at / after ``time``."""
+    x, n = s.exit, hold_bars(s, bars, horizon)
     rows = rows.sort_values("time", kind="stable").reset_index(drop=True)
     i0, ok, entry = _entry_points(rows, bars, s.entry.entry_price)
     skipped = {"no_bars": int((~ok).sum())}
     rows, i0, entry = rows[ok].reset_index(drop=True), i0[ok], entry[ok]
     if rows.empty:
         return pd.DataFrame(columns=list(TRADE_COLUMNS)), skipped
-    a = atr(bars, x.atr_bars)
-    atr_e = a[np.maximum(i0 - 1, 0)]
+    atr_e = _atr_at_entry(bars, i0, x)
     Op, H, L, C = (_paths(bars[k].to_numpy(), i0, n) for k in OHLCV_COLUMNS[:4])
     side = rows["side"].to_numpy()
     tgt = level_fraction(rows, x.take_profit, x.take_profit_unit, atr_e, entry, "target")
@@ -116,6 +146,7 @@ def simulate_coin(rows: pd.DataFrame, bars: pd.DataFrame, s: Strategy) -> tuple[
                      stop_frac=stp, _exit_bar=i0 + k, _entry_bar=i0)
     if s.entry.one_per_coin:
         out, skipped["overlap"] = _one_per_coin(out)
+    out["held"] = out["exit_time"] - out["entry_time"]
     out["win"] = out["net"] > 0
     out["direction_right"] = out["gross"] > 0
     if "y_true" in out:      # did the LABEL the model was trained on go the traded way (whatever the exit did)?
@@ -136,7 +167,7 @@ def run_backtest(signals: SignalSet, prices: PriceSource, strategy: Strategy, *,
                  batch_coins: int = 50, progress=None) -> Backtest:
     """Select the entries on the whole signal table (cross-section rules see every coin), then simulate coin by coin
     in batches of ``batch_coins`` (the candles of one coin are loaded once and may leave the cache after)."""
-    check_strategy(strategy, signals.enabled)
+    check_strategy(strategy, signals.enabled, signals.absolute, signals.horizon)
     rows = signals.read(coins)
     picked = select_entries(rows, strategy)
     trace = picked.attrs.get("rule_trace", [])
@@ -150,7 +181,7 @@ def run_backtest(signals: SignalSet, prices: PriceSource, strategy: Strategy, *,
             except KeyError:
                 skipped["no_prices"] += len(sub)
                 continue
-            trades, sk = simulate_coin(sub, bars, strategy)
+            trades, sk = simulate_coin(sub, bars, strategy, signals.horizon)
             for key, v in sk.items():
                 skipped[key] += v
             parts.append(trades)

@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from nig_backtest.kinds import OUTPUT_KINDS, decode, is_absolute
+
 __all__ = ["REQUIRED", "OPTIONAL", "FREE_PREFIX", "SignalSet", "check_signals", "describe", "to_utc_naive"]
 
 #: column -> meaning; every signal row needs these
@@ -33,6 +35,7 @@ OPTIONAL = {
     "pred_low": "predicted largest fall over the horizon, return units (<= 0); exits in 'pred' units",
     "y_true": "the realised label the model was trained on (any units); trade column label_right",
     "stage": "train / val / test (or any split name); rule: stages",
+    "ref_price": "the coin's price at time (the anchor of an output of kind 'price')",
 }
 FREE_PREFIX = "x_"
 
@@ -71,11 +74,16 @@ def check_signals(frame: pd.DataFrame) -> pd.DataFrame:
 @dataclass
 class SignalSet:
     """The signals of one backtest: from a frame (``frame``) or a parquet file (``path``, read per coin batch).
-    ``use`` = the optional features to keep (None = every one present); ``stages`` = the stages to read (None = all)."""
+    ``use`` = the optional features to keep (None = every one present); ``stages`` = the stages to read (None = all);
+    ``kind`` = what ``score`` means (``kinds.OUTPUT_KINDS``: absolute kinds decode to a predicted move, the others
+    give a direction and a ranking only); ``horizon`` = the model's prediction horizon (e.g. "8h"; an exit
+    ``hold: "horizon"`` uses it)."""
     frame: pd.DataFrame | None = None
     path: str | None = None
     use: tuple | None = None
     stages: tuple | None = None
+    kind: str = "score"
+    horizon: str | None = None
 
     def __post_init__(self):
         if (self.frame is None) == (self.path is None):
@@ -95,6 +103,16 @@ class SignalSet:
         self.enabled = present if self.use is None else tuple(c for c in present if c in self.use)
         if self.stages is not None and "stage" not in self.enabled:
             raise ValueError("SignalSet.stages needs the 'stage' column (present and enabled)")
+        need = [c for c in OUTPUT_KINDS.entry(self.kind).meta["needs"] if c not in self.enabled]
+        if need:
+            raise ValueError(f"output kind {self.kind!r} needs the features {need} (present and enabled)")
+        if self.horizon is not None:
+            pd.Timedelta(self.horizon)                                  # raises on a bad duration
+
+    @property
+    def absolute(self) -> bool:
+        """True when the output decodes to a price without loss (kinds.is_absolute)."""
+        return is_absolute(self.kind)
 
     def coins(self) -> list[str]:
         if self.frame is not None:
@@ -102,7 +120,8 @@ class SignalSet:
         return sorted(pd.read_parquet(self.path, columns=["coin"])["coin"].astype(str).unique())
 
     def read(self, coins=None) -> pd.DataFrame:
-        """The rows of ``coins`` (None = all) and of the chosen stages, with the disabled features dropped."""
+        """The rows of ``coins`` (None = all) and of the chosen stages, with the disabled features dropped and the
+        decoded columns of the output kind (dir, strength, pred_move)."""
         if self.frame is not None:
             out = self.frame if coins is None else self.frame[self.frame["coin"].isin(list(coins))]
         else:
@@ -111,7 +130,8 @@ class SignalSet:
         if self.stages is not None:
             out = out[out["stage"].isin(list(self.stages))]
         drop = [c for c in self.present if c not in self.enabled]
-        return out.drop(columns=drop).sort_values(["coin", "time"], kind="stable").reset_index(drop=True)
+        out = out.drop(columns=drop).sort_values(["coin", "time"], kind="stable").reset_index(drop=True)
+        return decode(out, self.kind)
 
     def batches(self, size: int = 50, coins=None):
         """Yield (coins, rows) per batch of ``size`` coins: the memory bound of a large backtest."""
@@ -134,4 +154,8 @@ def describe() -> str:
     lines += ["optional features (absent = off; present = on unless SignalSet.use leaves them out):"]
     lines += [f"  {k}: {v}" for k, v in OPTIONAL.items()]
     lines += [f"free columns: any name starting with '{FREE_PREFIX}' (carried to the trades, never read by a rule)"]
+    lines += ["output kinds (SignalSet(kind=...), what score means; absolute = decodes to a price without loss):"]
+    lines += [f"  {k}: {'absolute' if is_absolute(k) else 'direction + ranking only'}"
+              + (f", needs {list(OUTPUT_KINDS.entry(k).meta['needs'])}" if OUTPUT_KINDS.entry(k).meta["needs"] else "")
+              for k in OUTPUT_KINDS.names()]
     return "\n".join(lines)
