@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import pytest
 import torch
-from torch import nn
 
 from nig_timenet_torch.eval.influence_report import (
     group_attribution,
@@ -21,6 +20,7 @@ from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
 from nig_timenet_torch.workflow import flat_run
 from nig_timenet_torch.workflow.settings import RunSettings
+from tests.trainer.helpers import LIN_CFG, Linear, linear_data
 
 TARGETS = ("high", "low", "close")
 T, F = 8, 3
@@ -43,33 +43,13 @@ def _nig_trainer():
     return flat_run.make_trainer(RunSettings(run_dir="x", model=ms), ms, TARGETS, T, F, torch.device("cpu"))
 
 
-class Linear(nn.Module):
-    """A well-conditioned model with a known answer: y = x . w + noise."""
-
-    def __init__(self, f):
-        super().__init__()
-        self.fc = nn.Linear(f, 1)
-
-    def forward(self, x):
-        return {"pred": self.fc(x).squeeze(-1)}
-
-
-LIN_CFG = {"targets": {"y": {"true_key": "y", "task_type": "regression", "output_keys": {"pred": "pred"}}}, "loss": {}}
-W = torch.tensor([1.0, -0.5, 0.3, 0.0, 0.0, 0.0])
-
-
 def _lin_data(n, seed, n_groups=16, bad_groups=()):
-    g = torch.Generator().manual_seed(seed)
-    x = torch.randn(n, len(W), generator=g)
-    y = x @ W + 0.3 * torch.randn(n, generator=g)
-    group = np.arange(n) % n_groups
-    y = torch.where(torch.as_tensor(np.isin(group, bad_groups)), -y, y)   # planted: these rows teach the wrong sign
-    return x, {"y": y}, group
+    return linear_data(n, seed, n_groups, bad_groups)
 
 
 def _lin_trainer():
     torch.manual_seed(0)
-    return Trainer(Linear(len(W)), LIN_CFG, optimizer=lambda ps: torch.optim.SGD(ps, lr=0.05))
+    return Trainer(Linear(), LIN_CFG, optimizer=lambda ps: torch.optim.SGD(ps, lr=0.05))
 
 
 @pytest.fixture(scope="module")
