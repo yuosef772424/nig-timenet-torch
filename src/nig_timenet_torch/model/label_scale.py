@@ -4,7 +4,8 @@ TAGS: label scale, nig scale, beta floor, b-052, learned state, fit on train, re
 PITFALLS: ``train_std`` is a learned-state transform (rule B4): ``fit`` sees the training split only, the state is the
     model's ``label_scale`` buffers (state_dict, checkpoint, best weights), and every consumer (training, evaluation,
     prediction) reads it through the heads; a restored model gets s from its weights, never refits. ``fit_label_scale``
-    on a model built with ``fixed`` does nothing.
+    on a model built with ``fixed`` does nothing. A model with a target normalisation (``model.target_norm``) fits s
+    on the NORMALISED labels: fit that one first.
 
 With scale s the NIG heads work in label units / s (``nig_layers.NIGHead``): mu = s raw_mu and beta = s^2 (softplus +
 beta_min), so the beta floor is ``beta_min`` x s^2, i.e. proportional to the training label variance instead of the
@@ -17,6 +18,7 @@ import numpy as np
 import torch
 
 from nig_timenet_torch.core.registry import Contract, Registry
+from nig_timenet_torch.model.target_norm import normalized_labels
 
 __all__ = ["LABEL_SCALES", "fitted", "fit_label_scale", "label_scale_state"]
 
@@ -50,6 +52,7 @@ def fit_label_scale(model: torch.nn.Module, y_train: dict) -> dict | None:
     if not fitted(name):
         return None
     labels = {t: np.asarray(torch.as_tensor(y_train[spec.label_key]).cpu()) for t, spec in model.head_specs.items()}
+    labels = normalized_labels(model, labels)   # the heads' own space when the model has a target normalisation
     state = LABEL_SCALES.entry(name).meta["fit"](labels)
     with torch.no_grad():
         for _, buf in _buffers(model):

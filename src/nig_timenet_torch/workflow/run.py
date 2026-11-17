@@ -36,6 +36,7 @@ from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.model.label_scale import fit_label_scale
 from nig_timenet_torch.model.scalers import fit_scalers
+from nig_timenet_torch.model.target_norm import fit_target_norm
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
 from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
@@ -140,6 +141,9 @@ def build(run: Run) -> Run:
     run.ms = flat_run.model_settings(s.model, run.targets)
     run.trainer = flat_run.make_trainer(s, run.ms, run.targets, run.x["train"].shape[1], run.x["train"].shape[2],
                                         run.device)
+    tn_state = fit_target_norm(run.trainer.model, run.y["train"])   # TRAIN labels only; None = the model has none
+    if tn_state is not None:
+        run.extra["target_norm"] = tn_state
     fit_label_scale(run.trainer.model, run.y["train"])   # FX2: a fitted NIG label scale learns from TRAIN only
     # train-fitted state of the model (input scaler, NIG label scale): TRAIN rows only; a resume / restore then
     # loads the same values from the checkpoint. Empty for a model without such modules.

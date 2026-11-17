@@ -23,6 +23,7 @@ from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.model.scalers import fit_scalers
+from nig_timenet_torch.model.target_norm import fit_target_norm
 from nig_timenet_torch.stats.metrics import spearman
 from nig_timenet_torch.workflow import flat_run, run
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, default_model_settings
@@ -202,6 +203,7 @@ def fresh_trainer(ctx: DoctorContext, seed: int | None = None, *, train: dict | 
     ms = r.ms if not model else ModelSettings(r.ms.architecture, {**r.ms.overrides, **model})
     seed_everything(ctx.seed if seed is None else seed)
     trainer = flat_run.make_trainer(s, ms, r.targets, r.x["train"].shape[1], r.x["train"].shape[2], r.device)
+    fit_target_norm(trainer.model, r.y["train"])   # no-op unless the model has a target normalisation
     fit_scalers(trainer.model, r.x["train"], r.y["train"])
     return trainer
 
