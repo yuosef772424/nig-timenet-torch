@@ -23,6 +23,8 @@ Every line is a NEW default of a NEW option or a NEW function; no existing defau
 - `nig_timenet_torch.eval.legacy_reports.lag_scan(max_lag)`: `<new>` -> `3`
 - `nig_timenet_torch.eval.legacy_reports.move_over_sd(ks)`: `<new>` -> `(0.25, 0.5, 1.0)`
 - `nig_timenet_torch.eval.legacy_reports.tearsheet(risk)`: `<new>` -> `0.02`
+- `nig_timenet_torch.eval.legacy_plots.pred_vs_true(title)`: `<new>` -> `''`
+- `nig_timenet_torch.eval.legacy_plots.top_coins(n)`: `<new>` -> `3`
 - `nig_timenet_torch.eval.legacy_reports.trades(top_share)`: `<new>` -> `0.1`
 - `nig_timenet_torch.eval.sample_charts.Sample(note)`: `<new>` -> `''`
 - `nig_timenet_torch.eval.sample_charts.Sample(pnl)`: `<new>` -> `nan`
