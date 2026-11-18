@@ -154,6 +154,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `model/parts.py` | The registered input_skip variants of the transformer encoder (none, concat_each_block, dense_skip, late_raw, no_proj); class flags say what a variant adds, so builders never compare variant names. | input skip, variants, transformer encoder, patch embedding, readout, registry, flags |
 | `model/probe.py` | Per-layer ridge-probe report: forward-hook activations of named modules fitted to a label with time-ordered folds (AUC for binary y, else R^2), the raw input scored next to every layer. | probe, layer probe, ridge, activations, forward hook, health report |
 | `model/scalers.py` | The train-fitted scaling state kept INSIDE the model (buffers): InputScaler (per-channel input standardisation) and the fitted NIG label scale; fit_scalers() is the ONE place either is fitted. | input scaler, train statistics, standardisation, label scale, fitted state, buffers, logret_std, unfitted |
+| `model/snapshot.py` | The snapshot panel model (owner 2026-11-18, "100 x 3"): the WHOLE moment (every coin of a timestamp, its channels over the window) enters as one input with per-coin input and output weights; NIG + class outputs per coin. | snapshot panel, joint moment encoder, coin slots, per coin weights, multi coin, cross section, architecture, nig heads, hybrid, coin embedding, accuracy |
 | `model/taps.py` | Inspection-only taps: record the output of every (or chosen) named module of ANY architecture into a dict during a forward pass, per-layer summaries, and a signal trace (ridge R^2 of a known signal per layer). | taps, layer outputs, inspection, diagnostics, forward hook, signal trace, dead units, model doctor |
 | `model/target_norm.py` | TARGET_NORMS, the registered target normalisation of the NIG heads (rule B4): ``none`` (labels as they are) or ``logret_std`` (per head z = (y - mean_h) / std_h with TRAIN statistics, TF LogretStd's target half). | target normalisation, label standardisation, logret_std, per head mean std, learned state, fit on train, inverse, registry, model buffer |
 
@@ -217,7 +218,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | kind | variable | module | registered names |
 |---|---|---|---|
-| architecture | `ARCHITECTURES` | `model/architectures.py` | `nig_timenet_v2`, `tiny_mlp` |
+| architecture | `ARCHITECTURES` | `model/architectures.py` | `nig_timenet_v2`, `snapshot_panel`, `tiny_mlp` |
 | batch_order | `BATCH_ORDERS` | `trainer/groups.py` | `rows`, `time_blocks` |
 | calibrator | `CALIBRATORS` | `eval/calibrator.py` | `isotonic` |
 | custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` | `ath_distance`, `calendar`, `crash_rebound`, `direction_consistency`, `fisher`, `fractal`, `jump`, `mean_reversion`, `position_in_range`, `psar`, `range_rel`, `returns`, `risk_adj_momentum`, `rsi_divergence`, `rvi`, `supertrend`, `trend_age`, `vol_asymmetry`, `vol_estimators`, `vol_ratio`, `vol_term_structure`, `volume_z` |

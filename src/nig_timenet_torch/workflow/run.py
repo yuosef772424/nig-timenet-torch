@@ -87,7 +87,8 @@ class Run:
         _need(self, "result", "train")
         if stage not in self.x:
             self.x[stage], self.y[stage] = flat_run.flat_inputs(self.dataset, self.idx[stage],
-                                                                self.settings.split.cross_section)
+                                                                self.settings.split.cross_section,
+                                                                self.settings.split.coin_channel)
         return flat_run.predict_stage(self.trainer, self.dataset, self.idx[stage], self.x[stage], self.ident,
                                       self.device, stage=stage, train_end=self.bounds[0],
                                       chunk=self.settings.evaluation.chunk, fold=self.fold)
@@ -130,7 +131,8 @@ def _assemble(settings: RunSettings, art: LoadedData, targets: tuple, parts: tup
     run = Run(settings, art, targets, dict(zip(("train", "val", "test"), parts, strict=True)), bounds,
               run_common.pick_device(settings), None if out is None else Path(out))
     for stage in ("train", "val"):
-        run.x[stage], run.y[stage] = flat_run.flat_inputs(ds, run.idx[stage], settings.split.cross_section)
+        run.x[stage], run.y[stage] = flat_run.flat_inputs(ds, run.idx[stage], settings.split.cross_section,
+                                                          settings.split.coin_channel)
     return run
 
 

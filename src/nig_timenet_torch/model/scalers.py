@@ -110,8 +110,9 @@ def label_scale(y_train: dict, label_keys) -> float:
 
 def fit_scalers(model: nn.Module, x_train, y_train: dict) -> dict:
     """Fit every train-fitted state of ``model`` on the TRAIN rows and return what was fitted (for the run record):
-    each InputScaler from ``x_train`` (a tensor; a multi-timeframe model takes {timeframe: tensor}) and each
-    FittedScale from the regression labels of the model's NIG heads. A model without such modules is left as it is."""
+    each InputScaler from ``x_train`` (a tensor; a multi-timeframe model takes {timeframe: tensor}), every module with
+    a ``fit_from_inputs(x_train)`` method (the coin slots of model/snapshot.py) and each FittedScale from the
+    regression labels of the model's NIG heads. A model without such modules is left as it is."""
     from nig_timenet_torch.model.heads import head_spec  # heads imports nothing from here; kept local for clarity
 
     state: dict = {}
@@ -122,6 +123,9 @@ def fit_scalers(model: nn.Module, x_train, y_train: dict) -> dict:
             tf = name.removeprefix("input_scaler").lstrip("_")
             x = x_train[tf] if tf else next(iter(x_train.values()))
         state[name] = mod.fit(x)
+    for name, mod in model.named_modules():   # other input-fitted state (model/snapshot.py CoinSlots)
+        if hasattr(mod, "fit_from_inputs"):
+            state[name] = mod.fit_from_inputs(x_train)
     scales = [m for m in model.modules() if isinstance(m, FittedScale)]
     if scales:
         from nig_timenet_torch.model.target_norm import normalized_labels

@@ -45,6 +45,7 @@ class RollingConfig:
     train: dict = field(default_factory=dict)
     split: dict = field(default_factory=dict)
     day_metrics: bool = False          # D-032: every fold also writes the day metrics; the study pools their days
+    architecture: str = "nig_timenet_v2"   # model.architectures.ARCHITECTURES ("snapshot_panel": owner 2026-11-18)
 
     def __post_init__(self):
         if self.device not in DEVICES:
@@ -62,7 +63,8 @@ CONFIG = RollingConfig
 def run_settings(cfg: RollingConfig, code_sha: str = "") -> RunSettings:
     s = job_run_settings(device=cfg.device, run_dir=cfg.run_dir, artifact=cfg.artifact, base_tf=cfg.base_tf,
                          max_rows=cfg.max_rows, batch_size=cfg.batch_size, lr=cfg.lr,
-                         model_overrides=cfg.model_overrides, train=cfg.train, split=cfg.split, code_sha=code_sha)
+                         model_overrides=cfg.model_overrides, train=cfg.train, split=cfg.split, code_sha=code_sha,
+                         architecture=cfg.architecture)
     return updated(s, {"evaluation.battery.day_metrics": cfg.day_metrics})
 
 

@@ -83,6 +83,9 @@ class SplitSettings:
     # keep only the ``top_coins`` coins with the most TRAIN rows (the longest history; the artifact holds no volume
     # to rank liquidity by), in every split. None = all coins.
     top_coins: int | None = None
+    # snapshot panel model (model/snapshot.py, owner 2026-11-18): every row also carries its coin id (the dataset's
+    # asset index) as one more input channel, after the features and before the timestamp channel; needs cross_section
+    coin_channel: bool = False
 
     def __post_init__(self):
         coins = (self.exclude_coins,) if isinstance(self.exclude_coins, str) else tuple(self.exclude_coins)
@@ -99,6 +102,8 @@ class SplitSettings:
             raise ValueError(f"top_coins must be None or an integer >= 1, got {self.top_coins!r}")
         if self.max_rows is not None and (isinstance(self.max_rows, bool) or self.max_rows < 1):
             raise ValueError(f"max_rows must be None or an integer >= 1, got {self.max_rows!r}")
+        if self.coin_channel and not self.cross_section:
+            raise ValueError("split.coin_channel needs split.cross_section (the snapshot model reads whole timestamps)")
 
 
 @dataclass(frozen=True)
