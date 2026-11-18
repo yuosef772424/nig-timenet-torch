@@ -117,10 +117,16 @@ class OrderedMeans(_Scaled):
         s = self._s()
         return F.softplus(raw) if s is None else s * F.softplus(raw / s)
 
-    def forward(self, mu_c: torch.Tensor, raw_h: torch.Tensor, raw_l: torch.Tensor
+    def forward(self, mu_c: torch.Tensor, raw_h: torch.Tensor, raw_l: torch.Tensor, unit_h=None, unit_l=None
                 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """``unit_h`` / ``unit_l`` (None = 1): the offsets are multiplied by them, i.e. the heads' raw values live in a
+        space whose unit is that (the per-head label sd of a target normalisation) while ``mu_c`` is in label units
+        (owner 2026-11-19, B-079: the order then holds on prices, where it is true)."""
         base = mu_c.detach() if self.detach_close else mu_c
-        return base + self._offset(raw_h), mu_c, base - self._offset(raw_l)
+        up, down = self._offset(raw_h), self._offset(raw_l)
+        if unit_h is not None:
+            up, down = up * unit_h, down * unit_l
+        return base + up, mu_c, base - down
 
 
 class NIGUncertainty(nn.Module):
