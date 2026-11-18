@@ -20,7 +20,7 @@ from nig_timenet_torch.stats import metrics
 from nig_timenet_torch.workflow.flat_run import row_coins
 from nig_timenet_torch.workflow.run_common import input_key
 
-ARMS = ("A0", "A1", "A2", "C60", "C20", "C34", "H")
+ARMS = ("A0", "A1", "A2", "C60", "C20", "C34", "H", "N")
 HEADS = ("high", "low", "close")
 
 
