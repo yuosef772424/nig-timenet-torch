@@ -73,3 +73,27 @@ Accept rules:
   folds on either seed.
 - Expectation: the 1h shape of the last 4h bar (where inside the bar the move happened) adds to the last-bar
   asymmetry (DS1); a small close IC gain at most.
+
+## Addendum 3 (owner 2026-11-19, before any number of it): the USDT supply channel, walk-forward
+`panel-rolling-usdt-001` = the reference arm + the channel `usdt_supply_g7` (7-day log growth of the USDT supply,
+the day before each bar), same folds / seeds / settings, against `panel-rolling-ref-002` (and `-ref-003`). The
+model-free look (dominance-look-001, addendum 2) says the channel is about the market's DIRECTION, so:
+- **Accept (direction gain):** the absolute book (metric 1) paired day difference against the reference, gross, on
+  the pooled days, has a CI above 0 on both seeds.
+- **Profit:** as above (beats every baseline on the pooled days, CI excludes 0, both seeds).
+- **Refuted:** the paired absolute-book difference holds 0 on both seeds. Close rank IC is reported, not judged
+  (a common channel cannot change the ranking by itself).
+
+## Addendum 4 (owner 2026-11-19, before any number of it): a BTC-relative book against the market-neutral book
+No retraining: a common reference does not change the ranking, so the book is built from the saved TEST frames of the
+finished walk-forwards (`panel-rolling-ref-002`, `-std-001`, and `-2tf-001` / `-ref-003` / `-ls-001` when done), the
+1225 pooled days per seed. Books per timestamp, top / bottom 20 % by the close mean mu:
+- `neutral` (today): +top 20 % / -bottom 20 % (half a unit each).
+- `btc_hedged`: +top 20 % (half a unit) / -BTC (half a unit).
+- `btc_pair_sign` (information): every coin with mu above BTC's mu long, below short, each against BTC.
+Costs per side: (a) the flat battery cost 0.0008 on every leg every timestamp (today's convention); (b) per
+instrument: alts 0.0008, BTC 0.0004 (deeper book); (c) as (b) with the BTC leg held (charged only on the change of
+its size: zero for a constant half unit).
+- **Accept:** `btc_hedged` net mean day minus `neutral` net mean day, paired over the pooled days, CI above 0 on both
+  seeds under cost model (b) or (c).
+- **Refuted:** that CI holds 0 or is below 0 on either seed under (b) and (c).
