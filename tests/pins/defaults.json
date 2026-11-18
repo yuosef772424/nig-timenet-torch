@@ -1,5 +1,5 @@
 {
- "fingerprint": "d9d4632d61818030",
+ "fingerprint": "c37f59a49b07b7f8",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -1040,8 +1040,10 @@
   "nig_timenet_torch.workflow.run.run_all(out)": "None",
   "nig_timenet_torch.workflow.run.train(deadline)": "None",
   "nig_timenet_torch.workflow.run.train(on_epoch)": "None",
+  "nig_timenet_torch.workflow.run.train(on_interrupt)": "None",
   "nig_timenet_torch.workflow.run.train_staged(deadline)": "None",
   "nig_timenet_torch.workflow.run.train_staged(on_eval)": "None",
+  "nig_timenet_torch.workflow.run.train_staged(on_interrupt)": "None",
   "nig_timenet_torch.workflow.run.train_staged(stages)": "None",
   "nig_timenet_torch.workflow.run.write_summary(extra)": "None",
   "nig_timenet_torch.workflow.run_common.check_decode(n)": "2000",
