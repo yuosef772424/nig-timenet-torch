@@ -20,7 +20,7 @@ from nig_timenet_torch.stats import metrics
 from nig_timenet_torch.workflow.flat_run import row_coins
 from nig_timenet_torch.workflow.run_common import input_key
 
-ARMS = ("A0", "A1", "A2", "C60", "C20", "C34")
+ARMS = ("A0", "A1", "A2", "C60", "C20", "C34", "H")
 HEADS = ("high", "low", "close")
 
 
@@ -75,20 +75,22 @@ def main(artifact: str, study: str, control: str = "C20") -> int:
         print(f"| {arm} | {v['high']:.4f} | {v['low']:.4f} | {v['close']:.4f} | {v['low'] - base_low:+.4f} |")
     print("\n## Error map: low-head rank IC by volatility tercile (last-bar range) and by fold (seeds pooled)\n")
     df["vol_t"] = pd.qcut(df["range1"].rank(method="first"), 3, labels=["calm", "mid", "volatile"])
-    print(f"| group | rows A0 | A0 low IC | A2 low IC | {control} low IC |\n|---|---|---|---|---|")
+    shown = [a for a in ("A0", "A2", control) if a in set(df.arm)]
+    print("| group | rows A0 | " + " | ".join(f"{a} low IC" for a in shown) + " |\n|---|---|" + "---|" * len(shown))
     for key, name in (("vol_t", "volatility"), ("fold", "fold")):
         for gv in sorted(df[key].dropna().unique(), key=str):
             cells = []
-            for arm in ("A0", "A2", control):
+            for arm in shown:
                 s = df[(df.arm == arm) & (df[key] == gv)]
                 cells.append(np.mean([ic(q, "y_low", "lab_low") for _, q in s.groupby("seed")]))
             n = int(((df.arm == "A0") & (df[key] == gv)).sum())
-            print(f"| {name} {gv} | {n} | {cells[0]:.4f} | {cells[1]:.4f} | {cells[2]:.4f} |")
-    print("\n## Coins where A2 gains / loses most on the low head (|mu - y| relative to A0, seeds pooled)\n")
+            print(f"| {name} {gv} | {n} | " + " | ".join(f"{c:.4f}" for c in cells) + " |")
+    cand = "A2" if "A2" in set(df.arm) else control
+    print(f"\n## Coins where {cand} gains / loses most on the low head (|mu - y| relative to A0, seeds pooled)\n")
     err = {arm: df[df.arm == arm].assign(e=lambda q: (q.y_low - q.lab_low).abs()).groupby("asset").e.mean()
-           for arm in ("A0", "A2")}
-    gap = (err["A2"] - err["A0"]).sort_values()
-    print("| coin | mean abs err A0 | A2 - A0 |\n|---|---|---|")
+           for arm in ("A0", cand)}
+    gap = (err[cand] - err["A0"]).sort_values()
+    print(f"| coin | mean abs err A0 | {cand} - A0 |\n|---|---|---|")
     for c in list(gap.index[:3]) + list(gap.index[-3:]):
         print(f"| {c} | {err['A0'][c]:.4f} | {gap[c]:+.4f} |")
     print("\n## The worst rows of A0 (high head, largest |mu - y|, seed 0)\n")
