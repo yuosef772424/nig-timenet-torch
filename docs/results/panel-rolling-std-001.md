@@ -81,7 +81,10 @@ convergence (12 of 14 runs at their last epoch) is a second, smaller effect.
 ## Next hypotheses
 1. Ordering in label units: apply the ordered-means constraint AFTER the inverse map (or turn it off with
    `target_norm`). Refuted if the high / low rank IC stays more than 0.02 below the reference on E4 and on two folds.
-   Cheapest test: E4 look, 2 seeds, minutes.
+   Cheapest test: E4 look, 2 seeds, minutes. **E4 done 2026-11-18 (`label-order-e4-look`, commit `ed2d3b4`, switch
+   `order_in_label_units`): not refuted.** High / low rank IC seed 0 / 1: reference 0.263 / 0.253 and 0.269 / 0.255;
+   std 0.232 / 0.222 and 0.228 / 0.211; std + order on prices 0.263 / 0.252 and 0.269 / 0.256 (close 0.127 / 0.128 in
+   all). The walk-forward on real data is `panel-rolling-std-order-001`.
 2. Standardise the close head only (`target_norm` per head). Refuted if the close bias / coverage do not move while
    high / low stay at the reference. Cheapest test: E4 then two folds.
 3. `top_confidence` is a real edge after cost: pre-register it (20 % share, VAL thresholds) and read it with a
