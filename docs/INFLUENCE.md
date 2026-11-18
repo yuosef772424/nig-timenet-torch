@@ -61,7 +61,9 @@ is not used. It is for the single-coin (flat) model; a cross-section run (`split
 timestamps and staged training has its own loop, so both refuse it. A non-default value changes the run identity
 (a new run); the default keeps it. The model never sees the group id. Notebook: `"train.batch_by"` in `CHANGES`.
 On E1 (16 coins): `timestamp` = 799 batches of 16 rows per epoch, `day` = 267 batches. With the monitor on, the batch
-report then reads as "which DATES help or hurt", one step per date.
+report then reads as "which DATES help or hurt", one step per date. First walk-forward look (20 real coins, CPU):
+`docs/results/batch-by-wf-001.md` (no arm better on the test loss; timestamp batches raise the low-head rank IC in
+7 / 8 pairs, a hypothesis for a larger study).
 
 ## 2. Effect of each input feature
 
