@@ -97,3 +97,13 @@ its size: zero for a constant half unit).
 - **Accept:** `btc_hedged` net mean day minus `neutral` net mean day, paired over the pooled days, CI above 0 on both
   seeds under cost model (b) or (c).
 - **Refuted:** that CI holds 0 or is below 0 on either seed under (b) and (c).
+
+## Addendum 5 (owner 2026-11-19, before any number of it): does more training data help? (flat split)
+`panel-std-order-full-001` (all train rows, about 1.1 M) against `panel-std-order-400k-001` (train capped at 400000
+rows, as in a walk-forward fold), arm `relative_rank_loss_logret_std_label_order`, the artifact's default split, seeds 0
+and 1, one commit; the same test rows in both.
+- **More data helps:** close rank IC on TEST higher with all rows on both seeds, by more than the seed spread of the
+  capped job, and no high / low rank IC loss over 0.01.
+- **Refuted:** close rank IC not higher on either seed. Reported beside it: high / low rank IC, the pooled day books
+  (absolute, neutral) and the kept-row rules with their CIs, epochs to the best epoch (memorisation check).
+- A single split is one market regime: a look, not a walk-forward result (`docs/PHILOSOPHY.md` section 2, step 5).
