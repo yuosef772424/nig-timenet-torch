@@ -145,7 +145,8 @@ def fit_settings_of(settings: RunSettings) -> FitSettings:
     t = settings.train
     return FitSettings(epochs=t.epochs, batch_size=t.batch_size, seed=t.seed, early_stop=t.early_stop, trace=True,
                        grad_clip_norm=t.grad_clip_norm, ema_decay=t.ema_decay, init=t.init,
-                       steps_per_execution=t.steps_per_execution)
+                       steps_per_execution=t.steps_per_execution, batch_order=t.batch_order,
+                       time_block_bars=t.time_block_bars)
 
 
 @torch.no_grad()

@@ -2,11 +2,15 @@
     per chosen coin predicted vs realised close / high / low with a sigma band and a scatter (``pred_vs_true``).
 TAGS: legacy plots, equity chart, portfolio chart, drawdown, calibration curve, best worst predictions, lag plot,
     matplotlib, figures, predicted vs realised, per coin plot, sigma band, top coins
-PITFALLS: matplotlib is an optional dependency (extra ``plots``): it is imported inside ``figures`` and
-    ``pred_vs_true`` only, with the Agg backend (no display). ``pred_vs_true`` needs the battery table's ``coin``,
-    ``end_time``, ``mu``, ``sigma``, ``y_ret`` columns (``pred_high`` / ``fut_high`` / ``pred_low`` / ``fut_low``
-    optional) and raises on a coin the table does not hold; its rank IC (``stats.metrics.rank_ic``) is over the coin's
-    own rows (one series), not across coins per timestamp.
+PITFALLS: matplotlib is an optional dependency (extra ``plots``): it is imported inside ``figures``,
+    ``pred_vs_true`` and ``price_panels`` only, with the Agg backend (no display). ``pred_vs_true`` needs the battery
+    table's ``coin``, ``end_time``, ``mu``, ``sigma``, ``y_ret`` columns (``pred_high`` / ``fut_high`` /
+    ``pred_low`` / ``fut_low`` optional) and raises on a coin the table does not hold; its rank IC
+    (``stats.metrics.rank_ic``) is over the coin's own rows (one series), not across coins per timestamp.
+    ``price_panels`` (TF price-level figures: actual / predicted / naive t-1 over the last rows + a per-coin lag scan)
+    needs the table's ``last_close`` column (battery tables written before it was added raise: re-run the battery
+    step); price = last_close * (1 + return); the naive line is the previous row's actual price of the same coin,
+    so on price level the predicted line always hugs the actual one: judge by "MAE improve", not by the picture.
     Every figure reads the numbers of ``eval/legacy_reports.py``; nothing is computed twice.
     The scatter and the coin series are subsampled for size, the numbers in their titles are on all rows.
 """
@@ -19,7 +23,7 @@ import pandas as pd
 from nig_timenet_torch.eval import legacy_reports as lr
 from nig_timenet_torch.stats import metrics
 
-__all__ = ["figures", "pred_vs_true", "top_coins", "MAX_POINTS"]
+__all__ = ["figures", "pred_vs_true", "price_panels", "improve_vs_naive", "top_coins", "MAX_POINTS"]
 
 MAX_POINTS = 20_000
 
@@ -232,6 +236,99 @@ def pred_vs_true(table: pd.DataFrame, coins, out_dir, title: str = "") -> list[P
         fig = _pred_vs_true_fig(plt, d, coin, title)
         fig.tight_layout()
         path = out_dir / f"{title or 'stage'}_pred_vs_true_{coin}.png"
+        fig.savefig(path, dpi=90)
+        plt.close(fig)
+        paths.append(path)
+    return paths
+
+
+def _price_series(d: pd.DataFrame, head: str):
+    """(actual price, predicted price) of one head for one coin's rows (sorted by end_time)."""
+    lc = d["last_close"].to_numpy(dtype=float)
+    ret_p, ret_a = ("mu", "y_ret") if head == "close" else (f"pred_{head}", f"fut_{head}")
+    return lc * (1.0 + d[ret_a].to_numpy(dtype=float)), lc * (1.0 + d[ret_p].to_numpy(dtype=float))
+
+
+def improve_vs_naive(actual: np.ndarray, pred: np.ndarray) -> float:
+    """1 - MAE(pred) / MAE(naive) in percent over all rows; naive = the previous row's actual (row 0 is dropped).
+    100 = perfect, 0 = as good as repeating the previous value, negative = worse. NaN if the naive MAE is 0."""
+    a, p = np.asarray(actual, dtype=float), np.asarray(pred, dtype=float)
+    if a.shape[0] < 2:
+        return float("nan")
+    err_n, err_p = metrics.mae(a[1:], a[:-1]), metrics.mae(a[1:], p[1:])
+    return 100.0 * (1.0 - err_p / err_n) if err_n > 0 else float("nan")
+
+
+def _lag_corr(actual: np.ndarray, pred: np.ndarray, max_lag: int) -> dict[int, float]:
+    """corr(pred[t], actual[t + k]) for k in -max_lag..max_lag (``stats.metrics.pearson``, overlapping rows only)."""
+    n, out = len(actual), {}
+    for k in range(-max_lag, max_lag + 1):
+        lo, hi = max(0, -k), min(n, n - k)
+        out[k] = metrics.pearson(pred[lo:hi], actual[lo + k:hi + k]) if hi - lo >= 2 else float("nan")
+    return out
+
+
+def _price_head(ax_price, ax_lag, d: pd.DataFrame, coin: str, head: str, last_n: int, max_lag: int) -> None:
+    actual, pred = _price_series(d, head)
+    imp = improve_vs_naive(actual, pred)
+    naive = np.r_[np.nan, actual[:-1]]
+    k = min(last_n, len(d))
+    x = np.arange(k)
+    ax_price.plot(x, actual[-k:], color="#2a9d8f", marker="o", ms=3, lw=1.2, label="Actual")
+    ax_price.plot(x, pred[-k:], color="#f4a261", marker="o", ms=3, lw=1.2, label="Predicted")
+    ax_price.plot(x, naive[-k:], color="#6c757d", ls="--", lw=1.0, label="Naive Baseline (t-1)")
+    ax_price.set_title(f"{coin} - {head} (MAE improve: {imp:.1f}%)", fontsize=10)
+    ax_price.legend(fontsize=7)
+    ax_price.grid(alpha=0.25)
+    lags = _lag_corr(actual, pred, max_lag)
+    ax_lag.bar(list(lags), [0.0 if np.isnan(v) else v for v in lags.values()],
+               color=["#d62828" if kk == 0 else "#457b9d" for kk in lags])
+    ax_lag.set_title(f"Lag Scan - {coin} - {head}", fontsize=10)
+    ax_lag.set_xlabel("lag k (corr of predicted(t) with actual(t + k))")
+    ax_lag.grid(alpha=0.25)
+
+
+def price_panels(table: pd.DataFrame, coins, out_dir, heads=("high", "low", "close"), last_n: int = 16,
+                 max_lag: int = 5, title: str = "") -> list[Path]:
+    """TF price-level figures, one PNG per coin: per head a price panel (Actual / Predicted / Naive t-1 over the last
+    ``last_n`` rows, title "MAE improve" over ALL the coin's rows) and below it the Lag Scan bars (k = -max_lag..
+    max_lag, k = 0 red). close: price = last_close * (1 + mu / y_ret); high / low from ``pred_`` / ``fut_``. Needs
+    the battery table's ``last_close`` (else ValueError: re-run the battery step on this commit); a coin that is not
+    in the table raises like ``pred_vs_true``; a head without columns is skipped. Files:
+    ``<out_dir>/<title>_price_panels_<coin>.png``; returns the paths."""
+    if "last_close" not in table.columns:
+        raise ValueError("price_panels: the table has no 'last_close' column; re-run the battery step on this "
+                         "commit (older battery tables were written without it)")
+    need = {"coin", "end_time", "mu", "y_ret"}
+    if need - set(table.columns):
+        raise ValueError(f"price_panels: the table lacks columns {sorted(need - set(table.columns))}")
+    coins = [coins] if isinstance(coins, str) else list(coins)
+    if not coins:
+        raise ValueError("price_panels: no coin given")
+    have = set(table["coin"].astype(str))
+    missing = [c for c in coins if c not in have]
+    if missing:
+        raise ValueError(f"price_panels: coins {missing} are not in the table (it has {len(have)}, e.g. "
+                         f"{sorted(have)[:5]})")
+    use = [h for h in heads if h == "close" or {f"pred_{h}", f"fut_{h}"} <= set(table.columns)]
+    if not use:
+        raise ValueError(f"price_panels: none of the heads {list(heads)} is in the table")
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for coin in coins:
+        d = table[table["coin"].astype(str) == coin].sort_values("end_time")
+        fig, ax = plt.subplots(2, len(use), figsize=(6 * len(use), 8), squeeze=False)
+        for j, head in enumerate(use):
+            _price_head(ax[0, j], ax[1, j], d, coin, head, last_n, max_lag)
+        if title:
+            fig.suptitle(title, fontsize=10)
+        fig.tight_layout()
+        path = out_dir / f"{title or 'stage'}_price_panels_{coin}.png"
         fig.savefig(path, dpi=90)
         plt.close(fig)
         paths.append(path)

@@ -39,6 +39,7 @@ from nig_timenet_torch.model.scalers import fit_scalers
 from nig_timenet_torch.model.target_norm import fit_target_norm
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
+from nig_timenet_torch.trainer.groups import BATCH_ORDERS
 from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
 from nig_timenet_torch.trainer.staged import StagedResult, plan_stages, staged_fit
 from nig_timenet_torch.trainer.trainer import FitResult, FitSettings, Trainer
@@ -141,6 +142,10 @@ def build(run: Run) -> Run:
     run.ms = flat_run.model_settings(s.model, run.targets)
     run.trainer = flat_run.make_trainer(s, run.ms, run.targets, run.x["train"].shape[1], run.x["train"].shape[2],
                                         run.device)
+    if BATCH_ORDERS.entry(s.train.batch_order).meta["needs_times"]:      # the TRAIN rows' timestamp ids (no channel)
+        for attr, stage in (("row_times", "train"), ("val_times", "val")):
+            ids = flat_run.time_ids(run.dataset, run.idx[stage])
+            setattr(run.trainer, attr, torch.as_tensor(ids, dtype=torch.int64))
     tn_state = fit_target_norm(run.trainer.model, run.y["train"])   # TRAIN labels only; None = the model has none
     if tn_state is not None:
         run.extra["target_norm"] = tn_state
