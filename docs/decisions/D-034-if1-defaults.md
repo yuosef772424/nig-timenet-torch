@@ -8,6 +8,7 @@ Why: every line is a NEW option of new diagnostic code (`docs/INFLUENCE.md`); no
 - `monitor_of` / `batch_monitor` = None: no monitor, the training is unchanged.
 - `batch_by = "rows"` (TrainSettings, FitSettings, `FIT_SWITCH_DEFAULTS`): the batches are shuffled rows as before and the run identity is unchanged at the default (left out of the hash like the D-021 switches); "timestamp" / "day" (owner request 2) = one batch per timestamp / UTC day, the batches shuffled; `RunSettings(train)` changes only by carrying the new field at its default.
 - `har_range = None` (model builder, H3 of `docs/results/batch-by-wf-002.md`, owner 2026-11-18 "test H3"): the HAR range terms of the raw window are NOT a readout input by default; the default graph, its parameter names and checkpoints are unchanged. `HarRange(bn_warmup=False)` follows the Keras BatchNorm default as the other BatchNorm layers.
+- `use_instance_norm = True` (builder; before only `True` was accepted, "not ported yet") and `InstanceNorm(normalize=True)` (owner 2026-11-18 "try again removing the normalisation layer"): the per-window normalisation stays on by default, the default graph and its numbers are unchanged; `False` skips the centring / scaling only (stats path, clip, affine and parameter names unchanged).
 - `InfluenceSettings(group_every=0, group_rows=256)`: group-level TracIn (IF1 suggestion) off by default (it costs one backward per group); 256 rows per group gradient when on.
 - Report headings (`title` parameters) are no longer pinned defaults (`tests/defaults_pin.py::REPORT_ONLY`, IF1 suggestion): the two pinned before this PR are removed below; they change no number, file or behaviour.
 - `InfluenceSettings`: probe of 512 rows (two halves of 256: split-half reliability > 0.9 on the known-answer tests and on E1), exact deltas every step, first-order terms off by default (`first_order_every` 0: they cost a probe backward), batch rows kept for the composition analysis, seed 0.
@@ -56,8 +57,11 @@ Why: every line is a NEW option of new diagnostic code (`docs/INFLUENCE.md`); no
 - `nig_timenet_torch.eval.influence_report.write_influence_report(row_group)`: `<new>` -> `None`
 - `nig_timenet_torch.eval.influence_report.write_influence_report(window)`: `<new>` -> `9`
 - `nig_timenet_torch.model.builder.NigTimeNetV2(har_range)`: `<new>` -> `None`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(use_instance_norm)`: `<new>` -> `True`
 - `nig_timenet_torch.model.builder.build_nig_timenet_v2(har_range)`: `<new>` -> `None`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(use_instance_norm)`: `<new>` -> `True`
 - `nig_timenet_torch.model.har_range.HarRange(bn_warmup)`: `<new>` -> `False`
+- `nig_timenet_torch.model.layers.InstanceNorm(normalize)`: `<new>` -> `True`
 - `nig_timenet_torch.trainer.batch_influence.BatchInfluence(group_channel)`: `<new>` -> `False`
 - `nig_timenet_torch.trainer.batch_influence.BatchInfluence(groups)`: `<new>` -> `None`
 - `nig_timenet_torch.trainer.batch_influence.BatchInfluence(settings)`: `<new>` -> `None`

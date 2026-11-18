@@ -1,5 +1,5 @@
 {
- "fingerprint": "c644ff95ad32ae01",
+ "fingerprint": "0dcbc7079484a15f",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -749,6 +749,7 @@
   "nig_timenet_torch.model.builder.NigTimeNetV2(readout_dropout)": "None",
   "nig_timenet_torch.model.builder.NigTimeNetV2(stats_mode)": "'full'",
   "nig_timenet_torch.model.builder.NigTimeNetV2(target_norm)": "'none'",
+  "nig_timenet_torch.model.builder.NigTimeNetV2(use_instance_norm)": "True",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(alpha_min)": "2.0",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(attn_dropout)": "0.0",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(beta_min)": "0.01",
@@ -799,6 +800,7 @@
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(stride)": "2",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(target_norm)": "'none'",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(unc_max)": "20.0",
+  "nig_timenet_torch.model.builder.build_nig_timenet_v2(use_instance_norm)": "True",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(window)": "None",
   "nig_timenet_torch.model.contract.contract_of(input_name)": "'x'",
   "nig_timenet_torch.model.cross_coin.CrossCoin(dropout)": "0.1",
@@ -826,6 +828,7 @@
   "nig_timenet_torch.model.layers.InstanceNorm(affine)": "True",
   "nig_timenet_torch.model.layers.InstanceNorm(clip)": "None",
   "nig_timenet_torch.model.layers.InstanceNorm(eps)": "0.0001",
+  "nig_timenet_torch.model.layers.InstanceNorm(normalize)": "True",
   "nig_timenet_torch.model.layers.InstanceNorm(stats_clip)": "8.0",
   "nig_timenet_torch.model.layers.InstanceNorm(stats_mode)": "'full'",
   "nig_timenet_torch.model.layers.PatchEmbedding(patch_len)": "4",

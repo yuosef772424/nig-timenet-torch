@@ -62,7 +62,7 @@ NO_STATS_MODES = tuple(m for m, f in STATS_TRANSFORMS.items() if f is None)
 
 # option -> (value this port implements, step that adds the rest)
 _NOT_YET = {
-    "use_instance_norm": (True, "P34"), "use_decomposition": (True, "P34"), "use_linear_path": (True, "P34"),
+    "use_decomposition": (True, "P34"), "use_linear_path": (True, "P34"),
     "level_film": (False, "P34"), "architecture": ("fused", "P34"), "fusion": ("concat", "P34"), "n_coins": (0, "P34"),
 }
 LEVEL_NORMS = (None, "batch")
@@ -84,8 +84,9 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                  nig_head="dense", nig_head_dropout=0.0, ffn="swiglu",
                  ffn_dim=None, cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
                  cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none",
-                 har_range=None):
+                 har_range=None, use_instance_norm=True):
         super().__init__()
+        self.use_instance_norm = bool(use_instance_norm)   # owner 2026-11-18: False = no per-window normalisation
         self.har_range = None if har_range is None else tuple(int(c) for c in har_range)   # H3 (owner 2026-11-18)
         self.cross_center = bool(cross_center)   # D-032: the close mean is taken relative to its timestamp
         self.nig_trunk_grad = float(nig_trunk_grad)
@@ -184,7 +185,8 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             add("input_scaler", INPUT_SCALERS.get(self.input_scaler_kind)(nf))
         if hasattr(self, "cross_input"):  # the scaled input grows to [own, relative, relative z, market]
             nf = nf * self.cross_input.width_mult
-        add("instance_norm", InstanceNorm(nf, eps=norm_eps, clip=input_clip, stats_mode=stats_mode))
+        add("instance_norm", InstanceNorm(nf, eps=norm_eps, clip=input_clip, stats_mode=stats_mode,
+                                          normalize=self.use_instance_norm))
         if feature_dropout > 0:
             add("feature_dropout", SpatialDropout1D(feature_dropout))
         if input_noise_std > 0:
@@ -387,7 +389,7 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          nig_head="dense", nig_head_dropout=0.0, ffn="swiglu", ffn_dim=None,
                          cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
                          cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none",
-                         har_range=None, **options) -> NigTimeNetV2:
+                         har_range=None, use_instance_norm=True, **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
@@ -405,7 +407,8 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
     owner 2026-11-17): ``logret_std`` makes the NIG heads work on per-head train-standardised labels and maps their
     outputs back to label units (call ``target_norm.fit_target_norm`` before the label scale is fitted).
     ``har_range`` (H3, owner 2026-11-18; None = off): the (high, low) channel indices of the input; the HAR range terms
-    of the RAW window (model/har_range.py) join the readout."""
+    of the RAW window (model/har_range.py) join the readout. ``use_instance_norm=False`` (owner 2026-11-18): the
+    per-window normalisation is skipped (``InstanceNorm(normalize=False)``: z = the scaled input; stats unchanged)."""
     ENCODERS.entry(encoder)
     TARGET_NORMS.entry(target_norm)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
@@ -441,4 +444,5 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         nig_head=nig_head, nig_head_dropout=nig_head_dropout, ffn=ffn, ffn_dim=ffn_dim,
         cross_coin_layers=cross_coin_layers, cross_coin_heads=cross_coin_heads,
         cross_coin_peer_dropout=cross_coin_peer_dropout, cross_coin_kind=cross_coin_kind,
-        cross_input=cross_input, cross_center=cross_center, target_norm=target_norm, har_range=har_range)
+        cross_input=cross_input, cross_center=cross_center, target_norm=target_norm, har_range=har_range,
+        use_instance_norm=use_instance_norm)

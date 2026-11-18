@@ -2,7 +2,9 @@
 against the model-free bound (6-bar range, ridge on the HAR features fitted on the training rows). Prints markdown
 and the verdict of rules (a) and (b).
 
-    python docs/audit/2026-11-17-batch-by/h3_check.py ARTIFACT STUDY
+    python docs/audit/2026-11-17-batch-by/h3_check.py ARTIFACT STUDY [CANDIDATE]
+
+CANDIDATE: the version compared with A0 (H in PREREGISTERED_3, N in PREREGISTERED_4).
 """
 
 import json
@@ -25,7 +27,7 @@ from nig_timenet_torch.workflow.settings import RollingSettings
 ROLLING = RollingSettings(mode="expanding", train_span="365D", test_span="350D", step="350D", embargo="1D",
                           max_folds=1)
 LAMBDAS = (1.0, 10.0, 100.0, 1000.0, 10000.0, 100000.0)
-VERSIONS = ("A0", "H")
+VERSIONS = ["A0", "H"]
 HEADS = (("high", 1.0), ("low", -1.0))
 
 
@@ -41,7 +43,9 @@ def ic(y, pred, ts) -> float:
     return metrics.rank_ic(np.asarray(y), np.asarray(pred), np.asarray(ts))
 
 
-def main(artifact: str, study: str) -> int:
+def main(artifact: str, study: str, candidate: str = "H") -> int:
+    VERSIONS[1] = candidate
+    c = candidate
     ds = load_dataset(LoaderSettings(name=artifact, mmap=True, local_dir="")).dataset
     x = np.asarray(ds[input_key(ds)])
     feats, _ = simple_features(x, ds["feature_order"])
@@ -82,27 +86,27 @@ def main(artifact: str, study: str) -> int:
     df, wf = pd.DataFrame(rows), pd.DataFrame(whole)
     print(f"seeds {seeds}; test rows {len(te)}; train rows {len(tr)}; validation rows {len(va)}\n")
     print("## Rank IC by timestamp per quarter of 2024 (versions: mean of the seeds)\n")
-    cols = ["head", "quarter", "rows", "range6", "ridge", "lambda", "A0", "H", "bound"]
+    cols = ["head", "quarter", "rows", "range6", "ridge", "lambda", "A0", c, "bound"]
     print("| " + " | ".join(cols) + " |\n|" + "---|" * len(cols))
     for r in df[cols].itertuples(index=False):
         print("| " + " | ".join(f"{v:.4f}" if isinstance(v, float) else str(v) for v in r) + " |")
     print("\n## Whole test year per seed\n")
-    print("| head | seed | A0 | H |\n|---|---|---|---|")
-    for r in wf.itertuples(index=False):
-        print(f"| {r.head} | {r.seed} | {r.A0:.4f} | {r.H:.4f} |")
-    a = {h: int((g["H"] >= g["bound"]).sum()) for h, g in df.groupby("head")}
-    b_q = {h: int((g["H"] > g["A0"]).sum()) for h, g in df.groupby("head")}
-    b_s = bool((wf["H"] > wf["A0"]).all())
-    gap = {h: float(((g["H"] - g["A0"]).sum()) / max((g["bound"] - g["A0"]).sum(), 1e-12)) for h, g in
+    print(f"| head | seed | A0 | {c} |\n|---|---|---|---|")
+    for r in wf.to_dict("records"):
+        print(f"| {r['head']} | {r['seed']} | {r['A0']:.4f} | {r[c]:.4f} |")
+    a = {h: int((g[c] >= g["bound"]).sum()) for h, g in df.groupby("head")}
+    b_q = {h: int((g[c] > g["A0"]).sum()) for h, g in df.groupby("head")}
+    b_s = bool((wf[c] > wf["A0"]).all())
+    gap = {h: float(((g[c] - g["A0"]).sum()) / max((g["bound"] - g["A0"]).sum(), 1e-12)) for h, g in
            df.groupby("head")}
     rule_a = all(v >= 3 for v in a.values())
     rule_b = all(v >= 3 for v in b_q.values()) and b_s
-    print(f"\n- rule (a), H >= bound in quarters: {a} -> {rule_a}")
-    print(f"- rule (b), H > A0 in quarters: {b_q}; H > A0 on every seed and head (whole year): {b_s} -> {rule_b}")
-    print(f"- read: share of the A0-to-bound gap closed by H (sum over quarters): {json.dumps(gap)}")
-    print(f"\n**H3 {'supported' if rule_a and rule_b else 'refuted'}**")
+    print(f"\n- rule (a), {c} >= bound in quarters: {a} -> {rule_a}")
+    print(f"- rule (b), {c} > A0 in quarters: {b_q}; {c} > A0 on every seed and head (whole year): {b_s} -> {rule_b}")
+    print(f"- read: share of the A0-to-bound gap closed by {c} (sum over quarters): {json.dumps(gap)}")
+    print(f"\n**{c} {'supported' if rule_a and rule_b else 'refuted'}**")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1], sys.argv[2]))
+    sys.exit(main(*sys.argv[1:4]))

@@ -29,9 +29,10 @@ from nig_timenet_torch.workflow.settings import (
 ARMS = {"A0": {"batch_by": "rows", "batch_size": 256}, "A1": {"batch_by": "day"},
         "A2": {"batch_by": "timestamp"}, "C60": {"batch_by": "rows", "batch_size": 60},
         "C20": {"batch_by": "rows", "batch_size": 20},
-        "C34": {"batch_by": "rows", "batch_size": 34}, "H": {"batch_by": "rows", "batch_size": 256}}
+        "C34": {"batch_by": "rows", "batch_size": 34}, "H": {"batch_by": "rows", "batch_size": 256},
+        "N": {"batch_by": "rows", "batch_size": 256}}
 #: model overrides of an arm on top of the run default model (H3: the HAR range terms of the raw window)
-MODEL_ARMS = {"H": {"har_range": [0, 1]}}
+MODEL_ARMS = {"H": {"har_range": [0, 1]}, "N": {"use_instance_norm": False}}
 #: walk-forward geometry: "folds" = 4 quarters of 2024 (studies 1 and 2), "single" = train 2023 / test 2024 (H3)
 GEOMETRY = {"folds": {"train_span": "365D", "test_span": "90D", "step": "90D"},
             "single": {"train_span": "365D", "test_span": "350D", "step": "350D"}}
