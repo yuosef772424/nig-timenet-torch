@@ -1,4 +1,4 @@
-# D-035 — Panel walk-forwards: std target normalisation, LS selection, two timeframes 4h + 1h (owner 2026-11-18)
+# D-034 — Panel walk-forwards: std target normalisation, LS selection, two timeframes 4h + 1h (owner 2026-11-18)
 
 Date: 2026-11-18
 Owner decision: owner messages 2026-11-18 (Arabic): "test the panel model with std normalisation of the batch data, use the rolling training"; "run another process based on relative_rank_loss_ls for the best version"; "also prepare a process with two frames, the 4 hour frame and the 1 hour frame, then prepare the process and give me the run command so that if the limit ends I run it on Colab after the running trainings end".
