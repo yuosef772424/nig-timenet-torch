@@ -176,6 +176,7 @@ def test_experiment_switches_reach_the_settings_and_a_finished_run_is_read_with_
         run_notebook("main", {**base, "RUN_NAME": "x3", "ON_STOP_WEIGHTS": "newest"})
 
 
+@pytest.mark.slow   # rule E3: the fast suite reached 301.9 s on CI with it (AB1); it still runs in CI
 def test_notebook_stop_button_keeps_the_last_finished_epoch_and_runs_the_tests(tmp_path, art):
     """ON_STOP_WEIGHTS (notebook default "last"): a KeyboardInterrupt in the training cell leaves the weights of the
     last finished epoch and the later cells (health, test, battery, summary) run; None lets the stop through."""
