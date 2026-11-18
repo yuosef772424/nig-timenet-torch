@@ -63,7 +63,9 @@ timestamps and staged training has its own loop, so both refuse it. A non-defaul
 On E1 (16 coins): `timestamp` = 799 batches of 16 rows per epoch, `day` = 267 batches. With the monitor on, the batch
 report then reads as "which DATES help or hurt", one step per date. First walk-forward look (20 real coins, CPU):
 `docs/results/batch-by-wf-001.md` (no arm better on the test loss; timestamp batches raise the low-head rank IC in
-7 / 8 pairs, a hypothesis for a larger study).
+7 / 8 pairs, a hypothesis for a larger study). On 60 coins (`docs/results/batch-by-wf-002.md`) that gain did not
+repeat: timestamp batches only recover what small batches lose (vs a 34-row control +0.035), equal the default on the
+low IC and have a worse test loss in 12 / 12 pairs. `rows` stays the default.
 
 ## 2. Effect of each input feature
 
