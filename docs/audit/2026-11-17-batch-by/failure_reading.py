@@ -66,7 +66,7 @@ def main(artifact: str, study: str, control: str = "C20") -> int:
         sign = 1 if h == "high" else -1
         print(f"- {h}: rank IC by timestamp of last-bar range {ic(a0.assign(b=sign * a0.range1), 'b', f'lab_{h}'):.4f},"
               f" of 6-bar mean range {ic(a0.assign(b=sign * a0.range6), 'b', f'lab_{h}'):.4f}")
-    print("\n## Rank IC by timestamp per arm (all folds pooled, mean of the 2 seeds) and the gap to the 6-bar range\n")
+    print("\n## Rank IC by timestamp per arm (all folds pooled, mean over the seeds) and the gap to the 6-bar range\n")
     print("| arm | high | low | close | low - range6 baseline |\n|---|---|---|---|---|")
     base_low = ic(a0.assign(b=-a0.range6), "b", "lab_low")
     for arm in [a for a in ARMS if a in set(df.arm)]:
