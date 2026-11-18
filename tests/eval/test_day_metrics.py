@@ -105,3 +105,10 @@ def test_uncertainty_use_reads_a_useful_sd_and_fits_thresholds_on_val():
     assert ranked["rows_share"] == 1.0 and ranked["absolute_gross"] == sel["all_rows"]["absolute_gross"]   # same signs
     assert ranked["neutral_gross"]["win_share"] > 0.8
     assert "T-sharp" in uu.render(r) and "top_confidence" in uu.render(r)
+    # owner 2026-11-19: the kept-row rules carry the CI of the net mean day, also at 1 - 0.05 / rules (5 rules)
+    adj = sel["top_confidence"]["absolute_net_adjusted"]
+    net = sel["top_confidence"]["absolute_net"]
+    assert adj["level"] == pytest.approx(0.99) and adj["mean"] == pytest.approx(net["mean"])
+    assert adj["mean_lo"] <= net["mean_lo"] <= net["mean"] <= net["mean_hi"] <= adj["mean_hi"]   # wider at 99 %
+    text = uu.render(r)
+    assert "net CI at 1 - 0.05 / rules" in text and "5 rules read on the same rows" in text
