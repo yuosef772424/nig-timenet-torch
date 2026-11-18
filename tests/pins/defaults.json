@@ -1,5 +1,5 @@
 {
- "fingerprint": "5e2b68daede58c5d",
+ "fingerprint": "c644ff95ad32ae01",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -732,6 +732,7 @@
   "nig_timenet_torch.model.builder.NigTimeNetV2(feature_dropout)": "0.0",
   "nig_timenet_torch.model.builder.NigTimeNetV2(ffn)": "'swiglu'",
   "nig_timenet_torch.model.builder.NigTimeNetV2(ffn_dim)": "None",
+  "nig_timenet_torch.model.builder.NigTimeNetV2(har_range)": "None",
   "nig_timenet_torch.model.builder.NigTimeNetV2(input_clip)": "None",
   "nig_timenet_torch.model.builder.NigTimeNetV2(input_noise_std)": "0.0",
   "nig_timenet_torch.model.builder.NigTimeNetV2(input_scaler)": "'none'",
@@ -767,6 +768,7 @@
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(feature_dropout)": "0.0",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(ffn)": "'swiglu'",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(ffn_dim)": "None",
+  "nig_timenet_torch.model.builder.build_nig_timenet_v2(har_range)": "None",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(head_hidden)": "128",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(head_types)": "None",
   "nig_timenet_torch.model.builder.build_nig_timenet_v2(input_clip)": "None",
@@ -812,6 +814,7 @@
   "nig_timenet_torch.model.cross_coin.CrossSectionPool(peer_dropout)": "0.0",
   "nig_timenet_torch.model.encoders.EncoderDims(ffn)": "'swiglu'",
   "nig_timenet_torch.model.encoders.EncoderDims(ffn_dim)": "None",
+  "nig_timenet_torch.model.har_range.HarRange(bn_warmup)": "False",
   "nig_timenet_torch.model.heads.classification_head_forward(drop)": "None",
   "nig_timenet_torch.model.heads.multiclass_head_forward(drop)": "None",
   "nig_timenet_torch.model.layers.BatchNormChannelsLast(epsilon)": "0.001",

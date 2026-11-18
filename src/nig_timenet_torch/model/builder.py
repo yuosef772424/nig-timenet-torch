@@ -24,6 +24,7 @@ from nig_timenet_torch.model import label_scale
 from nig_timenet_torch.model.attn_heads import check_nig_head, nig_head_builder, reads_sequence
 from nig_timenet_torch.model.cross_coin import CROSS_INPUTS, CrossCoin, center_groups, split_group
 from nig_timenet_torch.model.encoders import ENCODERS, CausalConv1D, EncoderDims, tcn_n_blocks
+from nig_timenet_torch.model.har_range import HarRange
 from nig_timenet_torch.model.heads import (
     HEAD_REGISTRY,
     class_head_kind,
@@ -82,8 +83,10 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                  readout_dropout=None, nig_trunk_grad=1.0, nig_scale_fit="fixed", input_scaler="none",
                  nig_head="dense", nig_head_dropout=0.0, ffn="swiglu",
                  ffn_dim=None, cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
-                 cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none"):
+                 cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none",
+                 har_range=None):
         super().__init__()
+        self.har_range = None if har_range is None else tuple(int(c) for c in har_range)   # H3 (owner 2026-11-18)
         self.cross_center = bool(cross_center)   # D-032: the close mean is taken relative to its timestamp
         self.nig_trunk_grad = float(nig_trunk_grad)
         self.label_scale_name, fit_s = nig_scale_fit, label_scale.fitted(nig_scale_fit)   # FX2 (B-052)
@@ -207,6 +210,9 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         if self.use_stats:
             add("stats_proj", nn.Linear(2 * nf, d_model))
         extra = self.skip.readout_extra_dim if hasattr(self, "skip") else 0
+        if self.har_range is not None:   # H3: the HAR range terms of the RAW input join the readout
+            add("har_range", HarRange(self.har_range, d_model, bn_warmup=bn_warmup))
+            extra += d_model
         add("readout_fc", nn.Linear(2 * seq_width + (d_model if self.use_stats else 0) + extra, d_model))
         lin_width = nf * (2 if self.level_passthrough else 1)
         add("linear_path", nn.Linear(T * lin_width, d_model))
@@ -232,6 +238,7 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         """``branch`` plus the encoder's output tokens (B, T', d_model) after final_norm (attention heads' input)."""
         tap = lambda name, v: self._tap(name + sfx, v)  # noqa: E731
         x = tap("input", x)
+        raw = x
         if self._m("input_scaler", sfx) is not None:
             x = tap("scaled", self._m("input_scaler", sfx)(x))
         if hasattr(self, "cross_input"):
@@ -259,6 +266,8 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             parts.append(F.gelu(self._m("stats_proj", sfx)(stats)))
         if hasattr(self, "skip") and self.skip.readout_extra_dim:
             parts.append(self.skip.readout_extra(tok))
+        if self._m("har_range", sfx) is not None:
+            parts.append(tap("har_range", self._m("har_range", sfx)(raw)))
         lin_in = z if lvl is None else torch.cat([z, lvl], dim=-1)
         readout = tap("readout", F.gelu(self._m("readout_fc", sfx)(tap("pooled", torch.cat(parts, dim=-1)))))
         return tap("branch_out", readout + tap("linear_path", self._m("linear_path", sfx)(lin_in.flatten(1)))), h
@@ -378,7 +387,7 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          nig_head="dense", nig_head_dropout=0.0, ffn="swiglu", ffn_dim=None,
                          cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
                          cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none",
-                         **options) -> NigTimeNetV2:
+                         har_range=None, **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
@@ -394,7 +403,9 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
     (D-032): the close mean leaves the model minus its mean over the rows of the timestamp (a relative move; rows
     without the timestamp channel are left as they are). ``target_norm`` (a name of ``target_norm.TARGET_NORMS``,
     owner 2026-11-17): ``logret_std`` makes the NIG heads work on per-head train-standardised labels and maps their
-    outputs back to label units (call ``target_norm.fit_target_norm`` before the label scale is fitted)."""
+    outputs back to label units (call ``target_norm.fit_target_norm`` before the label scale is fitted).
+    ``har_range`` (H3, owner 2026-11-18; None = off): the (high, low) channel indices of the input; the HAR range terms
+    of the RAW window (model/har_range.py) join the readout."""
     ENCODERS.entry(encoder)
     TARGET_NORMS.entry(target_norm)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
@@ -430,4 +441,4 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         nig_head=nig_head, nig_head_dropout=nig_head_dropout, ffn=ffn, ffn_dim=ffn_dim,
         cross_coin_layers=cross_coin_layers, cross_coin_heads=cross_coin_heads,
         cross_coin_peer_dropout=cross_coin_peer_dropout, cross_coin_kind=cross_coin_kind,
-        cross_input=cross_input, cross_center=cross_center, target_norm=target_norm)
+        cross_input=cross_input, cross_center=cross_center, target_norm=target_norm, har_range=har_range)

@@ -15,6 +15,7 @@ from pathlib import Path
 import torch
 
 from nig_timenet_torch.data_io.loading import LoaderSettings
+from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.workflow.rolling_run import run_rolling
 from nig_timenet_torch.workflow.settings import (
     BatterySettings,
@@ -22,12 +23,18 @@ from nig_timenet_torch.workflow.settings import (
     RollingSettings,
     RunSettings,
     TrainSettings,
+    default_model_settings,
 )
 
 ARMS = {"A0": {"batch_by": "rows", "batch_size": 256}, "A1": {"batch_by": "day"},
         "A2": {"batch_by": "timestamp"}, "C60": {"batch_by": "rows", "batch_size": 60},
         "C20": {"batch_by": "rows", "batch_size": 20},
-        "C34": {"batch_by": "rows", "batch_size": 34}}
+        "C34": {"batch_by": "rows", "batch_size": 34}, "H": {"batch_by": "rows", "batch_size": 256}}
+#: model overrides of an arm on top of the run default model (H3: the HAR range terms of the raw window)
+MODEL_ARMS = {"H": {"har_range": [0, 1]}}
+#: walk-forward geometry: "folds" = 4 quarters of 2024 (studies 1 and 2), "single" = train 2023 / test 2024 (H3)
+GEOMETRY = {"folds": {"train_span": "365D", "test_span": "90D", "step": "90D"},
+            "single": {"train_span": "365D", "test_span": "350D", "step": "350D"}}
 
 
 def main(argv=None) -> int:
@@ -40,17 +47,20 @@ def main(argv=None) -> int:
     ap.add_argument("--seeds", default="0,1")
     ap.add_argument("--device", default="cpu", help="cpu (one thread) or cuda")
     ap.add_argument("--name", default="", help="output folder name (default: the arm), e.g. A2_s0 for one seed")
+    ap.add_argument("--geometry", choices=sorted(GEOMETRY), default="folds")
     a = ap.parse_args(argv)
     if a.device == "cpu":
         torch.set_num_threads(1)
     out = Path(a.out) / (a.name or a.arm)
     out.mkdir(parents=True, exist_ok=True)
     train = TrainSettings(device=a.device, epochs=a.epochs, **ARMS[a.arm])
-    settings = RunSettings(run_dir=str(out / "unused"), train=train,
+    base = default_model_settings()
+    model = ModelSettings(base.architecture, {**base.overrides, **MODEL_ARMS.get(a.arm, {})})
+    settings = RunSettings(run_dir=str(out / "unused"), train=train, model=model,
                            data=LoaderSettings(name=a.artifact, mmap=True, local_dir=""),
                            evaluation=EvalSettings(battery=BatterySettings(enabled=False)))
-    rolling = RollingSettings(mode="expanding", train_span="365D", test_span="90D", step="90D", embargo="1D",
-                              max_folds=a.max_folds, seeds=tuple(int(s) for s in a.seeds.split(",")))
+    rolling = RollingSettings(mode="expanding", embargo="1D", **GEOMETRY[a.geometry], max_folds=a.max_folds,
+                              seeds=tuple(int(s) for s in a.seeds.split(",")))
     log = out / "test_loss.jsonl"
     t0 = time.monotonic()
 
