@@ -24,6 +24,9 @@ ARMS = {
     # max(0.01, the lite seed spread) on BOTH seeds and high / low lose no more than 0.01; same rule for +rank_ic.
     "lite_tb": ({"train.batch_order": "time_blocks"}, LITE),
     "lite_tb_rank": ({"train.batch_order": "time_blocks", "train.cross_section_loss": "rank_ic"}, LITE),
+    # control added after the tb numbers (a confound, not a new rule): one-moment batches hold ~59 rows, so tb takes
+    # ~4 x more optimizer steps per epoch than batch 256; batch 64 with random rows matches the step count
+    "lite_bs64": ({"train.batch_size": 64}, LITE),
 }
 chg, mo = ARMS[arm]
 rd = f"{root}/{arm}_s{seed}"

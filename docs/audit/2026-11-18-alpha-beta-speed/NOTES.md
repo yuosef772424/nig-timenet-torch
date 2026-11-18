@@ -150,7 +150,31 @@ Reading (exploratory, rule C5; one data set, 4 epochs, 2 seeds):
   `trace_epoch_seconds`): base / lite / lite + batch 2048 lr 3e-3 / base + batch 2048 lr 3e-3, on the full artifact
   with `WORK_ON = "local"` and `steps_per_execution` 32. Accept rule as above.
 
-## 7. What was not verified
+## 7. Batch composition: one moment of all coins per batch (owner question, 2026-11-18)
+
+Switch `train.batch_order: "time_blocks"` (this PR, off by default): one batch = all coins of one timestamp, the order
+of the timestamps shuffled every epoch; the model still reads each coin alone (no timestamp channel, no cross-coin
+input). With it, the cross-section rank term (`train.cross_section_loss: "rank_ic"`, D-032) runs without the panel
+path. Same stand-in, lite model, 4 epochs, 2 seeds, rule written in `scripts/speed_arms.py` before the numbers
+(candidate only if VAL close rank IC beats lite (rows) by more than max(0.01, the lite seed spread) on BOTH seeds and
+high / low lose no more than 0.01). Raw rows: `batch_arms_cpu.jsonl`.
+
+| arm | steps / epoch | VAL rank IC high (s0 / s1) | low | close | best epoch | verdict |
+|---|---|---|---|---|---|---|
+| lite, random rows, batch 256 (reference) | 532 | 0.270 / 0.275 | 0.358 / 0.356 | 0.049 / 0.038 | 2 / 4 | reference |
+| control: lite, random rows, batch 64 (same step count as one-moment batches) | 2,126 | 0.271 / 0.271 | 0.366 / 0.333 | 0.055 / 0.019 | 2 / 3 | = reference: the step count alone changes nothing |
+| time_blocks (one moment per batch) | ~2,300 | 0.289 / 0.292 | 0.375 / 0.370 | -0.031 / 0.077 | 4 / 4 | fails (close unstable across seeds; VAL NLL -7.19 / -7.21 against -7.27) |
+| **time_blocks + rank_ic** | ~2,300 | **0.292 / 0.300** | **0.384 / 0.382** | **0.089 / 0.092** | 4 / 4 | **passes** (close +0.04 / +0.05, high / low +0.02 / +0.03) |
+
+Reading (exploratory, rule C5): ordering alone does not help the close head (one seed falls below zero): the loss is
+still an absolute NLL per row and a one-moment batch is dominated by the common market move. The rank term inside the
+moment is what lifts the relative ranking, now without the panel model's extra inputs. Not yet known: its NIG NLL
+(the logged raw loss includes the rank term, so it is not comparable), whether the gain holds past 4 epochs (best
+epoch = last on every time-block run), on the owner's artifact, in walk-forward folds, and after costs. Next: the
+same three arms (rows / time_blocks + rank_ic / panel relative + rank_ic) on the full artifact, 2 seeds, then the
+`rolling` entry; read with the day metrics (B-074: the gross edge of a 4 h book is below its cost).
+
+## 8. What was not verified
 - No GPU number here (no Colab bridge in this session): the GPU gains of S1, S4-S9 are expectations.
 - The stand-in is public Binance data (59 coins), not the owner's artifact; the trained Drive model was read on it.
 - The alpha fixes A1-A4 were not run; the speed arms are 4 epochs on 136k rows, not a full training.
