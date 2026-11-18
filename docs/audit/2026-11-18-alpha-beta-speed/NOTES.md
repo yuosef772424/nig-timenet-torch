@@ -119,3 +119,38 @@ dropout masks (9 %).
 | S9 | drop heads a run does not use (class heads, confidence heads, Kendall) | a head_types override plus the trainer's target config | fewer kernels | changes the model; a separate arm |
 
 S1-S5 are settings only (no code). S6-S9 are code changes and need their own switch, test and GPU measurement.
+
+## 6. Speed arms measured on CPU (stand-in, 136,054 train / 15,045 VAL windows, 4 epochs, 2 seeds, 2 threads each)
+
+Pre-registered in `scripts/speed_arms.py` before any number: a fast arm passes when its time per epoch is <= half the
+base arm's AND, at the same epoch count, every head's VAL rank IC (within timestamp, best-epoch weights) is >= base
+minus max(0.01, the base seed spread) AND its best VAL NIG NLL is not worse by more than 0.02. Raw rows:
+`speed_arms_cpu.jsonl`. "lite" = d_model 32, 1 GRU layer, head_hidden 32, class_head_hidden 16 (all else default).
+
+| arm | params | s / epoch (seed 0 / 1) | best VAL NLL (s0 / s1) | VAL rank IC high (s0 / s1) | low | close | best epoch | verdict |
+|---|---|---|---|---|---|---|---|---|
+| base (batch 256, lr 1e-3) | 102,310 | 59.4 / 59.8 | -7.256 / -7.204 | 0.239 / 0.250 | 0.336 / 0.311 | 0.044 / 0.030 | 2 / 2 | reference |
+| base, batch 1024, lr 2e-3 | 102,310 | 58.7 / 57.1 | -7.267 / -7.222 | 0.254 / 0.254 | 0.336 / 0.359 | 0.032 / 0.052 | 2 / 1 | quality kept; no CPU gain (expected, see below) |
+| base, batch 4096, lr 4e-3 | 102,310 | 85.8 / 87.3 * | -7.227 / -7.278 | 0.262 / 0.276 | 0.320 / 0.350 | 0.029 / 0.053 | 3 / 2 | quality kept |
+| **lite** (batch 256) | 25,094 | **23.1 / 22.4** | -7.274 / -7.265 | 0.270 / 0.275 | 0.358 / 0.356 | 0.049 / 0.038 | 2 / 4 | **pass** (0.38 x the time, every head at or above base) |
+| lite, batch 1024, lr 2e-3 | 25,094 | 18.1 / 18.3 | -7.268 / -7.252 | 0.270 / 0.278 | 0.358 / 0.344 | 0.052 / 0.049 | 4 / 3 | pass |
+| lite, batch 4096, lr 4e-3 | 25,094 | 22.5 / 22.2 | -7.241 / -7.248 | 0.276 / 0.273 | 0.352 / 0.356 | 0.047 / 0.050 | 4 / 4 | pass, still improving at epoch 4 (fewer steps) |
+
+\* the base batch-4096 runs overlapped with a subagent's test runs on the same 4 cores: their times are inflated.
+
+Reading (exploratory, rule C5; one data set, 4 epochs, 2 seeds):
+- **The default model is larger than this data needs.** The lite model (4 x fewer parameters) is at least as good on
+  every head and on the NLL, and the base model's best epoch is 2 of 4 on both seeds (it starts to memorise), the lite
+  model's 2-4. The gain over base is about the size of the seed spread for close, larger for high / low (+0.02 to
+  +0.05). Not shown on the full 2.5 M-row artifact, where capacity may matter: that is the GPU check below.
+- **A larger batch does not hurt quality** (with lr x sqrt(batch ratio)); on the CPU it does not save time because
+  the CPU is compute-bound (the GRU loop). On the GPU the model is launch-bound, so a 4-16 x larger batch is expected
+  to cut the epoch time by a similar factor; batch 4096 needs more epochs (best epoch = last epoch).
+- Proposal for the GPU check (one job, the baseline arm among the arms, 2 seeds, one commit; time per epoch from
+  `trace_epoch_seconds`): base / lite / lite + batch 2048 lr 3e-3 / base + batch 2048 lr 3e-3, on the full artifact
+  with `WORK_ON = "local"` and `steps_per_execution` 32. Accept rule as above.
+
+## 7. What was not verified
+- No GPU number here (no Colab bridge in this session): the GPU gains of S1, S4-S9 are expectations.
+- The stand-in is public Binance data (59 coins), not the owner's artifact; the trained Drive model was read on it.
+- The alpha fixes A1-A4 were not run; the speed arms are 4 epochs on 136k rows, not a full training.
