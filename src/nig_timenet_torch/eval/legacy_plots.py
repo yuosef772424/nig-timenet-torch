@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.eval import legacy_reports as lr
 from nig_timenet_torch.stats import metrics
 
@@ -288,7 +289,7 @@ def _price_head(ax_price, ax_lag, d: pd.DataFrame, coin: str, head: str, last_n:
     ax_lag.grid(alpha=0.25)
 
 
-def price_panels(table: pd.DataFrame, coins, out_dir, heads=("high", "low", "close"), last_n: int = 16,
+def price_panels(table: pd.DataFrame, coins, out_dir, heads=TARGET_COLUMNS, last_n: int = 16,
                  max_lag: int = 5, title: str = "") -> list[Path]:
     """TF price-level figures, one PNG per coin: per head a price panel (Actual / Predicted / Naive t-1 over the last
     ``last_n`` rows, title "MAE improve" over ALL the coin's rows) and below it the Lag Scan bars (k = -max_lag..
