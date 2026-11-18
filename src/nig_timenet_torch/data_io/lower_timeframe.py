@@ -22,15 +22,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import TS_COL
+from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io import npy_dir
 from nig_timenet_torch.data_io.artifact import read_manifest
 
 __all__ = ["log_move_windows", "add_timeframe", "DERIVATION_JSON", "main"]
 
 DERIVATION_JSON = "derivation.json"
-#: the channels of the source artifact, in order (feature_order high / low / close)
-CHANNELS = ("high", "low", "close")
+#: the channels of the source artifact, in order (its feature_order: the price targets high / low / close)
+CHANNELS = tuple(TARGET_COLUMNS)
 
 
 def log_move_windows(candles: pd.DataFrame, end_times: np.ndarray, tf: str, window: int,
@@ -79,7 +79,7 @@ def _coin_candles(symbol: str, tf: str, start: pd.Timestamp, end: pd.Timestamp, 
     path = None if cache is None else cache / f"{symbol}_{tf}.parquet"
     if path is not None and path.is_file():
         return pd.read_parquet(path)
-    frame = fetch(symbol, tf, start, end)[["high", "low", "close"]]
+    frame = fetch(symbol, tf, start, end)[list(CHANNELS)]
     if path is not None:
         tmp = path.with_suffix(".tmp")
         frame.to_parquet(tmp)
