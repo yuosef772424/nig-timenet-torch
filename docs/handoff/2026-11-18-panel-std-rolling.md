@@ -51,3 +51,14 @@ readings in `<job>/reading_vs_<ref>/reading.json`, the artifact in
 `MyDrive/crypto_model/torch_artifacts/preprocessing_output_1_plus_1h` (with `derivation.json`).
 Not verified: the chain end to end on Colab, the artifact build on real data (only the BTCUSDT channel check and the
 CPU tests), the runtime release (`runtime.unassign()` through the kernel).
+
+## State at 22:10 UTC on 2026-11-18 (runtime `68b28de0b4262a26`, L4)
+- The owner started the chain (no `SHUTDOWN`) about 21:3x: artifact `preprocessing_output_1_plus_1h` built (fingerprint
+  `02f375cb3286`, on Drive), smoke passed, `panel-rolling-2tf-001` running (commit `03bafba`), `panel-rolling-ls-001`
+  resuming from `/content/nig_ls` (`6c928bb`). A second chain started by the session waited behind it and was killed.
+- `panel-rolling-ref-003` failed at start (its config did not name a frame; fixed in `ed2d3b4`) and was restarted at
+  22:06 from `/content/nig_03b` (`03bafba`, the commit of the 2tf job, rule C4).
+- `label-order-e4-look` (E4, arms relative_rank_loss / _logret_std / _logret_std_label_order, seeds 0 and 1) from
+  `/content/nig_new` (`ed2d3b4`): the known-answer test of `order_in_label_units` (B-079).
+- `finish_and_release.sh` waits for every job, writes the readings (2tf vs ref-003, ls vs ref-002, ref-003 vs ref-002)
+  to `<job>/reading_vs_<ref>/`, flushes Drive and releases the runtime. Log: `nig_timenet_runs/finish_and_release.log`.
