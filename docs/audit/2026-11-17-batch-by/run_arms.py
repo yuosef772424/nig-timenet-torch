@@ -2,7 +2,8 @@
 arms run as separate processes (one CPU thread each). Writes ``<out>/<arm>/`` (the rolling outputs of every fold x
 seed) and ``<out>/<arm>/test_loss.jsonl`` (the trainer's raw loss and per-target losses on each fold's test rows).
 
-    python docs/audit/2026-11-17-batch-by/run_arms.py ARTIFACT OUT ARM [--epochs 4] [--max-folds 4]
+    python docs/audit/2026-11-17-batch-by/run_arms.py ARTIFACT OUT ARM [--epochs 4] [--max-folds 4] [--seeds 0,1]
+        [--device cpu|cuda]
 """
 
 import argparse
@@ -36,11 +37,13 @@ def main(argv=None) -> int:
     ap.add_argument("--epochs", type=int, default=4)
     ap.add_argument("--max-folds", type=int, default=4)
     ap.add_argument("--seeds", default="0,1")
+    ap.add_argument("--device", default="cpu", help="cpu (one thread) or cuda")
     a = ap.parse_args(argv)
-    torch.set_num_threads(1)
+    if a.device == "cpu":
+        torch.set_num_threads(1)
     out = Path(a.out) / a.arm
     out.mkdir(parents=True, exist_ok=True)
-    train = TrainSettings(device="cpu", epochs=a.epochs, **ARMS[a.arm])
+    train = TrainSettings(device=a.device, epochs=a.epochs, **ARMS[a.arm])
     settings = RunSettings(run_dir=str(out / "unused"), train=train,
                            data=LoaderSettings(name=a.artifact, mmap=True, local_dir=""),
                            evaluation=EvalSettings(battery=BatterySettings(enabled=False)))
