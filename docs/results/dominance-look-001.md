@@ -76,3 +76,33 @@ reference: (own - BTC) is the P&L of "long the coin, short BTC", a hedge with on
 basket of alts (relevant to the cost wall B-074; the battery's flat cost per side does not model it yet).
 Hypothesis: a BTC-relative target and book (long top coins, short BTC) against the market-neutral book, with a cost
 model per instrument; refuted if its net day mean is not above the neutral book's on the pooled walk-forward days.
+
+## Addendum 2: real dominance data, what can be downloaded, and the USDT supply test (owner 2026-11-19)
+Sources (web search 2026-11-19): no ready 4h / 1h dominance file was found. Daily BTC dominance: bitcoin-data.com
+(BGeometrics) free CSV per metric by MANUAL download, its terms forbid redistribution (keep it on Drive, never in this
+repository); Kaggle "Cryptocurrency: Fear & Dominance 2017-present" (account needed, schema unchecked). TradingView
+has no data API and its terms forbid scraping: only the owner's manual "Export chart data" of `CRYPTOCAP:BTC.D` /
+`CRYPTOCAP:USDT.D`. Free and scriptable: the USDT circulating supply, daily, from DefiLlama
+(`stablecoins.llama.fi/stablecoin/1`: 3277 days, 2017-11-29 .. 2026-11-18), saved to
+`MyDrive/crypto_model/external_usdt_supply_defillama.csv`.
+
+Test (scripts `usdt_supply.py`, `usdt_supply_after.py`): the log growth of USDT supply over 1 and 7 days, taken from
+the PREVIOUS day (no lookahead), against the market's next move (mean over the coins of the timestamp).
+
+| | TRAIN era (13183 timestamps, 2020-02 .. 2026-02) | after train (1285 timestamps, 2026-02 .. 2026-09) |
+|---|---|---|
+| 7-day growth -> market next 8 h | +0.030 [+0.002, +0.066] | +0.016 [-0.047, +0.091] |
+| 7-day growth -> market next 8 h, partial on the market's 24 h move | +0.032 [+0.002, +0.071] | +0.017 [-0.049, +0.095] |
+| 7-day growth -> market next 24 h | +0.039 [+0.002, +0.087] | +0.024 [-0.052, +0.115] |
+| 1-day growth -> market next 8 h, partial | +0.016 [-0.000, +0.035] | +0.025 [-0.036, +0.087] |
+| correlation of the 7-day growth with the market's own 24 h move | +0.05 | +0.05 |
+| market 24 h -> market next 8 h (reference) | -0.043 [-0.071, -0.013] | -0.027 [-0.124, +0.084] |
+
+Reading: the supply growth is NOT price information (r 0.05 with the market's own move) and on the train era it
+predicts the market's next 8-24 h with the expected sign, beyond the market's own move (partial +0.032, CI above 0 at
+95 %; about 6 variants were looked at, so at 1 - 0.05 / 6 it is not significant). On the seven months after train the
+sign holds (+0.017) but the CI is wide and holds 0: neither confirmed nor refuted (even the market's own reversal is
+not significant on so few days). Small (r^2 about 0.1 %), slow (daily), and about the market's DIRECTION (the absolute
+book), not the coin ranking. Hypothesis: a market-level input channel (7-day USDT supply growth, previous day) in the
+panel model, read on the absolute book over the walk-forward folds; refuted if the paired absolute-book day difference
+against the same arm without it holds 0 on both seeds.
