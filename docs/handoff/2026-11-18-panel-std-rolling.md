@@ -73,3 +73,17 @@ CPU tests), the runtime release (`runtime.unassign()` through the kernel).
 - `finish_and_release2.sh` (= `docs/audit/2026-11-18-panel-std/finish_and_release.sh`) waits for all of them, writes the
   readings (2tf vs ref-003, ls / usdt / std-order vs ref-002, ref-003 vs ref-002) and the BTC-hedged book of the later
   jobs to Drive, flushes Drive and releases the runtime.
+
+## The runtime stopped at about 22:58 UTC (not the release waiter: its log is empty)
+Cut, resumable from Drive: `panel-rolling-2tf-001` (fold 4 of 7), `-ref-003` (fold 3), `-usdt-001` and
+`-std-order-001` (fold 0). Not started: the flat-split pair `panel-std-order-full-001` / `-400k-001` (owner
+2026-11-19: does more data help) and its smoke. `docs/audit/2026-11-18-panel-std/resume_all.sh` brings all of it back
+on a new runtime (pinned checkouts `03bafba` / `df4580b` for the resumes, branch head for the new pair, then readings
+and the release). One Colab cell (the token is read from Drive, never typed):
+
+```python
+from google.colab import drive; drive.mount('/content/drive')
+!T=$(tr -d "\r\n " < /content/drive/MyDrive/crypto/secrets/github_token.txt); B=$(printf "x-access-token:%s" "$T" | base64 -w0); rm -rf /content/nig-timenet-torch; GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $B" git clone -q --branch ccr-acb890db-b2ekab https://github.com/yuosef772424/nig-timenet-torch.git /content/nig-timenet-torch && echo cloned
+!nohup bash /content/nig-timenet-torch/docs/audit/2026-11-18-panel-std/resume_all.sh > /content/drive/MyDrive/nig_timenet_runs/resume_all.log 2>&1 &
+```
+Follow: `!tail -5 /content/drive/MyDrive/nig_timenet_runs/resume_all.log`. `RELEASE=0` before `nohup` keeps the runtime.
