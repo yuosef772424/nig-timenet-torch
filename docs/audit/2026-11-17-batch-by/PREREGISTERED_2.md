@@ -45,3 +45,12 @@ H1 supported -> a GPU walk-forward on the owner's artifact (smoke first, rule E5
 locate the loss with the probe, then ONE switch (e.g. an input skip of the range terms) through the gates (rule C6).
 Neither supported -> the failure reading of PHILOSOPHY section 3 in the results note. No default changes from this
 study.
+
+## Amendment (2026-11-18, after the GPU smoke, before any number of the study was read)
+
+The smoke (A2, fold 0, 1 epoch; it read only its timing and batch count) showed that on 60 coins the coins' 8-hour
+rows sit on different phases (a coin listed later starts on another 4h bar), so a timestamp holds about 34 coins,
+not 60: fold 0 has 54,180 training rows in 1,584 timestamp batches (34.2 rows per batch). C60 would then NOT have the
+same steps per epoch as A2. The size control is therefore **C34 = rows, batch 34** (1,594 batches in fold 0), and
+every "C60" above reads "C34". Nothing else changes. To use the GPU, A2 and C34 run one process per seed (output
+folders `A2_s<seed>` / `C34_s<seed>`, merged by the reading scripts).

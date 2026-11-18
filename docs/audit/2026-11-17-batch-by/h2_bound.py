@@ -23,7 +23,7 @@ from nig_timenet_torch.workflow.settings import RollingSettings
 # the geometry of run_arms.py (kept equal by hand: a study does not import another study, rule G6)
 ROLLING = RollingSettings(mode="expanding", train_span="365D", test_span="90D", step="90D", embargo="1D", max_folds=4)
 LAMBDAS = (1.0, 10.0, 100.0, 1000.0, 10000.0)
-ARMS = ("A0", "A2", "C60")
+ARMS = ("A0", "A2", "C34")
 
 
 def ridge_fit(a: np.ndarray, y: np.ndarray, lam: float) -> np.ndarray:
@@ -49,8 +49,12 @@ def main(artifact: str, study: str) -> int:
     feats, _ = simple_features(x, ds["feature_order"])
     ts = np.asarray(ds["last_candles"])[:, TS_COL].astype(np.int64)
     rng6 = (x[:, -6:, 0] - x[:, -6:, 1]).mean(axis=1)
-    models = {arm: pd.read_csv(Path(study) / arm / "rolling_folds.csv") for arm in ARMS
-              if (Path(study) / arm / "rolling_folds.csv").exists()}
+    models = {}
+    for arm in ARMS:      # the arm's folder, or its per-seed folders <arm>_s<seed>
+        files = [d / "rolling_folds.csv" for d in [Path(study) / arm, *sorted(Path(study).glob(f"{arm}_s*"))]]
+        files = [f for f in files if f.exists()]
+        if files:
+            models[arm] = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
     rows = []
     for fold in rolling_folds(ds, ROLLING):
         plan, _ = fold_with_val(fold, ROLLING.embargo, ROLLING.val_share)

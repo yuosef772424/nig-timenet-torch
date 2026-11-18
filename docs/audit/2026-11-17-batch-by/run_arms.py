@@ -26,7 +26,8 @@ from nig_timenet_torch.workflow.settings import (
 
 ARMS = {"A0": {"batch_by": "rows", "batch_size": 256}, "A1": {"batch_by": "day"},
         "A2": {"batch_by": "timestamp"}, "C60": {"batch_by": "rows", "batch_size": 60},
-        "C20": {"batch_by": "rows", "batch_size": 20}}
+        "C20": {"batch_by": "rows", "batch_size": 20},
+        "C34": {"batch_by": "rows", "batch_size": 34}}
 
 
 def main(argv=None) -> int:
@@ -38,10 +39,11 @@ def main(argv=None) -> int:
     ap.add_argument("--max-folds", type=int, default=4)
     ap.add_argument("--seeds", default="0,1")
     ap.add_argument("--device", default="cpu", help="cpu (one thread) or cuda")
+    ap.add_argument("--name", default="", help="output folder name (default: the arm), e.g. A2_s0 for one seed")
     a = ap.parse_args(argv)
     if a.device == "cpu":
         torch.set_num_threads(1)
-    out = Path(a.out) / a.arm
+    out = Path(a.out) / (a.name or a.arm)
     out.mkdir(parents=True, exist_ok=True)
     train = TrainSettings(device=a.device, epochs=a.epochs, **ARMS[a.arm])
     settings = RunSettings(run_dir=str(out / "unused"), train=train,

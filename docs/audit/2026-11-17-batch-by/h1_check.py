@@ -1,4 +1,4 @@
-"""H1 of PREREGISTERED_2.md: A2 (timestamp batches) vs A0 (rows 256) and vs C60 (rows 60) on the low head's rank IC by
+"""H1 of PREREGISTERED_2.md: A2 (timestamp batches) vs A0 (rows 256) and vs C34 (rows 60) on the low head's rank IC by
 timestamp, per fold x seed; rule: A2 higher in >= 9 of 12 pairs AND the 95 % t-interval (3 df) of the per-fold mean
 paired difference above 0, for BOTH comparisons. The high head and the test raw loss are reported, not judged.
 
@@ -19,8 +19,13 @@ METRICS = {"low IC": "targets.low.skill.rank_ic_by_timestamp", "high IC": "targe
 
 
 def load(study: Path, arm: str) -> pd.DataFrame:
-    loss = pd.DataFrame([json.loads(x) for x in (study / arm / "test_loss.jsonl").read_text().splitlines() if x])
-    return loss.merge(pd.read_csv(study / arm / "rolling_folds.csv"), on=["fold", "seed"]).set_index(["fold", "seed"])
+    """The arm's folder, or its per-seed folders ``<arm>_s<seed>`` merged."""
+    parts = []
+    for d in [study / arm, *sorted(study.glob(f"{arm}_s*"))]:
+        if (d / "rolling_folds.csv").exists():
+            loss = pd.DataFrame([json.loads(x) for x in (d / "test_loss.jsonl").read_text().splitlines() if x])
+            parts.append(loss.merge(pd.read_csv(d / "rolling_folds.csv"), on=["fold", "seed"]))
+    return pd.concat(parts, ignore_index=True).set_index(["fold", "seed"]).sort_index()
 
 
 def paired(a: pd.DataFrame, b: pd.DataFrame, col: str, higher_is_better: bool = True) -> dict:
@@ -35,7 +40,7 @@ def paired(a: pd.DataFrame, b: pd.DataFrame, col: str, higher_is_better: bool = 
 
 def main(study) -> int:
     study = Path(study)
-    arms = {a: load(study, a) for a in ("A0", "A2", "C60")}
+    arms = {a: load(study, a) for a in ("A0", "A2", "C34")}
     print("## Per arm (mean over folds and seeds; sd over the fold x seed runs)\n")
     print("| arm | runs | " + " | ".join(METRICS) + " | minutes |\n|---|---|" + "---|" * len(METRICS) + "---|")
     for a, f in arms.items():
@@ -45,7 +50,7 @@ def main(study) -> int:
           " 95 % t-interval of the per-fold mean, 3 df)\n")
     print("| comparison | metric | better | mean diff | 95 % CI | per fold | passes |\n|---|---|---|---|---|---|---|")
     verdict = True
-    for ref in ("A0", "C60"):
+    for ref in ("A0", "C34"):
         for name, col in METRICS.items():
             if "cov" in name:
                 continue
