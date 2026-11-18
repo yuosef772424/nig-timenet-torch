@@ -17,6 +17,7 @@ import pandas as pd
 
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
+from nig_timenet_torch.trainer.groups import BATCH_ORDERS
 from nig_timenet_torch.trainer.staged import StageSettings
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 
@@ -136,9 +137,15 @@ class TrainSettings:
     # D-032 (owner idea 2026-11-16): weight of a term that penalises a batch whose close predictions lean long or
     # short (trainer.direction_balance; NIG mean and class probability of the close head); 0 = off
     direction_balance: float = 0.0
+    # owner question 2026-11-18 (experiment arm, flat model only): "rows" = random rows per batch (today);
+    # "time_blocks" = each batch holds whole blocks of ``time_block_bars`` consecutive timestamps (all coins of them),
+    # rows inside in time order, the batches shuffled (trainer.groups.BATCH_ORDERS). No extra input channel.
+    batch_order: str = "rows"
+    time_block_bars: int = 1                               # read only by "time_blocks"; >= 1
 
     def __post_init__(self):
-        for name in ("epochs", "batch_size", "steps_per_execution"):
+        BATCH_ORDERS.entry(self.batch_order)               # unknown names raise now
+        for name in ("epochs", "batch_size", "steps_per_execution", "time_block_bars"):
             v = getattr(self, name)
             if isinstance(v, bool) or not isinstance(v, int) or v < 1:
                 raise ValueError(f"TrainSettings.{name} must be an integer >= 1, got {v!r}")
@@ -204,3 +211,9 @@ class RunSettings:
     def __post_init__(self):
         if not isinstance(self.run_dir, str) or not self.run_dir:
             raise ValueError("RunSettings.run_dir must be a non-empty string")
+        if self.split.cross_section and BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]:
+            raise ValueError(f"train.batch_order {self.train.batch_order!r} groups rows by timestamp; the panel path "
+                             f"(split.cross_section = True) already batches whole timestamps: use batch_order 'rows'")
+        if self.train.staged is not None and BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]:
+            raise NotImplementedError(f"train.batch_order {self.train.batch_order!r} is not implemented for staged "
+                                      f"training (it samples its own batches from the stage rows)")

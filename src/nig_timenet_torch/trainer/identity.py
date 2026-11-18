@@ -135,7 +135,8 @@ def build_run_identity(fit_settings, model_settings, trainer_config, optimizer, 
 
 
 #: FitSettings switches added by D-021 and their defaults (left out of the hash when at the default)
-FIT_SWITCH_DEFAULTS = {"grad_clip_norm": None, "ema_decay": None, "init": "torch"}
+FIT_SWITCH_DEFAULTS = {"grad_clip_norm": None, "ema_decay": None, "init": "torch", "batch_order": "rows",
+                       "time_block_bars": 1}
 
 
 def _payload(fit_settings, model_settings, trainer_config, optimizer) -> dict:
