@@ -1,9 +1,13 @@
-"""PURPOSE: The figures of the TF evaluation over a battery table: equity / drawdown of the trades and of the daily
-    portfolio, calibration curve, errors, lag scan, batch hit rate, best / worst coins and samples.
+"""PURPOSE: The TF evaluation figures over a battery table (equity, calibration, errors, lag, best / worst coins) and
+    per chosen coin predicted vs realised close / high / low with a sigma band and a scatter (``pred_vs_true``).
 TAGS: legacy plots, equity chart, portfolio chart, drawdown, calibration curve, best worst predictions, lag plot,
-    matplotlib, figures
-PITFALLS: matplotlib is an optional dependency (extra ``plots``): it is imported inside ``figures`` only, with the Agg
-    backend (no display). Every figure reads the numbers of ``eval/legacy_reports.py``; nothing is computed twice.
+    matplotlib, figures, predicted vs realised, per coin plot, sigma band, top coins
+PITFALLS: matplotlib is an optional dependency (extra ``plots``): it is imported inside ``figures`` and
+    ``pred_vs_true`` only, with the Agg backend (no display). ``pred_vs_true`` needs the battery table's ``coin``,
+    ``end_time``, ``mu``, ``sigma``, ``y_ret`` columns (``pred_high`` / ``fut_high`` / ``pred_low`` / ``fut_low``
+    optional) and raises on a coin the table does not hold; its rank IC (``stats.metrics.rank_ic``) is over the coin's
+    own rows (one series), not across coins per timestamp.
+    Every figure reads the numbers of ``eval/legacy_reports.py``; nothing is computed twice.
     The scatter and the coin series are subsampled for size, the numbers in their titles are on all rows.
 """
 
@@ -15,7 +19,7 @@ import pandas as pd
 from nig_timenet_torch.eval import legacy_reports as lr
 from nig_timenet_torch.stats import metrics
 
-__all__ = ["figures", "MAX_POINTS"]
+__all__ = ["figures", "pred_vs_true", "top_coins", "MAX_POINTS"]
 
 MAX_POINTS = 20_000
 
@@ -148,6 +152,86 @@ def figures(stage: str, table: pd.DataFrame, rep: dict, out_dir) -> list[Path]:
     for name, fig in made.items():
         fig.tight_layout()
         path = out_dir / f"{stage}_{name}.png"
+        fig.savefig(path, dpi=90)
+        plt.close(fig)
+        paths.append(path)
+    return paths
+
+
+def top_coins(table: pd.DataFrame, n: int = 3) -> list[str]:
+    """The ``n`` coins with the most rows in a battery table (ties: first seen)."""
+    if "coin" not in table.columns:
+        raise ValueError("top_coins: the table has no 'coin' column")
+    return [str(c) for c in table["coin"].astype(str).value_counts().head(n).index]
+
+
+def _series(ax, t, pred, real, label, band=None):
+    ax.plot(t, real, color="#264653", lw=0.9, label=f"realised {label}")
+    ax.plot(t, pred, color="#e76f51", lw=0.9, label=f"predicted {label}")
+    if band is not None:
+        ax.fill_between(t, pred - band, pred + band, color="#e76f51", alpha=0.18, label="+-1 sigma")
+    ax.grid(alpha=0.25)
+    ax.legend(fontsize=7, loc="upper left")
+
+
+def _pred_vs_true_fig(plt, d: pd.DataFrame, coin: str, title: str):
+    fig = plt.figure(figsize=(14, 9))
+    grid = fig.add_gridspec(2, 2, height_ratios=[1, 1])
+    top, bottom, sc = fig.add_subplot(grid[0, :]), fig.add_subplot(grid[1, 0]), fig.add_subplot(grid[1, 1])
+    t = d["end_time"].to_numpy()
+    mu, y = d["mu"].to_numpy(), d["y_ret"].to_numpy()
+    _series(top, t, mu, y, "close return", band=d["sigma"].to_numpy())
+    top.set_title(f"{title} {coin}: close return, predicted vs realised (band = predicted sd)", fontsize=10)
+    has_hl = {"pred_high", "fut_high", "pred_low", "fut_low"} <= set(d.columns)
+    if has_hl:
+        bottom.plot(t, d["fut_high"], color="#264653", lw=0.8, label="realised high")
+        bottom.plot(t, d["pred_high"], color="#e76f51", lw=0.8, label="predicted high")
+        bottom.plot(t, d["fut_low"], color="#2a9d8f", lw=0.8, label="realised low")
+        bottom.plot(t, d["pred_low"], color="#e9c46a", lw=0.8, label="predicted low")
+        bottom.legend(fontsize=7, loc="upper left")
+    else:
+        bottom.text(0.5, 0.5, "no high / low heads in the table", ha="center", transform=bottom.transAxes)
+    bottom.set_title("high / low return, predicted vs realised", fontsize=10)
+    bottom.grid(alpha=0.25)
+    sub = d.sample(min(len(d), MAX_POINTS), random_state=0)
+    sc.scatter(sub["mu"], sub["y_ret"], s=4, alpha=0.4, color="#264653")
+    lim = float(np.nanmax(np.abs(np.r_[mu, y]))) if len(d) else 1.0
+    sc.plot([-lim, lim], [-lim, lim], color="#6c757d", lw=0.8, ls="--")
+    sc.set_xlabel("predicted close return")
+    sc.set_ylabel("realised close return")
+    sc.set_title(f"scatter: rank IC {metrics.rank_ic(y, mu):+.3f} on {len(d):,} rows", fontsize=10)
+    sc.grid(alpha=0.25)
+    return fig
+
+
+def pred_vs_true(table: pd.DataFrame, coins, out_dir, title: str = "") -> list[Path]:
+    """One PNG per coin: the close return predicted vs realised over time (+-1 sigma band), the high / low predicted
+    vs realised, and the predicted-vs-realised scatter with the rank IC in its title. ``table`` is a battery table
+    (``eval.battery_adapter.to_battery_table``), ``coins`` coin names; a coin that is not in the table raises
+    ``ValueError`` naming the coins it has. Files: ``<out_dir>/<title>_pred_vs_true_<coin>.png``; returns the paths."""
+    need = {"coin", "end_time", "mu", "sigma", "y_ret"}
+    if need - set(table.columns):
+        raise ValueError(f"pred_vs_true: the table lacks columns {sorted(need - set(table.columns))}")
+    coins = [coins] if isinstance(coins, str) else list(coins)
+    if not coins:
+        raise ValueError("pred_vs_true: no coin given")
+    have = set(table["coin"].astype(str))
+    missing = [c for c in coins if c not in have]
+    if missing:
+        raise ValueError(f"pred_vs_true: coins {missing} are not in the table (it has {len(have)}, e.g. "
+                         f"{sorted(have)[:5]})")
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for coin in coins:
+        d = table[table["coin"].astype(str) == coin].sort_values("end_time")
+        fig = _pred_vs_true_fig(plt, d, coin, title)
+        fig.tight_layout()
+        path = out_dir / f"{title or 'stage'}_pred_vs_true_{coin}.png"
         fig.savefig(path, dpi=90)
         plt.close(fig)
         paths.append(path)

@@ -188,3 +188,27 @@ def test_notebook_trains_staged_and_runs_the_rolling_section(tmp_path, art):
     assert ns["settings"].train.staged is not None and len(ns["run"].extra["stages"]) == 2
     assert ns["rolling_summary"]["n_folds"] == 2
     assert (tmp_path / "local" / "st1" / "out" / "rolling" / "rolling_summary.md").is_file()
+
+
+def test_target_norm_and_the_panel_rolling_switches_reach_the_settings(tmp_path, art):
+    """TARGET_NORM lands in model.overrides (default 'none' adds nothing); ROLLING_MODEL = 'panel' runs the rolling
+    section on the panel recipe (cross_section, relative inputs, rank_ic loss, day metrics) and pools the test days;
+    a bad value of either raises."""
+    small = {"train.epochs": 1, "train.batch_size": 64, "train.device": "cpu", "evaluation.health_max_rows": 50}
+    rolling = {"train_span": "20D", "test_span": "7D", "step": "10D", "embargo": "1D", "max_folds": 2}
+    base = {"ARTIFACT": str(art), "WORK_ON": "local", "DRIVE_RUNS": str(tmp_path / "drive"), "BATTERY_FOLDER": "",
+            "LOCAL_RUNS": str(tmp_path / "local"), "CHANGES": small, "LEGACY_REPORT": False, "PLOT_PRED_VS_TRUE": False}
+    ns = run_notebook("main", {**base, "RUN_NAME": "tn", "TARGET_NORM": "logret_std"})
+    assert ns["settings"].model.overrides["target_norm"] == "logret_std"
+    assert "target_norm" not in run_notebook("main", {**base, "RUN_NAME": "tn0"})["settings"].model.overrides
+    with pytest.raises(ValueError, match="TARGET_NORM"):
+        run_notebook("main", {**base, "RUN_NAME": "tn1", "TARGET_NORM": "zscore"})
+    with pytest.raises(ValueError, match="ROLLING_MODEL"):
+        run_notebook("main", {**base, "RUN_NAME": "rm", "ROLLING": rolling, "ROLLING_MODEL": "both"})
+    ns = run_notebook("main", {**base, "RUN_NAME": "rp", "ROLLING": rolling, "ROLLING_MODEL": "panel"})
+    s = ns["rolling_settings"]
+    assert s.split.cross_section and s.model.overrides["cross_input"] == "relative"
+    assert s.train.cross_section_loss == "rank_ic" and s.train.selection_metric == "val_rank_ic_reg"
+    assert ns["rolling_summary"]["n_folds"] == 2
+    assert (tmp_path / "local" / "rp" / "out" / "rolling" / "pooled_days_seed_0" / "panel_report.md").is_file()
+    assert (tmp_path / "drive" / "rp" / "out" / "rolling" / "rolling_summary.md").is_file()   # pushed to the fake Drive
