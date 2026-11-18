@@ -21,7 +21,7 @@ import json
 import os
 import shutil
 import statistics
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -154,9 +154,31 @@ def build(run: Run) -> Run:
     return run
 
 
-def train(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
-    """Fit (resumes a run folder that holds a checkpoint). ``deadline`` is a ``time.monotonic()`` value."""
+def _interrupted(run: Run, mode: str, err: KeyboardInterrupt) -> None:
+    """A stop (the Colab stop button) during training with ``on_interrupt`` = ``mode``: put the weights of the last
+    finished epoch (``"last"``) or of the best epoch so far (``"best"``) in the model through ``restore`` and set
+    ``run.result`` (stopped early), so the later steps run. No finished epoch (no checkpoint): the stop is re-raised."""
+    if checkpoint.load_checkpoint(Path(run.settings.run_dir)) is None:
+        raise KeyboardInterrupt("stopped before the first epoch finished: no epoch was saved, nothing to test") from err
+    restore(run, weights=mode)
+    res = run.result = replace(run.result, stopped_early=True)
+    print(f"STOPPED: {res.epochs_done} finished epoch(s) kept; the model holds the "
+          f"{'best-epoch' if mode == 'best' else 'last finished epoch'} weights (a cut epoch is not saved)",
+          flush=True)
+    _copy_best_weights(run)
+
+
+def _check_on_interrupt(on_interrupt) -> None:
+    if on_interrupt is not None and on_interrupt not in RESTORE_WEIGHTS:
+        raise ValueError(f"on_interrupt must be None or one of {RESTORE_WEIGHTS}, got {on_interrupt!r}")
+
+
+def train(run: Run, *, deadline: float | None = None, on_epoch=None, on_interrupt: str | None = None) -> Run:
+    """Fit (resumes a run folder that holds a checkpoint). ``deadline`` is a ``time.monotonic()`` value.
+    ``on_interrupt``: ``None`` (default) = a KeyboardInterrupt propagates; ``"last"`` / ``"best"`` = it is caught and
+    the model keeps the weights of the last finished epoch / the best epoch so far, ``run.result`` is set."""
     _need(run, "trainer", "build")
+    _check_on_interrupt(on_interrupt)
     n = {k: int(len(v)) for k, v in run.idx.items()}
     print(f"data: {n['train']} train / {n['val']} val / {n['test']} test windows "
           f"(max_rows {run.settings.split.max_rows}), split train_end {run.bounds[0]} val_end {run.bounds[1]}; "
@@ -164,20 +186,29 @@ def train(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
     trace_batches = (flat_run.batch_set(run.dataset, run.idx["train"], run.fit_settings.batch_size,
                                         run.settings.train.seed)
                      if run.settings.train.trace_representative else None)
-    run.result = run.trainer.fit(run.x["train"], run.y["train"], run.x["val"], run.y["val"], run.fit_settings,
-                                 run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline,
-                                 on_epoch=on_epoch, trace_batches=trace_batches)
+    try:
+        run.result = run.trainer.fit(run.x["train"], run.y["train"], run.x["val"], run.y["val"], run.fit_settings,
+                                     run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline,
+                                     on_epoch=on_epoch, trace_batches=trace_batches)
+    except KeyboardInterrupt as err:
+        if on_interrupt is None:
+            raise
+        _interrupted(run, on_interrupt, err)
+        return run
     _copy_best_weights(run)
     return run
 
 
-def train_staged(run: Run, *, deadline: float | None = None, on_eval=None, stages=None) -> Run:
+def train_staged(run: Run, *, deadline: float | None = None, on_eval=None, stages=None,
+                 on_interrupt: str | None = None) -> Run:
     """Staged training (ROADMAP ST1, card F) through the one Trainer: ``settings.train.staged`` says how the rows grow
     and the lr falls (``trainer.staged``); resumes a run folder that holds a checkpoint. ``stages``: a ready plan
     (the equal-step baselines of ``workflow.staged_study``) instead of the staged arm's. The per-stage table lands in
     ``run.extra['stages']``; ``run.result`` is a FitResult over the evaluation points so the later steps read it as
-    before. The scalers were fitted once on the whole training split by ``build``."""
+    before. The scalers were fitted once on the whole training split by ``build``. ``on_interrupt``: as in ``train``
+    (the state is saved at every evaluation point; a stop keeps the last saved one, ``run.staged`` stays None)."""
     _need(run, "trainer", "build")
+    _check_on_interrupt(on_interrupt)
     st = run.settings.train.staged
     if st is None:
         raise ValueError("train_staged needs settings.train.staged (a StageSettings)")
@@ -187,8 +218,14 @@ def train_staged(run: Run, *, deadline: float | None = None, on_eval=None, stage
     print(f"staged training: {len(plan)} stage(s), rows {[len(s.rows) for s in plan]}, lr "
           f"{[round(s.lr, 8) for s in plan]}; {len(run.idx['val'])} val rows (at most {st.val_max_rows} used)",
           flush=True)
-    res = staged_fit(run.trainer, run.x["train"], run.y["train"], run.x["val"], run.y["val"], plan, st, fs,
-                     run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline, on_eval=on_eval)
+    try:
+        res = staged_fit(run.trainer, run.x["train"], run.y["train"], run.x["val"], run.y["val"], plan, st, fs,
+                         run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline, on_eval=on_eval)
+    except KeyboardInterrupt as err:
+        if on_interrupt is None:
+            raise
+        _interrupted(run, on_interrupt, err)
+        return run
     run.staged, run.plan = res, plan
     _staged_outputs(run, res)
     _copy_best_weights(run)

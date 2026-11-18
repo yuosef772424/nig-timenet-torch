@@ -172,6 +172,34 @@ def test_experiment_switches_reach_the_settings_and_a_finished_run_is_read_with_
         run_notebook("main", {**base, "RUN_NAME": "x1", "LOAD_WEIGHTS": "last", "KEEP_LAST_WEIGHTS": True})
     with pytest.raises(ValueError, match="LOAD_WEIGHTS must be"):
         run_notebook("main", {**base, "RUN_NAME": "x2", "LOAD_WEIGHTS": "newest"})
+    with pytest.raises(ValueError, match="ON_STOP_WEIGHTS must be"):
+        run_notebook("main", {**base, "RUN_NAME": "x3", "ON_STOP_WEIGHTS": "newest"})
+
+
+def test_notebook_stop_button_keeps_the_last_finished_epoch_and_runs_the_tests(tmp_path, art):
+    """ON_STOP_WEIGHTS (notebook default "last"): a KeyboardInterrupt in the training cell leaves the weights of the
+    last finished epoch and the later cells (health, test, battery, summary) run; None lets the stop through."""
+    drive, local = tmp_path / "drive", tmp_path / "local"
+    small = {"train.epochs": 3, "train.batch_size": 64, "train.device": "cpu", "evaluation.health_max_rows": 50,
+             "train.early_stop.patience": 5}
+    base = {"ARTIFACT": str(art), "WORK_ON": "local", "DRIVE_RUNS": str(drive), "LOCAL_RUNS": str(local),
+            "CHANGES": small, "BATTERY_FOLDER": ""}
+    assert run_notebook("main", {**base, "RUN_NAME": "stop0"})["ON_STOP_WEIGHTS"] == "last"
+    import nig_timenet_torch.workflow.flat_run as flat_run
+
+    def boom(row, total):
+        if row["epoch"] == 3:
+            raise KeyboardInterrupt
+        return ""
+    orig = flat_run.epoch_line
+    flat_run.epoch_line = boom
+    try:
+        ns = run_notebook("main", {**base, "RUN_NAME": "stop1"})
+        assert ns["run"].result.epochs_done == 2 and ns["run"].result.stopped_early
+        with pytest.raises(KeyboardInterrupt):
+            run_notebook("main", {**base, "RUN_NAME": "stop2", "ON_STOP_WEIGHTS": None})
+    finally:
+        flat_run.epoch_line = orig
 
 
 def test_notebook_trains_staged_and_runs_the_rolling_section(tmp_path, art):
