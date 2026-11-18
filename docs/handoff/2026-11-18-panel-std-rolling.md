@@ -87,3 +87,9 @@ from google.colab import drive; drive.mount('/content/drive')
 !nohup bash /content/nig-timenet-torch/docs/audit/2026-11-18-panel-std/resume_all.sh > /content/drive/MyDrive/nig_timenet_runs/resume_all.log 2>&1 &
 ```
 Follow: `!tail -5 /content/drive/MyDrive/nig_timenet_runs/resume_all.log`. `RELEASE=0` before `nohup` keeps the runtime.
+
+## State at 23:30 UTC on 2026-11-18 (new runtime `052940f2bbbcfc2d`, L4)
+`resume_all.sh` started 23:22 (log `nig_timenet_runs/resume_all.log`): the four walk-forwards resumed on their commits
+(`/content/nig_03b`, `/content/nig_df4`), the smoke `panel-std-order-smoke-001` passed, `panel-std-order-full-001` and
+`-400k-001` running from the branch head (`c0f1219`); the release waiter runs at its end (readings, BTC book, flush
+Drive, release).
