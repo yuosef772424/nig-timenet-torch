@@ -49,12 +49,14 @@ def main(argv=None) -> int:
     ap.add_argument("--device", default="cpu", help="cpu (one thread) or cuda")
     ap.add_argument("--name", default="", help="output folder name (default: the arm), e.g. A2_s0 for one seed")
     ap.add_argument("--geometry", choices=sorted(GEOMETRY), default="folds")
+    ap.add_argument("--lr", type=float, default=None, help="learning rate (default: the run default, 1e-3)")
     a = ap.parse_args(argv)
     if a.device == "cpu":
         torch.set_num_threads(1)
     out = Path(a.out) / (a.name or a.arm)
     out.mkdir(parents=True, exist_ok=True)
-    train = TrainSettings(device=a.device, epochs=a.epochs, **ARMS[a.arm])
+    lr = {} if a.lr is None else {"lr": a.lr}
+    train = TrainSettings(device=a.device, epochs=a.epochs, **lr, **ARMS[a.arm])
     base = default_model_settings()
     model = ModelSettings(base.architecture, {**base.overrides, **MODEL_ARMS.get(a.arm, {})})
     settings = RunSettings(run_dir=str(out / "unused"), train=train, model=model,
