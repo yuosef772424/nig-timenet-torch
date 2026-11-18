@@ -35,3 +35,8 @@ read `--max-minutes` and resumes from `run_dir`: after a cut, start the SAME com
    accept rule of PREREGISTERED.md (close relative rank IC pooled over the test days, both seeds; high / low not lower
    by > 0.01; net day P&L); read E4 against its oracle (close rank IC by timestamp 0.13, high / low 0.28).
 2. Write `docs/results/snapshot-panel-001.md` with the seven headings of rule C7 for every arm that does not pass.
+
+## Outcome (2026-11-18 ~04:50 UTC)
+All three walk-forwards and the E4 look finished; the Colab tunnel then went down (HTTP 530). Read in
+`docs/results/snapshot-panel-001.md`: base 0.087 close relative rank IC (7 folds) against joint 0.013 and hybrid 0.058;
+neither snapshot arm passes the accept rule. Still to do: the error map on the fold tables (H4) and the arms H1-H3.
