@@ -203,7 +203,7 @@ def test_notebook_stop_button_keeps_the_last_finished_epoch_and_runs_the_tests(t
         flat_run.epoch_line = orig
 
 
-@pytest.mark.slow   # rule E3: the notebook gained the plot / legacy-report cells (AB1) and the fast suite reached 301 s on CI
+@pytest.mark.slow   # rule E3: new notebook cells (AB1) took the fast suite to 301 s on CI
 def test_notebook_trains_staged_and_runs_the_rolling_section(tmp_path, art):
     """ST1 / F2: ``train.staged`` in CHANGES makes the training cell run the staged steps and print the stage table;
     ROLLING runs section 13b on the same settings; both default to off (the other notebook tests)."""
