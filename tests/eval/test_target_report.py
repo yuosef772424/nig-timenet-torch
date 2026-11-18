@@ -9,6 +9,9 @@ from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats.nig import nig_interval_halfwidth, nig_predictive_std, student_t_quantile
 from tests.eval import synth
 
+# rule E3: 10 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 
 def report(table, labels, anchors):
     return target_report(table, labels, anchors=anchors, last_close=anchors["close"],

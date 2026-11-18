@@ -15,6 +15,9 @@ from nig_timenet_torch.workflow import run, run_common
 from nig_timenet_torch.workflow.settings import RunSettings
 from tests.data_io import envs
 
+# rule E3: 25 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 HEADS = ("high", "low", "close")
 SHA = "b" * 40
 

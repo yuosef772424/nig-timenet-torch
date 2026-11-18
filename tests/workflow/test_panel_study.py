@@ -19,6 +19,9 @@ from nig_timenet_torch.workflow import panel_report, panel_study
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.settings import RunSettings
 
+# rule E3: 37 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 ARMS = {"per_coin": {}, "rank": {"model": {"cross_input": "relative"},
                                  "train": {"cross_section_loss": "rank_ic", "selection_metric": "val_ls_sharpe_close"}}}
 

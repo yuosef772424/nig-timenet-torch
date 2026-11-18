@@ -18,6 +18,9 @@ from nig_timenet_torch.colab.runner import Runner, run_logged
 from tests.colab.helpers import make_job, make_origin, queue_job, results_files
 from tests.scan import PKG_DIR
 
+# rule E3: 27 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 TOKEN = "ghp_abcdefghijklmnop1234"
 
 

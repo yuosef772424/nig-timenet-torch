@@ -10,6 +10,9 @@ from nig_timenet_torch.data.sources import synthetic_market
 from nig_timenet_torch.data.windows import sample_filter_mask
 from tests.data.helpers import COINS, tiny_settings
 
+# rule E3: 8 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 
 def test_feature_order_is_the_production_set():
     assert feature_order(tiny_settings()) == [
