@@ -2,7 +2,10 @@
 seed: labels joined back from the artifact, the volatility baseline (rule C1), the error map by fold / volatility
 tercile / coin, the worst rows, the direction bias of the close head. Prints markdown.
 
-    python docs/audit/2026-11-17-batch-by/failure_reading.py ARTIFACT STUDY
+    python docs/audit/2026-11-17-batch-by/failure_reading.py ARTIFACT STUDY [CONTROL]
+
+CONTROL: the size-control arm of A2 (C20 in study 1, C34 in study 2); an arm's per-seed folders ``<arm>_s<seed>``
+are merged.
 """
 
 import sys
@@ -17,7 +20,7 @@ from nig_timenet_torch.stats import metrics
 from nig_timenet_torch.workflow.flat_run import row_coins
 from nig_timenet_torch.workflow.run_common import input_key
 
-ARMS = ("A0", "A1", "A2", "C60", "C20")
+ARMS = ("A0", "A1", "A2", "C60", "C20", "C34")
 HEADS = ("high", "low", "close")
 
 
@@ -40,7 +43,8 @@ def labels(artifact: str) -> pd.DataFrame:
 def tables(study: Path, lab: pd.DataFrame) -> pd.DataFrame:
     parts = []
     for arm in ARMS:
-        for p in sorted((study / arm).glob("fold_*_seed_*/test_table.parquet")):
+        dirs = [study / arm, *sorted(study.glob(f"{arm}_s*"))]
+        for p in sorted(q for d in dirs for q in d.glob("fold_*_seed_*/test_table.parquet")):
             t = pd.read_parquet(p)
             t["timestamp"] = pd.to_datetime(t["timestamp"], utc=True)
             t["arm"], t["seed"] = arm, int(p.parent.name.split("_seed_")[1])
@@ -52,7 +56,7 @@ def ic(df: pd.DataFrame, pred: str, lab: str) -> float:
     return metrics.rank_ic(df[lab].to_numpy(), df[pred].to_numpy(), df["timestamp"].astype("int64").to_numpy())
 
 
-def main(artifact: str, study: str) -> int:
+def main(artifact: str, study: str, control: str = "C20") -> int:
     lab = labels(artifact)
     df = tables(Path(study), lab)
     assert df["lab_high"].notna().all(), "a test row did not join back to the artifact"
@@ -65,17 +69,17 @@ def main(artifact: str, study: str) -> int:
     print("\n## Rank IC by timestamp per arm (all folds pooled, mean of the 2 seeds) and the gap to the 6-bar range\n")
     print("| arm | high | low | close | low - range6 baseline |\n|---|---|---|---|---|")
     base_low = ic(a0.assign(b=-a0.range6), "b", "lab_low")
-    for arm in ARMS:
+    for arm in [a for a in ARMS if a in set(df.arm)]:
         g = df[df.arm == arm]
         v = {h: np.mean([ic(s, f"y_{h}", f"lab_{h}") for _, s in g.groupby("seed")]) for h in HEADS}
         print(f"| {arm} | {v['high']:.4f} | {v['low']:.4f} | {v['close']:.4f} | {v['low'] - base_low:+.4f} |")
     print("\n## Error map: low-head rank IC by volatility tercile (last-bar range) and by fold (seeds pooled)\n")
     df["vol_t"] = pd.qcut(df["range1"].rank(method="first"), 3, labels=["calm", "mid", "volatile"])
-    print("| group | rows A0 | A0 low IC | A2 low IC | C20 low IC |\n|---|---|---|---|---|")
+    print(f"| group | rows A0 | A0 low IC | A2 low IC | {control} low IC |\n|---|---|---|---|---|")
     for key, name in (("vol_t", "volatility"), ("fold", "fold")):
         for gv in sorted(df[key].dropna().unique(), key=str):
             cells = []
-            for arm in ("A0", "A2", "C20"):
+            for arm in ("A0", "A2", control):
                 s = df[(df.arm == arm) & (df[key] == gv)]
                 cells.append(np.mean([ic(q, "y_low", "lab_low") for _, q in s.groupby("seed")]))
             n = int(((df.arm == "A0") & (df[key] == gv)).sum())
@@ -94,7 +98,7 @@ def main(artifact: str, study: str) -> int:
         print(f"| {r.asset} | {r.timestamp:%Y-%m-%d %H:%M} | {r.y_high:.4f} | {r.lab_high:.4f} | {r.range1:.4f} |")
     print("\n## Bias of the close head (share of rows with mu > 0 against the realised share)\n")
     print("| arm | predicted up | realised up | mean mu | mean label |\n|---|---|---|---|---|")
-    for arm in ARMS:
+    for arm in [a for a in ARMS if a in set(df.arm)]:
         g = df[df.arm == arm]
         print(f"| {arm} | {(g.y_close > 0).mean():.3f} | {(g.lab_close > 0).mean():.3f} | {g.y_close.mean():+.5f} | "
               f"{g.lab_close.mean():+.5f} |")
@@ -102,4 +106,4 @@ def main(artifact: str, study: str) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1], sys.argv[2]))
+    sys.exit(main(*sys.argv[1:4]))
