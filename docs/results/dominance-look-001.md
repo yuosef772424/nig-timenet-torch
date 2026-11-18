@@ -50,3 +50,29 @@ move (proxy: -(0.75 BTC + 0.25 ETH) over 24 h); the BTC.D change is about BTC's 
    relative arm: refuted if the close relative rank IC is more than 0.01 below it on the walk-forward folds.
 2. The real USDT.D / BTC.D histories (outside source, key needed): refuted if their 24 h change does not predict the
    market's next 8 h beyond the market's own 24 h move (partial correlation CI holding 0).
+
+## Addendum: BTC alone as the reference, dispersion over all coins except BTC and ETH (owner 2026-11-19)
+Same rows and method, script `btcref.py`, output `btc_ref_look.json`.
+
+| question | number |
+|---|---|
+| BTC vs the cross-section mean move (24 h; last bar; next 8 h) | r 0.79; 0.80; 0.79 (BTC + ETH: 0.86) |
+| dispersion over the alts only vs over all coins (24 h; last bar) | r 0.9998; 0.9998 |
+| BTC 24 h -> market next 8 h / market 24 h -> market next 8 h | -0.044 [-0.070, -0.017] / -0.043 [-0.071, -0.013] |
+| dispersion 24 h -> dispersion next 8 h (alts / all) | 0.70 / 0.70 |
+| dispersion of the last bar -> mean absolute relative move next 8 h | 0.61 |
+| absolute BTC 24 h move -> dispersion next 8 h | 0.18 [0.13, 0.24] |
+| rank IC with the next relative move: own - market / own - BTC / (own - BTC) / alt dispersion | -0.04633 / -0.04633 / -0.04633 |
+
+Reading: (1) the ranking does not change with any of these references (identical to five digits: a reference and a
+dispersion common to the timestamp keep the order). (2) BTC alone sees 62 % of the market's variance (r 0.79; BTC +
+ETH 74 %), yet as a timing signal for the market's next 8 h it is as good as the mean (-0.044 vs -0.043). (3) Leaving
+BTC and ETH out of the dispersion changes nothing (r 0.9998: 2 of about 120 coins). (4) The dispersion is the strong
+channel: it persists (0.70) and predicts the size of the next relative moves (0.61), i.e. the volatility regime the
+high / low heads and the uncertainty need. (5) Practical cost: the dispersion still needs the cross-section of the
+timestamp, so a model with this channel still needs whole timestamps at training and at prediction time (the panel's
+coin-set limit stays); a fixed basket of liquid alts would lift that limit (not measured). (6) Practical gain of a BTC
+reference: (own - BTC) is the P&L of "long the coin, short BTC", a hedge with one liquid instrument instead of a short
+basket of alts (relevant to the cost wall B-074; the battery's flat cost per side does not model it yet).
+Hypothesis: a BTC-relative target and book (long top coins, short BTC) against the market-neutral book, with a cost
+model per instrument; refuted if its net day mean is not above the neutral book's on the pooled walk-forward days.
