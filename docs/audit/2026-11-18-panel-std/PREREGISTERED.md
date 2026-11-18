@@ -49,3 +49,14 @@ half of its cost (B-074).
 E4 (the synthetic panel, planted specific IC 0.15) through the `panel` entry, arms `relative_rank_loss` and
 `relative_rank_loss_logret_std`, seeds 0 and 1, run on Colab beside the walk-forward; read against the oracle's
 0.15, not against 1.
+
+## Addendum (owner request 2026-11-18, 18:3x UTC, written before any fold of it was read)
+Third arm `panel-rolling-ls-001`: the panel arm `relative_rank_loss_ls` = the reference with the best epoch chosen
+by `val_ls_sharpe_close` (the per-timestamp Sharpe of the top-bottom 20 % close book) instead of
+`val_rank_ic_reg`; same folds, seeds, data and code (`6c928bb`; its job file was committed later, the code is
+the same). Smoke `panel-rolling-ls-smoke-001` passed (51 s). Started while the first two ran, so its fold times
+are not comparable. Accept rules:
+- **Profit:** as above (beats every day-metric baseline on the pooled days, CI excludes 0, both seeds).
+- **Selection gain:** the paired difference of the neutral book (gross, pooled days) against
+  `panel-rolling-ref-002` has a CI above 0 on both seeds; the close rank IC may fall by at most 0.01 (the metric
+  it no longer selects on).
