@@ -76,8 +76,9 @@ class CoinSlots(nn.Module):
         counts = torch.bincount(ids, minlength=self.max_assets)
         order = sorted((i for i in range(self.max_assets) if counts[i] > 0), key=lambda i: (-int(counts[i]), i))
         keep = order[:self.n_slots]
-        self.slot_of_asset.fill_(-1)
-        self.slot_of_asset[torch.as_tensor(keep, dtype=torch.long)] = torch.arange(len(keep))
+        table = torch.full((self.max_assets,), -1, dtype=torch.long)   # built on the CPU, copied to the buffer's device
+        table[torch.as_tensor(keep, dtype=torch.long)] = torch.arange(len(keep))
+        self.slot_of_asset.copy_(table)
         return {"coins_with_slot": len(keep), "coins_in_train": len(order)}
 
     def forward(self, asset: torch.Tensor) -> torch.Tensor:
