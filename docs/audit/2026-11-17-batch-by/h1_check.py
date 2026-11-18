@@ -1,4 +1,4 @@
-"""H1 of PREREGISTERED_2.md: A2 (timestamp batches) vs A0 (rows 256) and vs C34 (rows 60) on the low head's rank IC by
+"""H1 of PREREGISTERED_2.md: A2 (timestamp batches) vs A0 (rows 256) and vs C34 (rows 34) on the low head's rank IC by
 timestamp, per fold x seed; rule: A2 higher in >= 9 of 12 pairs AND the 95 % t-interval (3 df) of the per-fold mean
 paired difference above 0, for BOTH comparisons. The high head and the test raw loss are reported, not judged.
 
