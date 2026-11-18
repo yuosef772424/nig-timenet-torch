@@ -18,6 +18,8 @@ from nig_timenet_torch.doctor.feature_importance import (
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
 
+pytestmark = pytest.mark.slow   # rule E3 (the fast suite reached 312.6 s on CI); runs in CI's slow step
+
 T, F, COINS = 6, 6, 16
 NAMES = [f"f{j}" for j in range(F)]
 CFG = {"targets": {"y": {"true_key": "y", "task_type": "regression", "output_keys": {"pred": "pred"}}}, "loss": {}}
