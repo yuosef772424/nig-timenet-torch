@@ -24,7 +24,7 @@ _OWN_KEYS = ("device", "batch_size", "lr", "seed")
 
 def job_run_settings(*, device: str, run_dir: str, artifact: str, base_tf: str | None, max_rows: int | None,
                      batch_size: int, lr: float, model_overrides: dict, train: dict, split: dict,
-                     code_sha: str = "") -> RunSettings:
+                     code_sha: str = "", input_timeframes: tuple = ()) -> RunSettings:
     """The RunSettings of a study job: everything the config does not name is the RunSettings default."""
     bad = sorted(set(train) & set(_OWN_KEYS))
     if bad:
@@ -32,7 +32,7 @@ def job_run_settings(*, device: str, run_dir: str, artifact: str, base_tf: str |
     base = default_model_settings()
     return RunSettings(
         run_dir=run_dir, code_sha=code_sha,
-        data=LoaderSettings(name=artifact, mmap=True, expect_base_tf=base_tf),
+        data=LoaderSettings(name=artifact, mmap=True, expect_base_tf=base_tf, input_timeframes=tuple(input_timeframes)),
         split=from_dict(SplitSettings, {**split, "max_rows": max_rows}),
         model=ModelSettings(base.architecture, {**base.overrides, **model_overrides}),
         train=from_dict(TrainSettings, {**train, "device": device, "batch_size": batch_size, "lr": lr}),

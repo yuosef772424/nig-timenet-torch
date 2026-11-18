@@ -25,7 +25,7 @@ from nig_timenet_torch.trainer.switches import param_groups
 from nig_timenet_torch.trainer.targets import targets_config
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
-from nig_timenet_torch.workflow.run_common import input_key, price_targets
+from nig_timenet_torch.workflow.run_common import input_keys, price_targets
 from nig_timenet_torch.workflow.settings import RunSettings, TrainSettings
 
 __all__ = ["HEAD_KINDS", "LAMBDA_SCHEDULES", "anchors_by_name", "flat_inputs", "model_settings", "trainer_config",
@@ -71,11 +71,15 @@ def time_ids(dataset: dict, idx: np.ndarray) -> np.ndarray:
     return ids
 
 
-def flat_inputs(dataset: dict, idx: np.ndarray, time_channel: bool = False) -> tuple[torch.Tensor, dict]:
+def flat_inputs(dataset: dict, idx: np.ndarray, time_channel: bool = False,
+                timeframes: tuple = ()) -> tuple[torch.Tensor, dict]:
     """(x (n, T, F), {label_key: (n,)}) of the dataset rows ``idx``, float32, on the CPU; the heads are the artifact's
     price targets x ``HEAD_KINDS`` (label keys from ``head_spec``). ``time_channel``: x gets one more channel, the
-    row's timestamp id repeated over the window (model/cross_coin.py, trainer/groups.py read it)."""
-    x = torch.as_tensor(np.asarray(dataset[input_key(dataset)])[idx], dtype=torch.float32)
+    row's timestamp id repeated over the window (model/cross_coin.py, trainer/groups.py read it). ``timeframes``
+    (``LoaderSettings.input_timeframes``): () = the artifact's one frame; else the named frames' windows side by side
+    on the channel axis, in that order (F = 3 per frame)."""
+    xs = [torch.as_tensor(np.asarray(dataset[k])[idx], dtype=torch.float32) for k in input_keys(dataset, timeframes)]
+    x = xs[0] if len(xs) == 1 else torch.cat(xs, dim=-1)
     if time_channel:
         gid = torch.as_tensor(time_ids(dataset, idx), dtype=torch.float32)
         x = torch.cat([x, gid[:, None, None].expand(-1, x.shape[1], 1)], dim=-1)

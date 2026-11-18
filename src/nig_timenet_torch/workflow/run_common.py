@@ -81,6 +81,23 @@ def input_key(dataset: dict) -> str:
     return f"X_{tfs[0]}"
 
 
+def input_keys(dataset: dict, timeframes=()) -> list[str]:
+    """The ``X_<tf>`` keys a run reads: ``()`` = ``[input_key(dataset)]`` (one-frame artifact, as before); else one
+    key per named frame, in that order, all of the artifact and all with the same window length (they are put side
+    by side on the channel axis, owner task 2026-11-18)."""
+    if not timeframes:
+        return [input_key(dataset)]
+    missing = [tf for tf in timeframes if tf not in dataset["timeframes"]]
+    if missing:
+        raise ValueError(f"input_timeframes {list(timeframes)}: the artifact has no {missing} "
+                         f"(it holds {list(dataset['timeframes'])})")
+    keys = [f"X_{tf}" for tf in timeframes]
+    lengths = {k: int(np.asarray(dataset[k]).shape[1]) for k in keys}
+    if len(set(lengths.values())) != 1:
+        raise ValueError(f"input_timeframes need windows of one length to stand side by side, got {lengths}")
+    return keys
+
+
 def split_bounds(dataset: dict, split: SplitSettings) -> tuple:
     """(train_end, val_end): the settings' instants, else the artifact's ``split_dates``, else the share quantiles of
     the window times (TF's ``raw_quantile`` method; the TF main dataset leaves ``split_dates`` None)."""

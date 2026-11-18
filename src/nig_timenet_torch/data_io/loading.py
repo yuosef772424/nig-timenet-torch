@@ -43,12 +43,16 @@ class LoaderSettings:
     allow_unchecked: bool = False              # rule D1: False = only a contract artifact loads; True = skip the checks
     verify_hashes: bool = False                # re-hash every file of such an artifact (reads it all once)
     expect_base_tf: str | None = None          # refuse an artifact whose base timeframe differs (None = accept any)
+    input_timeframes: tuple = ()               # () = the artifact's one frame; e.g. ("4h", "1h"): X_<tf> side by side
 
     def __post_init__(self):
         if self.format not in FORMATS:
             raise ValueError(f"format must be one of {FORMATS}, not {self.format!r}")
         if not self.name:
             raise ValueError("name must not be empty")
+        object.__setattr__(self, "input_timeframes", tuple(self.input_timeframes))
+        if len(set(self.input_timeframes)) != len(self.input_timeframes):
+            raise ValueError(f"input_timeframes repeats a frame: {self.input_timeframes}")
 
 
 @dataclass(frozen=True)

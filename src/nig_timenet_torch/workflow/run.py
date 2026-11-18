@@ -86,7 +86,8 @@ class Run:
         _need(self, "result", "train")
         if stage not in self.x:
             self.x[stage], self.y[stage] = flat_run.flat_inputs(self.dataset, self.idx[stage],
-                                                                self.settings.split.cross_section)
+                                                                self.settings.split.cross_section,
+                                                                self.settings.data.input_timeframes)
         return flat_run.predict_stage(self.trainer, self.dataset, self.idx[stage], self.x[stage], self.ident,
                                       self.device, stage=stage, train_end=self.bounds[0],
                                       chunk=self.settings.evaluation.chunk, fold=self.fold)
@@ -106,7 +107,7 @@ def prepare(settings: RunSettings, out=None) -> Run:
     ds = art.dataset
     targets = run_common.price_targets(ds)
     run_common.check_decode(ds, targets)
-    run_common.input_key(ds)
+    run_common.input_keys(ds, settings.data.input_timeframes)
     parts, bounds = run_common.make_plan(ds, settings.split)
     if settings.split.exclude_coins:
         names = ", ".join(settings.split.exclude_coins)
@@ -129,7 +130,8 @@ def _assemble(settings: RunSettings, art: LoadedData, targets: tuple, parts: tup
     run = Run(settings, art, targets, dict(zip(("train", "val", "test"), parts, strict=True)), bounds,
               run_common.pick_device(settings), None if out is None else Path(out))
     for stage in ("train", "val"):
-        run.x[stage], run.y[stage] = flat_run.flat_inputs(ds, run.idx[stage], settings.split.cross_section)
+        run.x[stage], run.y[stage] = flat_run.flat_inputs(ds, run.idx[stage], settings.split.cross_section,
+                                                          settings.data.input_timeframes)
     return run
 
 
@@ -322,7 +324,8 @@ def write_summary(run: Run, extra: dict | None = None) -> dict:
                "split": {"train_end": str(run.bounds[0]), "val_end": str(run.bounds[1])},
                "targets": list(run.targets), "label_smoothing": s.train.label_smoothing,
                "reg_target_mode": ds["reg_target_mode"], "reg_target_scale": float(ds["reg_target_scale"]),
-               "input_key": run_common.input_key(ds), "max_rows": s.split.max_rows, "model_overrides": run.ms.overrides,
+               "input_key": "+".join(run_common.input_keys(ds, s.data.input_timeframes)),
+               "max_rows": s.split.max_rows, "model_overrides": run.ms.overrides,
                "data_fingerprint": run.art.manifest.data_fingerprint, "identity_fingerprint": run.ident.fingerprint(),
                "run_dir": str(s.run_dir), "history": res.history,
                **{k: v for k, v in run.extra.items() if k != "tables"}, **(extra or {})}

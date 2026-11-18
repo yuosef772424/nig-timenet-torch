@@ -79,6 +79,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `data_io/artifact.py` | Loader of a contract artifact exported by the TF side: refuses it unless every rule D1 field is present and consistent with the data itself. | artifact loader, rule d1, manifest, sealed coins, time seal, hash verification |
 | `data_io/environments.py` | Test environments of MODEL_DEV_PROTOCOL section 3: E2 = one global label permutation, E3 = a training-era slice of the real artifact, E3p = its panel form (whole timestamps); nig-envs writes E1 .. E4. | e2 environment, e3 environment, shuffled labels, label permutation, real slice, panel slice, whole timestamps, training era, purged split, leakage canary, gates |
 | `data_io/loading.py` | One way to load a prepared dataset by base name, latest name or full name, memory-mapped or copied to local disk, with the rule D1 artifact checks applied by default. | dataset loading, latest name, mmap, local copy, artifact checks, rule d1 |
+| `data_io/lower_timeframe.py` | Add a finer timeframe's input window (X_<tf>, e.g. the last 32 1h bars) to an existing contract artifact, row by row, from Binance archive candles, as a new contract artifact with the same rows, labels and coins. | lower timeframe, multi timeframe, 1h window, derived artifact, log moves, binance vision, alignment, x_1h |
 | `data_io/npy_dir.py` | Reader of the npy_dir dataset format (manifest.json + one .npy per array + meta.pkl), optionally memory- mapped, and a local-disk copy helper. | npy dir, dataset reader, mmap, localize, data format, manifest |
 | `data_io/split_plan.py` | One global train/val/test split with purge by label end and embargo, plus the per-row times it needs (feature start, feature end, label end) derived from last_candles. | split plan, purge embargo, label end, sample times, leakage check |
 | `data_io/synthetic.py` | E1 test environment (MODEL_DEV_PROTOCOL section 3): synthetic 4h bars from intrabar random walks, HAR-like volatility, a planted close drift of known IC; a contract artifact with each label's exact conditional mean / sd. | synthetic data, e1 environment, oracle, planted signal, known ic, heteroscedastic noise, har volatility, intrabar path, contract artifact, gates |
@@ -244,6 +245,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `data/cli.py`: runnable (`python -m nig_timenet_torch.data.cli`)
 - `data_io/artifact.py`: runnable (`python -m nig_timenet_torch.data_io.artifact`)
 - `data_io/environments.py`: runnable (`python -m nig_timenet_torch.data_io.environments`)
+- `data_io/lower_timeframe.py`: runnable (`python -m nig_timenet_torch.data_io.lower_timeframe`)
 - `data_io/vision_slice.py`: runnable (`python -m nig_timenet_torch.data_io.vision_slice`)
 - `doctor/__main__.py`: runnable (`python -m nig_timenet_torch.doctor`)
 - `doctor/readiness.py`: runnable (`python -m nig_timenet_torch.doctor.readiness`)
