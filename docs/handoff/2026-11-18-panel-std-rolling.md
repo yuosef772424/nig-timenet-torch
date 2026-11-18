@@ -62,3 +62,14 @@ CPU tests), the runtime release (`runtime.unassign()` through the kernel).
   `/content/nig_new` (`ed2d3b4`): the known-answer test of `order_in_label_units` (B-079).
 - `finish_and_release.sh` waits for every job, writes the readings (2tf vs ref-003, ls vs ref-002, ref-003 vs ref-002)
   to `<job>/reading_vs_<ref>/`, flushes Drive and releases the runtime. Log: `nig_timenet_runs/finish_and_release.log`.
+
+## State at 22:55 UTC on 2026-11-18
+- Finished: `label-order-e4-look` (order on prices restores high / low IC on E4: 0.263 / 0.252 vs reference 0.263 /
+  0.253, std 0.232 / 0.222), `panel-rolling-ls-001` (14 / 14 folds), `btc-hedged-book-001` (results note).
+- Running (all on Drive, resumable): `panel-rolling-2tf-001` (`03bafba`, main checkout started it: resume ONLY from
+  `/content/nig_03b`), `panel-rolling-ref-003` (`/content/nig_03b`), `panel-rolling-usdt-001` and
+  `panel-rolling-std-order-001` (`/content/nig_u`, `df4580b`; artifact `preprocessing_output_1_plus_usdt`, fingerprint
+  `8dbebef936cd`, on Drive).
+- `finish_and_release2.sh` (= `docs/audit/2026-11-18-panel-std/finish_and_release.sh`) waits for all of them, writes the
+  readings (2tf vs ref-003, ls / usdt / std-order vs ref-002, ref-003 vs ref-002) and the BTC-hedged book of the later
+  jobs to Drive, flushes Drive and releases the runtime.
