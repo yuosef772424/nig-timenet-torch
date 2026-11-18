@@ -28,3 +28,26 @@ candidate fails); close the step (`python -m tools.close_step`), draft PR.
 Owner 2026-11-18: when training is finished, end the Colab session (after the reading is saved to Drive and pulled):
 `runtime.unassign()` executed in the notebook kernel through `jupyter_client` (the bridge is a separate process, the
 kernel is idle), which also ends the bridge.
+
+## State at 21:30 UTC (after the session's worker restart)
+- `panel-rolling-std-001` and `panel-rolling-ref-002`: finished 19:56 (7 folds x 2 seeds each; pooled reports on Drive).
+- `panel-rolling-ls-001`: cut at about 11 of 14 folds when the runtime / tunnel died (between 19:56 and 21:29); its
+  checkpoints only resume on commit `6c928bb` (run identity): the chain below does that from a second checkout.
+- The reading script (`read_std_rolling.py`) has NOT run on the finished jobs (no runtime): the chain runs it first.
+
+## The two-timeframe chain (owner 2026-11-18): the run command
+A NEW Colab GPU runtime, one cell (the token is read from Drive, never typed):
+
+```python
+from google.colab import drive; drive.mount('/content/drive')
+!T=$(tr -d "\r\n " < /content/drive/MyDrive/crypto/secrets/github_token.txt); B=$(printf "x-access-token:%s" "$T" | base64 -w0); rm -rf /content/nig-timenet-torch; GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $B" git clone -q --branch ccr-acb890db-b2ekab https://github.com/yuosef772424/nig-timenet-torch.git /content/nig-timenet-torch && echo cloned
+!mkdir -p /content/drive/MyDrive/nig_timenet_runs && SHUTDOWN=1 nohup bash /content/nig-timenet-torch/docs/audit/2026-11-18-panel-std/two_frames_chain.sh > /content/drive/MyDrive/nig_timenet_runs/two_frames_chain.log 2>&1 &
+```
+
+Follow: `!tail -5 /content/drive/MyDrive/nig_timenet_runs/two_frames_chain.log`. Without `SHUTDOWN=1` the runtime stays.
+What it does: `docs/audit/2026-11-18-panel-std/two_frames_chain.sh` (header). Expected time: artifact build
+(535 coins of 1h candles, first time only) then about 2 h of jobs. Outputs: `MyDrive/nig_timenet_runs/<job>/out`,
+readings in `<job>/reading_vs_<ref>/reading.json`, the artifact in
+`MyDrive/crypto_model/torch_artifacts/preprocessing_output_1_plus_1h` (with `derivation.json`).
+Not verified: the chain end to end on Colab, the artifact build on real data (only the BTCUSDT channel check and the
+CPU tests), the runtime release (`runtime.unassign()` through the kernel).
