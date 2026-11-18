@@ -1,0 +1,194 @@
+{
+ "val/high": {
+  "rows": 15045,
+  "label_scale": 0.036183055490255356,
+  "alpha_q": [
+   2.00012,
+   2.00027,
+   2.00171,
+   2.01692,
+   2.67797
+  ],
+  "alpha_excess_share<1e-3": 0.24207377866400798,
+  "alpha_excess_share<1e-2": 0.9830508474576272,
+  "alpha_share_within5pct(report rule)": 0.9982718511133267,
+  "beta_floor_report(unscaled)": 0.01,
+  "beta_floor_true(label units)": 1.3092135046108982e-05,
+  "beta_share_report_rule": 1.0,
+  "beta_share_true_floor_5pct": 0.0,
+  "beta/true_floor_q": [
+   1.92,
+   3.27,
+   11.66,
+   42.64,
+   187.27
+  ],
+  "student_t_mle_df_of_residuals": 3.827,
+  "implied_alpha=df/2": 1.914,
+  "scale_mult": 0.826,
+  "mean_dNLL_dalpha(>0 pushes alpha down)": -0.06368374739532777,
+  "share_rows_dNLL_dalpha>0": 0.19521435692921235,
+  "reg_grad_dalpha=lambda*|err| (lambda 0.01)": 8.602072492303799e-05,
+  "kurtosis_excess_z": 76.52078492967227
+ },
+ "val/low": {
+  "rows": 15045,
+  "label_scale": 0.036183055490255356,
+  "alpha_q": [
+   2.00004,
+   2.00013,
+   2.0006,
+   2.00366,
+   2.01907
+  ],
+  "alpha_excess_share<1e-3": 0.7945496842804919,
+  "alpha_excess_share<1e-2": 0.9989365237620472,
+  "alpha_share_within5pct(report rule)": 1.0,
+  "beta_floor_report(unscaled)": 0.01,
+  "beta_floor_true(label units)": 1.3092135046108982e-05,
+  "beta_share_report_rule": 1.0,
+  "beta_share_true_floor_5pct": 0.0,
+  "beta/true_floor_q": [
+   1.84,
+   3.45,
+   12.06,
+   36.23,
+   117.55
+  ],
+  "student_t_mle_df_of_residuals": 7.307,
+  "implied_alpha=df/2": 3.653,
+  "scale_mult": 0.891,
+  "mean_dNLL_dalpha(>0 pushes alpha down)": -0.08292642634215823,
+  "share_rows_dNLL_dalpha>0": 0.22838152210036558,
+  "reg_grad_dalpha=lambda*|err| (lambda 0.01)": 8.361734638228765e-05,
+  "kurtosis_excess_z": 503.24786678812046
+ },
+ "val/close": {
+  "rows": 15045,
+  "label_scale": 0.036183055490255356,
+  "alpha_q": [
+   2.00554,
+   2.01082,
+   2.02557,
+   2.12198,
+   3.00618
+  ],
+  "alpha_excess_share<1e-3": 0.0,
+  "alpha_excess_share<1e-2": 0.0052509139248919905,
+  "alpha_share_within5pct(report rule)": 0.9867065470255899,
+  "beta_floor_report(unscaled)": 0.01,
+  "beta_floor_true(label units)": 1.3092135046108982e-05,
+  "beta_share_report_rule": 1.0,
+  "beta_share_true_floor_5pct": 0.0,
+  "beta/true_floor_q": [
+   3.22,
+   6.47,
+   22.31,
+   67.66,
+   228.21
+  ],
+  "student_t_mle_df_of_residuals": 4.99,
+  "implied_alpha=df/2": 2.495,
+  "scale_mult": 0.791,
+  "mean_dNLL_dalpha(>0 pushes alpha down)": -0.09586193141335847,
+  "share_rows_dNLL_dalpha>0": 0.213160518444666,
+  "reg_grad_dalpha=lambda*|err| (lambda 0.01)": 0.0001168093874002228,
+  "kurtosis_excess_z": 59.216072401493314
+ },
+ "test/high": {
+  "rows": 15163,
+  "label_scale": 0.036183055490255356,
+  "alpha_q": [
+   2.00016,
+   2.00034,
+   2.00204,
+   2.01581,
+   2.30786
+  ],
+  "alpha_excess_share<1e-3": 0.18175822726373408,
+  "alpha_excess_share<1e-2": 0.9814020972103146,
+  "alpha_share_within5pct(report rule)": 0.99973619996043,
+  "beta_floor_report(unscaled)": 0.01,
+  "beta_floor_true(label units)": 1.3092135046108982e-05,
+  "beta_share_report_rule": 1.0,
+  "beta_share_true_floor_5pct": 0.0,
+  "beta/true_floor_q": [
+   1.86,
+   3.86,
+   21.42,
+   146.15,
+   454.46
+  ],
+  "student_t_mle_df_of_residuals": 2.271,
+  "implied_alpha=df/2": 1.136,
+  "scale_mult": 0.897,
+  "mean_dNLL_dalpha(>0 pushes alpha down)": 0.04916503579075418,
+  "share_rows_dNLL_dalpha>0": 0.27751764162764625,
+  "reg_grad_dalpha=lambda*|err| (lambda 0.01)": 0.00015896523989915204,
+  "kurtosis_excess_z": 49.10638735271655
+ },
+ "test/low": {
+  "rows": 15163,
+  "label_scale": 0.036183055490255356,
+  "alpha_q": [
+   2.00006,
+   2.00016,
+   2.00114,
+   2.02228,
+   2.11075
+  ],
+  "alpha_excess_share<1e-3": 0.44423926663589,
+  "alpha_excess_share<1e-2": 0.9682780452417068,
+  "alpha_share_within5pct(report rule)": 0.9999340499901075,
+  "beta_floor_report(unscaled)": 0.01,
+  "beta_floor_true(label units)": 1.3092135046108982e-05,
+  "beta_share_report_rule": 1.0,
+  "beta_share_true_floor_5pct": 0.0,
+  "beta/true_floor_q": [
+   2.09,
+   4.15,
+   20.95,
+   89.6,
+   372.65
+  ],
+  "student_t_mle_df_of_residuals": 4.919,
+  "implied_alpha=df/2": 2.459,
+  "scale_mult": 0.933,
+  "mean_dNLL_dalpha(>0 pushes alpha down)": -0.04488434135818537,
+  "share_rows_dNLL_dalpha>0": 0.27626459143968873,
+  "reg_grad_dalpha=lambda*|err| (lambda 0.01)": 0.00012589256745907323,
+  "kurtosis_excess_z": 9.583314078978292
+ },
+ "test/close": {
+  "rows": 15163,
+  "label_scale": 0.036183055490255356,
+  "alpha_q": [
+   2.00748,
+   2.01219,
+   2.02689,
+   2.08273,
+   2.84388
+  ],
+  "alpha_excess_share<1e-3": 0.0,
+  "alpha_excess_share<1e-2": 0.0015828002374200355,
+  "alpha_share_within5pct(report rule)": 0.9924816988722548,
+  "beta_floor_report(unscaled)": 0.01,
+  "beta_floor_true(label units)": 1.3092135046108982e-05,
+  "beta_share_report_rule": 1.0,
+  "beta_share_true_floor_5pct": 0.0,
+  "beta/true_floor_q": [
+   3.46,
+   7.77,
+   39.19,
+   173.28,
+   466.67
+  ],
+  "student_t_mle_df_of_residuals": 3.472,
+  "implied_alpha=df/2": 1.736,
+  "scale_mult": 0.919,
+  "mean_dNLL_dalpha(>0 pushes alpha down)": -0.014519809258015945,
+  "share_rows_dNLL_dalpha>0": 0.2936753940513091,
+  "reg_grad_dalpha=lambda*|err| (lambda 0.01)": 0.000202663091676001,
+  "kurtosis_excess_z": 21.55847417330391
+ }
+}
