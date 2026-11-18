@@ -60,3 +60,16 @@ are not comparable. Accept rules:
 - **Selection gain:** the paired difference of the neutral book (gross, pooled days) against
   `panel-rolling-ref-002` has a CI above 0 on both seeds; the close rank IC may fall by at most 0.01 (the metric
   it no longer selects on).
+
+## Addendum 2 (owner 2026-11-19, written before the chain started): two timeframes, 4h + 1h
+Jobs (chain `two_frames_chain.sh`, one commit): `panel-rolling-2tf-001` (reference arm + the 1h window of every row
+beside the 4h window, `input_timeframes [4h, 1h]`) against `panel-rolling-ref-003` (the same arm on the same derived
+artifact without the 1h input); same folds, seeds and settings as ref-002. `panel-rolling-ref-003` against
+`panel-rolling-ref-002` checks that the derived artifact reproduces the 4h run (close rank IC per fold within 0.002).
+Accept rules:
+- **Profit:** as above (beats every day-metric baseline on the pooled days, CI excludes 0, both seeds).
+- **Information gain:** close rank IC above ref-003 in >= 6 of 7 folds on both seeds and the pooled mean difference
+  over twice the seed spread, with no high / low rank IC loss over 0.01. **Refuted** if not above in at least 4 of 7
+  folds on either seed.
+- Expectation: the 1h shape of the last 4h bar (where inside the bar the move happened) adds to the last-bar
+  asymmetry (DS1); a small close IC gain at most.
