@@ -17,12 +17,12 @@ ARMS = {
 }
 
 
-def main(art, root, arm, seed, epochs=8, threads=2, batch=1600):
+def main(art, root, arm, seed, epochs=8, threads=2, batch=1600, device="cpu"):
     torch.set_num_threads(int(threads))
     arch, over = ARMS[arm]
     rd = f"{root}/{arm}_s{seed}"
     s = updated(RunSettings(run_dir=rd), {
-        "data.name": art, "train.device": "cpu", "train.epochs": int(epochs), "train.seed": int(seed),
+        "data.name": art, "train.device": device, "train.epochs": int(epochs), "train.seed": int(seed),
         "train.batch_size": int(batch), "train.lr": 1e-3, "train.early_stop.patience": 3,
         "split.cross_section": True, "split.coin_channel": arch == "snapshot_panel",
         "train.cross_section_loss": "rank_ic", "train.selection_metric": "val_rank_ic_reg",
