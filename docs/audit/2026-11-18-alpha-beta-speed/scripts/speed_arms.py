@@ -19,6 +19,11 @@ ARMS = {
     "lite": ({}, LITE),
     "lite_bs1024": ({"train.batch_size": 1024, "train.lr": 2e-3}, LITE),
     "lite_bs4096": ({"train.batch_size": 4096, "train.lr": 4e-3}, LITE),
+    # batch composition look (owner 2026-11-18). Pre-registered before any number: time_blocks (one moment of all
+    # coins per batch) is kept as a candidate only if its VAL close rank IC beats lite (rows) by more than
+    # max(0.01, the lite seed spread) on BOTH seeds and high / low lose no more than 0.01; same rule for +rank_ic.
+    "lite_tb": ({"train.batch_order": "time_blocks"}, LITE),
+    "lite_tb_rank": ({"train.batch_order": "time_blocks", "train.cross_section_loss": "rank_ic"}, LITE),
 }
 chg, mo = ARMS[arm]
 rd = f"{root}/{arm}_s{seed}"
