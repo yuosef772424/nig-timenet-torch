@@ -78,6 +78,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 |---|---|---|
 | `data_io/artifact.py` | Loader of a contract artifact exported by the TF side: refuses it unless every rule D1 field is present and consistent with the data itself. | artifact loader, rule d1, manifest, sealed coins, time seal, hash verification |
 | `data_io/environments.py` | Test environments of MODEL_DEV_PROTOCOL section 3: E2 = one global label permutation, E3 = a training-era slice of the real artifact, E3p = its panel form (whole timestamps); nig-envs writes E1 .. E4. | e2 environment, e3 environment, shuffled labels, label permutation, real slice, panel slice, whole timestamps, training era, purged split, leakage canary, gates |
+| `data_io/indicator_channels.py` | Add indicator channels (RSI 14, stochastic %K / %D 14-3-3, relative quote volume) to every bar of the base frame's windows of a contract artifact, from the coin's own base-frame candles with full warm-up history. | indicator channels, rsi, stochastic, volume, relative volume, derived artifact, binance vision, no lookahead |
 | `data_io/loading.py` | One way to load a prepared dataset by base name, latest name or full name, memory-mapped or copied to local disk, with the rule D1 artifact checks applied by default. | dataset loading, latest name, mmap, local copy, artifact checks, rule d1 |
 | `data_io/lower_timeframe.py` | Add a finer timeframe's input window (X_<tf>, e.g. the last 32 1h bars) to an existing contract artifact, row by row, from Binance archive candles, as a new contract artifact with the same rows, labels and coins. | lower timeframe, multi timeframe, 1h window, derived artifact, log moves, binance vision, alignment, x_1h |
 | `data_io/market_channel.py` | Add a market-level input channel from an outside DAILY series (e.g. the USDT supply) to a contract artifact: for every bar of every window, the log growth of the series over k days as known the day BEFORE that bar. | market channel, outside data, usdt supply, stablecoin, daily series, log growth, no lookahead, derived artifact |
@@ -254,6 +255,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `data/cli.py`: runnable (`python -m nig_timenet_torch.data.cli`)
 - `data_io/artifact.py`: runnable (`python -m nig_timenet_torch.data_io.artifact`)
 - `data_io/environments.py`: runnable (`python -m nig_timenet_torch.data_io.environments`)
+- `data_io/indicator_channels.py`: runnable (`python -m nig_timenet_torch.data_io.indicator_channels`)
 - `data_io/lower_timeframe.py`: runnable (`python -m nig_timenet_torch.data_io.lower_timeframe`)
 - `data_io/market_channel.py`: runnable (`python -m nig_timenet_torch.data_io.market_channel`)
 - `data_io/vision_slice.py`: runnable (`python -m nig_timenet_torch.data_io.vision_slice`)
