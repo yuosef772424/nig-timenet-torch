@@ -22,3 +22,17 @@ H1b q per fold: f0=0.9, f1=0.8, f2=0.8, f3=0.7, f4=0.7, f5=0.7, f6=0.8
   H1b  (1) kept net>0 and >R0 short: {0: False, 1: False}; (2) dropped<kept: {0: False, 1: True}; (3) book net and busy > R0: {0: True, 1: True}; accepted: False
   H3   (1) kept net>0 and >R0 short: {0: False, 1: False}; (2) dropped<kept: {0: True, 1: False}; (3) book net and busy > R0: {0: True, 1: True}; accepted: False
   H13  (1) kept net>0 and >R0 short: {0: False, 1: False}; (2) dropped<kept: {0: False, 1: True}; (3) book net and busy > R0: {0: True, 1: True}; accepted: False
+
+######## lead check and reading (2026-11-19), dataset A = rolling-single-001 seeds 0, 1 (development data)
+- Re-run by the lead from the PR branch: output identical. R0 matches short-side-001 (short top 20 % net -0.043 / -0.069 %).
+- Accept rule: no rule passes (condition 1 fails for every rule on both seeds: the kept shorts stay below 0).
+- Trivial comparison, NOT pre-registered (a reading aid, not a rule): the book with NO shorts (longs of U only)
+    seed 0: n=69,810 net=+0.121% mean day +0.157 [-0.007, +0.330] busy +0.127 w/o best -0.094 win days 52.9%
+    seed 1: n=60,620 net=+0.119% mean day +0.204 [+0.047, +0.396] busy +0.135 w/o best -0.042 win days 55.3%
+  It beats every rule's book (best rule book net +0.100 / +0.103, busy +0.109 / +0.133): the rules raise the book
+  only by trading fewer shorts. None of them finds shorts that pay.
+- What H1a does find: the 3-5 % of shorts whose predicted log fall does not cover s^2/2 + cost lose -0.50 / -0.64 %
+  per trade (kept: -0.016 / -0.049 %). The price-unit test picks the worst shorts, but what remains still loses.
+- The long-only book itself fails the scorecard verdict: negative without its best 5 % of days on both seeds (the
+  late-2024 rally, fold 3).
+- Dataset B (rolling-single-002, seeds 2 and 3, real VAL tables) is the pre-registered test; not run yet.
