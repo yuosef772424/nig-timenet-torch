@@ -23,6 +23,12 @@ residual inputs / residual label. Outputs stay in the session scratchpad (not on
   +0.064 against the own label's ranks, positive in all 4 folds). The residual feature set fitted on the residual
   label gives +0.051.
 
+- **M3a (longer horizons, model-free, amendment 1): cannot pay either.** Ridge on the residual features and label,
+  per-timestamp top 10 %, residual gross per trade (mean of the 4 folds): 8 h +0.039 %, 24 h +0.063 %, 48 h
+  +0.079 % (48 h: above 0.16 % in 2 of 4 folds only). Rank IC stays positive (24 h +0.041 .. +0.056 in every fold).
+  And the BOTTOM decile earns more in mean simple return than the top at every horizon (24 h +0.154 %, 48 h +0.270 %):
+  the ranking is right in log / median terms, the mean P&L is carried by the right tail of volatile coins.
+
 ## What the model learned
 
 M learned to rank coins inside a timestamp (IC 0.077 in every fold), and the ridge shows the label is what matters:
@@ -61,7 +67,8 @@ ridge agree, every fold), but it lives in the median of log moves; the mean simp
 
 | # | Hypothesis | Refuted if | Cheapest test |
 |---|---|---|---|
-| M3a | Residual drift adds up over time: at 24-48 h the residual top decile's gross per trade exceeds 0.16 % | the ridge on the residual label at 24 / 48 h gives top-decile gross below 0.16 % | model-free on this local artifact (re-targeted horizon) |
+| M3a | (tested, amendment 1: REFUTED) residual drift adds up to more than 0.16 % at 24-48 h | top decile +0.063 % / +0.079 % | done |
+| M3e | The P&L lives in the right tail: a target that is the MEAN simple residual return (not the log move) or a quantile head on the upper tail ranks the coins that pay | the per-timestamp top decile's mean residual return is not above the bottom decile's | local run, residual label as exp(r) - 1 |
 | M3b | A volatility-scaled residual target (residual / predicted sd) stops mu from ranking by volatility and makes the deciles monotone | the top-minus-bottom spread stays at or below 0 | the same local run with a scaled label |
 | M3c | Use the residual model as a FILTER for the long-only book: do not buy coins in M's lowest 3 deciles | the filtered long book's mean day without the best 5 % is not above the unfiltered one | the full artifact (GPU) or this local slice with arm A's long book |
 | M3d | The full artifact (535 coins) gives the same IC gain on its own folds | IC against the residual label below 0.03 on the 7 folds | `market_residual` on Colab (`--cache`), 2 seeds, 7 folds |
