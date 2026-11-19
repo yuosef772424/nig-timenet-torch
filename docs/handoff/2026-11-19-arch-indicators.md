@@ -26,6 +26,7 @@ Another session (branch `claude/loss-side-heads`) runs 5 rolling jobs on the sam
 | `look-{g64,g128,g128l3,tcn64,tr64,ct64}` | stage 1, `docs/jobs/arch-ind-look-001.json` per arm (configs `/content/cfg_ind/look_<arm>.json`) | `arch-ind-look-001/out_<arm>`, ckpts `arch-ind-look-001/train_<arm>` |
 | `wf-R-s{0,1}` | stage 2 arm R (gru 64, art1, lr 3e-4) | `rolling-ind-001/out_R_s<seed>` |
 | `wf-I-s{0,1}`, `wf-IR-s{0,1}` | stage 2 arms I / IR (tcn 64, art_ind, lr 1e-5; IR + rank term + time blocks), started 20:02 UTC | `rolling-ind-001/out_<arm>_s<seed>` |
+| `br-chain` (`/content/br_chain.sh`) | BTC-relative artifact `/content/art_btcrel` (`data_io/btc_relative.py`, 0.64 % rows without values), smoke `rolling-btcrel-smoke-001` (OK), then `rolling-btcrel-001` seeds 0 / 1 in parallel (logs `/content/br_main_s<seed>.log`), checkout `/content/nig_br` pinned at 34d574a, started 21:05 UTC | `rolling-btcrel-001/out_s<seed>` |
 
 All Colab runs of this study (smoke, stage 1, stage 2) run on commit **458bcdb** (`code_sha` in the checkpoints'
 run identity). `/content/nig_ind` was later pulled for the reading script: a cut stage-2 job must be resumed from a
@@ -49,6 +50,10 @@ worktree at 458bcdb (`git -C /content/nig_ind worktree add -f /content/nig_ind_4
   as rolling-single-002 (replicated on seeds 0 / 1 on this commit).
 - Stage 2 timing: arm I best epoch = 16 of 16 in fold 0 (lr 1e-5 still learning); about 22 min per fold for I, about
   35 min for IR (time-block batches): I ~2.5 h, IR ~4 h from 20:02 UTC.
+
+- Free tests on the saved tables: `docs/results/btc-hedge-long-001.md` (no edge beyond BTC, beta 1.35) and
+  `docs/results/b1-btc-timing-001.md` (BTC at the bullish times beats BTC always, nets about 0: cost wall).
+- BR (owner): BTC-relative inputs, R configuration otherwise; pre-registered in `PREREGISTERED_BR.md`.
 
 ## What is next
 1. (done) stage 1 choice.
