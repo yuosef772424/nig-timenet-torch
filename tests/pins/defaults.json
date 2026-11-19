@@ -1,5 +1,5 @@
 {
- "fingerprint": "6ad4090f1f7a5918",
+ "fingerprint": "2dfb6ff35fe32f32",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -282,6 +282,11 @@
   "nig_timenet_torch.data_io.environments.real_slice(n_coins)": "20",
   "nig_timenet_torch.data_io.environments.real_slice(train_share)": "0.7",
   "nig_timenet_torch.data_io.environments.real_slice(val_share)": "0.15",
+  "nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(cache)": "None",
+  "nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(fetch)": "None",
+  "nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(overwrite)": "False",
+  "nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(workers)": "16",
+  "nig_timenet_torch.data_io.indicator_channels.indicator_windows(x_close)": "None",
   "nig_timenet_torch.data_io.loading.LoadedData(manifest)": "None",
   "nig_timenet_torch.data_io.loading.LoaderSettings(allow_unchecked)": "False",
   "nig_timenet_torch.data_io.loading.LoaderSettings(directory)": "'.'",
