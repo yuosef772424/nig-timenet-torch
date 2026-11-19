@@ -49,6 +49,13 @@ out_s{0,1}` and `rolling-mres-001/out_s{0,1}`. Started again on the SAME commit 
   against R; also BTC-hedged.
 - arm IR: stopped at 6 / 7 folds; resume only on a worktree at 458bcdb (details in the 2026-11-19 handoff).
 
+## Verified 2026-11-19 (so tomorrow does not re-check)
+- `market_residual --cache` (the Colab path, archive fetch + cache) ran end to end on the local 60 coins: residual
+  label variance 0.000291 (the same as the local-file path); the missing cache folder bug is fixed (commit 056c14c,
+  test `test_archive_path_creates_the_cache_folder_and_reuses_it`).
+- The 4 generated configs of `colab_chain.sh` parse as `RollingConfig`; the script passes `bash -n`.
+- NOT verified: the chain itself on Colab (no runtime tonight).
+
 ## Known traps for tomorrow
 - `market_residual` reads candles one coin at a time; on Colab they come from the Drive cache (fast). Cached
   candles end one bar after a coin's last row, so the last rows of each coin keep their own close label and zero
