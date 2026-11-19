@@ -24,7 +24,6 @@ Another session (branch `claude/loss-side-heads`) runs 5 rolling jobs on the sam
 | process | what | outputs (Drive `MyDrive/nig_timenet_runs/`) |
 |---|---|---|
 | `look-{g64,g128,g128l3,tcn64,tr64,ct64}` | stage 1, `docs/jobs/arch-ind-look-001.json` per arm (configs `/content/cfg_ind/look_<arm>.json`) | `arch-ind-look-001/out_<arm>`, ckpts `arch-ind-look-001/train_<arm>` |
-
 | `wf-R-s{0,1}` | stage 2 arm R (gru 64, art1, lr 3e-4) | `rolling-ind-001/out_R_s<seed>` |
 | `wf-I-s{0,1}`, `wf-IR-s{0,1}` | stage 2 arms I / IR (tcn 64, art_ind, lr 1e-5; IR + rank term + time blocks), started 20:02 UTC | `rolling-ind-001/out_<arm>_s<seed>` |
 
@@ -34,7 +33,6 @@ Smoke `rolling-ind-smoke-001` ran OK on commit eb6f1eb+ (rule E5). Stage 2 (`rol
 ## What is decided
 - Reference reading (rolling-single-002 through read_arms.py): the long top 10 % book pays (+0.16-0.22 % per day,
   CI above 0) but loses after removing the market move of the same timestamp: the model times the market.
-
 - Stage 1 read on VAL (`analysis-ind-001/look_val/`): mean VAL long net per trade over 2 folds g64 +0.028 %, tcn64
   +0.023 %, g128l3 +0.004 %, ct64 -0.041 %, g128 -0.056 %, tr64 -0.181 %; VAL close rank IC tcn64 0.065 (highest).
   Choice by the rule: tcn64 (d_model 64, 2 layers, 120k parameters). Every arm's best epoch was the last of fold 0
