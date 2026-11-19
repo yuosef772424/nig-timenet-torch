@@ -11,6 +11,9 @@ from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats.nig import nig_predictive_std
 from tests.eval.synth import ANCHOR, codec_state, make
 
+# rule E3: 10 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 
 def _adapt(table, labels, anchors, **kw):
     return to_battery_table(table, labels, anchors=anchors, last_close=np.full(len(table), ANCHOR),

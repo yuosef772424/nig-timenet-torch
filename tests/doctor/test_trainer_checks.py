@@ -13,6 +13,9 @@ from nig_timenet_torch.doctor.trainer_checks import (
     verdict,
 )
 
+# rule E3: 12 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 TARGETS = ("high", "low", "close")
 
 

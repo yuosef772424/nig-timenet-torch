@@ -18,6 +18,9 @@ from nig_timenet_torch.workflow.rolling import fold_with_val, rolling_folds
 from nig_timenet_torch.workflow.rolling_run import fold_dir, run_rolling, summarize
 from nig_timenet_torch.workflow.settings import RollingSettings, RunSettings
 
+# rule E3: 9 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 
 def rolling(**over):
     base = dict(train_span="20D", test_span="7D", step="10D", embargo="1D", max_folds=3)

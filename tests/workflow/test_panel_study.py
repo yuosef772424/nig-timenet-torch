@@ -19,6 +19,9 @@ from nig_timenet_torch.workflow import panel_report, panel_study
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.settings import RunSettings
 
+# rule E3: 37 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 ARMS = {"per_coin": {}, "rank": {"model": {"cross_input": "relative"},
                                  "train": {"cross_section_loss": "rank_ic", "selection_metric": "val_ls_sharpe_close"}}}
 
@@ -37,6 +40,7 @@ def base(e4_dir, tmp_path) -> RunSettings:
                        "evaluation.battery.enabled": False, "train.selection_metric": "val_rank_ic_reg"})
 
 
+@pytest.mark.slow   # rule E3: 16.7 s on CI, the slowest fast test (fast suite 312.6 s); runs in CI's slow step
 def test_study_runs_arms_and_seeds_writes_day_metrics_and_reads_finished_arms_back(e4_dir, tmp_path):
     out, keep = tmp_path / "out", tmp_path / "keep"
     study = panel_study.run_panel_study(base(e4_dir, tmp_path), ARMS, (0, 1), out, ckpt_root=keep)

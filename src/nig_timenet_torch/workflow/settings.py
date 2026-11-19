@@ -19,6 +19,7 @@ from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
 from nig_timenet_torch.trainer.staged import StageSettings
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
+from nig_timenet_torch.trainer.trainer import BATCHINGS
 
 __all__ = ["RollingSettings", "RunSettings", "ROLLING_MODES", "SplitSettings", "TrainSettings", "EvalSettings",
            "BatterySettings", "default_model_settings", "MODEL_FIRST_FIXES"]
@@ -136,8 +137,14 @@ class TrainSettings:
     # D-032 (owner idea 2026-11-16): weight of a term that penalises a batch whose close predictions lean long or
     # short (trainer.direction_balance; NIG mean and class probability of the close head); 0 = off
     direction_balance: float = 0.0
+    # D-034 (owner 2026-11-17): what one batch is: "rows" = shuffled rows in batch_size chunks (as before),
+    # "timestamp" / "day" = ALL training rows of one timestamp / one UTC day form one batch and the batches (not the
+    # rows) are shuffled (trainer.trainer.BATCHINGS); batch_size is then not used; not with split.cross_section
+    batch_by: str = "rows"
 
     def __post_init__(self):
+        if self.batch_by not in BATCHINGS:
+            raise ValueError(f"TrainSettings.batch_by must be one of {sorted(BATCHINGS)}, not {self.batch_by!r}")
         for name in ("epochs", "batch_size", "steps_per_execution"):
             v = getattr(self, name)
             if isinstance(v, bool) or not isinstance(v, int) or v < 1:
@@ -204,3 +211,6 @@ class RunSettings:
     def __post_init__(self):
         if not isinstance(self.run_dir, str) or not self.run_dir:
             raise ValueError("RunSettings.run_dir must be a non-empty string")
+        if BATCHINGS[self.train.batch_by] and (self.split.cross_section or self.train.staged is not None):
+            raise ValueError(f"train.batch_by={self.train.batch_by!r} needs the flat epoch loop: not with "
+                             f"split.cross_section (it batches whole timestamps already) or train.staged")

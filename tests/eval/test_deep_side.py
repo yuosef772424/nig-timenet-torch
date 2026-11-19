@@ -9,6 +9,9 @@ import pytest
 
 from nig_timenet_torch.eval import deep_side as ds
 
+# rule E3: 30 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 
 def frame(signal: float, seed: int, n_coins=25, n_ts=120, close_is_model=False) -> pd.DataFrame:
     """Synthetic battery rows: true deep z, model score = signal * z + noise, baselines independent of z."""

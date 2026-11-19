@@ -20,6 +20,9 @@ from nig_timenet_torch.workflow.settings import RunSettings
 from tests.notebooks.helpers import code_cells, is_settings, load, run_notebook
 from tests.scan import ROOT
 
+# rule E3: 12 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 ARABIC = re.compile(r"[؀-ۿ]")
 
 

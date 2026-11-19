@@ -9,6 +9,9 @@ import pytest
 from nig_timenet_torch.colab.job import JobError, parse_job
 from nig_timenet_torch.jobs import rolling, staged
 
+# rule E3: 7 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 

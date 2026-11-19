@@ -8,6 +8,7 @@ A "default" is any value the code uses when the caller says nothing:
   * a module constant whose name contains DEFAULT or CONFIG, assigned in that module's own file (a re-export is
     pinned once, where it is defined; dict constants are expanded per key)  -> key ``module.CONSTANT[.<key>]``
   * NOT a default: a parameter named in ``INJECTION_POINTS`` (a collaborator a test replaces: ``run``, ``env``, ...)
+    or in ``REPORT_ONLY`` (the heading of a rendered report: ``title``)
 
 ``python -m tests.defaults_pin`` prints the current map as JSON; ``--add`` writes keys missing from
 ``tests/pins/defaults.json`` into it (it never changes or removes an existing key: that needs a decision file).
@@ -73,13 +74,19 @@ def _defined_constants(mod) -> set[str]:
     return names
 
 
+#: parameters that only name a REPORT (the heading text of a rendered markdown page): their default changes no number,
+#: no file and no behaviour, so they are not pinned (IF1 suggestion 2026-11-17: a diagnostics module produced a
+#: decision line per report title). Add a name here only for that kind; a file name or a row count is NOT report-only.
+REPORT_ONLY = frozenset({"title"})
+
+
 def _signature_defaults(prefix: str, obj) -> dict[str, str]:
     out = {}
     if inspect.isclass(obj) and dataclasses.is_dataclass(obj):
         for f in dataclasses.fields(obj):
             if not f.init:
                 continue
-            if f.name in INJECTION_POINTS:
+            if f.name in INJECTION_POINTS or f.name in REPORT_ONLY:
                 continue
             if f.default is not dataclasses.MISSING:
                 out[f"{prefix}({f.name})"] = _norm(f.default)
@@ -92,7 +99,7 @@ def _signature_defaults(prefix: str, obj) -> dict[str, str]:
         return out
     for p in sig.parameters.values():
         if (p.default is not inspect.Parameter.empty and p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
-                and p.name not in INJECTION_POINTS):
+                and p.name not in INJECTION_POINTS and p.name not in REPORT_ONLY):
             out[f"{prefix}({p.name})"] = _norm(p.default)
     return out
 

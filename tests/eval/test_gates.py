@@ -13,6 +13,9 @@ from nig_timenet_torch.eval.vol_baseline import window_ranges
 from nig_timenet_torch.model.heads import head_spec
 from tests.data_io import envs
 
+# rule E3: 17 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 TARGETS = ("high", "low", "close")
 
 

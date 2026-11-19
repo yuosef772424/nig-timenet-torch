@@ -154,19 +154,23 @@ def build(run: Run) -> Run:
     return run
 
 
-def train(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
-    """Fit (resumes a run folder that holds a checkpoint). ``deadline`` is a ``time.monotonic()`` value."""
+def train(run: Run, *, deadline: float | None = None, on_epoch=None, batch_monitor=None) -> Run:
+    """Fit (resumes a run folder that holds a checkpoint). ``deadline`` is a ``time.monotonic()`` value;
+    ``batch_monitor``: a ``trainer.batch_influence.BatchInfluence`` (log-only; None = none)."""
     _need(run, "trainer", "build")
     n = {k: int(len(v)) for k, v in run.idx.items()}
+    groups = flat_run.batch_groups(run.dataset, run.idx["train"], run.settings.train.batch_by)
+    n_batches = -(-n['train'] // run.fit_settings.batch_size) if groups is None else len(torch.unique(groups))
     print(f"data: {n['train']} train / {n['val']} val / {n['test']} test windows "
           f"(max_rows {run.settings.split.max_rows}), split train_end {run.bounds[0]} val_end {run.bounds[1]}; "
-          f"{-(-n['train'] // run.fit_settings.batch_size)} batches per epoch on {run.device}", flush=True)
+          f"{n_batches} batches per epoch (batch_by {run.settings.train.batch_by}) on {run.device}", flush=True)
     trace_batches = (flat_run.batch_set(run.dataset, run.idx["train"], run.fit_settings.batch_size,
                                         run.settings.train.seed)
                      if run.settings.train.trace_representative else None)
     run.result = run.trainer.fit(run.x["train"], run.y["train"], run.x["val"], run.y["val"], run.fit_settings,
                                  run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline,
-                                 on_epoch=on_epoch, trace_batches=trace_batches)
+                                 on_epoch=on_epoch, trace_batches=trace_batches, batch_monitor=batch_monitor,
+                                 batch_groups=groups)
     _copy_best_weights(run)
     return run
 

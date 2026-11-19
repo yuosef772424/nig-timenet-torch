@@ -71,6 +71,19 @@ def time_ids(dataset: dict, idx: np.ndarray) -> np.ndarray:
     return ids
 
 
+#: TrainSettings.batch_by -> the group key of a row from its timestamp (int64 ns UTC); "rows" has none
+BATCH_KEYS = {"timestamp": lambda ts: ts, "day": lambda ts: ts // 86_400_000_000_000}
+
+
+def batch_groups(dataset: dict, idx: np.ndarray, batch_by: str) -> torch.Tensor | None:
+    """The group id (int64) of every row ``idx`` for ``batch_by`` (one group = one training batch: all rows of one
+    timestamp or one UTC day); None for "rows" (row batches)."""
+    if batch_by not in BATCH_KEYS:
+        return None
+    ts = np.asarray(dataset["last_candles"])[np.asarray(idx), TS_COL].astype(np.int64)
+    return torch.as_tensor(BATCH_KEYS[batch_by](ts), dtype=torch.int64)
+
+
 def flat_inputs(dataset: dict, idx: np.ndarray, time_channel: bool = False) -> tuple[torch.Tensor, dict]:
     """(x (n, T, F), {label_key: (n,)}) of the dataset rows ``idx``, float32, on the CPU; the heads are the artifact's
     price targets x ``HEAD_KINDS`` (label keys from ``head_spec``). ``time_channel``: x gets one more channel, the
@@ -145,7 +158,7 @@ def fit_settings_of(settings: RunSettings) -> FitSettings:
     t = settings.train
     return FitSettings(epochs=t.epochs, batch_size=t.batch_size, seed=t.seed, early_stop=t.early_stop, trace=True,
                        grad_clip_norm=t.grad_clip_norm, ema_decay=t.ema_decay, init=t.init,
-                       steps_per_execution=t.steps_per_execution)
+                       steps_per_execution=t.steps_per_execution, batch_by=t.batch_by)
 
 
 @torch.no_grad()

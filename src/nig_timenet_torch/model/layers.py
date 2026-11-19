@@ -38,14 +38,17 @@ class InstanceNorm(nn.Module):
     mean / population variance over the time axis (TF reduce_variance, i.e. mean((x - mean)^2)), std = sqrt(var + eps),
     z = (x - mean) / std, optional soft clip ``clip * tanh(z / clip)``, optional affine ``z * gamma + beta``.
     stats_mode: "full" = [mean, log std]; "symlog" = [sign(mean) log1p|mean|, clip(log std, +-stats_clip)];
-    "none" = stats returned as None (P33b).
+    "none" = stats returned as None (P33b). ``normalize=False`` (owner 2026-11-18, ``use_instance_norm=False`` of the
+    builder): z = x (no per-window centring / scaling, so the window's level and volatility reach the encoder); the
+    stats, the clip and the affine are unchanged.
     """
 
     STATS_MODES = tuple(STATS_TRANSFORMS)
 
     def __init__(self, n_features: int, eps: float = 1e-4, affine: bool = True,
-                 clip: float | None = None, stats_mode: str = "full", stats_clip: float = 8.0):
+                 clip: float | None = None, stats_mode: str = "full", stats_clip: float = 8.0, normalize: bool = True):
         super().__init__()
+        self.normalize = bool(normalize)
         if stats_mode not in self.STATS_MODES:
             raise ValueError(f"stats_mode must be one of {self.STATS_MODES}, not {stats_mode!r}")
         self.eps, self.affine, self.clip = eps, affine, clip
@@ -59,7 +62,7 @@ class InstanceNorm(nn.Module):
         mean = x.mean(dim=1, keepdim=True)
         var = (x - mean).square().mean(dim=1, keepdim=True)
         std = torch.sqrt(var + self.eps)
-        z = (x - mean) / std
+        z = (x - mean) / std if self.normalize else x
         if self.clip:
             z = self.clip * torch.tanh(z / self.clip)
         if self.affine:

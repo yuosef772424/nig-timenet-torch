@@ -14,6 +14,9 @@ from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.settings import RunSettings
 
+# rule E3: 11 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 
 def settings(art_dir, tmp_path, **over):  # noqa: F811
     base = RunSettings(run_dir=str(tmp_path / "run"), data=LoaderSettings(name=str(art_dir)))
