@@ -13,10 +13,10 @@ import pandas as pd
 from nig_backtest.portfolio import by_group
 from nig_backtest.prices import PriceSource, bar_interval
 
-__all__ = ["TradeBook"]
+__all__ = ["TradeBook", "draw_candles"]
 
 
-def _draw_candles(ax, frame: pd.DataFrame, width: float) -> None:
+def draw_candles(ax, frame: pd.DataFrame, width: float) -> None:
     """Candlesticks of ``frame`` on ``ax``; ``width`` in days."""
     x = frame.index.to_pydatetime()
     o, h, lo, c = (frame[k].to_numpy() for k in ("open", "high", "low", "close"))
@@ -85,20 +85,19 @@ class TradeBook:
             return by_group(self.trades, self.trades["entry_time"].dt.to_period("M").astype(str))
         return by_group(self.trades, key)
 
-    def plot(self, i: int, prices: PriceSource, out_dir, context_bars: int = 48) -> Path:
-        """Chart of trade ``i`` (row position) on its raw candles: ``context_bars`` before the entry, the holding
-        bars, the entry / exit marks and the target / stop lines."""
+    def figure(self, i: int, prices: PriceSource, context_bars: int = 48):
+        """The matplotlib figure of trade ``i`` (row position) on its raw candles: ``context_bars`` before the entry,
+        the holding bars, the entry / exit marks and the target / stop lines."""
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-
 
         tr = self.trades.iloc[i]
         bars = prices.bars(tr["coin"])
         dt = bar_interval(bars)
         w = bars[(bars.index >= tr["entry_time"] - context_bars * dt) & (bars.index < tr["exit_time"] + 4 * dt)]
         fig, ax = plt.subplots(figsize=(12, 5))
-        _draw_candles(ax, w, width=dt / pd.Timedelta(days=1) * 0.7)
+        draw_candles(ax, w, width=dt / pd.Timedelta(days=1) * 0.7)
         ax.axvspan(tr["entry_time"], tr["exit_time"], color="#ffd166", alpha=0.25)
         ax.scatter([tr["entry_time"]], [tr["entry_price"]], marker="^" if tr["side"] > 0 else "v", s=80,
                    color="#264653", zorder=5, label="entry")
@@ -114,6 +113,13 @@ class TradeBook:
         ax.legend(fontsize=7, loc="upper left")
         ax.grid(alpha=0.25)
         fig.tight_layout()
+        return fig
+
+    def plot(self, i: int, prices: PriceSource, out_dir, context_bars: int = 48) -> Path:
+        """``figure`` of trade ``i`` saved as a PNG in ``out_dir``."""
+        import matplotlib.pyplot as plt
+        fig = self.figure(i, prices, context_bars)
+        tr = self.trades.iloc[i]
         path = Path(out_dir) / f"{i:05d}_{tr['coin']}_{tr['entry_time']:%Y%m%d%H%M}.png"
         path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(path, dpi=85)

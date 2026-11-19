@@ -166,3 +166,28 @@ The summary covers every chosen coin, per period. The charts are drawn per batch
   oracle of that data.
 - **Memory.** Selection reads the whole signal table, so cross-section rules see every coin. The candles load one coin
   at a time, in batches, and are cached. A parquet signal table is read with filters.
+
+## 10. The web page (`nig_backtest/app.py`)
+
+`build_app(signal_set, prices).launch()` opens a page with three tabs. Install it with `pip install gradio`, or the
+`app` extra.
+
+- **Signals.** Every signal, with filters: coins, periods, direction, min strength and dates; strongest first, 500
+  rows shown. Click a row, or type its number, to chart it on raw candles: the signal time, the holding window and the
+  realised move.
+- **Strategy.** Controls for:
+  - the side rule (and the quantile's q);
+  - the top share, min strength, strength > k sigma and min confidence;
+  - the registered entry filters with their JSON parameters;
+  - hold or max bars, take profit and stop with their units, and the ATR frame;
+  - the cost mode, fee and move share;
+  - open trades per coin, max open trades, and who gets the place;
+  - risk per trade.
+
+  Run shows the rule trace, one summary row per period and the equity per period.
+- **TEST is hidden by default.** Tune on VAL, then switch "show TEST" on once.
+- **Trades.** The trades of the last run, filtered by coin, outcome, exit reason, period and side, ordered worst,
+  best or by time. Each trade can be charted.
+
+In Colab, `launch(share=True)` gives a temporary public link. Whoever holds the link sees the page.
+
