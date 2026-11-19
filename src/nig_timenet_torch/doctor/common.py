@@ -166,9 +166,11 @@ def row_times(dataset: dict, idx: np.ndarray) -> np.ndarray:
 def make_context(artifact: str, out, *, run_dir: str | None = None, model: dict | None = None,
                  train: dict | None = None, architecture: str | None = None, no_preset: bool = False,
                  max_rows: int | None = None, epochs: int = 3, batch_size: int = 512, seed: int = 0,
-                 quick: bool = True, trained: bool = False) -> DoctorContext:
+                 quick: bool = True, trained: bool = False, monitor_of=None) -> DoctorContext:
     """Prepare, build and train (or, with ``trained``, restore the finished ``run_dir``) the configuration: the
-    default model and training settings with ``model`` / ``train`` overrides. ``max_rows`` strides every split."""
+    default model and training settings with ``model`` / ``train`` overrides. ``max_rows`` strides every split.
+    ``monitor_of``: a function of the built Run that returns a batch monitor for the training
+    (``trainer.batch_influence.BatchInfluence``; None = none)."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     if run_dir is None and not trained:           # the doctor's own short run: always trained afresh, never resumed
@@ -186,7 +188,7 @@ def make_context(artifact: str, out, *, run_dir: str | None = None, model: dict 
     if trained:
         run.restore(r)
     else:
-        run.train(r)
+        run.train(r, batch_monitor=None if monitor_of is None else monitor_of(r))
     return DoctorContext(r, out, quick=quick, seed=seed)
 
 

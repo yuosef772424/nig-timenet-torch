@@ -11,6 +11,8 @@ import pytest
 
 from nig_timenet_torch.jobs import baseline
 
+pytestmark = pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PIN = ROOT / "tests" / "pins" / "baseline_fixture.json"
 SKIP = {"step_seconds_per_batch", "epoch_seconds_median", "run_dir", "identity_fingerprint", "gpu_name", "key",

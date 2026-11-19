@@ -128,3 +128,33 @@ def test_transform_and_inverse_are_each_others_inverse():
         tn.transform(y, "open")
     with pytest.raises(ValueError, match="positive std"):
         TargetNorm(("close",)).fit({"close": torch.ones(5)})
+
+
+def test_order_in_label_units_orders_prices_and_keeps_close_and_beta():
+    """owner 2026-11-19 (B-084): with ``order_in_label_units`` the order holds on PRICES (mu_low <= mu_close <=
+    mu_high in label units, on any input), the close mean and every beta are those of the default normalised model
+    with the same weights, and high / low = close +- (their label sd) x the offset of the same raw head value."""
+    base = _model(target_norm="logret_std")
+    lab = _model(target_norm="logret_std", order_in_label_units=True)
+    lab.load_state_dict(base.state_dict())          # no new parameter: the same weights fit both
+    fit_target_norm(base, _labels()), fit_target_norm(lab, _labels())
+    base.eval(), lab.eval()
+    x = 5.0 * _x(64)                                  # large inputs: confident means of both signs
+    with torch.no_grad():
+        ob, ol = base(x), lab(x)
+    mu = {t: ol[_key(t, "mu")] for t in TARGETS}
+    assert bool((mu["low"] <= mu["close"]).all()) and bool((mu["close"] <= mu["high"]).all())
+    assert torch.allclose(mu["close"], ob[_key("close", "mu")], atol=1e-6)
+    for t in TARGETS:
+        assert torch.allclose(ol[_key(t, "beta")], ob[_key(t, "beta")], rtol=1e-5)
+    st = target_norm_state(lab)
+    off = (ob[_key("high", "mu")] - st["high"]["mean"]) / st["high"]["std"] - (
+        ob[_key("close", "mu")] - st["close"]["mean"]) / st["close"]["std"]   # the z-space offset of the default
+    assert torch.allclose(mu["high"] - mu["close"], st["high"]["std"] * off, atol=1e-5)
+
+
+def test_order_in_label_units_needs_a_target_norm_and_the_ordered_means():
+    with pytest.raises(ValueError, match="order_in_label_units needs"):
+        _model(order_in_label_units=True)
+    with pytest.raises(ValueError, match="order_in_label_units needs"):
+        _model(target_norm="logret_std", order_in_label_units=True, enforce_order=False)

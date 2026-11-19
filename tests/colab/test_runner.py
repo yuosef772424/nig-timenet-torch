@@ -18,6 +18,9 @@ from nig_timenet_torch.colab.runner import Runner, run_logged
 from tests.colab.helpers import make_job, make_origin, queue_job, results_files
 from tests.scan import PKG_DIR
 
+# rule E3: 27 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 TOKEN = "ghp_abcdefghijklmnop1234"
 
 
@@ -37,6 +40,7 @@ def queue(w, **over):
     queue_job(w["base"], w["url"], make_job(w["sha"], **over))
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_ok_run_goes_queue_to_run_to_results_and_records_the_device(world):
     queue(world)
     r = runner(world).run_all()
@@ -57,6 +61,7 @@ def test_ok_run_goes_queue_to_run_to_results_and_records_the_device(world):
     assert state["pushed"] is True and len(state["results_sha"]) == 40
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_a_finished_job_is_refused_unless_it_sets_rerun(world):
     queue(world)
     assert runner(world).run_all()["status"] == "OK"
@@ -67,6 +72,7 @@ def test_a_finished_job_is_refused_unless_it_sets_rerun(world):
     assert runner(world).run_all()["status"] == "OK"
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_on_existing_new_version_runs_a_finished_job_as_its_next_free_version(world):
     queue(world, on_existing="new_version")
     assert runner(world).run_all()["status"] == "OK"                     # first run keeps its id
@@ -89,6 +95,7 @@ def test_a_gpu_job_on_a_cpu_vm_fails_before_anything_runs_and_the_failure_is_pub
     assert {"env.json", "run_log.txt", "bundle_summary.md"} <= results_files(world["base"], world["url"], "smoke-001")
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_an_entry_that_cannot_get_its_device_fails_the_job_even_when_the_runner_check_passes(world):
     """Second layer of rule E1: the entry asserts the device itself (here the runner's own check is bypassed)."""
     queue(world, device="cuda", config={"device": "cuda"})
@@ -106,6 +113,7 @@ def test_a_bad_commit_and_a_bad_job_are_failures_not_crashes(world):
     assert runner(world).run_all()["status"] == "REFUSED"
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_the_token_never_appears_in_output_or_results(world):
     queue(world)
     runner(world).run_all()
@@ -123,6 +131,7 @@ def reject_pushes(w, on: bool):
     flag.write_text("x") if on else flag.unlink(missing_ok=True)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_a_failed_push_keeps_the_bundle_and_republish_needs_nothing_else(world):
     queue(world)
     reject_pushes(world, True)
@@ -144,6 +153,7 @@ def test_a_failed_push_keeps_the_bundle_and_republish_needs_nothing_else(world):
     assert "already on" in world["echo"][-1] and again["pushed"] is True
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_republish_command_line(world, tmp_path, capsys):
     queue(world)
     reject_pushes(world, True)
@@ -189,6 +199,7 @@ def test_large_outputs_stay_on_drive_and_are_listed(world, tmp_path):
     assert "big.bin" not in results_files(world["base"], world["url"], "smoke-001")
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_the_publish_keeps_the_run_folder_that_lives_inside_the_bundle_folder(world):
     """B-050: docs/jobs put run_dir at <drive_runs>/<job_id>/train, inside the bundle folder; the publish used to
     replace the whole bundle folder, so every run's checkpoints went to the Drive trash at the end of the job."""
@@ -243,6 +254,7 @@ def test_a_bundle_without_the_files_record_is_pushed_whole(world, tmp_path):
     assert "result.json" in results_files(world["base"], world["url"], "smoke-001")
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_the_wall_clock_guard_kills_a_runaway_job(tmp_path):
     t0 = time.time()
     log = tmp_path / "l.log"

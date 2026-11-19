@@ -119,3 +119,5 @@ def test_pin_collects_only_own_constants_and_no_injection_points():
     assert not any(k.startswith("nig_timenet_torch.workflow.settings.ANTI_MEMORIZATION_CONFIG") for k in keys)
     assert any(k.startswith("nig_timenet_torch.model.architectures.ANTI_MEMORIZATION_CONFIG.") for k in keys)
     assert not [k for k in keys if k.endswith(("(echo)", "(secrets)", "(run)", "(torch_mod)"))]
+    assert not [k for k in keys if k.endswith("(title)")]                 # REPORT_ONLY: a report heading
+    assert "nig_timenet_torch.doctor.feature_importance.render_importance(top)" in keys   # a row count stays pinned

@@ -9,6 +9,9 @@ import pytest
 
 from nig_timenet_torch.eval import deep_side as ds
 
+# rule E3: 30 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 
 def frame(signal: float, seed: int, n_coins=25, n_ts=120, close_is_model=False) -> pd.DataFrame:
     """Synthetic battery rows: true deep z, model score = signal * z + noise, baselines independent of z."""
@@ -42,6 +45,7 @@ def test_deep_is_the_sum_of_the_log_extremes_and_the_prediction_is_mu_high_plus_
     assert set(d["day"].astype(str)) and d["ts"].nunique() == 120
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_a_real_signal_beyond_the_baselines_is_evidence_on_both_splits():
     res = ds.deep_side(*frames(signal=1.0))
     v = res["verdict"]
@@ -51,6 +55,7 @@ def test_a_real_signal_beyond_the_baselines_is_evidence_on_both_splits():
     assert abs(res["skill"]["TEST"]["shuffled model"]["ic"]["ic"]) < 0.05
 
 
+@pytest.mark.slow  # rule E3: 13 s; the fast suite reached 300.4 s on CI (PR #68); still runs in CI
 def test_the_close_head_renamed_is_not_evidence_and_no_signal_is_not_evidence():
     res = ds.deep_side(*frames(signal=1.0, close_is_model=True))
     diff = res["skill"]["VAL"]["close head mu"]["model_minus_it"]
@@ -62,6 +67,7 @@ def test_the_close_head_renamed_is_not_evidence_and_no_signal_is_not_evidence():
     assert none["verdict"]["profit_section"].startswith("not reached")
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_thresholds_come_from_val_and_clipped_rows_are_counted():
     val, test = frames(signal=1.0)
     signs = ds.orient(val)
@@ -79,6 +85,7 @@ def test_thresholds_come_from_val_and_clipped_rows_are_counted():
     assert (c["high"], c["low"], c["high_or_low"], c["high_and_low"]) == (5, 5, 8, 2)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_the_step_writes_both_reports(tmp_path, monkeypatch):
     from nig_timenet_torch.workflow import deep_side_run as run_mod
     val, test = frames(signal=1.0)

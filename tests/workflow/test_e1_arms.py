@@ -45,6 +45,7 @@ def test_arm_settings_merge_the_preset_unless_another_architecture(tmp_path):
     assert tiny.model.overrides == {"nig_scale": 0.01} and tiny.train.batch_size == 128
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_cli_runs_an_arm_and_writes_rows_calibration_and_readout(e1, capsys):
     res = e1_arms.main([str(e1 / "out"), json.dumps({"tiny": ARM}), "0", str(e1 / "E1"), "--epochs", "1"])
     (r,) = res["tiny"]

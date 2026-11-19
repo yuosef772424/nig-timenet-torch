@@ -11,6 +11,9 @@ from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats.nig import nig_predictive_std
 from tests.eval.synth import ANCHOR, codec_state, make
 
+# rule E3: 10 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 
 def _adapt(table, labels, anchors, **kw):
     return to_battery_table(table, labels, anchors=anchors, last_close=np.full(len(table), ANCHOR),
@@ -23,6 +26,7 @@ def test_column_mapping_matches_the_hand_computation():
     spec = head_spec("nig_regression", "close")
     assert list(out.columns[:6]) == list(BATTERY_COLUMNS[:6]) and "last_ret" not in out
     assert set(LIMIT_COLUMNS) <= set(out.columns)
+    assert "last_close" in BATTERY_COLUMNS and (out["last_close"] == ANCHOR).all()
     np.testing.assert_allclose(out["mu"], table[spec.output_keys["mu"]])          # scale 1, anchor == last_close
     np.testing.assert_allclose(out["y_ret"], labels[spec.label_key])
     std = nig_predictive_std(*(table[spec.output_keys[k]] for k in ("nu", "alpha", "beta")))
@@ -85,6 +89,7 @@ def test_close_only_table_and_bad_inputs():
         _adapt(table.iloc[:0], labels, anchors)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_the_whole_battery_runs_on_the_adapted_nig_table():
     table, labels, anchors = make(skilled=True)
     val = _adapt(table, labels, anchors, prev_close=np.full(len(table), 99.0))
@@ -97,6 +102,7 @@ def test_the_whole_battery_runs_on_the_adapted_nig_table():
     assert "SKIPPED" in no_prev["baseline"]["title"]
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_run_battery_entry_point_writes_the_report(tmp_path):
     from nig_timenet_torch.workflow.battery_run import REPORT_TXT, StageInputs, render, run_battery
     table, labels, anchors = make()

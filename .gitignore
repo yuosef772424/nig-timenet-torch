@@ -4,3 +4,6 @@ upstream/
 __pycache__/
 *.egg-info/
 .close_step/
+
+# Claude Code agent worktrees (local only)
+.claude/worktrees/

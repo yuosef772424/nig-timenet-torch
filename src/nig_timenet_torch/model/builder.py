@@ -24,6 +24,7 @@ from nig_timenet_torch.model import label_scale
 from nig_timenet_torch.model.attn_heads import check_nig_head, nig_head_builder, reads_sequence
 from nig_timenet_torch.model.cross_coin import CROSS_INPUTS, CrossCoin, center_groups, split_group
 from nig_timenet_torch.model.encoders import ENCODERS, CausalConv1D, EncoderDims, tcn_n_blocks
+from nig_timenet_torch.model.har_range import HarRange
 from nig_timenet_torch.model.heads import (
     HEAD_REGISTRY,
     class_head_kind,
@@ -61,7 +62,7 @@ NO_STATS_MODES = tuple(m for m, f in STATS_TRANSFORMS.items() if f is None)
 
 # option -> (value this port implements, step that adds the rest)
 _NOT_YET = {
-    "use_instance_norm": (True, "P34"), "use_decomposition": (True, "P34"), "use_linear_path": (True, "P34"),
+    "use_decomposition": (True, "P34"), "use_linear_path": (True, "P34"),
     "level_film": (False, "P34"), "architecture": ("fused", "P34"), "fusion": ("concat", "P34"), "n_coins": (0, "P34"),
 }
 LEVEL_NORMS = (None, "batch")
@@ -82,8 +83,11 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                  readout_dropout=None, nig_trunk_grad=1.0, nig_scale_fit="fixed", input_scaler="none",
                  nig_head="dense", nig_head_dropout=0.0, ffn="swiglu",
                  ffn_dim=None, cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
-                 cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none"):
+                 cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none",
+                 har_range=None, use_instance_norm=True, order_in_label_units=False):
         super().__init__()
+        self.use_instance_norm = bool(use_instance_norm)   # owner 2026-11-18: False = no per-window normalisation
+        self.har_range = None if har_range is None else tuple(int(c) for c in har_range)   # H3 (owner 2026-11-18)
         self.cross_center = bool(cross_center)   # D-032: the close mean is taken relative to its timestamp
         self.nig_trunk_grad = float(nig_trunk_grad)
         self.label_scale_name, fit_s = nig_scale_fit, label_scale.fitted(nig_scale_fit)   # FX2 (B-052)
@@ -162,6 +166,13 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         if TARGET_NORMS.entry(target_norm).meta["fitted"]:
             self.target_norm = TARGET_NORMS.get(target_norm)(self.nig_targets)
         self.apply_order = enforce_order and set(TARGET_COLUMNS) <= set(self.nig_targets)
+        # owner 2026-11-19 (B-084): with a fitted target normalisation, order the means on prices (after the inverse
+        # map) instead of in the per-head normalised space, where the order has no meaning
+        self.order_in_label_units = bool(order_in_label_units)
+        if self.order_in_label_units and not (self.apply_order and hasattr(self, "target_norm")):
+            raise ValueError("order_in_label_units needs the ordered means (enforce_order, the three price targets) "
+                             "and a fitted target normalisation (target_norm, e.g. 'logret_std'): without them it "
+                             "would change nothing")
         if self.apply_order:
             self.ordered_means = OrderedMeans(nig_scale, order_detach_close, fitted_scale=fit_s)
         self.class_targets = list(self.class_kind)
@@ -181,7 +192,8 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             add("input_scaler", INPUT_SCALERS.get(self.input_scaler_kind)(nf))
         if hasattr(self, "cross_input"):  # the scaled input grows to [own, relative, relative z, market]
             nf = nf * self.cross_input.width_mult
-        add("instance_norm", InstanceNorm(nf, eps=norm_eps, clip=input_clip, stats_mode=stats_mode))
+        add("instance_norm", InstanceNorm(nf, eps=norm_eps, clip=input_clip, stats_mode=stats_mode,
+                                          normalize=self.use_instance_norm))
         if feature_dropout > 0:
             add("feature_dropout", SpatialDropout1D(feature_dropout))
         if input_noise_std > 0:
@@ -207,6 +219,9 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         if self.use_stats:
             add("stats_proj", nn.Linear(2 * nf, d_model))
         extra = self.skip.readout_extra_dim if hasattr(self, "skip") else 0
+        if self.har_range is not None:   # H3: the HAR range terms of the RAW input join the readout
+            add("har_range", HarRange(self.har_range, d_model, bn_warmup=bn_warmup))
+            extra += d_model
         add("readout_fc", nn.Linear(2 * seq_width + (d_model if self.use_stats else 0) + extra, d_model))
         lin_width = nf * (2 if self.level_passthrough else 1)
         add("linear_path", nn.Linear(T * lin_width, d_model))
@@ -232,6 +247,7 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         """``branch`` plus the encoder's output tokens (B, T', d_model) after final_norm (attention heads' input)."""
         tap = lambda name, v: self._tap(name + sfx, v)  # noqa: E731
         x = tap("input", x)
+        raw = x
         if self._m("input_scaler", sfx) is not None:
             x = tap("scaled", self._m("input_scaler", sfx)(x))
         if hasattr(self, "cross_input"):
@@ -259,6 +275,8 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             parts.append(F.gelu(self._m("stats_proj", sfx)(stats)))
         if hasattr(self, "skip") and self.skip.readout_extra_dim:
             parts.append(self.skip.readout_extra(tok))
+        if self._m("har_range", sfx) is not None:
+            parts.append(tap("har_range", self._m("har_range", sfx)(raw)))
         lin_in = z if lvl is None else torch.cat([z, lvl], dim=-1)
         readout = tap("readout", F.gelu(self._m("readout_fc", sfx)(tap("pooled", torch.cat(parts, dim=-1)))))
         return tap("branch_out", readout + tap("linear_path", self._m("linear_path", sfx)(lin_in.flatten(1)))), h
@@ -312,7 +330,7 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             h = self.trunk_drop(self._tap("trunk", self.trunk_norm(br)))
             seq = self.head_seq_norm(torch.cat([br[:, None, :], tokens], dim=1))
             raw = {t: getattr(self, f"nig_{t}")(grad_scale(seq, self.nig_trunk_grad)) for t in self.nig_targets}
-        if self.apply_order:
+        if self.apply_order and not self.order_in_label_units:
             mu_h, mu_c, mu_l = self.ordered_means(raw["close"][0], raw["high"][0], raw["low"][0])
             mus = {"high": mu_h, "close": mu_c, "low": mu_l}
         else:
@@ -321,6 +339,11 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         if hasattr(self, "target_norm"):  # the heads work in z = (y - mean) / std: back to label units
             for t in self.nig_targets:
                 mus[t], betas[t] = self.target_norm.inverse(mus[t], betas[t], t)
+        if self.order_in_label_units:     # the order on prices: high / low = close +- (their label sd) x offset
+            tn = self.target_norm
+            mu_h, mu_c, mu_l = self.ordered_means(mus["close"], raw["high"][0], raw["low"][0],
+                                                  unit_h=tn.std_of("high"), unit_l=tn.std_of("low"))
+            mus.update(high=mu_h, close=mu_c, low=mu_l)
         if self.cross_center and gid is not None and "close" in mus:
             mus["close"] = center_groups(mus["close"], gid)
         out: dict[str, torch.Tensor] = {}
@@ -378,7 +401,7 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          nig_head="dense", nig_head_dropout=0.0, ffn="swiglu", ffn_dim=None,
                          cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
                          cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none",
-                         **options) -> NigTimeNetV2:
+                         har_range=None, use_instance_norm=True, order_in_label_units=False, **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
@@ -394,7 +417,13 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
     (D-032): the close mean leaves the model minus its mean over the rows of the timestamp (a relative move; rows
     without the timestamp channel are left as they are). ``target_norm`` (a name of ``target_norm.TARGET_NORMS``,
     owner 2026-11-17): ``logret_std`` makes the NIG heads work on per-head train-standardised labels and maps their
-    outputs back to label units (call ``target_norm.fit_target_norm`` before the label scale is fitted)."""
+    outputs back to label units (call ``target_norm.fit_target_norm`` before the label scale is fitted).
+    ``har_range`` (H3, owner 2026-11-18; None = off): the (high, low) channel indices of the input; the HAR range terms
+    of the RAW window (model/har_range.py) join the readout. ``use_instance_norm=False`` (owner 2026-11-18): the
+    per-window normalisation is skipped (``InstanceNorm(normalize=False)``: z = the scaled input; stats unchanged).
+    ``order_in_label_units`` (owner 2026-11-19, B-084; needs the ordered means and a fitted ``target_norm``): the
+    order mu_low <= mu_close <= mu_high is applied on prices after the inverse map (high / low = close +- their label
+    sd x the offset) instead of in the per-head normalised space, where it has no meaning. False = as before."""
     ENCODERS.entry(encoder)
     TARGET_NORMS.entry(target_norm)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
@@ -430,4 +459,5 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         nig_head=nig_head, nig_head_dropout=nig_head_dropout, ffn=ffn, ffn_dim=ffn_dim,
         cross_coin_layers=cross_coin_layers, cross_coin_heads=cross_coin_heads,
         cross_coin_peer_dropout=cross_coin_peer_dropout, cross_coin_kind=cross_coin_kind,
-        cross_input=cross_input, cross_center=cross_center, target_norm=target_norm)
+        cross_input=cross_input, cross_center=cross_center, target_norm=target_norm, har_range=har_range,
+        use_instance_norm=use_instance_norm, order_in_label_units=order_in_label_units)

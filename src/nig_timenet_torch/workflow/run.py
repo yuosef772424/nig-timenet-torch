@@ -21,7 +21,7 @@ import json
 import os
 import shutil
 import statistics
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +39,7 @@ from nig_timenet_torch.model.scalers import fit_scalers
 from nig_timenet_torch.model.target_norm import fit_target_norm
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
+from nig_timenet_torch.trainer.groups import BATCH_ORDERS
 from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
 from nig_timenet_torch.trainer.staged import StagedResult, plan_stages, staged_fit
 from nig_timenet_torch.trainer.trainer import FitResult, FitSettings, Trainer
@@ -86,7 +87,9 @@ class Run:
         _need(self, "result", "train")
         if stage not in self.x:
             self.x[stage], self.y[stage] = flat_run.flat_inputs(self.dataset, self.idx[stage],
-                                                                self.settings.split.cross_section)
+                                                                self.settings.split.cross_section,
+                                                                self.settings.split.coin_channel,
+                                                                self.settings.data.input_timeframes)
         return flat_run.predict_stage(self.trainer, self.dataset, self.idx[stage], self.x[stage], self.ident,
                                       self.device, stage=stage, train_end=self.bounds[0],
                                       chunk=self.settings.evaluation.chunk, fold=self.fold)
@@ -106,7 +109,7 @@ def prepare(settings: RunSettings, out=None) -> Run:
     ds = art.dataset
     targets = run_common.price_targets(ds)
     run_common.check_decode(ds, targets)
-    run_common.input_key(ds)
+    run_common.input_keys(ds, settings.data.input_timeframes)
     parts, bounds = run_common.make_plan(ds, settings.split)
     if settings.split.exclude_coins:
         names = ", ".join(settings.split.exclude_coins)
@@ -129,7 +132,9 @@ def _assemble(settings: RunSettings, art: LoadedData, targets: tuple, parts: tup
     run = Run(settings, art, targets, dict(zip(("train", "val", "test"), parts, strict=True)), bounds,
               run_common.pick_device(settings), None if out is None else Path(out))
     for stage in ("train", "val"):
-        run.x[stage], run.y[stage] = flat_run.flat_inputs(ds, run.idx[stage], settings.split.cross_section)
+        run.x[stage], run.y[stage] = flat_run.flat_inputs(ds, run.idx[stage], settings.split.cross_section,
+                                                          settings.split.coin_channel,
+                                                          settings.data.input_timeframes)
     return run
 
 
@@ -141,6 +146,10 @@ def build(run: Run) -> Run:
     run.ms = flat_run.model_settings(s.model, run.targets)
     run.trainer = flat_run.make_trainer(s, run.ms, run.targets, run.x["train"].shape[1], run.x["train"].shape[2],
                                         run.device)
+    if BATCH_ORDERS.entry(s.train.batch_order).meta["needs_times"]:      # the TRAIN rows' timestamp ids (no channel)
+        for attr, stage in (("row_times", "train"), ("val_times", "val")):
+            ids = flat_run.time_ids(run.dataset, run.idx[stage])
+            setattr(run.trainer, attr, torch.as_tensor(ids, dtype=torch.int64))
     tn_state = fit_target_norm(run.trainer.model, run.y["train"])   # TRAIN labels only; None = the model has none
     if tn_state is not None:
         run.extra["target_norm"] = tn_state
@@ -154,30 +163,66 @@ def build(run: Run) -> Run:
     return run
 
 
-def train(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
-    """Fit (resumes a run folder that holds a checkpoint). ``deadline`` is a ``time.monotonic()`` value."""
+def _interrupted(run: Run, mode: str, err: KeyboardInterrupt) -> None:
+    """A stop (the Colab stop button) during training with ``on_interrupt`` = ``mode``: put the weights of the last
+    finished epoch (``"last"``) or of the best epoch so far (``"best"``) in the model through ``restore`` and set
+    ``run.result`` (stopped early), so the later steps run. No finished epoch (no checkpoint): the stop is re-raised."""
+    if checkpoint.load_checkpoint(Path(run.settings.run_dir)) is None:
+        raise KeyboardInterrupt("stopped before the first epoch finished: no epoch was saved, nothing to test") from err
+    restore(run, weights=mode)
+    res = run.result = replace(run.result, stopped_early=True)
+    print(f"STOPPED: {res.epochs_done} finished epoch(s) kept; the model holds the "
+          f"{'best-epoch' if mode == 'best' else 'last finished epoch'} weights (a cut epoch is not saved)",
+          flush=True)
+    _copy_best_weights(run)
+
+
+def _check_on_interrupt(on_interrupt) -> None:
+    if on_interrupt is not None and on_interrupt not in RESTORE_WEIGHTS:
+        raise ValueError(f"on_interrupt must be None or one of {RESTORE_WEIGHTS}, got {on_interrupt!r}")
+
+
+def train(run: Run, *, deadline: float | None = None, on_epoch=None, on_interrupt: str | None = None,
+          batch_monitor=None) -> Run:
+    """Fit (resumes a run folder that holds a checkpoint). ``deadline`` is a ``time.monotonic()`` value.
+    ``on_interrupt``: ``None`` (default) = a KeyboardInterrupt propagates; ``"last"`` / ``"best"`` = it is caught and
+    the model keeps the weights of the last finished epoch / the best epoch so far, ``run.result`` is set.
+    ``batch_monitor``: a ``trainer.batch_influence.BatchInfluence`` (log-only; None = none)."""
     _need(run, "trainer", "build")
+    _check_on_interrupt(on_interrupt)
     n = {k: int(len(v)) for k, v in run.idx.items()}
+    groups = flat_run.batch_groups(run.dataset, run.idx["train"], run.settings.train.batch_by)
+    n_batches = -(-n['train'] // run.fit_settings.batch_size) if groups is None else len(torch.unique(groups))
     print(f"data: {n['train']} train / {n['val']} val / {n['test']} test windows "
           f"(max_rows {run.settings.split.max_rows}), split train_end {run.bounds[0]} val_end {run.bounds[1]}; "
-          f"{-(-n['train'] // run.fit_settings.batch_size)} batches per epoch on {run.device}", flush=True)
+          f"{n_batches} batches per epoch (batch_by {run.settings.train.batch_by}) on {run.device}", flush=True)
     trace_batches = (flat_run.batch_set(run.dataset, run.idx["train"], run.fit_settings.batch_size,
                                         run.settings.train.seed)
                      if run.settings.train.trace_representative else None)
-    run.result = run.trainer.fit(run.x["train"], run.y["train"], run.x["val"], run.y["val"], run.fit_settings,
-                                 run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline,
-                                 on_epoch=on_epoch, trace_batches=trace_batches)
+    try:
+        run.result = run.trainer.fit(run.x["train"], run.y["train"], run.x["val"], run.y["val"], run.fit_settings,
+                                     run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline,
+                                     on_epoch=on_epoch, trace_batches=trace_batches, batch_monitor=batch_monitor,
+                                     batch_groups=groups)
+    except KeyboardInterrupt as err:
+        if on_interrupt is None:
+            raise
+        _interrupted(run, on_interrupt, err)
+        return run
     _copy_best_weights(run)
     return run
 
 
-def train_staged(run: Run, *, deadline: float | None = None, on_eval=None, stages=None) -> Run:
+def train_staged(run: Run, *, deadline: float | None = None, on_eval=None, stages=None,
+                 on_interrupt: str | None = None) -> Run:
     """Staged training (ROADMAP ST1, card F) through the one Trainer: ``settings.train.staged`` says how the rows grow
     and the lr falls (``trainer.staged``); resumes a run folder that holds a checkpoint. ``stages``: a ready plan
     (the equal-step baselines of ``workflow.staged_study``) instead of the staged arm's. The per-stage table lands in
     ``run.extra['stages']``; ``run.result`` is a FitResult over the evaluation points so the later steps read it as
-    before. The scalers were fitted once on the whole training split by ``build``."""
+    before. The scalers were fitted once on the whole training split by ``build``. ``on_interrupt``: as in ``train``
+    (the state is saved at every evaluation point; a stop keeps the last saved one, ``run.staged`` stays None)."""
     _need(run, "trainer", "build")
+    _check_on_interrupt(on_interrupt)
     st = run.settings.train.staged
     if st is None:
         raise ValueError("train_staged needs settings.train.staged (a StageSettings)")
@@ -187,8 +232,14 @@ def train_staged(run: Run, *, deadline: float | None = None, on_eval=None, stage
     print(f"staged training: {len(plan)} stage(s), rows {[len(s.rows) for s in plan]}, lr "
           f"{[round(s.lr, 8) for s in plan]}; {len(run.idx['val'])} val rows (at most {st.val_max_rows} used)",
           flush=True)
-    res = staged_fit(run.trainer, run.x["train"], run.y["train"], run.x["val"], run.y["val"], plan, st, fs,
-                     run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline, on_eval=on_eval)
+    try:
+        res = staged_fit(run.trainer, run.x["train"], run.y["train"], run.x["val"], run.y["val"], plan, st, fs,
+                         run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline, on_eval=on_eval)
+    except KeyboardInterrupt as err:
+        if on_interrupt is None:
+            raise
+        _interrupted(run, on_interrupt, err)
+        return run
     run.staged, run.plan = res, plan
     _staged_outputs(run, res)
     _copy_best_weights(run)
@@ -322,7 +373,8 @@ def write_summary(run: Run, extra: dict | None = None) -> dict:
                "split": {"train_end": str(run.bounds[0]), "val_end": str(run.bounds[1])},
                "targets": list(run.targets), "label_smoothing": s.train.label_smoothing,
                "reg_target_mode": ds["reg_target_mode"], "reg_target_scale": float(ds["reg_target_scale"]),
-               "input_key": run_common.input_key(ds), "max_rows": s.split.max_rows, "model_overrides": run.ms.overrides,
+               "input_key": "+".join(run_common.input_keys(ds, s.data.input_timeframes)),
+               "max_rows": s.split.max_rows, "model_overrides": run.ms.overrides,
                "data_fingerprint": run.art.manifest.data_fingerprint, "identity_fingerprint": run.ident.fingerprint(),
                "run_dir": str(s.run_dir), "history": res.history,
                **{k: v for k, v in run.extra.items() if k != "tables"}, **(extra or {})}

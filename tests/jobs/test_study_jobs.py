@@ -9,6 +9,9 @@ import pytest
 from nig_timenet_torch.colab.job import JobError, parse_job
 from nig_timenet_torch.jobs import rolling, staged
 
+# rule E3: 7 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
@@ -22,6 +25,7 @@ def run_entry(module, tmp_path, name, art, monkeypatch, **cfg):  # noqa: F811
     return out
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_staged_entry_runs_the_study(tmp_path, art, monkeypatch):  # noqa: F811
     out = run_entry(staged, tmp_path, "st", art, monkeypatch, seeds=[0, 1], max_rows=96,
                     staged={"start_share": 0.5, "eval_every": 2, "step_cap_epochs": 2, "warmup_steps": 2,
@@ -41,6 +45,7 @@ def test_rolling_entry_runs_the_study(tmp_path, art, monkeypatch):  # noqa: F811
     assert (tmp_path / "ro_run" / "fold_000_seed_0" / "ckpt" / "checkpoint.pt").is_file()
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_rolling_entry_pools_the_day_metrics_of_its_folds(tmp_path, art, monkeypatch):  # noqa: F811
     out = run_entry(rolling, tmp_path, "rd", art, monkeypatch, day_metrics=True, split={"cross_section": True},
                     rolling={"train_span": "20D", "test_span": "7D", "step": "10D", "embargo": "1D", "max_folds": 2},
@@ -69,6 +74,7 @@ def test_configs_are_strict():
         rolling.CONFIG(**ok)                      # the rolling spans have no defaults
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_rolling_entry_pools_the_day_metrics_of_a_single_coin_run(tmp_path, art, monkeypatch):  # noqa: F811
     """rolling-single-001: the day metrics do not need whole-timestamp batches (no ``split.cross_section``)."""
     out = run_entry(rolling, tmp_path, "rs", art, monkeypatch, day_metrics=True,

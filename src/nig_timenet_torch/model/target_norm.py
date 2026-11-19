@@ -7,8 +7,13 @@ PITFALLS: the state (mean / std per NIG head) lives in the model's ``target_norm
     The heads, the ordered means and the NIG floors work in the normalised space; the model's outputs are mapped
     back by ``inverse`` (mu = mean + std * mu_z, beta = std^2 * beta_z, nu / alpha unchanged: the exact affine map of
     a NIG), so every consumer keeps label units and nothing is decoded in a second place. With per-head statistics
-    the ordered means hold in z space: mu_low <= mu_close <= mu_high in label units is no longer guaranteed. The
-    fitted label scale (``model.label_scale``) is then fitted on the NORMALISED labels (``normalized_labels``).
+    and the default ordering, the ordered means hold in z space: each head is centred on its own train mean there
+    (high about +0.9 sd of the close's unit, low about -0.9), so "mu_low_z <= mu_close_z <= mu_high_z" is NOT the
+    price order and has no meaning: a confident close mean drags the high / low means with it (measured: high / low
+    rank IC 0.36 / 0.44 -> 0.18 / 0.33 in the panel walk-forward, B-084, docs/results/panel-rolling-std-001.md), and
+    mu_low <= mu_close <= mu_high in label units is not guaranteed. The model override ``order_in_label_units``
+    applies the order on prices instead (model/builder.py). The fitted label scale (``model.label_scale``) is then
+    fitted on the NORMALISED labels (``normalized_labels``).
 
 Why (owner, 2026-11-17; docs/audit/2026-11-14-model-first/NOTES.md N-01): TF's ``logret_std`` standardised the inputs
 AND the targets of each head with train statistics; this port standardises the inputs (``model.scalers``
@@ -69,6 +74,10 @@ class TargetNorm(nn.Module):
         """Label units -> the heads' normalised space."""
         m, s = self._stats(target)
         return (y - m.to(y)) / s.to(y)
+
+    def std_of(self, target: str) -> torch.Tensor:
+        """The fitted label sd of ``target``: the unit of that head's normalised space in label units."""
+        return self._stats(target)[1]
 
     def inverse(self, mu: torch.Tensor, beta: torch.Tensor, target: str) -> tuple[torch.Tensor, torch.Tensor]:
         """The heads' (mu, beta) -> label units (nu and alpha are unit-free)."""

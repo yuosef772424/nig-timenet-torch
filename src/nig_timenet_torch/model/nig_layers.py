@@ -86,7 +86,11 @@ class NIGHead(_Scaled):
         return self.out(self.drop(F.silu(self.fc(h))))
 
     def forward(self, h: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        p = self.raw_params(h)
+        return self.from_raw(self.raw_params(h))
+
+    def from_raw(self, p: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """(mu, nu, alpha, beta) from raw (B, 4) [mu, nu, alpha, beta] parameters: the floors and the label scale of
+        this head (a model that adds its own raw terms, e.g. per-coin output weights, maps them through here)."""
         mu = p[:, 0:1]
         nu = F.softplus(p[:, 1:2]) + self.nu_min
         alpha = F.softplus(p[:, 2:3]) + self.alpha_min
@@ -117,10 +121,16 @@ class OrderedMeans(_Scaled):
         s = self._s()
         return F.softplus(raw) if s is None else s * F.softplus(raw / s)
 
-    def forward(self, mu_c: torch.Tensor, raw_h: torch.Tensor, raw_l: torch.Tensor
+    def forward(self, mu_c: torch.Tensor, raw_h: torch.Tensor, raw_l: torch.Tensor, unit_h=None, unit_l=None
                 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """``unit_h`` / ``unit_l`` (None = 1): the offsets are multiplied by them, i.e. the heads' raw values live in a
+        space whose unit is that (the per-head label sd of a target normalisation) while ``mu_c`` is in label units
+        (owner 2026-11-19, B-084: the order then holds on prices, where it is true)."""
         base = mu_c.detach() if self.detach_close else mu_c
-        return base + self._offset(raw_h), mu_c, base - self._offset(raw_l)
+        up, down = self._offset(raw_h), self._offset(raw_l)
+        if unit_h is not None:
+            up, down = up * unit_h, down * unit_l
+        return base + up, mu_c, base - down
 
 
 class NIGUncertainty(nn.Module):

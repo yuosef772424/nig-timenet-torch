@@ -40,6 +40,7 @@ def _fixture():
     return npy_dir.load(DATASET_DIR)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 @pytest.mark.parametrize("source", ["e1", "fixture"])
 def test_e2_inputs_byte_identical_labels_permuted(source, request):
     ds = request.getfixturevalue("e1") if source == "e1" else _fixture()
@@ -65,6 +66,7 @@ def test_e2_inputs_byte_identical_labels_permuted(source, request):
     assert permute_labels(ds, seed=3)[reg].tobytes() == e2[reg].tobytes()
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_e2_of_e1_round_trips_as_a_contract_artifact(e1, tmp_path):
     write_artifact(permute_labels(e1), tmp_path / "e2.dataset", source_commit=SHA)
     ds = load_dataset(LoaderSettings(directory=str(tmp_path), name="e2.dataset", local_dir="")).dataset
@@ -129,6 +131,7 @@ def test_e3_on_the_real_artifact():
     run_common.check_decode(e3, run_common.price_targets(e3))
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_nig_envs_command_writes_e1_e2_e3(tmp_path, capsys):
     from nig_timenet_torch.data_io.environments import main
 

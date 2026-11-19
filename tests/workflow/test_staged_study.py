@@ -22,6 +22,7 @@ def settings(art, tmp_path):  # noqa: F811
                           "split.max_rows": 96})
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_study_runs_every_arm_at_the_staged_runs_number_of_steps(art, tmp_path):  # noqa: F811
     out = tmp_path / "study"
     study = run_staged_study(settings(art, tmp_path), (0, 1), out)

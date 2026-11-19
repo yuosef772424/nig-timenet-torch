@@ -117,6 +117,16 @@ def test_c2_one_implementation_per_metric():
     _ratchet("C2_metric_definitions_outside_stats", scan.metric_definitions_outside_stats())
 
 
+def test_c2_name_exceptions_are_real_and_narrow(monkeypatch):
+    """An exception names a function that exists in src/ (no stale entry) and exempts only that exact name."""
+    defined = {n.name for _, (_, tree) in scan.sources().items() for n in ast.walk(tree)
+               if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    assert set(scan.METRIC_NAME_EXCEPTIONS) <= defined, set(scan.METRIC_NAME_EXCEPTIONS) - defined
+    _scan_source(monkeypatch, {"eval/x.py": "def spearman_brown(r):\n    return r\n"
+                                            "def spearman_brown_copy(a, b):\n    return a\n"})
+    assert scan.metric_definitions_outside_stats() == ["eval/x.py:3: def spearman_brown_copy"]
+
+
 # --- the scans themselves must catch what they claim to catch (B3: a guard needs its own test) -------------------
 def _scan_source(monkeypatch, files: dict[str, str]) -> None:
     """Make tests.scan see a fake package made of `files` ({relative path: source})."""

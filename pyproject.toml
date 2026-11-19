@@ -12,6 +12,8 @@ dependencies = ["numpy==2.4.6", "pandas==3.0.6", "pyarrow~=25.0.1", "torch>=2.15
 [project.scripts]
 nig-data = "nig_timenet_torch.data.cli:main"
 nig-envs = "nig_timenet_torch.data_io.environments:main"
+nig-add-timeframe = "nig_timenet_torch.data_io.lower_timeframe:main"
+nig-market-channel = "nig_timenet_torch.data_io.market_channel:main"
 nig-backtest = "nig_backtest.__main__:main"
 
 [project.optional-dependencies]
@@ -20,6 +22,8 @@ nig-backtest = "nig_backtest.__main__:main"
 data = ["pandas-ta-classic==0.8.32", "requests>=2.31"]
 # plots: the figures of eval/legacy_plots.py and eval/sample_charts.py (imported inside the plot functions only).
 plots = ["matplotlib~=3.11"]
+# app: the web page of the backtest (nig_backtest/app.py, imported inside build_app only).
+app = ["gradio>=5,<7", "matplotlib~=3.11"]
 dev = ["pytest~=9.1.1", "ruff==0.17.3", "scikit-learn~=1.9", "matplotlib~=3.11"]
 
 [tool.setuptools.dynamic]

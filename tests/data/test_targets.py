@@ -110,6 +110,7 @@ def test_retarget_keeps_x_and_windows_and_stamps_the_dataset():
     assert again["reg_target_scale"] == ds["reg_target_scale"]
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_retarget_magnitude_fits_the_threshold_on_the_train_rows_only():
     ds = build_dataset(tiny_settings())
     train = np.arange(0, 100)

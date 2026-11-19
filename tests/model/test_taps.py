@@ -8,6 +8,7 @@ import torch
 
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.model.architectures import ARCHITECTURES, ModelSettings, build_model
+from nig_timenet_torch.model.scalers import fit_scalers
 from nig_timenet_torch.model.taps import record_taps, signal_trace, tap_points, tap_summary
 
 SEQ, FEAT = 16, 6
@@ -16,6 +17,9 @@ SEQ, FEAT = 16, 6
 def _model(arch):
     seed_everything(0)
     m = build_model(ModelSettings(arch), SEQ, FEAT)
+    x = torch.randn(64, SEQ, FEAT)
+    x[..., -1] = (torch.arange(64) % 8).float()[:, None]     # a coin-id channel for a model that reads one (snapshot)
+    fit_scalers(m, x, {s.label_key: torch.randn(64) * 0.03 for s in getattr(m, "head_specs", {}).values()})
     return m.eval()
 
 

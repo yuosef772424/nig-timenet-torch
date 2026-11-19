@@ -18,6 +18,9 @@ from nig_timenet_torch.workflow.rolling import fold_with_val, rolling_folds
 from nig_timenet_torch.workflow.rolling_run import fold_dir, run_rolling, summarize
 from nig_timenet_torch.workflow.settings import RollingSettings, RunSettings
 
+# rule E3: 9 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 
 def rolling(**over):
     base = dict(train_span="20D", test_span="7D", step="10D", embargo="1D", max_folds=3)
@@ -50,6 +53,7 @@ def test_folds_never_leak_and_the_inner_validation_is_purged(art):  # noqa: F811
         fold_with_val(folds[0], "1D", 0.999999)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_run_rolling_trains_per_fold_with_scalers_of_that_fold(art, tmp_path):  # noqa: F811
     seen = []
 
@@ -82,6 +86,7 @@ def test_run_rolling_trains_per_fold_with_scalers_of_that_fold(art, tmp_path):  
     assert json.loads((out / "rolling_summary.json").read_text())["n_folds"] == summary["n_folds"]
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_retrain_every_k_reuses_the_last_model_and_seeds_loop(art, tmp_path):  # noqa: F811
     rows = []
     out = tmp_path / "roll"
@@ -102,6 +107,7 @@ def test_retrain_every_k_reuses_the_last_model_and_seeds_loop(art, tmp_path):  #
     assert reused["trained"] is False and reused["n_train"] > 0
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_a_finished_study_resumes_without_retraining(art, tmp_path):  # noqa: F811
     out = tmp_path / "roll"
     first = run_rolling(settings(art, tmp_path), rolling(max_folds=2), out)
@@ -109,6 +115,7 @@ def test_a_finished_study_resumes_without_retraining(art, tmp_path):  # noqa: F8
     assert again["across_folds"] == first["across_folds"]
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_rolling_composes_with_staged_training_and_the_battery(art, tmp_path):  # noqa: F811
     st = StageSettings(start_share=0.5, eval_every=2, step_cap_epochs=2, warmup_steps=2, bn_refresh_steps=2, k=2,
                        probe_rows=16)

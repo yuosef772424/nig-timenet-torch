@@ -6,6 +6,8 @@ import pytest
 
 from nig_timenet_torch.eval import error_map as em
 
+pytestmark = pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
+
 
 def frame(n=6000, seed=0):
     rng = np.random.default_rng(seed)

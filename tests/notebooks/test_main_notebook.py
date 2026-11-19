@@ -20,6 +20,9 @@ from nig_timenet_torch.workflow.settings import RunSettings
 from tests.notebooks.helpers import code_cells, is_settings, load, run_notebook
 from tests.scan import ROOT
 
+# rule E3: 12 s locally; the fast suite was over budget (runs in CI's slow step)
+pytestmark = pytest.mark.slow
+
 ARABIC = re.compile(r"[؀-ۿ]")
 
 
@@ -121,6 +124,7 @@ def test_the_no_equivalent_table_names_real_roadmap_steps(nb):
     assert "Later" in roadmap
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_main_notebook_runs_the_fixture_end_to_end_on_a_fake_drive(tmp_path, art):
     """Settings -> paths -> restore -> data -> split -> model -> train -> push -> health -> test report -> battery ->
     summary -> push -> battery of the finished folder, through the workflow.run steps, on the fixture artifact
@@ -145,6 +149,7 @@ def test_main_notebook_runs_the_fixture_end_to_end_on_a_fake_drive(tmp_path, art
     assert ns2["restored"]["copied"] > 0 and ns2["restored"]["restored_from"] == str(drive / "t3b")
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_experiment_switches_reach_the_settings_and_a_finished_run_is_read_with_its_last_weights(tmp_path, art):
     """FX1_BUNDLE / FX1_NIG_SCALE land in model.overrides, KEEP_LAST_WEIGHTS in the early-stop section, and
     LOAD_WEIGHTS reads a finished run (best or last epoch) without training; bad combinations raise."""
@@ -172,8 +177,38 @@ def test_experiment_switches_reach_the_settings_and_a_finished_run_is_read_with_
         run_notebook("main", {**base, "RUN_NAME": "x1", "LOAD_WEIGHTS": "last", "KEEP_LAST_WEIGHTS": True})
     with pytest.raises(ValueError, match="LOAD_WEIGHTS must be"):
         run_notebook("main", {**base, "RUN_NAME": "x2", "LOAD_WEIGHTS": "newest"})
+    with pytest.raises(ValueError, match="ON_STOP_WEIGHTS must be"):
+        run_notebook("main", {**base, "RUN_NAME": "x3", "ON_STOP_WEIGHTS": "newest"})
 
 
+@pytest.mark.slow   # rule E3: the fast suite reached 301.9 s on CI with it (AB1); it still runs in CI
+def test_notebook_stop_button_keeps_the_last_finished_epoch_and_runs_the_tests(tmp_path, art):
+    """ON_STOP_WEIGHTS (notebook default "last"): a KeyboardInterrupt in the training cell leaves the weights of the
+    last finished epoch and the later cells (health, test, battery, summary) run; None lets the stop through."""
+    drive, local = tmp_path / "drive", tmp_path / "local"
+    small = {"train.epochs": 3, "train.batch_size": 64, "train.device": "cpu", "evaluation.health_max_rows": 50,
+             "train.early_stop.patience": 5}
+    base = {"ARTIFACT": str(art), "WORK_ON": "local", "DRIVE_RUNS": str(drive), "LOCAL_RUNS": str(local),
+            "CHANGES": small, "BATTERY_FOLDER": ""}
+    assert run_notebook("main", {**base, "RUN_NAME": "stop0"})["ON_STOP_WEIGHTS"] == "last"
+    import nig_timenet_torch.workflow.flat_run as flat_run
+
+    def boom(row, total):
+        if row["epoch"] == 3:
+            raise KeyboardInterrupt
+        return ""
+    orig = flat_run.epoch_line
+    flat_run.epoch_line = boom
+    try:
+        ns = run_notebook("main", {**base, "RUN_NAME": "stop1"})
+        assert ns["run"].result.epochs_done == 2 and ns["run"].result.stopped_early
+        with pytest.raises(KeyboardInterrupt):
+            run_notebook("main", {**base, "RUN_NAME": "stop2", "ON_STOP_WEIGHTS": None})
+    finally:
+        flat_run.epoch_line = orig
+
+
+@pytest.mark.slow   # rule E3: new notebook cells (AB1) took the fast suite to 301 s on CI
 def test_notebook_trains_staged_and_runs_the_rolling_section(tmp_path, art):
     """ST1 / F2: ``train.staged`` in CHANGES makes the training cell run the staged steps and print the stage table;
     ROLLING runs section 13b on the same settings; both default to off (the other notebook tests)."""
@@ -188,3 +223,27 @@ def test_notebook_trains_staged_and_runs_the_rolling_section(tmp_path, art):
     assert ns["settings"].train.staged is not None and len(ns["run"].extra["stages"]) == 2
     assert ns["rolling_summary"]["n_folds"] == 2
     assert (tmp_path / "local" / "st1" / "out" / "rolling" / "rolling_summary.md").is_file()
+
+
+def test_target_norm_and_the_panel_rolling_switches_reach_the_settings(tmp_path, art):
+    """TARGET_NORM lands in model.overrides (default 'none' adds nothing); ROLLING_MODEL = 'panel' runs the rolling
+    section on the panel recipe (cross_section, relative inputs, rank_ic loss, day metrics) and pools the test days;
+    a bad value of either raises."""
+    small = {"train.epochs": 1, "train.batch_size": 64, "train.device": "cpu", "evaluation.health_max_rows": 50}
+    rolling = {"train_span": "20D", "test_span": "7D", "step": "10D", "embargo": "1D", "max_folds": 2}
+    base = {"ARTIFACT": str(art), "WORK_ON": "local", "DRIVE_RUNS": str(tmp_path / "drive"), "BATTERY_FOLDER": "",
+            "LOCAL_RUNS": str(tmp_path / "local"), "CHANGES": small, "LEGACY_REPORT": False, "PLOT_PRED_VS_TRUE": False}
+    ns = run_notebook("main", {**base, "RUN_NAME": "tn", "TARGET_NORM": "logret_std"})
+    assert ns["settings"].model.overrides["target_norm"] == "logret_std"
+    assert "target_norm" not in run_notebook("main", {**base, "RUN_NAME": "tn0"})["settings"].model.overrides
+    with pytest.raises(ValueError, match="TARGET_NORM"):
+        run_notebook("main", {**base, "RUN_NAME": "tn1", "TARGET_NORM": "zscore"})
+    with pytest.raises(ValueError, match="ROLLING_MODEL"):
+        run_notebook("main", {**base, "RUN_NAME": "rm", "ROLLING": rolling, "ROLLING_MODEL": "both"})
+    ns = run_notebook("main", {**base, "RUN_NAME": "rp", "ROLLING": rolling, "ROLLING_MODEL": "panel"})
+    s = ns["rolling_settings"]
+    assert s.split.cross_section and s.model.overrides["cross_input"] == "relative"
+    assert s.train.cross_section_loss == "rank_ic" and s.train.selection_metric == "val_rank_ic_reg"
+    assert ns["rolling_summary"]["n_folds"] == 2
+    assert (tmp_path / "local" / "rp" / "out" / "rolling" / "pooled_days_seed_0" / "panel_report.md").is_file()
+    assert (tmp_path / "drive" / "rp" / "out" / "rolling" / "rolling_summary.md").is_file()   # pushed to the fake Drive

@@ -34,6 +34,7 @@ from nig_timenet_torch.model.heads import (
     nig_outputs,
 )
 from nig_timenet_torch.model.nig_layers import ConfidenceHead, NIGHead, NIGUncertainty, OrderedMeans
+from nig_timenet_torch.model.snapshot import SNAPSHOT_DEFAULT_CONFIG, build_snapshot_panel
 
 __all__ = ["ARCHITECTURES", "DEFAULT_ARCHITECTURE", "ModelSettings", "build_model", "NIG_TIMENET_V2_DEFAULT_CONFIG",
            "TinyMLP", "build_tiny_mlp", "ANTI_MEMORIZATION_CONFIG", "architecture_contract"]
@@ -152,3 +153,8 @@ def build_tiny_mlp(seq_len: int, n_features: int, **config) -> TinyMLP:
 
 ARCHITECTURES.register("tiny_mlp", build_tiny_mlp, version=1, build_fn=build_tiny_mlp,
                        default_config={"price_targets": list(TARGET_COLUMNS), "hidden": 32})
+
+# owner 2026-11-18 ("100 x 3"): the whole moment as one input, per-coin input / output weights (model/snapshot.py);
+# needs split.cross_section and split.coin_channel
+ARCHITECTURES.register("snapshot_panel", build_snapshot_panel, version=1, build_fn=build_snapshot_panel,
+                       default_config=SNAPSHOT_DEFAULT_CONFIG)

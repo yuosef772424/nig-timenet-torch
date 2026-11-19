@@ -293,3 +293,13 @@ def test_trivial_baseline_brier(rng):
     base = metrics.brier(y, np.full(N, y.mean()))
     assert base == pytest.approx(y.mean() * (1 - y.mean())), "the base rate scores p (1 - p), the bar to beat"
     assert metrics.brier(y, y) == 0.0 and np.isnan(metrics.brier(np.array([]), np.array([])))
+
+
+def test_trivial_baseline_spearman_matrix(rng):
+    a = rng.normal(size=(N, 3))
+    m = metrics.spearman_matrix(a)
+    assert np.allclose(np.diag(m), 1.0) and np.abs(m[~np.eye(3, dtype=bool)]).max() < 4 / np.sqrt(N)
+    a[:, 2] = 2.0 * a[:, 0] ** 3                         # a monotone copy: rank correlation 1
+    assert metrics.spearman_matrix(a)[0, 2] == pytest.approx(1.0)
+    assert metrics.spearman_matrix(a)[0, 1] == pytest.approx(metrics.spearman(a[:, 0], a[:, 1]))
+    assert np.isnan(metrics.spearman_matrix(np.column_stack([a[:, 0], np.ones(N)]))[0, 1])

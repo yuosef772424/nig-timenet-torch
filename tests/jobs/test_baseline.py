@@ -22,6 +22,7 @@ def run(tmp_path, art, name, epochs, run_dir):  # noqa: F811
     return out, cfg
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_baseline_runs_and_resumes(tmp_path, art, monkeypatch):  # noqa: F811
     monkeypatch.setenv("NIG_REPO_DIR", str(ROOT))
     run_dir = tmp_path / "drive" / "train"
