@@ -20,6 +20,7 @@ def e4():
     return build_panel_synthetic(SMALL)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_every_timestamp_holds_every_coin_and_the_oracle_columns_are_there(e4):
     ts = np.asarray(e4["last_candles"])[:, TS_COL].astype(np.int64)
     stamps, counts = np.unique(ts, return_counts=True)
@@ -33,6 +34,7 @@ def test_every_timestamp_holds_every_coin_and_the_oracle_columns_are_there(e4):
     assert e4["environment"]["name"] == "E4" and e4["synthetic"]["generator"].endswith("synthetic_panel")
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_the_known_answers_are_the_planted_ones(e4):
     p = e4["synthetic"]["panel"]
     n = len(e4["last_candles"])

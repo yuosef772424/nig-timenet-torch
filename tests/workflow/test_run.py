@@ -58,6 +58,7 @@ def test_battery_can_be_switched_off(art, tmp_path):  # noqa: F811
     assert not (out / "battery_report.txt").exists() and steps.battery_step(r) == {}
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_battery_reruns_from_the_finished_folder_alone(art, tmp_path):  # noqa: F811
     from nig_timenet_torch.workflow.battery_run import battery_from_folder, render
     out = tmp_path / "out"
@@ -71,6 +72,7 @@ def test_battery_reruns_from_the_finished_folder_alone(art, tmp_path):  # noqa: 
         battery_from_folder(tmp_path)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_restore_rereads_a_finished_run_folder_without_training(art, tmp_path):  # noqa: F811
     """T5r: restore() puts the best weights of a finished run folder in a freshly built model; its test report equals
     the trained run's; a changed seed (another identity) is refused."""
@@ -89,6 +91,7 @@ def test_restore_rereads_a_finished_run_folder_without_training(art, tmp_path): 
         steps.restore(empty)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_restore_last_loads_the_last_epoch_weights_not_the_best(art, tmp_path):  # noqa: F811
     """weights="last" puts the weights after the LAST finished epoch (checkpoint.pt) in the model, weights="best"
     (the default) best.pt; an unknown name raises."""
@@ -110,6 +113,7 @@ def test_restore_last_loads_the_last_epoch_weights_not_the_best(art, tmp_path): 
         steps.restore(steps.build(steps.prepare(s, tmp_path / "out3")), weights="newest")
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_fit_without_restore_best_weights_leaves_the_last_epoch_in_the_model(art, tmp_path):  # noqa: F811
     """train.early_stop.restore_best_weights=False: after fit the model holds the weights of the last finished epoch
     (the ones checkpoint.pt keeps), so every report step reads them."""
@@ -188,6 +192,7 @@ def test_top_coins_keeps_the_coins_with_the_most_train_rows_in_every_split(art, 
         updated(RunSettings(run_dir="x"), {"split.top_coins": 0})
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_rank_ic_selection_metric_reads_the_timestamps_on_a_cross_section_run(art, tmp_path):  # noqa: F811
     over = {"split.cross_section": True, "train.selection_metric": "val_rank_ic_reg", "train.epochs": 2,
             "evaluation.battery.enabled": False,
@@ -197,6 +202,7 @@ def test_rank_ic_selection_metric_reads_the_timestamps_on_a_cross_section_run(ar
     assert all(-1.0 <= v <= 1.0 for v in vals) and r.result.best_value == max(vals)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_staged_run_through_the_run_steps(art, tmp_path):  # noqa: F811
     """ST1: ``train.staged`` set -> run_all trains through train_staged (the one Trainer), the summary carries the
     per-stage table, restore() re-reads the folder; unset -> the plain loop (switch off = today's behaviour)."""

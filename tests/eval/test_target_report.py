@@ -67,6 +67,7 @@ def test_perfect_prediction():
     assert sk["rank_ic_by_timestamp"] == pytest.approx(1.0) and sk["spearman_per_coin"]["mean"] == pytest.approx(1.0)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_informative_confidence_meets_t_conf_and_constant_does_not():
     table, labels, anchors = synth.make(conf_informative=True)
     for rep in report(table, labels, anchors)["targets"].values():
@@ -116,6 +117,7 @@ def test_t_sharp_too_wide_std_fails_the_share():
         assert r[t]["sharp"]["share_std_below_move"] < 0.05 and r[t]["sharp"]["meets_target"] is False
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_t_sharp_move_is_measured_from_the_explicit_last_close_not_the_head_anchor():
     table, labels, anchors = synth.make(conf_informative=False, scale=0.05, signal_sd=1e-9)
     anchors = dict(anchors, high=np.full(len(table), 110.0))         # the head's own last price differs

@@ -48,6 +48,7 @@ def test_presets_apply_in_order_and_unknown_names_fail():
         preset("nope")
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_cli_builds_writes_and_shows(tmp_path, capsys):
     out = tmp_path / "art"
     sha = "cd" * 20

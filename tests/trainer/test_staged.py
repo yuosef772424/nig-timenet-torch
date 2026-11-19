@@ -181,6 +181,7 @@ def test_the_validation_rows_are_the_same_in_every_stage(data):  # noqa: F811
         assert all(torch.equal(y[k], data[3][k][torch.as_tensor(pick)]) for k in y)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_baselines_get_the_staged_runs_number_of_steps(data):  # noqa: F811
     st, stages = two_stage()
     fit = FitSettings(epochs=1, batch_size=BS, early_stop=RAW)

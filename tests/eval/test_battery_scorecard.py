@@ -108,6 +108,7 @@ def test_uncertainty_buckets_show_the_short_exp_cost_growing_with_sigma():
     assert exp_costs == sorted(exp_costs, reverse=True)   # more negative as sigma rises
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_sections_join_the_full_battery_and_skip_without_timestamps():
     val, test = _frame(seed=10), _frame(seed=11)
     out = full_battery(val, test, cost=0.0008)

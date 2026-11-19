@@ -85,6 +85,7 @@ def test_close_only_table_and_bad_inputs():
         _adapt(table.iloc[:0], labels, anchors)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_the_whole_battery_runs_on_the_adapted_nig_table():
     table, labels, anchors = make(skilled=True)
     val = _adapt(table, labels, anchors, prev_close=np.full(len(table), 99.0))
@@ -97,6 +98,7 @@ def test_the_whole_battery_runs_on_the_adapted_nig_table():
     assert "SKIPPED" in no_prev["baseline"]["title"]
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_run_battery_entry_point_writes_the_report(tmp_path):
     from nig_timenet_torch.workflow.battery_run import REPORT_TXT, StageInputs, render, run_battery
     table, labels, anchors = make()

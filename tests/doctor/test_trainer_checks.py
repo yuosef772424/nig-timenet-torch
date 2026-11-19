@@ -49,6 +49,7 @@ def test_verdict_mapping():
     assert verdict([Check("A", "m", "x", 1, "", "fail")]) == ("learns", [])  # other cards do not decide
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_resume_is_exact(ctx):
     assert resume_check(ctx)["max_abs_diff"] == 0
 
@@ -61,12 +62,14 @@ def test_mode_gap_has_an_entry_per_target(ctx):
     assert isinstance(gap["batch_norm_var_ratio"], dict)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_overfit_one_batch_reaches_high_corr_on_every_head(ctx):
     res = overfit_one_batch(ctx, steps=150)
     assert all(res[t] >= 0.9 for t in ctx.targets), res
     assert res["loss_last"] < res["loss_first"]
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_lr_range_test_is_finite_and_ordered(ctx):
     res = lr_range_test(ctx, steps=20)
     assert np.isfinite(res["lr_best"]) and np.isfinite(res["lr_diverge"])

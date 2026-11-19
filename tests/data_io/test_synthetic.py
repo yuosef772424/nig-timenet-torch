@@ -35,6 +35,7 @@ def _z(ds, t):
     return (y - mean) / sd
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 @pytest.mark.parametrize("which", ["e1", "e1_return"])
 def test_oracle_columns_are_the_conditional_moments_within_mc_error(which, request):
     ds = request.getfixturevalue(which)
@@ -51,6 +52,7 @@ def test_oracle_columns_are_the_conditional_moments_within_mc_error(which, reque
                 assert abs((zz ** 2).mean() - 1.0) < 4 * se_v, (which, t, (zz ** 2).mean(), se_v)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 @pytest.mark.parametrize("ic", [0.05, 0.10])
 def test_planted_close_ic_is_known(ic):
     ds = envs.small(close_ic=ic, n_coins=48)
@@ -60,12 +62,14 @@ def test_planted_close_ic_is_known(ic):
     assert ds["synthetic"]["summary"]["close"]["rank_ic_by_timestamp"] > 0.5 * ic
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_oracle_t_sharp_share_is_one_one_and_about_zero(e1):
     s = e1["synthetic"]["summary"]
     assert s["high"]["share_sd_below_move"] == 1.0 and s["low"]["share_sd_below_move"] == 1.0
     assert s["close"]["share_sd_below_move"] < 0.02
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 @pytest.mark.parametrize("which", ["e1", "e1_return"])
 def test_target_report_on_the_oracle(which, request):
     """The REAL report code (eval.target_report) on the oracle as a prediction: T-sharp 1 / 1 / ~0 for both codecs,
@@ -110,6 +114,7 @@ def test_bars_are_consistent_intrabar_paths(e1):
     assert (np.diff(ts[:per]) == h * 4 * 3600 * 10**9).all()
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_defaults_mirror_the_real_artifact_scale_and_its_beta_floor_pathology():
     """Default label scale 1.0 and magnitudes of the real artifact c572b1b36960 (bar range median 0.029, close label
     sd 0.039, high label mean 0.025): y^2 is far below the NIG beta floor 0.01 (B-052), on purpose."""

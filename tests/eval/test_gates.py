@@ -43,6 +43,7 @@ def oracle_rows(e1):
     return gates.stage_rows(_stage(e1, *envs.oracle_table(e1)))
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_oracle_passes_every_blocking_e1_check(oracle_rows):
     rows = oracle_rows
     bad = [(r["gate"], r["check"], r["head"], r["value"]) for r in _blocking(rows) if r["verdict"] == "fail"]
@@ -56,6 +57,7 @@ def test_oracle_passes_every_blocking_e1_check(oracle_rows):
     assert not any(r["blocking"] for r in rows if r["gate"] in ("S", "D"))
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_constant_confidence_fails_gate_b(e1):
     table, *rest = envs.oracle_table(e1)
     for t in TARGETS:
@@ -66,6 +68,7 @@ def test_constant_confidence_fails_gate_b(e1):
     assert not [r for r in _blocking(rows, "C") if r["verdict"] == "fail"], "gate C is not affected"
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_zero_std_fails_gate_c_coverage(e1):
     table, *rest = envs.oracle_table(e1)
     for t in TARGETS:
@@ -75,6 +78,7 @@ def test_zero_std_fails_gate_c_coverage(e1):
     assert cov == {t: "fail" for t in TARGETS}
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_label_leak_fails_the_canary_on_e2(e1):
     e2 = permute_labels(e1, seed=1)
     table, labels, anchors, last_close, state = envs.oracle_table(e1)      # predictions of the source rows
@@ -119,6 +123,7 @@ def test_summarize_ands_over_seeds_and_needs_every_env():
     assert gates.summarize(rows + [info])["passed"], "information rows never block"
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_report_markdown_lists_every_row(oracle_rows):
     rows = oracle_rows
     rep = {"key": "k" * 64, "summary": gates.summarize(rows), "rows": rows, "baseline_arm": True}

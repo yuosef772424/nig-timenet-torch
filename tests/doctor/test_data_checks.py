@@ -1,6 +1,7 @@
 """doctor/data_checks.py (card C): alignment, overlap, coverage, shift and batch independence on a small E1."""
 
 import numpy as np
+import pytest
 
 from nig_timenet_torch.doctor.data_checks import (
     ALIGN_TOL,
@@ -14,6 +15,7 @@ from nig_timenet_torch.doctor.data_checks import (
 )
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_alignment_of_the_fixture_is_exact_enough(ctx):
     al = alignment(ctx.dataset)
     assert al["pairs"] > 0 and al["window_err"] <= ALIGN_TOL and ALIGN_TOL == 2e-5

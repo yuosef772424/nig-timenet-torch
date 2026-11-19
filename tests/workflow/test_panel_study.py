@@ -67,6 +67,7 @@ def test_study_runs_arms_and_seeds_writes_day_metrics_and_reads_finished_arms_ba
     assert (tmp_path / "out2" / "rank_s1" / "panel_report.md").is_file()
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_deadline_cuts_between_epochs_and_the_next_call_continues(e4_dir, tmp_path):
     s, out = base(e4_dir, tmp_path), tmp_path / "out"
     cut = panel_study.run_panel_study(s, {"per_coin": {}}, (0, 1), out, deadline=time.monotonic() + 0.01)
@@ -76,6 +77,7 @@ def test_deadline_cuts_between_epochs_and_the_next_call_continues(e4_dir, tmp_pa
     assert done["finished"] and [r["epochs_done"] for r in done["arms"]["per_coin"]] == [2, 2]
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_oracle_frame_is_the_known_answer_and_beats_a_two_epoch_model(e4_dir, tmp_path):
     r = steps.train(steps.build(steps.prepare(base(e4_dir, tmp_path), tmp_path / "out")))
     oracle = panel_report.panel_report(panel_report.oracle_frame(r, "val"), panel_report.oracle_frame(r, "test"))
@@ -104,6 +106,7 @@ def test_study_and_arms_are_strict(e4_dir, tmp_path):
             panel.CONFIG(**ok, **bad)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_panel_entry_runs_and_resumes(e4_dir, tmp_path, monkeypatch):
     import pathlib
 
@@ -124,6 +127,7 @@ def test_panel_entry_runs_and_resumes(e4_dir, tmp_path, monkeypatch):
     assert "battery_tradeable" in study["arms"]["per_coin"][0]
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_battery_step_writes_the_day_metrics_when_asked(e4_dir, tmp_path):
     s = updated(base(e4_dir, tmp_path), {"evaluation.battery.day_metrics": True})
     r = steps.train(steps.build(steps.prepare(s, tmp_path / "out")))
