@@ -1,5 +1,5 @@
 {
- "fingerprint": "f5102c625d5e21d1",
+ "fingerprint": "b7eaf4f7bc49b4aa",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -515,11 +515,9 @@
   "nig_timenet_torch.eval.influence_report.write_influence_report(n_perm)": "1000",
   "nig_timenet_torch.eval.influence_report.write_influence_report(row_group)": "None",
   "nig_timenet_torch.eval.influence_report.write_influence_report(window)": "9",
-  "nig_timenet_torch.eval.legacy_plots.pred_vs_true(title)": "''",
   "nig_timenet_torch.eval.legacy_plots.price_panels(heads)": "('high', 'low', 'close')",
   "nig_timenet_torch.eval.legacy_plots.price_panels(last_n)": "16",
   "nig_timenet_torch.eval.legacy_plots.price_panels(max_lag)": "5",
-  "nig_timenet_torch.eval.legacy_plots.price_panels(title)": "''",
   "nig_timenet_torch.eval.legacy_plots.top_coins(n)": "3",
   "nig_timenet_torch.eval.legacy_reports.calibration(n_bins)": "10",
   "nig_timenet_torch.eval.legacy_reports.coin_ranking(min_rows)": "30",
