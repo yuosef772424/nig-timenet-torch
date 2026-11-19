@@ -214,11 +214,15 @@ def relative_close_labels(src, dst, *, fetch=None, overwrite: bool = False) -> d
     m = btc_moves_over_horizon(btc, ts, ds["base_tf"], h)
     ok = np.isfinite(m)
     scale = float(ds.get("reg_target_scale", 1.0))
-    y = np.asarray(ds["y_close_reg"], dtype=np.float64)
+    from nig_timenet_torch.model.heads import head_spec
+
+    reg_key = head_spec("nig_regression", "close").label_key
+    cls_key = head_spec("binary_classification", "close").label_key
+    y = np.asarray(ds[reg_key], dtype=np.float64)
     rel = np.where(ok, np.clip(y - np.where(ok, m, 0.0), -scale, scale), y)
     lc[:, LAST_COLUMN_INDEX["future_close"]] = lc[:, LAST_COLUMN_INDEX["last_close"]] * np.exp(rel)
-    ds = {**ds, "y_close_reg": rel.astype(np.asarray(ds["y_close_reg"]).dtype),
-          "y_close_class": (rel > 0).astype(np.asarray(ds["y_close_class"]).dtype), "last_candles": lc}
+    ds = {**ds, reg_key: rel.astype(np.asarray(ds[reg_key]).dtype),
+          cls_key: (rel > 0).astype(np.asarray(ds[cls_key]).dtype), "last_candles": lc}
     manifest = write_artifact(ds, dst, source_commit=man.source_commit, overwrite=overwrite,
                               producer=f"nig_timenet_torch.data_io.btc_relative close label (on "
                                        f"{man.data_fingerprint})")
