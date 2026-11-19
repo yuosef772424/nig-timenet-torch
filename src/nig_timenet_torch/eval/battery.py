@@ -36,6 +36,7 @@ from nig_timenet_torch.eval.battery_lib import (
     round_trip,
 )
 from nig_timenet_torch.eval.battery_profit import profit_sections
+from nig_timenet_torch.eval.battery_scorecard import scorecard_sections
 from nig_timenet_torch.stats.metrics import spearman
 
 __all__ = ["battery", "full_battery", "show", "table_integrity", "persistence_baseline",
@@ -302,4 +303,5 @@ def full_battery(val, test, cost: float = 0.0008, n_variants: int = 1) -> dict:
     """The sections, the T-profit sections (battery_profit; ``n_variants`` = variants tried so far, for the CI
     level) AND the verdict in one call - what the notebook prints, in order."""
     sections = battery(val, test, cost)
-    return {**sections, **profit_sections(test, cost, n_variants), "verdict": verdict(test, cost, sections)}
+    return {**sections, **profit_sections(test, cost, n_variants), **scorecard_sections(val, test, cost, n_variants),
+            "verdict": verdict(test, cost, sections)}

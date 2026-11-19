@@ -93,9 +93,10 @@ def stage_inputs(run, stage: str) -> StageInputs:
 
 
 def profit_json(sections: dict) -> dict:
-    """The T-profit sections (title, rows, note, stats) and the verdict, as plain JSON-able data."""
-    keep = {k: v for k, v in sections.items() if k.startswith("profit_") or k == "verdict"}
-    return {k: {f: v[f] for f in ("title", "rows", "note", "stats", "best", "tradeable") if f in v}
+    """The T-profit sections (title, rows, note, stats), the verdict and the scorecard verdict, as plain JSON-able
+    data."""
+    keep = {k: v for k, v in sections.items() if k.startswith("profit_") or k in ("verdict", "scorecard_verdict")}
+    return {k: {f: v[f] for f in ("title", "rows", "note", "stats", "best", "tradeable", "passed") if f in v}
             for k, v in keep.items()}
 
 
