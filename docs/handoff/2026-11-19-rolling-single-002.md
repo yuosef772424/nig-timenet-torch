@@ -37,3 +37,8 @@ PR: #68 (draft), branch `claude/reports-analysis-evaluation-jv4sqr`.
 2. Write `docs/results/rolling-single-002.md`, with the failure reading if the candidate fails (rule C7).
 3. Read the 14 re-read reports (`ss1/`): does the short-side reading of short-side-001 hold with the real VAL
    thresholds?
+
+## Outcome (2026-11-19, ~13:30 UTC)
+Both seed processes finished; the 14 old folds were re-read (`ss1/` reports). Read in `docs/results/rolling-single-002.md`:
+the candidate fails (CI contains 0; negative without the best 5 % of days), no H1 / H3 rule passes (the kept shorts
+lose), and the short exp() reading of short-side-001 replicates. The next hypotheses (N1-N4) are in that note.
