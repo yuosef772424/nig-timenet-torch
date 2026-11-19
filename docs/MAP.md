@@ -192,7 +192,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `trainer/switches.py` | Registered training switches of TR1 / D-021: weight initialisation (INITS: torch, keras), weight-decay parameter groups (WEIGHT_DECAY_GROUPS: all_params, exclude_norm_bias) and the EMA copy of the weights of fit. | training switches, init registry, keras init, glorot, orthogonal, weight decay groups, ema weights, tr1 |
 | `trainer/targets.py` | The trainer config schema: ``validate_trainer_config`` (unknown keys raise), ``resolve_targets`` / ``resolve_loss`` (defaults filled once) and ``targets_config``, the ONE builder of the targets (from HeadSpec). | trainer config, strict config, validate, targets_config, HeadSpec, task config_keys, loss defaults, did you mean |
 | `trainer/task_weighting.py` | Kendall uncertainty weighting: total = sum_t 0.5 exp(-log_var_t) L_t + 0.5 log_var_t over the trainer's non-excluded (positive-loss) tasks; the log-variances are learned parameters with a configurable start value. | kendall, uncertainty weighting, task weighting, log variance, multi-task, class heads |
-| `trainer/tasks.py` | TASK_REGISTRY: the task losses (evidential NIG, regression, classification) with, per task, the registered ``config_keys`` (the options a target config may carry) and ``default_options`` (their values when left out). | task loss, task registry, evidential, classification, regression, config_keys, default_options, calibration |
+| `trainer/tasks.py` | TASK_REGISTRY: the task losses (evidential NIG, regression, classification, side payoff, pinball) with, per task, the registered ``config_keys`` (the options a target config may carry) and ``default_options``. | task loss, task registry, evidential, classification, regression, config_keys, default_options, calibration, side payoff, pinball, quantile |
 | `trainer/trace.py` | T4 trainer trace: what the loss weighting and the schedules did, one row of numbers per epoch (log-only), and the per-head gradients on the shared parameters that the trace and gate A5 / A6 read. | trainer trace, gradient share, kendall weights, schedules, head gradients, shared trunk, log only |
 | `trainer/tracker.py` | Best epoch + early stopping in one resumable object (ROADMAP T1; source: crypto-signal-prediction |  |
 | `trainer/trainer.py` | Trainer: loss weighting (loss_weight, Kendall for the non-excluded task types), train / eval steps and the ``fit`` epoch loop; its config is validated by ``trainer.targets`` first and its schedules are parsed once. | trainer, fit, compute_losses, kendall uncertainty weighting, scheduled vars, selection metric, resume, config |
@@ -232,7 +232,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | custom_feature | `CUSTOM_FEATURES` | `data/custom_registry.py` | `ath_distance`, `calendar`, `crash_rebound`, `direction_consistency`, `fisher`, `fractal`, `jump`, `mean_reversion`, `position_in_range`, `psar`, `range_rel`, `returns`, `risk_adj_momentum`, `rsi_divergence`, `rvi`, `supertrend`, `trend_age`, `vol_asymmetry`, `vol_estimators`, `vol_ratio`, `vol_term_structure`, `volume_z` |
 | encoder | `ENCODERS` | `model/encoders.py` | `conv_transformer`, `gru`, `itransformer`, `tcn`, `transformer` |
 | growth | `GROWTH` | `trainer/staged.py` | `coins`, `stride`, `time` |
-| head | `HEAD_REGISTRY` | `model/heads.py` | `binary_classification`, `multiclass_classification`, `nig_regression` |
+| head | `HEAD_REGISTRY` | `model/heads.py` | `binary_classification`, `multiclass_classification`, `nig_regression`, `side_payoff`, `upper_quantile` |
 | init | `INITS` | `trainer/switches.py` | `keras`, `torch` |
 | input_scaler | `INPUT_SCALERS` | `model/scalers.py` | `none`, `train_std` |
 | input_skip | `INPUT_SKIP_VARIANTS` | `model/parts.py` | `concat_each_block`, `dense_skip`, `late_raw`, `no_proj`, `none` |
@@ -243,7 +243,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | target_codec | `TARGET_CODECS` | `data_io/target_codec.py` | `logret_close`, `return` |
 | target_norm | `TARGET_NORMS` | `model/target_norm.py` | `logret_std`, `none` |
 | target_raw | `TARGET_RAW` | `data/targets.py` | `entry_range`, `magnitude`, `return`, `return_close`, `scaled`, `volnorm`, `window_scale` |
-| task | `TASK_REGISTRY` | `trainer/tasks.py` | `classification`, `evidential`, `regression` |
+| task | `TASK_REGISTRY` | `trainer/tasks.py` | `classification`, `evidential`, `pinball`, `regression`, `side_payoff` |
 | weight_decay_groups | `WEIGHT_DECAY_GROUPS` | `trainer/switches.py` | `all_params`, `exclude_norm_bias` |
 
 ## Entry points

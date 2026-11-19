@@ -1,0 +1,8 @@
+R 0 {'E_short_rho': 0.753, 'pay_short_rho': 0.626, 'E_long_rho': 0.753, 'pay_long_rho': 0.625, 'pay_short_bias_sd': -0.14, 'best_epoch': 9}
+W 0 {'E_short_rho': 0.697, 'pay_short_rho': 0.517, 'E_long_rho': 0.697, 'pay_long_rho': 0.509, 'pay_short_bias_sd': -0.331, 'best_epoch': 7}
+R 1 {'E_short_rho': 0.742, 'pay_short_rho': 0.471, 'E_long_rho': 0.742, 'pay_long_rho': 0.471, 'pay_short_bias_sd': 0.183, 'best_epoch': 6}
+W 1 {'E_short_rho': 0.821, 'pay_short_rho': 0.58, 'E_long_rho': 0.821, 'pay_long_rho': 0.578, 'pay_short_bias_sd': -0.702, 'best_epoch': 8}
+R 2 {'E_short_rho': 0.795, 'pay_short_rho': 0.43, 'E_long_rho': 0.795, 'pay_long_rho': 0.43, 'pay_short_bias_sd': -0.775, 'best_epoch': 10}
+W 2 {'E_short_rho': 0.795, 'pay_short_rho': 0.64, 'E_long_rho': 0.795, 'pay_long_rho': 0.64, 'pay_short_bias_sd': -0.055, 'best_epoch': 10}
+
+[exited with code 0]

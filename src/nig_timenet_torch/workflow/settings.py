@@ -18,6 +18,7 @@ import pandas as pd
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
 from nig_timenet_torch.trainer.groups import BATCH_ORDERS
+from nig_timenet_torch.trainer.schedules import LR_KINDS
 from nig_timenet_torch.trainer.staged import StageSettings
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import BATCHINGS
@@ -152,6 +153,18 @@ class TrainSettings:
     # rows inside in time order, the batches shuffled (trainer.groups.BATCH_ORDERS). No extra input channel.
     batch_order: str = "rows"
     time_block_bars: int = 1                               # read only by "time_blocks"; >= 1
+    # LS1 (owner 2026-11-19): the losses of the auxiliary close heads (ModelSettings override ``aux_heads``:
+    # side_payoff / upper_quantile; read only when the model has them): their fixed loss weight (they are never
+    # Kendall-weighted) and the quantile the upper_quantile head learns. The side payoffs use the battery's cost.
+    aux_loss_weight: float = 1.0
+    aux_quantile: float = 0.9
+    # LS1: the side-payoff rows weighted by (close NIG predictive variance)^-this (0 = plain squared error; 1 = WLS)
+    aux_variance_weight: float = 0.0
+    # LR1 (owner 2026-11-19, "a gap in the settings or the training"): the learning-rate schedule over ``epochs``
+    # (trainer.schedules.LR_KINDS; "constant" = lr every epoch, as every run before; "cosine" = from lr down to
+    # lr * lr_min_ratio at the last epoch). The run path never passed a schedule before, so every run was constant.
+    lr_schedule: str = "constant"
+    lr_min_ratio: float = 0.1                              # read only by a non-constant schedule; in (0, 1]
 
     def __post_init__(self):
         if self.batch_by not in BATCHINGS:
@@ -164,9 +177,15 @@ class TrainSettings:
         if self.lr <= 0 or self.weight_decay < 0 or not 0.0 <= self.label_smoothing < 1.0:
             raise ValueError("lr > 0, weight_decay >= 0, 0 <= label_smoothing < 1")
         if min(self.class_loss_weight, self.lambda_reg_end, self.lambda_calib_end, self.beta_nll,
-               self.cross_section_weight, self.direction_balance) < 0:
-            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end, beta_nll, cross_section_weight "
-                             "and direction_balance must be >= 0")
+               self.cross_section_weight, self.direction_balance, self.aux_loss_weight, self.aux_variance_weight) < 0:
+            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end, beta_nll, cross_section_weight, "
+                             "direction_balance, aux_loss_weight and aux_variance_weight must be >= 0")
+        if self.lr_schedule not in LR_KINDS:
+            raise ValueError(f"TrainSettings.lr_schedule must be one of {sorted(LR_KINDS)}, not {self.lr_schedule!r}")
+        if not 0.0 < self.lr_min_ratio <= 1.0:
+            raise ValueError(f"TrainSettings.lr_min_ratio must be in (0, 1], got {self.lr_min_ratio!r}")
+        if not 0.0 < self.aux_quantile < 1.0:
+            raise ValueError(f"TrainSettings.aux_quantile must be in (0, 1), got {self.aux_quantile!r}")
 
 
 @dataclass(frozen=True)

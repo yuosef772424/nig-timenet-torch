@@ -1,0 +1,7 @@
+seed  side   closed_form  ridge(h)  ridge(h,mu,s)  ridge(mu,s)
+   0  long         0.698     0.678          0.651        0.748
+   0  short        0.698     0.678          0.651        0.748
+   1  long         0.587     0.639          0.600        0.735
+   1  short        0.587     0.639          0.600        0.735
+   2  long         0.697     0.704          0.656        0.725
+   2  short        0.697     0.704          0.656        0.725
