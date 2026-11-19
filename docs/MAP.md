@@ -83,6 +83,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `data_io/loading.py` | One way to load a prepared dataset by base name, latest name or full name, memory-mapped or copied to local disk, with the rule D1 artifact checks applied by default. | dataset loading, latest name, mmap, local copy, artifact checks, rule d1 |
 | `data_io/lower_timeframe.py` | Add a finer timeframe's input window (X_<tf>, e.g. the last 32 1h bars) to an existing contract artifact, row by row, from Binance archive candles, as a new contract artifact with the same rows, labels and coins. | lower timeframe, multi timeframe, 1h window, derived artifact, log moves, binance vision, alignment, x_1h |
 | `data_io/market_channel.py` | Add a market-level input channel from an outside DAILY series (e.g. the USDT supply) to a contract artifact: for every bar of every window, the log growth of the series over k days as known the day BEFORE that bar. | market channel, outside data, usdt supply, stablecoin, daily series, log growth, no lookahead, derived artifact |
+| `data_io/market_residual.py` | Write a market-residual copy of a contract artifact: each bar's coin moves minus beta x the equal-weight market move (beta per coin from its own past only), residual RSI / stochastic, market features, and the close label made residual too. | market residual, beta, market neutral, idiosyncratic return, equal weight market, derived artifact, rolling beta |
 | `data_io/npy_dir.py` | Reader of the npy_dir dataset format (manifest.json + one .npy per array + meta.pkl), optionally memory- mapped, and a local-disk copy helper. | npy dir, dataset reader, mmap, localize, data format, manifest |
 | `data_io/split_plan.py` | One global train/val/test split with purge by label end and embargo, plus the per-row times it needs (feature start, feature end, label end) derived from last_candles. | split plan, purge embargo, label end, sample times, leakage check |
 | `data_io/synthetic.py` | E1 test environment (MODEL_DEV_PROTOCOL section 3): synthetic 4h bars from intrabar random walks, HAR-like volatility, a planted close drift of known IC; a contract artifact with each label's exact conditional mean / sd. | synthetic data, e1 environment, oracle, planted signal, known ic, heteroscedastic noise, har volatility, intrabar path, contract artifact, gates |
@@ -260,6 +261,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `data_io/indicator_channels.py`: runnable (`python -m nig_timenet_torch.data_io.indicator_channels`)
 - `data_io/lower_timeframe.py`: runnable (`python -m nig_timenet_torch.data_io.lower_timeframe`)
 - `data_io/market_channel.py`: runnable (`python -m nig_timenet_torch.data_io.market_channel`)
+- `data_io/market_residual.py`: runnable (`python -m nig_timenet_torch.data_io.market_residual`)
 - `data_io/vision_slice.py`: runnable (`python -m nig_timenet_torch.data_io.vision_slice`)
 - `doctor/__main__.py`: runnable (`python -m nig_timenet_torch.doctor`)
 - `doctor/influence.py`: runnable (`python -m nig_timenet_torch.doctor.influence`)
