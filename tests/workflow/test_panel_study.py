@@ -37,6 +37,7 @@ def base(e4_dir, tmp_path) -> RunSettings:
                        "evaluation.battery.enabled": False, "train.selection_metric": "val_rank_ic_reg"})
 
 
+@pytest.mark.slow  # rule E3: 16 s; the fast suite reached 300.4 s on CI (PR #68); still runs in CI
 def test_study_runs_arms_and_seeds_writes_day_metrics_and_reads_finished_arms_back(e4_dir, tmp_path):
     out, keep = tmp_path / "out", tmp_path / "keep"
     study = panel_study.run_panel_study(base(e4_dir, tmp_path), ARMS, (0, 1), out, ckpt_root=keep)

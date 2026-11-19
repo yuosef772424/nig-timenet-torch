@@ -51,6 +51,7 @@ def test_a_real_signal_beyond_the_baselines_is_evidence_on_both_splits():
     assert abs(res["skill"]["TEST"]["shuffled model"]["ic"]["ic"]) < 0.05
 
 
+@pytest.mark.slow  # rule E3: 13 s; the fast suite reached 300.4 s on CI (PR #68); still runs in CI
 def test_the_close_head_renamed_is_not_evidence_and_no_signal_is_not_evidence():
     res = ds.deep_side(*frames(signal=1.0, close_is_model=True))
     diff = res["skill"]["VAL"]["close head mu"]["model_minus_it"]
