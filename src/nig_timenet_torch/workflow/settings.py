@@ -152,6 +152,11 @@ class TrainSettings:
     # rows inside in time order, the batches shuffled (trainer.groups.BATCH_ORDERS). No extra input channel.
     batch_order: str = "rows"
     time_block_bars: int = 1                               # read only by "time_blocks"; >= 1
+    # LS1 (owner 2026-11-19): the losses of the auxiliary close heads (ModelSettings override ``aux_heads``:
+    # side_payoff / upper_quantile; read only when the model has them): their fixed loss weight (they are never
+    # Kendall-weighted) and the quantile the upper_quantile head learns. The side payoffs use the battery's cost.
+    aux_loss_weight: float = 1.0
+    aux_quantile: float = 0.9
 
     def __post_init__(self):
         if self.batch_by not in BATCHINGS:
@@ -164,9 +169,11 @@ class TrainSettings:
         if self.lr <= 0 or self.weight_decay < 0 or not 0.0 <= self.label_smoothing < 1.0:
             raise ValueError("lr > 0, weight_decay >= 0, 0 <= label_smoothing < 1")
         if min(self.class_loss_weight, self.lambda_reg_end, self.lambda_calib_end, self.beta_nll,
-               self.cross_section_weight, self.direction_balance) < 0:
-            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end, beta_nll, cross_section_weight "
-                             "and direction_balance must be >= 0")
+               self.cross_section_weight, self.direction_balance, self.aux_loss_weight) < 0:
+            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end, beta_nll, cross_section_weight, "
+                             "direction_balance and aux_loss_weight must be >= 0")
+        if not 0.0 < self.aux_quantile < 1.0:
+            raise ValueError(f"TrainSettings.aux_quantile must be in (0, 1), got {self.aux_quantile!r}")
 
 
 @dataclass(frozen=True)

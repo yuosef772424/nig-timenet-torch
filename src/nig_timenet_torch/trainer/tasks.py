@@ -1,9 +1,11 @@
-"""PURPOSE: TASK_REGISTRY: the task losses (evidential NIG, regression, classification) with, per task, the registered
-    ``config_keys`` (the options a target config may carry) and ``default_options`` (their values when left out).
-TAGS: task loss, task registry, evidential, classification, regression, config_keys, default_options, calibration
+"""PURPOSE: TASK_REGISTRY: the task losses (evidential NIG, regression, classification, side payoff, pinball) with, per
+    task, the registered ``config_keys`` (the options a target config may carry) and ``default_options``.
+TAGS: task loss, task registry, evidential, classification, regression, config_keys, default_options, calibration,
+    side payoff, pinball, quantile
 PITFALLS: a task fn reads ``target_cfg[key]`` with NO fallback: it needs the target config RESOLVED by
     ``trainer.targets.resolve_targets`` (``with_defaults`` fills a single one); a new option needs a ``config_keys``
     entry (else ``validate_trainer_config`` refuses it) and a ``default_options`` value (a pinned default, rule B1).
+    side_payoff / pinball read a LOG-return label (codec logret_close): on another codec their targets mean nothing.
 
 TASK_REGISTRY and the task losses, ported from crypto-signal-prediction trainer/tasks.py @ aeafc564
 (BUILD_PLAN.md P17): evidential NIG, regression, binary and multiclass classification (P42), confidence calibration.
@@ -24,7 +26,8 @@ import torch.nn.functional as F
 from nig_timenet_torch.core.registry import Contract, Registry
 
 __all__ = ["TASK_REGISTRY", "register_task_type", "with_defaults", "evidential_task_loss", "regression_task_loss",
-           "classification_task_loss", "nig_regularizer", "nig_w_st", "compute_confidence_calibration_loss"]
+           "classification_task_loss", "nig_regularizer", "nig_w_st", "compute_confidence_calibration_loss",
+           "side_payoff_task_loss", "quantile_task_loss", "side_payoffs"]
 
 KERAS_EPSILON = 1e-7  # keras.backend.epsilon(): probability clip of binary_crossentropy
 
@@ -234,3 +237,60 @@ def classification_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample
 register_task_type("classification", classification_task_loss, ["accuracy"], supports_sample_weight=True,
                    config_keys=("binary", "label_smoothing"),
                    default_options={"binary": True, "label_smoothing": 0.0})
+
+
+# ------------------------------------------------------------------- auxiliary heads (owner 2026-11-19, LS1)
+
+def side_payoffs(y_log: torch.Tensor, cost_per_side: float) -> tuple[torch.Tensor, torch.Tensor]:
+    """What a long and a short of a fixed notional are paid over the label's horizon, after a round trip of cost:
+    long ``e^y - 1 - 2c``, short ``1 - e^y - 2c`` (y = log return). The short is NOT the long's mirror in log units:
+    a rise of +l costs it e^l - 1 > l (docs/results/short-side-001.md)."""
+    move = torch.expm1(y_log)
+    cost = 2.0 * float(cost_per_side)
+    return move - cost, -move - cost
+
+
+def _squared_or_huber(error: torch.Tensor, delta: float) -> torch.Tensor:
+    """0.5 e^2 when ``delta`` is 0, else the Huber loss with that delta (in the error's units)."""
+    if delta <= 0:
+        return 0.5 * error.square()
+    a = error.abs()
+    q = torch.clamp_max(a, delta)
+    return 0.5 * q.square() + delta * (a - q)
+
+
+def side_payoff_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_weight=None):
+    """Each side's head regresses that side's payoff (``side_payoffs``): the squared error (or Huber,
+    ``huber_delta`` > 0) of (prediction - payoff) / ``scale``, the short term weighted by ``short_weight``. The
+    predictions are in price-return units, so ``pred > 0`` reads "this side pays after cost"."""
+    keys = target_cfg["output_keys"]
+    w = None if sample_weight is None else _flat(sample_weight)
+    pay_long, pay_short = side_payoffs(_flat(y_true), target_cfg["cost_per_side"])
+    scale, delta = float(target_cfg["scale"]), float(target_cfg["huber_delta"])
+    err_long = _flat(outputs[keys["long"]]) - pay_long
+    err_short = _flat(outputs[keys["short"]]) - pay_short
+    per = (_squared_or_huber(err_long / scale, delta)
+           + float(target_cfg["short_weight"]) * _squared_or_huber(err_short / scale, delta))
+    return _wmean(per, w), {"mae_long": _wmean(err_long.abs(), w), "mae_short": _wmean(err_short.abs(), w)}
+
+
+register_task_type("side_payoff", side_payoff_task_loss, ["mae_long", "mae_short"], supports_sample_weight=True,
+                   config_keys=("cost_per_side", "scale", "huber_delta", "short_weight"),
+                   default_options={"cost_per_side": 0.0008, "scale": 0.02, "huber_delta": 0.0,
+                                    "short_weight": 1.0})
+
+
+def quantile_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_weight=None):
+    """The pinball (quantile) loss of the head's value as the ``quantile`` of the label, divided by ``scale``; stat
+    ``coverage`` = share of rows whose label is at or under the prediction (it tends to ``quantile``)."""
+    keys = target_cfg["output_keys"]
+    w = None if sample_weight is None else _flat(sample_weight)
+    tau = float(target_cfg["quantile"])
+    q = _flat(outputs[keys["q"]])
+    error = _flat(y_true) - q
+    per = torch.maximum(tau * error, (tau - 1.0) * error) / float(target_cfg["scale"])
+    return _wmean(per, w), {"coverage": _wmean((error <= 0).to(torch.float32), w)}
+
+
+register_task_type("pinball", quantile_task_loss, ["coverage"], supports_sample_weight=True,
+                   config_keys=("quantile", "scale"), default_options={"quantile": 0.9, "scale": 0.02})

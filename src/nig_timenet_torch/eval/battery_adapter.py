@@ -16,6 +16,9 @@ last_close = the price the returns are over (price = last_close * (1 + return); 
 plots need it, older tables lack it).
 When the high / low heads are in the table: pred_high / pred_low (decoded mu return), fut_high / fut_low (decoded
 label return = the realised extreme over the horizon), sigma_high / sigma_low.
+When the LS1 auxiliary close heads are in the table (model ``aux_heads``): pay_long / pay_short (each side's predicted
+payoff after cost, return units, as the head outputs it) and q_up (the upper-quantile head, log -> return units). Both
+assume a log-return close label (codec logret_close, the artifact's).
 """
 
 import math
@@ -107,5 +110,11 @@ def to_battery_table(table: pd.DataFrame, labels: dict, *, anchors: dict, last_c
         if head_spec("nig_regression", t).output_keys["mu"] in table.columns:
             pred, real, width = _head(table, labels, anchors, last_close, codec, codec_state, t)
             out[f"pred_{t}"], out[f"fut_{t}"], out[f"sigma_{t}"] = pred, real, width
+    side = head_spec("side_payoff", "close").output_keys     # LS1 auxiliary heads (owner 2026-11-19), when present
+    if side["long"] in table.columns:
+        out["pay_long"], out["pay_short"] = _col(table, side["long"]), _col(table, side["short"])
+    upq = head_spec("upper_quantile", "close").output_keys["q"]
+    if upq in table.columns:
+        out["q_up"] = np.expm1(_col(table, upq))
     out.attrs["p_dir_source"] = "close class head" if from_class else "gaussian from close mu/sigma"
     return out

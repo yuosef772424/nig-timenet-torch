@@ -6,7 +6,9 @@ PURPOSE:  The ONE head vocabulary: HEAD_REGISTRY (a head KIND -> output keys, la
 TAGS:     heads, head registry, head spec, output keys, nig outputs, class outputs, task type, output width
 PITFALLS: nig_regression is registered with no forward (the builder needs all three targets at once for OrderedMeans);
           a classification kind's forward returns PROBABILITIES under a key named ``..._class_logits``. Builders and
-          architectures assemble output dicts ONLY through nig_outputs / class_outputs (rule G1).
+          architectures assemble output dicts ONLY through nig_outputs / class_outputs / aux_outputs (rule G1). The
+          auxiliary kinds (side_payoff, upper_quantile; owner 2026-11-19) read the SAME label as the NIG head of
+          their target; their outputs are in price-return (side_payoff) or log-return (upper_quantile) units.
 
 One HEAD_REGISTRY entry per head KIND; its metadata are templates with ``{target}`` that ``head_spec(kind, target)``
 fills into a HeadSpec — the single vocabulary linking a head's output keys, its label key and its loss task type
@@ -22,7 +24,8 @@ from torch import nn
 from nig_timenet_torch.core.registry import Contract, Registry
 
 __all__ = ["HeadSpec", "HEAD_REGISTRY", "head_spec", "classification_head_forward", "multiclass_head_forward",
-           "kinds_with_task", "class_head_kind", "head_width", "nig_outputs", "class_outputs"]
+           "kinds_with_task", "class_head_kind", "head_width", "nig_outputs", "class_outputs", "AUX_TASK_TYPES",
+           "aux_head_forward", "aux_outputs"]
 
 
 @dataclass(frozen=True)
@@ -111,6 +114,23 @@ def multiclass_head_forward(x: torch.Tensor, fc: nn.Linear, out: nn.Linear,
     return torch.softmax(out(h), dim=-1)
 
 
+def aux_head_forward(x: torch.Tensor, fc: nn.Linear, out: nn.Linear,
+                     drop: nn.Module | None = None) -> torch.Tensor:
+    """Dense(relu) -> Dropout -> Dense(width, linear): an auxiliary head's raw values (B, width)."""
+    h = torch.relu(fc(x))
+    if drop is not None:
+        h = drop(h)
+    return out(h)
+
+
+def aux_outputs(spec: HeadSpec, values: torch.Tensor) -> dict:
+    """The output dict of one auxiliary head: column i of ``values`` (B, width) under the i-th output key."""
+    return {key: values[:, i] for i, key in enumerate(spec.output_keys.values())}
+
+
+#: task types of the auxiliary heads (they read the label of their target's NIG head; model.builder ``aux_heads``)
+AUX_TASK_TYPES = ("side_payoff", "pinball")
+
 HEAD_REGISTRY.register(
     "nig_regression", None, version=1, head_name="{target}_reg",
     output_keys={"mu": "y_{target}", "nu": "y_{target}_nu", "alpha": "y_{target}_alpha", "beta": "y_{target}_beta",
@@ -127,3 +147,16 @@ HEAD_REGISTRY.register(
     "multiclass_classification", multiclass_head_forward, version=1, head_name="{target}_class",
     output_keys={"logits": "y_{target}_class_logits"}, label_key="y_{target}_class", task_type="classification",
     label_encoding="multiclass", default_weight=1.0, eval_role="direction", output_width=None)
+# owner 2026-11-19 (LS1): one head per trade side, each regressed on what that side is PAID after cost (long
+# e^y - 1 - c, short 1 - e^y - c, y = the log-return label): the short's exp() cost stays inside its own head
+HEAD_REGISTRY.register(
+    "side_payoff", aux_head_forward, version=1, head_name="{target}_side",
+    output_keys={"long": "y_{target}_long_payoff", "short": "y_{target}_short_payoff"},
+    label_key="y_{target}_reg", task_type="side_payoff", label_encoding="continuous", default_weight=1.0,
+    eval_role="side", output_width=2)
+# owner 2026-11-19 (LS1): an upper quantile of the log-return label (pinball loss), for a "no short into a likely
+# squeeze" rule; a quantile of log(1 + r) is the same quantile of r, so no exp() correction is needed
+HEAD_REGISTRY.register(
+    "upper_quantile", aux_head_forward, version=1, head_name="{target}_upq",
+    output_keys={"q": "y_{target}_upper_q"}, label_key="y_{target}_reg", task_type="pinball",
+    label_encoding="continuous", default_weight=1.0, eval_role="tail", output_width=1)
