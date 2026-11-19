@@ -64,3 +64,21 @@ def test_residual_artifact_label_channels_and_run(tmp_path):
     assert r.x["train"].shape[2] == len(mr.CHANNELS)
     steps.train(steps.build(r))
     assert r.result.epochs_done == 1 and np.isfinite(r.result.best_value)
+
+
+def test_archive_path_creates_the_cache_folder_and_reuses_it(tmp_path):
+    src = tmp_path / "e4.dataset"
+    write_artifact(build_panel_synthetic(PanelSyntheticSettings(n_coins=5, n_bars=300)), src, source_commit="0" * 40)
+    base = _fetch_from_artifact(load_artifact(src).dataset)
+    calls = []
+
+    def fetch(symbol, tf, start, end):
+        calls.append(symbol)
+        return base(symbol, tf, start, end)
+
+    cache = tmp_path / "new" / "cache"
+    r1 = mr.add_market_residual(src, tmp_path / "a.dataset", cache=cache, fetch=fetch)
+    n = len(calls)
+    assert cache.is_dir() and len(list(cache.glob("*.parquet"))) == n
+    r2 = mr.add_market_residual(src, tmp_path / "b.dataset", cache=cache, fetch=fetch)
+    assert len(calls) == n and r1["fingerprint"] == r2["fingerprint"]                # second run reads the cache only

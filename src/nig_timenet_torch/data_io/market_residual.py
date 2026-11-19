@@ -137,6 +137,8 @@ def add_market_residual(src, dst, *, candles=None, cache=None, fetch=None, overw
     if candles is None:
         fetch = fetch or vision_klines
         cache = None if cache is None else Path(cache)
+        if cache is not None:
+            cache.mkdir(parents=True, exist_ok=True)
 
         def candles(name, start, end):
             return _coin_candles(name, base_tf, start, end, cache, fetch)
