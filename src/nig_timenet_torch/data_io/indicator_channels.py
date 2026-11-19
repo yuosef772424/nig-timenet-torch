@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import TS_COL
+from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io import npy_dir
 from nig_timenet_torch.data_io.artifact import read_manifest
 
@@ -41,7 +41,7 @@ RSI_LEN, STOCH_LEN, STOCH_SMOOTH, VOL_LEN = 14, 14, 3, 30
 WARMUP_BARS = 100            # history fetched before a coin's first window (RSI converges in ~ 5 x 14 bars)
 VOL_CLIP = 5.0
 CLOSE_TOL = 2e-4             # |log close move (candles) - X close channel| above this = a mismatched bar
-_CANDLE_COLS = ("high", "low", "close", "quote_volume")
+_CANDLE_COLS = (*TARGET_COLUMNS, "quote_volume")          # high, low, close (core.schema) + the volume
 
 
 def _grid(candles: pd.DataFrame, step: int) -> tuple[int, pd.DataFrame]:
