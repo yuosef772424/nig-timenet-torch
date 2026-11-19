@@ -40,6 +40,13 @@ Smoke `rolling-ind-smoke-001` ran OK on commit eb6f1eb+ (rule E5). Stage 2 (`rol
 - instance_norm (owner question): RevIN per window and channel, on by default; levels return through the level
   passthrough and the stats path; `use_instance_norm=False` tested 2026-11-18 (`docs/results/no-instance-norm-001.md`).
 
+- Arm R finished (`analysis-ind-001/stage2_R/`): long book mean day +0.173 % [+0.034, +0.310] (seed 0) and +0.215 %
+  [+0.060, +0.362] (seed 1) at 98.3 %; without the best 5 % of days -0.072 / -0.022 %; hedged by the market -0.159 /
+  -0.110 % (CI below 0); fold 3 (2024-06 rally) carries it (+0.57 / +0.76 % per trade), fold 6 loses. The same shape
+  as rolling-single-002 (replicated on seeds 0 / 1 on this commit).
+- Stage 2 timing: arm I best epoch = 16 of 16 in fold 0 (lr 1e-5 still learning); about 22 min per fold for I, about
+  35 min for IR (time-block batches): I ~2.5 h, IR ~4 h from 20:02 UTC.
+
 ## What is next
 1. (done) stage 1 choice.
 2. Launch stage 2 (6 processes), read it, write `docs/results/arch-indicators-001.md` (failure reading if IR fails).
