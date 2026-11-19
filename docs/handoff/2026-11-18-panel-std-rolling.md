@@ -93,3 +93,11 @@ Follow: `!tail -5 /content/drive/MyDrive/nig_timenet_runs/resume_all.log`. `RELE
 (`/content/nig_03b`, `/content/nig_df4`), the smoke `panel-std-order-smoke-001` passed, `panel-std-order-full-001` and
 `-400k-001` running from the branch head (`c0f1219`); the release waiter runs at its end (readings, BTC book, flush
 Drive, release).
+
+## State at 02:10 UTC on 2026-11-19 (runtime `052940f2bbbcfc2d` stopped at about 01:03 UTC, NOT by the waiter)
+- Finished and read: `panel-rolling-2tf-001`, `-ref-003` (results note two-frames-001), `panel-std-order-full-001` /
+  `-400k-001` (results note more-data-flat-001).
+- Cut, resumable: `panel-rolling-usdt-001` and `-std-order-001` (25 of their 28 fold x seed runs written; about 30 min
+  of work left). The runtime is released (the bridge answers 502), so nothing bills. To finish: a new GPU runtime and
+  the same `resume_all.sh` cell (it re-reads every finished job quickly and resumes the two on `df4580b`), then the
+  waiter writes the readings and releases the runtime.
