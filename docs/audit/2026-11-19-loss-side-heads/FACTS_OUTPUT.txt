@@ -1,0 +1,15 @@
+seed 2: rows 638279; share pay_short>0 0.1581; pay_long>0 0.1413
+  mean pay_short -0.00153 realised short -0.00175; mean pay_long -0.00167 realised long -0.00145
+  spearman(pay_short, -mu) 0.625; (pay_short, s) -0.053; (pay_short, realised short) 0.0141; (-mu, realised short) 0.0483
+  realised short net by pay_short decile (low->high) %: -0.376 -0.214 -0.237 -0.175 -0.113 -0.152 -0.117 -0.095 -0.085 -0.184
+  log sd by pay_short decile: 0.0336 0.0279 0.0266 0.0263 0.0263 0.0254 0.0264 0.0266 0.0274 0.0310
+  worst top-5% pay_short trades: DENTUSDT 2026-02-26 04 y +88.5% q_up 8.7%; DENTUSDT 2026-04-21 04 y +64.7% q_up 10.2%; UNFIUSDT 2024-10-23 16 y +59.8% q_up 4.1%; UNFIUSDT 2024-10-23 12 y +57.6% q_up 4.4%; ALPHAUSDT 2024-10-22 04 y +40.6% q_up 6.4%; DENTUSDT 2026-03-01 00 y +36.4% q_up 7.8%
+  q_up of those 6 vs median q_up of all: 6.9% vs 2.6%; y>q_up share overall 0.102, among y>+20%: 1.000
+seed 3: rows 638279; share pay_short>0 0.1149; pay_long>0 0.2121
+  mean pay_short -0.00182 realised short -0.00175; mean pay_long -0.00138 realised long -0.00145
+  spearman(pay_short, -mu) 0.658; (pay_short, s) -0.094; (pay_short, realised short) 0.0203; (-mu, realised short) 0.0455
+  realised short net by pay_short decile (low->high) %: -0.427 -0.238 -0.212 -0.158 -0.152 -0.146 -0.150 -0.084 -0.092 -0.090
+  log sd by pay_short decile: 0.0342 0.0272 0.0276 0.0269 0.0269 0.0266 0.0255 0.0260 0.0264 0.0311
+  worst top-5% pay_short trades: DENTUSDT 2026-02-26 04 y +88.5% q_up 9.0%; TRXUSDT 2024-12-03 16 y +67.6% q_up 6.7%; DENTUSDT 2026-04-21 04 y +64.7% q_up 10.6%; UNFIUSDT 2024-10-23 16 y +59.8% q_up 5.1%; FILUSDT 2025-11-07 12 y +57.8% q_up 10.3%; UNFIUSDT 2024-10-23 12 y +57.6% q_up 4.2%
+  q_up of those 6 vs median q_up of all: 7.6% vs 2.6%; y>q_up share overall 0.104, among y>+20%: 1.000
+  exit 0
