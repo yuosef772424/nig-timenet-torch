@@ -179,8 +179,8 @@ def charts(all_days, tables, fres, out: Path, stage: str) -> None:
             g = st[st["coin"] == c].sort_values("end_time").tail(360)
             if "last_close" in g and g["last_close"].notna().any():
                 path = g["last_close"].to_numpy(np.float64)
-            else:
-                path = (1 + g["last_ret"].fillna(0)).cumprod().to_numpy()
+            else:                       # the battery table has no price: the middle of the realised next range
+                path = 0.5 * (g["fut_high"] + g["fut_low"]).to_numpy(np.float64)
             ax.plot(pd.to_datetime(g["end_time"]), path, lw=0.9, color="grey")
             sig = g["long"].to_numpy()
             ok = sig & (g["y_ret"] > COST).to_numpy()
