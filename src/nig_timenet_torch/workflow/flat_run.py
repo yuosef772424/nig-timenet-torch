@@ -21,6 +21,7 @@ from nig_timenet_torch.model.heads import AUX_TASK_TYPES, head_spec
 from nig_timenet_torch.trainer.batch_set import representative_batches
 from nig_timenet_torch.trainer.groups import group_chunks, row_groups
 from nig_timenet_torch.trainer.identity import RunIdentity
+from nig_timenet_torch.trainer.schedules import LrSettings
 from nig_timenet_torch.trainer.switches import param_groups
 from nig_timenet_torch.trainer.targets import targets_config
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
@@ -188,10 +189,13 @@ def _trainer(settings: RunSettings, model, targets) -> Trainer:
 
 def fit_settings_of(settings: RunSettings) -> FitSettings:
     t = settings.train
+    lr = (None if t.lr_schedule == TrainSettings.lr_schedule      # LR1: constant = no schedule (as before)
+          else LrSettings(lr_initial=t.lr, lr_min=t.lr * t.lr_min_ratio, kind=t.lr_schedule,
+                          total_epochs=max(t.epochs - 1, 1)))   # the last epoch runs at the floor
     return FitSettings(epochs=t.epochs, batch_size=t.batch_size, seed=t.seed, early_stop=t.early_stop, trace=True,
                        grad_clip_norm=t.grad_clip_norm, ema_decay=t.ema_decay, init=t.init,
                        steps_per_execution=t.steps_per_execution, batch_by=t.batch_by, batch_order=t.batch_order,
-                       time_block_bars=t.time_block_bars)
+                       time_block_bars=t.time_block_bars, lr=lr)
 
 
 @torch.no_grad()

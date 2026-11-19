@@ -1,5 +1,5 @@
 {
- "fingerprint": "2677aa8e831e605e",
+ "fingerprint": "02e0a9b504864ee0",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -1243,6 +1243,7 @@
   "nig_timenet_torch.workflow.settings.SplitSettings(val_share)": "0.1",
   "nig_timenet_torch.workflow.settings.TrainSettings(aux_loss_weight)": "1.0",
   "nig_timenet_torch.workflow.settings.TrainSettings(aux_quantile)": "0.9",
+  "nig_timenet_torch.workflow.settings.TrainSettings(aux_variance_weight)": "0.0",
   "nig_timenet_torch.workflow.settings.TrainSettings(batch_by)": "'rows'",
   "nig_timenet_torch.workflow.settings.TrainSettings(batch_order)": "'rows'",
   "nig_timenet_torch.workflow.settings.TrainSettings(batch_size)": "256",
@@ -1264,6 +1265,8 @@
   "nig_timenet_torch.workflow.settings.TrainSettings(lambda_reg_end)": "0.05",
   "nig_timenet_torch.workflow.settings.TrainSettings(loss_balance)": "'none'",
   "nig_timenet_torch.workflow.settings.TrainSettings(lr)": "0.001",
+  "nig_timenet_torch.workflow.settings.TrainSettings(lr_min_ratio)": "0.1",
+  "nig_timenet_torch.workflow.settings.TrainSettings(lr_schedule)": "'constant'",
   "nig_timenet_torch.workflow.settings.TrainSettings(seed)": "0",
   "nig_timenet_torch.workflow.settings.TrainSettings(selection_metric)": "'val_raw_loss'",
   "nig_timenet_torch.workflow.settings.TrainSettings(staged)": "None",
@@ -1368,7 +1371,9 @@
   "registry:task:regression.default_options.loss_fn": "'mse'",
   "registry:task:side_payoff.default_options.cost_per_side": "0.0008",
   "registry:task:side_payoff.default_options.huber_delta": "0.0",
+  "registry:task:side_payoff.default_options.nig_keys": "{}",
   "registry:task:side_payoff.default_options.scale": "0.02",
-  "registry:task:side_payoff.default_options.short_weight": "1.0"
+  "registry:task:side_payoff.default_options.short_weight": "1.0",
+  "registry:task:side_payoff.default_options.variance_weight": "0.0"
  }
 }

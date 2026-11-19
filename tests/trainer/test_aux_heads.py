@@ -152,3 +152,18 @@ def test_variance_weight_reweights_rows_by_the_nig_variance_and_reaches_the_trai
         "beta"]
     off = flat_run.trainer_config(TARGET_COLUMNS, 0.1, TrainSettings(), aux_kinds={"close": ["side_payoff"]})
     assert "variance_weight" not in off["targets"][SIDE.name]
+
+
+def test_lr_schedule_is_constant_by_default_and_cosine_decays_to_the_floor():
+    from nig_timenet_torch.trainer.schedules import lr_at
+
+    assert flat_run.fit_settings_of(RunSettings(run_dir="x")).lr is None          # as every run before LR1
+    s = RunSettings(run_dir="x", train=TrainSettings(lr=3e-4, epochs=8, lr_schedule="cosine", lr_min_ratio=0.1))
+    lr = flat_run.fit_settings_of(s).lr
+    steps = [lr_at(lr, e) for e in range(8)]
+    assert steps[0] == pytest.approx(3e-4) and all(a > b for a, b in zip(steps, steps[1:], strict=False))
+    assert steps[-1] == pytest.approx(3e-5)
+    with pytest.raises(ValueError, match="lr_schedule"):
+        TrainSettings(lr_schedule="nope")
+    with pytest.raises(ValueError, match="lr_min_ratio"):
+        TrainSettings(lr_min_ratio=0.0)
