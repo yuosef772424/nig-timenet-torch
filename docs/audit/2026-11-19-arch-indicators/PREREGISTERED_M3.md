@@ -32,3 +32,9 @@ label. If the ridge finds no residual ranking (IC <= 0.01), M is not expected to
 "Feasible" = M above A on 1 AND 2 on both seeds. "Pays" = M's top-decile residual gross per trade above 0.16 % (one
 round trip; a long-only trader keeps the market exposure) and above 0.32 % (with a beta hedge). A look on 60 coins and
 2 years of tests: a pass sends method 3 to the full artifact on the GPU (2 seeds, 7 folds); a fail gets the C7 reading.
+
+## Amendment 1: M3a, longer horizons, model-free (written before these numbers)
+The same 60-coin data rebuilt with label horizons 6 bars (24 h) and 12 bars (48 h), stride = horizon (labels do not
+overlap), then `market_residual`. Ridge (the residual feature set, fitted on the residual label of each fold's train
+rows), the same 4 test windows: rank IC by timestamp and the per-timestamp top 10 % residual gross per trade, against
+8 h (horizon 2). "Can pay" = top 10 % residual gross per trade above 0.16 % at some horizon, in at least 3 of 4 folds.
