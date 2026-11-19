@@ -27,7 +27,10 @@ Another session (branch `claude/loss-side-heads`) runs 5 rolling jobs on the sam
 | `wf-R-s{0,1}` | stage 2 arm R (gru 64, art1, lr 3e-4) | `rolling-ind-001/out_R_s<seed>` |
 | `wf-I-s{0,1}`, `wf-IR-s{0,1}` | stage 2 arms I / IR (tcn 64, art_ind, lr 1e-5; IR + rank term + time blocks), started 20:02 UTC | `rolling-ind-001/out_<arm>_s<seed>` |
 
-Smoke `rolling-ind-smoke-001` ran OK on commit eb6f1eb+ (rule E5). Stage 2 (`rolling-ind-001`, arms R / I / IR x seeds
+All Colab runs of this study (smoke, stage 1, stage 2) run on commit **458bcdb** (`code_sha` in the checkpoints'
+run identity). `/content/nig_ind` was later pulled for the reading script: a cut stage-2 job must be resumed from a
+worktree at 458bcdb (`git -C /content/nig_ind worktree add -f /content/nig_ind_458 458bcdb`, PYTHONPATH to its
+`src`, NIG_REPO_DIR to it; `docs/COLAB_OPS.md` traps). Smoke `rolling-ind-smoke-001` ran OK (rule E5). Stage 2 (`rolling-ind-001`, arms R / I / IR x seeds
 0, 1) starts after the stage-1 choice. A cut job resumes when the SAME command is started again (same commit).
 
 ## What is decided
