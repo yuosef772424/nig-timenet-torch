@@ -1,6 +1,7 @@
 """Read the short side of `rolling-single-001` (7 expanding folds x 2 seeds) from the saved battery tables.
 
-Usage: python docs/audit/2026-11-19-short-side/read_short_side.py <folder with test_f{k}_s{s}.parquet [val_...]>
+Usage: python docs/audit/2026-11-19-short-side/read_short_side.py <folder> [seeds, default 0,1]
+(<folder> holds test_f{k}_s{s}.parquet [val_...], or a run's fold_00k_seed_s/ folders)
 
 The battery tables come from Drive `nig_timenet_runs/rolling-single-001/fold_00k_seed_s/out/battery_table_*.parquet`.
 VAL tables above 10 MB could not be fetched through the Drive connector, so the thresholds of fold k come from its own
@@ -22,6 +23,11 @@ RT = round_trip(COST)
 
 
 def load(folder: Path, seed: int):
+    """Either the copied layout (test_f{k}_s{s}.parquet) or a run's own folders (fold_00k_seed_s/battery_table_*)."""
+    if (folder / f"fold_000_seed_{seed}").is_dir():
+        return [(k, pd.read_parquet(folder / f"fold_{k:03d}_seed_{seed}" / "battery_table_val.parquet"),
+                 pd.read_parquet(folder / f"fold_{k:03d}_seed_{seed}" / "battery_table_test.parquet"))
+                for k in range(7)]
     out = []
     for k in range(7):
         test = pd.read_parquet(folder / f"test_f{k}_s{seed}.parquet")
@@ -128,7 +134,8 @@ def market_days(test, masks):
 
 def main():
     folder = Path(sys.argv[1])
-    for seed in (0, 1):
+    seeds = [int(s) for s in sys.argv[2].split(",")] if len(sys.argv) > 2 else [0, 1]
+    for seed in seeds:
         folds = load(folder, seed)
         test, masks = pooled_masks(folds)
         print(f"\n######## seed {seed}: {len(test):,} TEST rows, {test['end_time'].dt.floor('D').nunique()} days, "
