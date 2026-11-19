@@ -34,3 +34,14 @@ tables, q_up coverage 0.90 (rule E5).
    `docs/audit/2026-11-19-loss-side-heads/read_ls1.py` on the fold folders.
 2. Write `docs/results/ls1-side-heads-001.md`, with the failure reading of every test that fails (rule C7).
 3. E1 known-answer results: `docs/audit/2026-11-19-loss-side-heads/E1_OUTPUT.txt`.
+
+## Update 18:30 UTC
+- E1: the side-payoff heads fail E1-a / E1-b on every seed (also W = inverse-variance weights, also 10 epochs); the
+  quantile head passes; a ridge on the trunk reaches the closed form (amendments 1-2 of PREREGISTERED.md). W is not run.
+- Seed 2 of A0 / R / S read (`read_ls1.py --seeds 2`): P1, P1L, P3, P4 already fail on seed 2; P2 passes on seed 2.
+- Gap found (owner question "a gap in the settings or the training"): the run path never passed an lr schedule, every
+  run trained at a constant lr; best epoch = last of 8 in 4 / 7 A0 folds. New switch `TrainSettings.lr_schedule`
+  (D-038). E1 gate: cosine beats constant on 3 / 3 seeds (`E1_LR_COSINE.txt`). Smoke `rolling-lr1-smoke-001` OK.
+- Running since 18:29 UTC from the second checkout `/content/nig_lr1` (commit 2764907; PYTHONPATH =
+  `/content/nig_venv/lib/python3.13/site-packages:/content/nig_lr1/src`): `rolling-lr1-cos-001` seeds 2 and 3, one
+  process each, outputs `rolling-lr1-cos-001/out_s{2,3}`. Compare with `rolling-ls1-a0-001` (same config and seeds).
