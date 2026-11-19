@@ -11,7 +11,9 @@ Column mapping (return = price / last_close - 1, prices decoded with the head's 
 step = 1 (one horizon per row); mu = decode(close mu) return; sigma = (decode(mu + std) - decode(mu)) / last_close
 with std = nig_predictive_std(nu, alpha, beta); p_dir = the close class head output (a probability, see
 model/heads.py) or the Gaussian fallback; y_ret = decoded close label return; dir_true = sign(y_ret); last_ret =
-last_close / prev_close - 1 (only when ``prev_close`` is given); coin = asset; end_time = prediction_made_at.
+last_close / prev_close - 1 (only when ``prev_close`` is given); coin = asset; end_time = prediction_made_at;
+last_close = the price the returns are over (price = last_close * (1 + return); the TF price-level
+plots need it, older tables lack it).
 When the high / low heads are in the table: pred_high / pred_low (decoded mu return), fut_high / fut_low (decoded
 label return = the realised extreme over the horizon), sigma_high / sigma_low.
 """
@@ -29,7 +31,8 @@ from nig_timenet_torch.stats.nig import nig_predictive_std
 
 __all__ = ["to_battery_table", "BATTERY_COLUMNS", "LIMIT_COLUMNS"]
 
-BATTERY_COLUMNS = ("step", "mu", "sigma", "p_dir", "y_ret", "dir_true", "last_ret", "coin", "end_time")
+BATTERY_COLUMNS = ("step", "mu", "sigma", "p_dir", "y_ret", "dir_true", "last_ret", "coin", "end_time",
+                   "last_close")
 LIMIT_COLUMNS = ("pred_high", "pred_low", "fut_high", "fut_low", "sigma_high", "sigma_low")
 
 
@@ -99,6 +102,7 @@ def to_battery_table(table: pd.DataFrame, labels: dict, *, anchors: dict, last_c
         out["last_ret"] = last_close / prev - 1.0
     out["coin"] = table["asset"].astype(str).to_numpy()
     out["end_time"] = table["prediction_made_at"].dt.tz_convert("UTC").dt.tz_localize(None).to_numpy()
+    out["last_close"] = last_close
     for t in (c for c in TARGET_COLUMNS if c != "close"):
         if head_spec("nig_regression", t).output_keys["mu"] in table.columns:
             pred, real, width = _head(table, labels, anchors, last_close, codec, codec_state, t)

@@ -221,3 +221,68 @@ def test_staged_run_through_the_run_steps(art, tmp_path):  # noqa: F811
     assert "stages" not in plain.extra and plain.settings.train.staged is None
     with pytest.raises(ValueError, match="staged"):
         steps.train_staged(steps.build(steps.prepare(settings(art, tmp_path / "x"))))
+
+
+def _stop_at(epoch):
+    def on_epoch(row):
+        if row["epoch"] == epoch:   # the stop button: fit calls on_epoch BEFORE it saves that epoch
+            raise KeyboardInterrupt
+    return on_epoch
+
+
+def _interrupted_run(art, tmp_path, stop_epoch=3, **kw):  # noqa: F811
+    s = updated(settings(art, tmp_path), {"train.epochs": 3, "train.early_stop.patience": 5})
+    run = steps.build(steps.prepare(s, tmp_path / "out"))
+    return s, run, steps.train(run, on_epoch=_stop_at(stop_epoch), **kw)
+
+
+def test_on_interrupt_last_keeps_the_weights_of_the_last_finished_epoch(art, tmp_path):  # noqa: F811
+    """A stop during epoch 3: the model holds checkpoint.pt (epoch 2), result is set (stopped early) and the later
+    steps run on it."""
+    s, run, _ = _interrupted_run(art, tmp_path, on_interrupt="last")
+    ckpt = checkpoint.load_checkpoint(Path(s.run_dir))
+    w = run.trainer.model.state_dict()
+    assert all(torch.equal(w[k], v) for k, v in ckpt["model"].items())
+    assert run.result.epochs_done == 2 and run.result.stopped_early and not run.result.restored_best
+    assert (tmp_path / "out" / checkpoint.BEST).is_file()   # best weights copied to out like a normal finish
+    assert steps.test_step(run)["n_rows"] > 0
+
+
+def test_on_interrupt_best_keeps_the_best_epoch_weights(art, tmp_path):  # noqa: F811
+    s, run, _ = _interrupted_run(art, tmp_path, on_interrupt="best")
+    best = checkpoint.load_best(Path(s.run_dir))
+    w = run.trainer.model.state_dict()
+    assert all(torch.equal(w[k], v) for k, v in best.items())
+    assert run.result.epochs_done == 2 and run.result.stopped_early and run.result.restored_best
+
+
+def test_on_interrupt_none_propagates_and_a_stop_before_the_first_epoch_is_reraised(art, tmp_path):  # noqa: F811
+    with pytest.raises(KeyboardInterrupt):
+        _interrupted_run(art, tmp_path / "a")
+    with pytest.raises(KeyboardInterrupt, match="no epoch was saved"):
+        _interrupted_run(art, tmp_path / "b", stop_epoch=1, on_interrupt="last")
+    s = settings(art, tmp_path / "c")
+    with pytest.raises(ValueError, match="on_interrupt must be"):
+        steps.train(steps.build(steps.prepare(s, tmp_path / "c" / "out")), on_interrupt="newest")
+
+
+def test_staged_on_interrupt_keeps_the_last_saved_evaluation_state(art, tmp_path):  # noqa: F811
+    from nig_timenet_torch.trainer.staged import StageSettings
+    st = StageSettings(start_share=0.5, eval_every=2, step_cap_epochs=2, warmup_steps=2, bn_refresh_steps=2, k=2,
+                       probe_rows=16)
+    s = settings(art, tmp_path, **{"train.staged": st})
+    seen = []
+
+    def stop_on_second_eval(row):
+        seen.append(row)
+        if len(seen) == 2:
+            raise KeyboardInterrupt
+
+    run = steps.build(steps.prepare(s, tmp_path / "out"))
+    with pytest.raises(KeyboardInterrupt):
+        steps.train_staged(run, on_eval=stop_on_second_eval)
+    run = steps.build(steps.prepare(updated(s, {"run_dir": str(tmp_path / "run2")}), tmp_path / "out2"))
+    seen.clear()
+    steps.train_staged(run, on_eval=stop_on_second_eval, on_interrupt="last")
+    assert run.result.stopped_early and run.result.epochs_done >= 1
+    assert steps.test_step(run)["n_rows"] > 0

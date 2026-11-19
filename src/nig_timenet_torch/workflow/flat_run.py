@@ -84,11 +84,24 @@ def batch_groups(dataset: dict, idx: np.ndarray, batch_by: str) -> torch.Tensor 
     return torch.as_tensor(BATCH_KEYS[batch_by](ts), dtype=torch.int64)
 
 
-def flat_inputs(dataset: dict, idx: np.ndarray, time_channel: bool = False) -> tuple[torch.Tensor, dict]:
+def asset_ids(dataset: dict, idx: np.ndarray) -> np.ndarray:
+    """The asset index of each row ``idx`` (its position in ``asset_bounds``): the coin id of ``coin_channel``."""
+    ids = np.full(np.asarray(dataset["last_candles"]).shape[0], -1, dtype=np.int64)
+    for i, b in enumerate(dataset["asset_bounds"]):
+        ids[b["start"]:b["end"]] = i
+    return ids[np.asarray(idx)]
+
+
+def flat_inputs(dataset: dict, idx: np.ndarray, time_channel: bool = False,
+                coin_channel: bool = False) -> tuple[torch.Tensor, dict]:
     """(x (n, T, F), {label_key: (n,)}) of the dataset rows ``idx``, float32, on the CPU; the heads are the artifact's
     price targets x ``HEAD_KINDS`` (label keys from ``head_spec``). ``time_channel``: x gets one more channel, the
-    row's timestamp id repeated over the window (model/cross_coin.py, trainer/groups.py read it)."""
+    row's timestamp id repeated over the window (model/cross_coin.py, trainer/groups.py read it); ``coin_channel``: one
+    more channel BEFORE it, the row's asset index (model/snapshot.py reads it)."""
     x = torch.as_tensor(np.asarray(dataset[input_key(dataset)])[idx], dtype=torch.float32)
+    if coin_channel:   # before the timestamp channel (the trainer reads the LAST channel as the group)
+        cid = torch.as_tensor(asset_ids(dataset, idx), dtype=torch.float32)
+        x = torch.cat([x, cid[:, None, None].expand(-1, x.shape[1], 1)], dim=-1)
     if time_channel:
         gid = torch.as_tensor(time_ids(dataset, idx), dtype=torch.float32)
         x = torch.cat([x, gid[:, None, None].expand(-1, x.shape[1], 1)], dim=-1)
@@ -158,7 +171,8 @@ def fit_settings_of(settings: RunSettings) -> FitSettings:
     t = settings.train
     return FitSettings(epochs=t.epochs, batch_size=t.batch_size, seed=t.seed, early_stop=t.early_stop, trace=True,
                        grad_clip_norm=t.grad_clip_norm, ema_decay=t.ema_decay, init=t.init,
-                       steps_per_execution=t.steps_per_execution, batch_by=t.batch_by)
+                       steps_per_execution=t.steps_per_execution, batch_by=t.batch_by, batch_order=t.batch_order,
+                       time_block_bars=t.time_block_bars)
 
 
 @torch.no_grad()

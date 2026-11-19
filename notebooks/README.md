@@ -50,7 +50,7 @@ candle files on Drive and writes `<NAME>_<stamp>.dataset` plus `<NAME>_latest.da
 (tagged `colab-only`: code source `colab/bootstrap.py::load_code`, cached env `colab/env_cache.py`, device check), the Drive folders
 (`colab/drive_sync.py`: `run_paths`, `restore_run`, `push_run`), then the steps of `src/nig_timenet_torch/workflow/run.py` one cell each: `prepare`
 (load, split) -> `build` -> `train` -> `health_step` -> `test_step` -> `battery_step` -> `write_summary`; the same steps
-`jobs/baseline.py` calls. The last section reads a finished run folder and runs the battery again (`BATTERY_FOLDER`,
+`jobs/baseline.py` calls; after the battery: predicted-vs-realised plots for chosen coins (`eval/legacy_plots.py::pred_vs_true`) and the TF legacy report (`workflow/legacy_report.py`, `LEGACY_REPORT`). Switches in the settings cell: `TARGET_NORM` (D-033), `ROLLING_MODEL` (`single` | `panel`) for the walk-forward section 13b (the panel form adds `ROLLING_PANEL` + `cross_input: relative`; same recipe as `jobs/rolling.py`), and the D-032 fields inside `CHANGES`. Section 13c names the separate `nig-backtest`. The last section reads a finished run folder and runs the battery again (`BATTERY_FOLDER`,
 another cost per side or more variants, no model needed), and a last table of the TF `main.ipynb` sections that have no torch
 equivalent yet. `tests/notebooks/test_main_notebook.py` checks it (every field in the settings cell, Arabic text, no `git push`, ROADMAP steps
 exist) and runs it headless on the fixture artifact with a fake Drive.

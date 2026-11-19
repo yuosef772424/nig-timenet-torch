@@ -17,6 +17,7 @@ import pandas as pd
 
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
+from nig_timenet_torch.trainer.groups import BATCH_ORDERS
 from nig_timenet_torch.trainer.staged import StageSettings
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import BATCHINGS
@@ -83,6 +84,9 @@ class SplitSettings:
     # keep only the ``top_coins`` coins with the most TRAIN rows (the longest history; the artifact holds no volume
     # to rank liquidity by), in every split. None = all coins.
     top_coins: int | None = None
+    # snapshot panel model (model/snapshot.py, owner 2026-11-18): every row also carries its coin id (the dataset's
+    # asset index) as one more input channel, after the features and before the timestamp channel; needs cross_section
+    coin_channel: bool = False
 
     def __post_init__(self):
         coins = (self.exclude_coins,) if isinstance(self.exclude_coins, str) else tuple(self.exclude_coins)
@@ -99,6 +103,8 @@ class SplitSettings:
             raise ValueError(f"top_coins must be None or an integer >= 1, got {self.top_coins!r}")
         if self.max_rows is not None and (isinstance(self.max_rows, bool) or self.max_rows < 1):
             raise ValueError(f"max_rows must be None or an integer >= 1, got {self.max_rows!r}")
+        if self.coin_channel and not self.cross_section:
+            raise ValueError("split.coin_channel needs split.cross_section (the snapshot model reads whole timestamps)")
 
 
 @dataclass(frozen=True)
@@ -141,11 +147,17 @@ class TrainSettings:
     # "timestamp" / "day" = ALL training rows of one timestamp / one UTC day form one batch and the batches (not the
     # rows) are shuffled (trainer.trainer.BATCHINGS); batch_size is then not used; not with split.cross_section
     batch_by: str = "rows"
+    # owner question 2026-11-18 (D-035, experiment arm, flat model only): "rows" = random rows per batch (today);
+    # "time_blocks" = each batch holds whole blocks of ``time_block_bars`` consecutive timestamps (all coins of them),
+    # rows inside in time order, the batches shuffled (trainer.groups.BATCH_ORDERS). No extra input channel.
+    batch_order: str = "rows"
+    time_block_bars: int = 1                               # read only by "time_blocks"; >= 1
 
     def __post_init__(self):
         if self.batch_by not in BATCHINGS:
             raise ValueError(f"TrainSettings.batch_by must be one of {sorted(BATCHINGS)}, not {self.batch_by!r}")
-        for name in ("epochs", "batch_size", "steps_per_execution"):
+        BATCH_ORDERS.entry(self.batch_order)               # unknown names raise now
+        for name in ("epochs", "batch_size", "steps_per_execution", "time_block_bars"):
             v = getattr(self, name)
             if isinstance(v, bool) or not isinstance(v, int) or v < 1:
                 raise ValueError(f"TrainSettings.{name} must be an integer >= 1, got {v!r}")
@@ -214,3 +226,9 @@ class RunSettings:
         if BATCHINGS[self.train.batch_by] and (self.split.cross_section or self.train.staged is not None):
             raise ValueError(f"train.batch_by={self.train.batch_by!r} needs the flat epoch loop: not with "
                              f"split.cross_section (it batches whole timestamps already) or train.staged")
+        if self.split.cross_section and BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]:
+            raise ValueError(f"train.batch_order {self.train.batch_order!r} groups rows by timestamp; the panel path "
+                             f"(split.cross_section = True) already batches whole timestamps: use batch_order 'rows'")
+        if self.train.staged is not None and BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]:
+            raise NotImplementedError(f"train.batch_order {self.train.batch_order!r} is not implemented for staged "
+                                      f"training (it samples its own batches from the stage rows)")

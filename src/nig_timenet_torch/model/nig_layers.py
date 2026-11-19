@@ -86,7 +86,11 @@ class NIGHead(_Scaled):
         return self.out(self.drop(F.silu(self.fc(h))))
 
     def forward(self, h: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        p = self.raw_params(h)
+        return self.from_raw(self.raw_params(h))
+
+    def from_raw(self, p: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """(mu, nu, alpha, beta) from raw (B, 4) [mu, nu, alpha, beta] parameters: the floors and the label scale of
+        this head (a model that adds its own raw terms, e.g. per-coin output weights, maps them through here)."""
         mu = p[:, 0:1]
         nu = F.softplus(p[:, 1:2]) + self.nu_min
         alpha = F.softplus(p[:, 2:3]) + self.alpha_min

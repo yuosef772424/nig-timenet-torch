@@ -27,7 +27,7 @@ from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES, cross_section_loss
 from nig_timenet_torch.trainer.direction_balance import direction_balance_loss
-from nig_timenet_torch.trainer.groups import group_batches, group_chunks, row_groups
+from nig_timenet_torch.trainer.groups import BATCH_ORDERS, group_batches, group_chunks, row_batches, row_groups
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
 from nig_timenet_torch.trainer.log_groups import GroupedLogs, tensor_logs
 from nig_timenet_torch.trainer.loss_balance import make_balancer
@@ -72,8 +72,16 @@ class FitSettings:
     # name (BATCHINGS) = every batch holds ALL rows of one group (one timestamp / one UTC day) and the ORDER of the
     # groups is shuffled, not the rows; ``fit`` then needs ``batch_groups`` (the group id of every training row)
     batch_by: str = "rows"
+    # experiment arm (flat model, off by default): trainer.groups.BATCH_ORDERS; "time_blocks" batches whole blocks of
+    # ``time_block_bars`` consecutive timestamps (the trainer needs ``row_times``); left out of the identity at default
+    batch_order: str = "rows"
+    time_block_bars: int = 1
 
     def __post_init__(self):
+        BATCH_ORDERS.entry(self.batch_order)  # unknown names raise now
+        if isinstance(self.time_block_bars, bool) or not isinstance(self.time_block_bars, int) \
+                or self.time_block_bars < 1:
+            raise ValueError(f"time_block_bars must be an integer >= 1, got {self.time_block_bars!r}")
         if self.epochs < 1 or self.batch_size < 1:
             raise ValueError("epochs and batch_size must be >= 1")
         if isinstance(self.steps_per_execution, bool) or not isinstance(self.steps_per_execution, int) \
@@ -170,6 +178,11 @@ class Trainer:
         self.selection_metric = selection_metric
         #: True = the last input channel is a group (timestamp) id: batches and evaluation chunks hold whole groups
         self.group_channel = False
+        #: timestamp id of every TRAIN row (aligned to ``x_train`` of ``fit``); read only by a ``batch_order`` that
+        #: needs it (trainer.groups.BATCH_ORDERS "time_blocks"); set by workflow ``build``
+        self.row_times = None
+        #: the same for the VALIDATION rows (``fit`` hands them to ``evaluate`` as the groups of the cross-section term)
+        self.val_times = None
         config = tasks_cfg  # kept as given: it is hashed into the RunIdentity (defaults are never written into it)
         self.model, self.config = model, config
         self.targets_cfg = resolve_targets(config)
@@ -226,20 +239,23 @@ class Trainer:
             yield from self.uncertainty_layer.parameters()
 
     def compute_losses(self, x, y, sample_weight=None, training: bool = False, outputs: dict | None = None,
-                       groups: torch.Tensor | None = None):
+                       groups: torch.Tensor | None = None, plain: bool = False):
         """``compute_losses`` with this trainer's config; the D-032 terms that are switched on (the cross-section
         term, the direction-balance term) are added to the total and the raw loss and logged as the stats
-        ``cross_section_loss`` / ``direction_balance_loss``. ``groups``: the rows' timestamp ids when ``x`` is not
-        given (``evaluate``); else they are read from the group channel of ``x``."""
+        ``cross_section_loss`` / ``direction_balance_loss``. ``groups``: the rows' timestamp ids (``evaluate``, or
+        a time-block batch); else they are read from the group channel of ``x``.
+        ``plain``: the NIG / class losses only, without the D-032 terms
+        (the per-head gradient trace, whose rows are not whole timestamps)."""
         cross = CROSS_SECTION_LOSSES[self.cross_section] is not None
-        if not cross and not self.direction_balance:
+        if plain or (not cross and not self.direction_balance):
             return compute_losses(self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights,
                                   self.uncertainty_layer, self.kendall_task_names, self.fixed_task_names,
                                   sample_weight=sample_weight, training=training, outputs=outputs,
                                   multipliers=self.balancer.multipliers())
         if cross and groups is None and not (self.group_channel and x is not None):
             raise ValueError(f"the cross-section loss {self.cross_section!r} needs whole-timestamp batches: run with "
-                             f"SplitSettings.cross_section (the group channel)")
+                             f"SplitSettings.cross_section (the group channel) or TrainSettings.batch_order "
+                             f"'time_blocks'")
         outputs = self.model(x) if outputs is None else outputs
         total, raw, per_target, stats, cons = compute_losses(
             self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights, self.uncertainty_layer,
@@ -262,8 +278,7 @@ class Trainer:
     def batch_indices(n: int, batch_size: int, shuffle: bool = True) -> list[torch.Tensor]:
         """Mini-batch index tensors over n rows; the shuffle draws from torch's global RNG, so it derives from the
         seed_everything(seed) call made before the Trainer is built."""
-        order = torch.randperm(n) if shuffle else torch.arange(n)
-        return list(order.split(batch_size))
+        return row_batches(n, batch_size, shuffle)
 
     @staticmethod
     def _logs(total, raw, per_target, stats) -> dict[str, float]:
@@ -273,15 +288,17 @@ class Trainer:
         return logs
 
     def train_step(self, x, y, sample_weight=None, grad_clip_norm: float | None = None,
-                   as_tensors: bool = False) -> dict[str, float]:
+                   as_tensors: bool = False, groups: torch.Tensor | None = None) -> dict[str, float]:
         """One optimizer step on (x, y) with the model in train() mode; returns scalar logs. ``grad_clip_norm``
         clips the global norm of every trainer parameter's gradient before the step (None = no clipping).
-        ``as_tensors``: the logs stay 0-d device tensors (no host sync; ``_train_epoch`` reads them per group)."""
+        ``as_tensors``: the logs stay 0-d device tensors (no host sync; ``_train_epoch`` reads them per group).
+        ``groups``: the batch rows' timestamp ids for the cross-section term when ``x`` has no group channel."""
         if self.optimizer is None:
             raise RuntimeError("Trainer has no optimizer")
         self.model.train()
         self.optimizer.zero_grad(set_to_none=True)
-        total, raw, per_target, stats, _ = self.compute_losses(x, y, sample_weight=sample_weight, training=True)
+        total, raw, per_target, stats, _ = self.compute_losses(x, y, sample_weight=sample_weight, training=True,
+                                                                 groups=groups)
         self.balancer.update(per_target, self._shared)
         total.backward()
         if grad_clip_norm is not None:
@@ -303,12 +320,14 @@ class Trainer:
 
     # ------------------------------------------------------------------------------------------------- fit (T1)
     @torch.no_grad()
-    def evaluate(self, x, y, batch_size: int) -> dict[str, float]:
+    def evaluate(self, x, y, batch_size: int, groups: torch.Tensor | None = None) -> dict[str, float]:
         """eval() pass over ALL rows in batches; losses and the selection metric are computed once on the
-        concatenated outputs (an AUC must not be averaged over batches)."""
+        concatenated outputs (an AUC must not be averaged over batches). ``groups`` (no group channel): the rows'
+        timestamp ids, for the cross-section term and the rank selection metrics; the model sees plain chunks (its
+        rows do not interact), only the loss reads the groups."""
         self.model.eval()
         dev = self._device()
-        gid = row_groups(x) if self.group_channel else None
+        gid = row_groups(x) if self.group_channel else groups
         if self.group_channel:  # whole timestamps per chunk (rows are time-major: workflow cross_section)
             parts = [self.model(x[c].to(dev)) for c in group_chunks(gid, batch_size)]
         else:
@@ -339,12 +358,14 @@ class Trainer:
         elif self.group_channel:
             batches = group_batches(row_groups(x), settings.batch_size)
         else:
-            batches = self.batch_indices(len(x), settings.batch_size)
+            batches = BATCH_ORDERS.entry(settings.batch_order).meta["fn"](
+                len(x), settings.batch_size, self.row_times, settings.time_block_bars)
         for ix in batches:
             if monitor is not None:
                 monitor.before_step(self, epoch, ix)
+            gb = None if self.row_times is None else self.row_times[ix].to(dev)
             step = self.train_step(x[ix].to(dev), {k: v[ix].to(dev) for k, v in y.items()},
-                                   grad_clip_norm=settings.grad_clip_norm, as_tensors=True)
+                                   grad_clip_norm=settings.grad_clip_norm, as_tensors=True, groups=gb)
             if monitor is not None:
                 monitor.after_step(self, step)
             if ema is not None:
@@ -396,14 +417,14 @@ class Trainer:
         ix = [torch.as_tensor(b, dtype=torch.long) for b in batches]
         return epoch_trace_mean(self, [(x[i].to(dev), {k: v[i].to(dev) for k, v in y.items()}) for i in ix])
 
-    def _evaluate_with(self, weights: dict | None, x, y, batch_size: int) -> dict[str, float]:
+    def _evaluate_with(self, weights: dict | None, x, y, batch_size: int, groups=None) -> dict[str, float]:
         """``evaluate`` with ``weights`` loaded for the pass (the live weights are put back after); None = live."""
         if weights is None:
-            return self.evaluate(x, y, batch_size)
+            return self.evaluate(x, y, batch_size, groups)
         live = {k: v.detach().clone() for k, v in self.model.state_dict().items()}
         self.model.load_state_dict(weights)
         try:
-            return self.evaluate(x, y, batch_size)
+            return self.evaluate(x, y, batch_size, groups)
         finally:
             self.model.load_state_dict(live)
 
@@ -485,7 +506,8 @@ class Trainer:
             row = {"epoch": epoch + 1, "lr": lr}
             train_logs = self._train_epoch(x_train, y_train, settings, ema, batch_monitor, epoch, groups)
             row.update({f"train_{k}": v for k, v in train_logs.items()})
-            val = self._evaluate_with(None if ema is None else ema.shadow, x_val, y_val, settings.batch_size)
+            val = self._evaluate_with(None if ema is None else ema.shadow, x_val, y_val, settings.batch_size,
+                                      self.val_times)
             row.update({f"val_{k}": v for k, v in val.items()})
             if settings.trace:
                 row.update(self._trace(x_train, y_train, settings.batch_size, trace_batches))

@@ -26,6 +26,7 @@ def test_column_mapping_matches_the_hand_computation():
     spec = head_spec("nig_regression", "close")
     assert list(out.columns[:6]) == list(BATTERY_COLUMNS[:6]) and "last_ret" not in out
     assert set(LIMIT_COLUMNS) <= set(out.columns)
+    assert "last_close" in BATTERY_COLUMNS and (out["last_close"] == ANCHOR).all()
     np.testing.assert_allclose(out["mu"], table[spec.output_keys["mu"]])          # scale 1, anchor == last_close
     np.testing.assert_allclose(out["y_ret"], labels[spec.label_key])
     std = nig_predictive_std(*(table[spec.output_keys[k]] for k in ("nu", "alpha", "beta")))

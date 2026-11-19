@@ -1,0 +1,113 @@
+# D-035 — Alpha / beta floors of the Drive models, floor-report unit fix, speed arms + lite model, notebook (rolling both models, target_norm, plots, stop-and-keep-weights), time-block batches (owner 2026-11-18)
+
+Date: 2026-11-18
+Owner decision: owner messages 2026-11-18 (Arabic): (1) "take some models from Google Drive, check the alpha and beta outputs and why alpha and beta are at their lower bounds in 100 % of the samples, or the exact share"; (2) "launch a Sonnet agent to update the main notebook with the updates made: rolling training for both models, the target-normalisation change, the plot of predictions against the truth and the other additions"; (3) "search for ways to speed up training; try settings and design a model version that trains fast"; (4) "if I stop the model in the middle of training I want to use the last weights for the tests"; (5) "will the plot show like this" (screenshot of the TF price panels with the naive baseline and the lag scan); (6) "each batch = all coins of the same moment, so the gradients are computed over them together, like the panel but for each coin on its own".
+Why: `docs/audit/2026-11-18-alpha-beta-speed/NOTES.md`: the health report printed beta 100 % on its floor because the floor was read in head units (fixed, no default involved); alpha is really frozen at 2.0; the notebook did not expose the merged features; a stopped notebook could not reach the tests; the owner asked for the TF price panels and for one-moment batches.
+
+## What changes behaviour
+Every line is a NEW default of a NEW option or function; no existing behaviour changes and the default run is unchanged (its identity hash too: `batch_order` / `time_block_bars` are in `FIT_SWITCH_DEFAULTS`, left out of the identity at their defaults):
+- `legacy_plots.pred_vs_true` / `top_coins` / `price_panels`: plot tools off the run path; `last_n` 16 and `max_lag` 5 copy the TF figures the owner showed; 3 coins is a report size. The battery table gains a `last_close` column (additive; old tables stay readable; `price_panels` asks for a re-run of the battery on an old table).
+- `trainer.groups` batch builders and `TrainSettings` / `FitSettings` `batch_order` "rows" (= `torch.randperm` batches exactly, tested) / `time_block_bars` 1: the experiment arm "time_blocks" (one batch = all rows of a block of consecutive timestamps, blocks shuffled) is off; with it, `cross_section_loss` works without the timestamp channel. `RunSettings(train)` changes only by these two fields.
+- `run.train` / `train_staged` `on_interrupt` None = a KeyboardInterrupt propagates as before. The notebook (a runner, not a package default) sets `ON_STOP_WEIGHTS = "last"`: a stopped training keeps the weights of the last finished epoch and the later cells run (owner message 4).
+- Not pinned (notebook settings): `ROLLING_MODEL` "single", `TARGET_NORM` "none", `LEGACY_REPORT` True, `PLOT_PRED_VS_TRUE` True, `PLOT_KIND` "both", `PLOT_N_COINS` 3, `PLOT_LAST_N` 16; the new cells only read the run's own outputs (battery tables) and write figures / reports.
+- Snapshot panel model (owner message 2026-11-18: "design the model structure to match the size of the inputs and the outputs, for the best accuracy, not simplified for speed; test it on a small sample; we will run it on Colab on the full data with rolling training"): a NEW architecture `snapshot_panel` (`model/snapshot.py`, registered in `model/architectures.py`, never the default) with its own default config (128 coin slots, joint GRU 256 x 2 layers, shared per-coin GRU 64 x 2, coin embedding 32, readout 128, dropout 0.25, whole-coin dropout 0.1, the NIG floors / label scale / ordered-means settings of the run default) sized for ~100 coins x 3 channels x 32 bars; `SplitSettings.coin_channel` False (the rows carry their asset index only when asked; needs `cross_section`); `flat_run.flat_inputs(coin_channel)` False; `study_settings.job_run_settings(architecture)` None and `RollingConfig.architecture` "nig_timenet_v2" (= the default model, as before); `NIGHead.from_raw` (the same mapping `forward` used, now callable on raw parameters); `fit_scalers` also fits a module's `fit_from_inputs` (only the snapshot model has one). Pre-registration: `docs/audit/2026-11-18-snapshot-panel/PREREGISTERED.md`.
+- `eval/nig_floor.nig_floors` returns the beta floor in label units (beta_min x label scale^2 x target-norm std^2): a fix of a measurement, not a default; it changes the numbers of the health report's floor table only.
+
+- `nig_timenet_torch.eval.legacy_plots.pred_vs_true(title)`: `<new>` -> `''`
+- `nig_timenet_torch.eval.legacy_plots.price_panels(heads)`: `<new>` -> `('high', 'low', 'close')`
+- `nig_timenet_torch.eval.legacy_plots.price_panels(last_n)`: `<new>` -> `16`
+- `nig_timenet_torch.eval.legacy_plots.price_panels(max_lag)`: `<new>` -> `5`
+- `nig_timenet_torch.eval.legacy_plots.price_panels(title)`: `<new>` -> `''`
+- `nig_timenet_torch.eval.legacy_plots.top_coins(n)`: `<new>` -> `3`
+- `nig_timenet_torch.jobs.rolling.RollingConfig(architecture)`: `<new>` -> `'nig_timenet_v2'`
+- `nig_timenet_torch.model.snapshot.CoinSlots(max_assets)`: `<new>` -> `4096`
+- `nig_timenet_torch.model.snapshot.FeatureScaler(clip)`: `<new>` -> `5.0`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.alpha_min`: `<new>` -> `2.0`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.beta_min`: `<new>` -> `0.01`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.class_head_hidden`: `<new>` -> `32`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.coin_layers`: `<new>` -> `2`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.d_coin`: `<new>` -> `64`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.d_emb`: `<new>` -> `32`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.d_joint`: `<new>` -> `256`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.d_read`: `<new>` -> `128`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.dropout`: `<new>` -> `0.25`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.enforce_order`: `<new>` -> `True`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.head_hidden`: `<new>` -> `64`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.input_clip`: `<new>` -> `5.0`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.input_noise_std`: `<new>` -> `0.1`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.joint_layers`: `<new>` -> `2`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.joint_path`: `<new>` -> `True`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.max_assets`: `<new>` -> `4096`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.n_slots`: `<new>` -> `128`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.nig_scale_fit`: `<new>` -> `'train_std'`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.nu_min`: `<new>` -> `0.1`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.order_detach_close`: `<new>` -> `True`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.price_targets`: `<new>` -> `['high', 'low', 'close']`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.shared_path`: `<new>` -> `True`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.slot_dropout`: `<new>` -> `0.1`
+- `nig_timenet_torch.model.snapshot.SNAPSHOT_DEFAULT_CONFIG.unc_max`: `<new>` -> `20.0`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(alpha_min)`: `<new>` -> `2.0`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(beta_min)`: `<new>` -> `0.01`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(class_head_hidden)`: `<new>` -> `32`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(coin_layers)`: `<new>` -> `2`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(d_coin)`: `<new>` -> `64`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(d_emb)`: `<new>` -> `32`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(d_joint)`: `<new>` -> `256`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(d_read)`: `<new>` -> `128`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(dropout)`: `<new>` -> `0.25`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(enforce_order)`: `<new>` -> `True`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(head_hidden)`: `<new>` -> `64`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(head_types)`: `<new>` -> `None`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(input_clip)`: `<new>` -> `5.0`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(input_noise_std)`: `<new>` -> `0.1`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(joint_layers)`: `<new>` -> `2`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(joint_path)`: `<new>` -> `True`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(max_assets)`: `<new>` -> `4096`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(n_slots)`: `<new>` -> `128`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(nig_scale_fit)`: `<new>` -> `'train_std'`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(nu_min)`: `<new>` -> `0.1`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(order_detach_close)`: `<new>` -> `True`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(price_targets)`: `<new>` -> `('high', 'low', 'close')`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(shared_path)`: `<new>` -> `True`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(slot_dropout)`: `<new>` -> `0.1`
+- `nig_timenet_torch.model.snapshot.SnapshotPanelModel(unc_max)`: `<new>` -> `20.0`
+- `nig_timenet_torch.trainer.groups.block_batches(shuffle)`: `<new>` -> `True`
+- `nig_timenet_torch.trainer.groups.row_batches(shuffle)`: `<new>` -> `True`
+- `nig_timenet_torch.trainer.groups.time_block_batches(shuffle)`: `<new>` -> `True`
+- `nig_timenet_torch.trainer.identity.FIT_SWITCH_DEFAULTS.batch_order`: `<new>` -> `'rows'`
+- `nig_timenet_torch.trainer.identity.FIT_SWITCH_DEFAULTS.time_block_bars`: `<new>` -> `1`
+- `nig_timenet_torch.trainer.trainer.FitSettings(batch_order)`: `<new>` -> `'rows'`
+- `nig_timenet_torch.trainer.trainer.FitSettings(time_block_bars)`: `<new>` -> `1`
+- `nig_timenet_torch.workflow.flat_run.flat_inputs(coin_channel)`: `<new>` -> `False`
+- `nig_timenet_torch.workflow.run.train(on_interrupt)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.run.train_staged(on_interrupt)`: `<new>` -> `None`
+- `nig_timenet_torch.workflow.settings.RunSettings(split)`: `SplitSettings(train_end='', val_end='', train_share=0.8, val_share=0.1, embargo_hours=0.0, max_rows=None, exclude_coins=(), cross_section=False, top_coins=None)` -> `SplitSettings(train_end='', val_end='', train_share=0.8, val_share=0.1, embargo_hours=0.0, max_rows=None, exclude_coins=(), cross_section=False, top_coins=None, coin_channel=False)`
+- `nig_timenet_torch.workflow.settings.RunSettings(train)`: `TrainSettings(epochs=5, batch_size=256, seed=0, lr=0.001, weight_decay=0.0001, label_smoothing=0.1, selection_metric='val_raw_loss', early_stop=EarlyStopSettings(patience=15, min_delta=0.0001, smoothing='window', window=3, ema_beta=0.7, restore_best_weights=True), device='auto', trace_representative=False, steps_per_execution=1, grad_clip_norm=None, ema_decay=None, init='torch', weight_decay_groups='all_params', uncertainty_weighting=True, class_loss_weight=1.0, lambda_reg_end=0.05, lambda_calib_end=0.1, beta_nll=0.0, beta_nll_normalize=False, loss_balance='none', kendall_init_logvar=0.0, staged=None, cross_section_loss='none', cross_section_weight=1.0, direction_balance=0.0)` -> `TrainSettings(epochs=5, batch_size=256, seed=0, lr=0.001, weight_decay=0.0001, label_smoothing=0.1, selection_metric='val_raw_loss', early_stop=EarlyStopSettings(patience=15, min_delta=0.0001, smoothing='window', window=3, ema_beta=0.7, restore_best_weights=True), device='auto', trace_representative=False, steps_per_execution=1, grad_clip_norm=None, ema_decay=None, init='torch', weight_decay_groups='all_params', uncertainty_weighting=True, class_loss_weight=1.0, lambda_reg_end=0.05, lambda_calib_end=0.1, beta_nll=0.0, beta_nll_normalize=False, loss_balance='none', kendall_init_logvar=0.0, staged=None, cross_section_loss='none', cross_section_weight=1.0, direction_balance=0.0, batch_order='rows', time_block_bars=1)`
+- `nig_timenet_torch.workflow.settings.SplitSettings(coin_channel)`: `<new>` -> `False`
+- `nig_timenet_torch.workflow.settings.TrainSettings(batch_order)`: `<new>` -> `'rows'`
+- `nig_timenet_torch.workflow.settings.TrainSettings(time_block_bars)`: `<new>` -> `1`
+- `nig_timenet_torch.workflow.study_settings.job_run_settings(architecture)`: `<new>` -> `None`
+- `registry:architecture:snapshot_panel.default_config.alpha_min`: `<new>` -> `2.0`
+- `registry:architecture:snapshot_panel.default_config.beta_min`: `<new>` -> `0.01`
+- `registry:architecture:snapshot_panel.default_config.class_head_hidden`: `<new>` -> `32`
+- `registry:architecture:snapshot_panel.default_config.coin_layers`: `<new>` -> `2`
+- `registry:architecture:snapshot_panel.default_config.d_coin`: `<new>` -> `64`
+- `registry:architecture:snapshot_panel.default_config.d_emb`: `<new>` -> `32`
+- `registry:architecture:snapshot_panel.default_config.d_joint`: `<new>` -> `256`
+- `registry:architecture:snapshot_panel.default_config.d_read`: `<new>` -> `128`
+- `registry:architecture:snapshot_panel.default_config.dropout`: `<new>` -> `0.25`
+- `registry:architecture:snapshot_panel.default_config.enforce_order`: `<new>` -> `True`
+- `registry:architecture:snapshot_panel.default_config.head_hidden`: `<new>` -> `64`
+- `registry:architecture:snapshot_panel.default_config.input_clip`: `<new>` -> `5.0`
+- `registry:architecture:snapshot_panel.default_config.input_noise_std`: `<new>` -> `0.1`
+- `registry:architecture:snapshot_panel.default_config.joint_layers`: `<new>` -> `2`
+- `registry:architecture:snapshot_panel.default_config.joint_path`: `<new>` -> `True`
+- `registry:architecture:snapshot_panel.default_config.max_assets`: `<new>` -> `4096`
+- `registry:architecture:snapshot_panel.default_config.n_slots`: `<new>` -> `128`
+- `registry:architecture:snapshot_panel.default_config.nig_scale_fit`: `<new>` -> `'train_std'`
+- `registry:architecture:snapshot_panel.default_config.nu_min`: `<new>` -> `0.1`
+- `registry:architecture:snapshot_panel.default_config.order_detach_close`: `<new>` -> `True`
+- `registry:architecture:snapshot_panel.default_config.price_targets`: `<new>` -> `['high', 'low', 'close']`
+- `registry:architecture:snapshot_panel.default_config.shared_path`: `<new>` -> `True`
+- `registry:architecture:snapshot_panel.default_config.slot_dropout`: `<new>` -> `0.1`
+- `registry:architecture:snapshot_panel.default_config.unc_max`: `<new>` -> `20.0`
