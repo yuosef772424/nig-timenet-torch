@@ -177,10 +177,7 @@ def charts(all_days, tables, fres, out: Path, stage: str) -> None:
         axes = np.atleast_1d(axes)
         for ax, c in zip(axes, coins, strict=False):
             g = st[st["coin"] == c].sort_values("end_time").tail(360)
-            if "last_close" in g and g["last_close"].notna().any():
-                path = g["last_close"].to_numpy(np.float64)
-            else:                       # the battery table has no price: the middle of the realised next range
-                path = 0.5 * (g["fut_high"] + g["fut_low"]).to_numpy(np.float64)
+            path = g["y_ret"].to_numpy(np.float64) * 100      # the table holds returns, not prices
             ax.plot(pd.to_datetime(g["end_time"]), path, lw=0.9, color="grey")
             sig = g["long"].to_numpy()
             ok = sig & (g["y_ret"] > COST).to_numpy()
@@ -188,7 +185,9 @@ def charts(all_days, tables, fres, out: Path, stage: str) -> None:
             t = pd.to_datetime(g["end_time"]).to_numpy()
             ax.scatter(t[ok], np.asarray(path)[ok], color="green", s=14, label="long, won after cost")
             ax.scatter(t[bad], np.asarray(path)[bad], color="red", s=14, label="long, lost")
-            ax.set_title(f"{c}: last 360 test rows, {name} seed {seed}")
+            ax.axhline(COST * 100, color="r", lw=0.6, ls="--")
+            ax.set_ylabel("realised close return %")
+            ax.set_title(f"{c}: last 360 test rows, realised return to the label horizon, {name} seed {seed}")
             ax.legend(fontsize=7)
         fig.tight_layout()
         fig.savefig(out / f"05_sample_coins_{stage}.png", dpi=110)
