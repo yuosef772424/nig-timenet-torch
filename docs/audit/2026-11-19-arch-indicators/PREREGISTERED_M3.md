@@ -38,3 +38,15 @@ The same 60-coin data rebuilt with label horizons 6 bars (24 h) and 12 bars (48 
 overlap), then `market_residual`. Ridge (the residual feature set, fitted on the residual label of each fold's train
 rows), the same 4 test windows: rank IC by timestamp and the per-timestamp top 10 % residual gross per trade, against
 8 h (horizon 2). "Can pay" = top 10 % residual gross per trade above 0.16 % at some horizon, in at least 3 of 4 folds.
+
+## Amendment 2: putting the market back (owner 2026-11-19, before these numbers)
+Question: does M's coin selection, with the market added back, make a better LONG-ONLY book (own returns, cost
+0.16 % per trade) than arm A alone? Same local runs (A, M; seeds 0, 1; 4 folds). Variants, fixed here:
+- V0 (today's way): A's long book, VAL 90th percentile of A's mu.
+- V1 (market back): score = M's mu + beta_t x A's mean mu over the timestamp's coins (A's market forecast; beta_t
+  from the residual artifact's last bar); VAL 90th percentile of the score.
+- V2 (timing x selection): at timestamps whose mean A mu is at or above its VAL 80th percentile, buy the top 10 % of
+  that timestamp's coins by M's mu.
+- Baseline: always long (every row).
+Read per seed on TEST pooled over folds: net per trade, mean day with a day-block CI (95 %), without the best 5 % of
+days, win days. "Better" = above V0 on mean day AND on the mean without the best 5 % of days, on both seeds.
