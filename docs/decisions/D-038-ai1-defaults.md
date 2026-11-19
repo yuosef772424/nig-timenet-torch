@@ -12,6 +12,8 @@ Why: the artifact `c572b1b36960` holds only three channels (log high / low / clo
   `coin_channels(is_btc)` False = a normal coin (True only for BTC's own rows: zero relative channels).
   `relative_close_labels(fetch, overwrite)` (BR1, the next hypothesis of `docs/results/btc-relative-001.md`): the
   same meaning as above.
+  `market_residual` (owner 2026-11-19, method 3): `add_market_residual(candles)` None = candles from the archive
+  through the cache (`cache`, `fetch` as above); a callable (tests, the local vision_slice raw files) replaces it.
 
 - `nig_timenet_torch.data_io.btc_relative.add_btc_relative(cache)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.btc_relative.add_btc_relative(fetch)`: `<new>` -> `None`
@@ -25,3 +27,7 @@ Why: the artifact `c572b1b36960` holds only three channels (log high / low / clo
 - `nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(overwrite)`: `<new>` -> `False`
 - `nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(workers)`: `<new>` -> `16`
 - `nig_timenet_torch.data_io.indicator_channels.indicator_windows(x_close)`: `<new>` -> `None`
+- `nig_timenet_torch.data_io.market_residual.add_market_residual(cache)`: `<new>` -> `None`
+- `nig_timenet_torch.data_io.market_residual.add_market_residual(candles)`: `<new>` -> `None`
+- `nig_timenet_torch.data_io.market_residual.add_market_residual(fetch)`: `<new>` -> `None`
+- `nig_timenet_torch.data_io.market_residual.add_market_residual(overwrite)`: `<new>` -> `False`

@@ -92,6 +92,33 @@ def _coin_series(g_r: np.ndarray, mkt: np.ndarray, vol: np.ndarray) -> tuple[np.
     return ch, beta, valid
 
 
+def _fill_coin(b, f, coin_moves, mkt, cum_mkt, first, step, ts, x, h, window, y, y_new, new, scale) -> tuple:
+    """Write one coin's channels into ``new`` and its residual close label into ``y_new`` (in place); returns its
+    record and the count of its label rows whose beta was unknown (1 used)."""
+    size = len(mkt)
+    s, e = int(b["start"]), int(b["end"])
+    ns = pd.DatetimeIndex(f.index).as_unit("ns").asi8
+    on = (ns - first) % step == 0
+    vol = np.full(size, np.nan)
+    vcol = "quote_volume" if "quote_volume" in f.columns else "volume"
+    vol[(ns[on] - first) // step] = f[vcol].to_numpy(np.float64)[on]
+    ch, beta, ok_bar = _coin_series(coin_moves, mkt, vol)
+    pos = (ts[s:e] - first) // step
+    good = ((ts[s:e] - first) % step == 0) & (pos - window + 1 >= 0) & (pos + h < size)
+    rows = np.flatnonzero(good)
+    take = pos[rows][:, None] + np.arange(-window + 1, 1)[None, :]
+    okw = ok_bar[take].all(axis=1)
+    r = rows[okw]
+    bt = beta[take[okw]]                                                             # (m, window)
+    res3 = x[s + r].astype(np.float64) - bt[..., None] * mkt[take[okw]][..., None]
+    new[s + r] = np.concatenate([res3, ch[take[okw]]], axis=-1).astype(np.float32)
+    p = pos[rows]
+    unknown = int((~np.isfinite(rolling_beta(coin_moves, mkt))[p]).sum())
+    m_span = cum_mkt[p + h + 1] - cum_mkt[p + 1]                                      # market move over the label span
+    y_new[s + rows] = np.clip(y[s + rows] - beta[p] * m_span, -scale, scale)
+    return {"rows": e - s, "written": int(len(r)), "label_rows": int(len(rows))}, unknown
+
+
 def add_market_residual(src, dst, *, candles=None, cache=None, fetch=None, overwrite: bool = False) -> dict:
     """Write ``dst``: ``src`` with its base-frame channels replaced by ``CHANNELS`` and the close label residual.
     ``candles(name, start, end)`` returns a coin's base-frame candles (high / low / close / volume or quote_volume,
@@ -125,7 +152,6 @@ def add_market_residual(src, dst, *, candles=None, cache=None, fetch=None, overw
         frames[b["name"]] = candles(b["name"], pd.Timestamp(int(t.min()), tz="UTC") - bar * (window + WARMUP_BARS),
                                     pd.Timestamp(int(t.max()), tz="UTC") + bar * (h + 1))
     first, mkt, moves = market_panel({k: f["close"] for k, f in frames.items()}, step)
-    size = len(mkt)
     cum_mkt = np.concatenate([[0.0], np.cumsum(np.nan_to_num(mkt))])       # cum_mkt[j] = sum of mkt[:j]
     new = np.zeros((len(ts), window, len(CHANNELS)), dtype=np.float32)
     reg_key = head_spec("nig_regression", "close").label_key
@@ -135,29 +161,9 @@ def add_market_residual(src, dst, *, candles=None, cache=None, fetch=None, overw
     scale = float(ds.get("reg_target_scale", 1.0))
     per_coin, n_unknown_beta = {}, 0
     for b in ds["asset_bounds"]:
-        s, e = int(b["start"]), int(b["end"])
-        f = frames[b["name"]]
-        ns = pd.DatetimeIndex(f.index).as_unit("ns").asi8
-        on = (ns - first) % step == 0
-        vol = np.full(size, np.nan)
-        vcol = "quote_volume" if "quote_volume" in f.columns else "volume"
-        vol[(ns[on] - first) // step] = f[vcol].to_numpy(np.float64)[on]
-        ch, beta, ok_bar = _coin_series(moves[b["name"]], mkt, vol)
-        pos = (ts[s:e] - first) // step
-        good = ((ts[s:e] - first) % step == 0) & (pos - window + 1 >= 0) & (pos + h < size)
-        rows = np.flatnonzero(good)
-        take = pos[rows][:, None] + np.arange(-window + 1, 1)[None, :]
-        okw = ok_bar[take].all(axis=1)
-        r = rows[okw]
-        bt = beta[take[okw]]                                                         # (m, window)
-        res3 = x[s + r].astype(np.float64) - bt[..., None] * mkt[take[okw]][..., None]
-        new[s + r] = np.concatenate([res3, ch[take[okw]]], axis=-1).astype(np.float32)
-        p = pos[rows]
-        known = np.isfinite(rolling_beta(moves[b["name"]], mkt))[p]
-        n_unknown_beta += int((~known).sum())
-        m_span = cum_mkt[p + h + 1] - cum_mkt[p + 1]                                  # market move over the label span
-        y_new[s + rows] = np.clip(y[s + rows] - beta[p] * m_span, -scale, scale)
-        per_coin[b["name"]] = {"rows": e - s, "written": int(len(r)), "label_rows": int(len(rows))}
+        rec, unknown = _fill_coin(b, frames[b["name"]], moves[b["name"]], mkt, cum_mkt, first, step, ts, x, h,
+                                  window, y, y_new, new, scale)
+        per_coin[b["name"]], n_unknown_beta = rec, n_unknown_beta + unknown
     lc[:, LAST_COLUMN_INDEX["future_close"]] = lc[:, LAST_COLUMN_INDEX["last_close"]] * np.exp(y_new)
     ds = {**ds, f"X_{base_tf}": new, "feature_order": list(CHANNELS), "last_candles": lc,
           reg_key: y_new.astype(np.asarray(ds[reg_key]).dtype),
@@ -185,7 +191,7 @@ def _vision_raw_candles(raw: Path, base_tf: str):
     def get(name, start, end):
         if name not in cache:
             f = load_frames(raw, [name], base_tf)[name]
-            cache[name] = f.set_index(pd.to_datetime(f["open_time"], utc=True))[["high", "low", "close", "volume"]]
+            cache[name] = f.set_index(pd.to_datetime(f["open_time"], utc=True))[[*TARGET_COLUMNS, "volume"]]
         return cache[name]
 
     return get

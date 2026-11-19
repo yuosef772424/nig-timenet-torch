@@ -1,5 +1,5 @@
 {
- "fingerprint": "abbe42a65adf58e0",
+ "fingerprint": "b303fc3e7babff5f",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -314,6 +314,10 @@
   "nig_timenet_torch.data_io.lower_timeframe.add_timeframe(workers)": "16",
   "nig_timenet_torch.data_io.market_channel.add_market_channel(days)": "7",
   "nig_timenet_torch.data_io.market_channel.add_market_channel(overwrite)": "False",
+  "nig_timenet_torch.data_io.market_residual.add_market_residual(cache)": "None",
+  "nig_timenet_torch.data_io.market_residual.add_market_residual(candles)": "None",
+  "nig_timenet_torch.data_io.market_residual.add_market_residual(fetch)": "None",
+  "nig_timenet_torch.data_io.market_residual.add_market_residual(overwrite)": "False",
   "nig_timenet_torch.data_io.npy_dir.load(mmap)": "False",
   "nig_timenet_torch.data_io.npy_dir.load(small_bytes)": "67108864",
   "nig_timenet_torch.data_io.split_plan.SplitPlan(feature_start)": "None",
