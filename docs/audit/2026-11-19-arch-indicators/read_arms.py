@@ -43,6 +43,8 @@ def fold_frames(out_dir: Path, stage: str):
         thr = float(np.quantile(val["mu"], Q))
         st = st.copy()
         st["mkt"] = st.groupby("end_time")["y_ret"].transform("mean")
+        btc = st.loc[st["coin"] == "BTCUSDT"].drop_duplicates("end_time").set_index("end_time")["y_ret"]
+        st["btc"] = st["end_time"].map(btc)
         st["day"] = pd.to_datetime(st["end_time"]).dt.floor("D")
         st["long"] = st["mu"] >= thr
         st["short"] = st["mu"] <= float(np.quantile(val["mu"], 1 - Q))
@@ -59,6 +61,10 @@ def book_days(st: pd.DataFrame) -> pd.DataFrame:
     sh = st[st["short"]]
     days["short"] = (-sh["y_ret"] - COST).groupby(sh["day"]).mean()
     days["short_hedged"] = (-(sh["y_ret"] - sh["mkt"]) - COST).groupby(sh["day"]).mean()
+    lb = lg[lg["btc"].notna()]
+    days["long_btc"] = (lb["y_ret"] - lb["btc"] - COST).groupby(lb["day"]).mean()
+    days["long_btc_real"] = (lb["y_ret"] - lb["btc"] - 2 * COST).groupby(lb["day"]).mean()
+    days["btc_buy_hold_same_times"] = (lb["btc"] - COST).groupby(lb["day"]).mean()
     days["trades"] = lg.groupby("day").size()
     return days.fillna({"trades": 0})
 
@@ -103,7 +109,14 @@ def main(argv=None) -> int:
             all_days[(name, seed)] = days
             r = {"arm": name, "seed": seed, "folds": len(parts), "trades": int(st["long"].sum()),
                  "net_per_trade": float((st.loc[st["long"], "y_ret"] - COST).mean())}
-            for col in ("long", "long_hedged", "always_long", "short", "short_hedged"):
+            lg = st[st["long"]]
+            ok = lg["btc"].notna()
+            beta = float(np.polyfit(lg.loc[ok, "btc"], lg.loc[ok, "y_ret"], 1)[0]) if ok.sum() > 10 else np.nan
+            beta_net = lg.loc[ok, "y_ret"] - beta * lg.loc[ok, "btc"] - 2 * COST
+            r.update({"trades_without_btc": int((~ok).sum()), "beta_to_btc": beta,
+                      "long_btc_beta_per_trade": float(beta_net.mean())})
+            for col in ("long", "long_hedged", "always_long", "short", "short_hedged", "long_btc", "long_btc_real",
+                        "btc_buy_hold_same_times"):
                 r.update(summarise(days, col, a.level))
             rows.append(r)
     res, fres = pd.DataFrame(rows), pd.DataFrame(frows)

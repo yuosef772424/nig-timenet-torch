@@ -81,3 +81,14 @@ note) gave: long top 10 % mean day +0.218 % / +0.158 % (CI above 0, seeds 2 / 3)
 equal-weight market move of the same timestamp is -0.125 % / -0.156 % per day: the long trades sit at timestamps
 where the whole market rose (+0.30 % on average over the horizon), i.e. the model times the market, it does not pick
 coins. Both readings are added to the accept rule as information; the rule itself is unchanged.
+
+## Amendment 2 (owner 2026-11-19: "the free test first: re-read the current long trades minus the BTC return")
+
+Written before the BTC-hedged numbers are computed. On the saved TEST tables of arm R (seeds 0, 1) and of
+`rolling-single-002` (seeds 2, 3), the long book above is re-read with BTC as the hedge: per trade
+`y_ret - y_ret(BTCUSDT, same end_time) - 0.0016` (one hedge leg, no extra cost) and the same minus a second 0.0016
+(the BTC short's own round trip, the realistic cost of a hedged trade). Trades whose timestamp has no BTCUSDT row
+are dropped and counted. Accept "an edge beyond BTC": the realistic BTC-hedged mean day net has a day-block CI above 0
+(level 1 - 0.05 / 4, four seeds read) on every seed AND stays above 0 without the best 5 % of days. If it fails, the
+long edge is BTC / market direction (timing), not coin choice. Also reported: beta to BTC of the long book's trade
+returns (OLS slope) and the BTC-hedged book with that beta.
