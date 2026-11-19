@@ -50,3 +50,14 @@ Question: does M's coin selection, with the market added back, make a better LON
 - Baseline: always long (every row).
 Read per seed on TEST pooled over folds: net per trade, mean day with a day-block CI (95 %), without the best 5 % of
 days, win days. "Better" = above V0 on mean day AND on the mean without the best 5 % of days, on both seeds.
+
+## Amendment 3: exit threshold / hysteresis (owner 2026-11-19, idea from another model; before these numbers)
+Idea: enter a coin when its mu reaches the top 10 %, keep it while it stays in the top 25-30 %, exit below. Fewer
+round trips, the same selection. Local runs A and M, seeds 0 and 1, 4 folds, TEST. Per fold the levels are VAL
+quantiles of mu: entry = 90th percentile; exit = 90th (H0 = today's book: one 8 h period per entry), 75th (H75),
+70th (H70). Rows of a coin are consecutive 8 h periods (stride = horizon); a missing period forces an exit. A held
+coin earns each period's simple return; 0.08 % is charged on the entry period and 0.08 % on the exit period. Book
+return per timestamp = mean over held coins; day = mean of the day's timestamps with a position.
+Read per arm and seed: mean day with a day-block CI (95 %), without the best 5 % of days, periods held per entry,
+entries. "Better" = H75 or H70 above H0 on the mean day AND without the best 5 % of days, on both seeds of the arm.
+"Pays" = its CI above 0.
