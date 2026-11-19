@@ -1,5 +1,5 @@
 {
- "fingerprint": "2dfb6ff35fe32f32",
+ "fingerprint": "2a4eb188399a0079",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -272,6 +272,11 @@
   "nig_timenet_torch.data_io.artifact.ArtifactManifest(base_tf)": "None",
   "nig_timenet_torch.data_io.artifact.ArtifactManifest(timeframes)": "None",
   "nig_timenet_torch.data_io.artifact.load_artifact(mmap)": "False",
+  "nig_timenet_torch.data_io.btc_relative.add_btc_relative(cache)": "None",
+  "nig_timenet_torch.data_io.btc_relative.add_btc_relative(fetch)": "None",
+  "nig_timenet_torch.data_io.btc_relative.add_btc_relative(overwrite)": "False",
+  "nig_timenet_torch.data_io.btc_relative.add_btc_relative(workers)": "16",
+  "nig_timenet_torch.data_io.btc_relative.coin_channels(is_btc)": "False",
   "nig_timenet_torch.data_io.environments.panel_slice(max_rows)": "60000",
   "nig_timenet_torch.data_io.environments.panel_slice(n_coins)": "50",
   "nig_timenet_torch.data_io.environments.panel_slice(train_share)": "0.7",

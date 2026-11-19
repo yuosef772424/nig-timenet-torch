@@ -7,6 +7,15 @@ Why: the artifact `c572b1b36960` holds only three channels (log high / low / clo
 ## What changes behaviour
 - `cache` None = no candle cache (tests); Colab passes a Drive folder so a cut build resumes. `fetch` None = the public Binance archive (`data.fetch.vision_klines`); tests inject candles. `overwrite` False = an existing destination raises. `workers` 16 = the thread count `lower_timeframe` uses (the build of 2026-11-19 took 509 s for 535 coins). `x_close` None = no check against the artifact's own close channel (the artifact build always passes it: rows whose candles disagree get zeros and are counted).
 
+- `btc_relative` (owner message 2026-11-19: inputs minus BTC per bar, RSI / stochastic on the coin / BTC price,
+  BTC as a feature): `cache`, `fetch`, `overwrite`, `workers` mean what they mean for `add_indicator_channels`;
+  `coin_channels(is_btc)` False = a normal coin (True only for BTC's own rows: zero relative channels).
+
+- `nig_timenet_torch.data_io.btc_relative.add_btc_relative(cache)`: `<new>` -> `None`
+- `nig_timenet_torch.data_io.btc_relative.add_btc_relative(fetch)`: `<new>` -> `None`
+- `nig_timenet_torch.data_io.btc_relative.add_btc_relative(overwrite)`: `<new>` -> `False`
+- `nig_timenet_torch.data_io.btc_relative.add_btc_relative(workers)`: `<new>` -> `16`
+- `nig_timenet_torch.data_io.btc_relative.coin_channels(is_btc)`: `<new>` -> `False`
 - `nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(cache)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(fetch)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(overwrite)`: `<new>` -> `False`
