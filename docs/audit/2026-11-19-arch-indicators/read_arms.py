@@ -177,7 +177,10 @@ def charts(all_days, tables, fres, out: Path, stage: str) -> None:
         axes = np.atleast_1d(axes)
         for ax, c in zip(axes, coins, strict=False):
             g = st[st["coin"] == c].sort_values("end_time").tail(360)
-            path = (1 + g["last_ret"].fillna(0)).cumprod() if "last_ret" in g else np.ones(len(g))
+            if "last_close" in g and g["last_close"].notna().any():
+                path = g["last_close"].to_numpy(np.float64)
+            else:
+                path = (1 + g["last_ret"].fillna(0)).cumprod().to_numpy()
             ax.plot(pd.to_datetime(g["end_time"]), path, lw=0.9, color="grey")
             sig = g["long"].to_numpy()
             ok = sig & (g["y_ret"] > COST).to_numpy()
