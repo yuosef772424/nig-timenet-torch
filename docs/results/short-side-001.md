@@ -34,6 +34,31 @@ That earlier period is never the rows being judged.
    The short side's day P&L has a correlation of -0.44 / -0.41 with the market day: +2.3 % a day in the most falling
    fifth of days, -1.37 % in the most rising fifth.
 
+## Confirmation with the real VAL thresholds (re-read on Colab, 2026-11-19)
+
+`battery_from_folder` was re-run on the 14 fold folders on Colab, with each fold's own VAL table, so it prints the new
+sections. The reports are in `rolling-single-001/out/fold_*/ss1/battery_report.txt`. "LONG vs SHORT PAYOFF" rows, top
+5 % |mu| per fold and seed:
+
+| fold | SHORT win % | SHORT log % | SHORT exp % (pred) | SHORT net % | SHORT L/W | LONG exp % | LONG net % |
+|---|---|---|---|---|---|---|---|
+| 0 s0 / s1 | 48.5 / 43.9 | +0.231 / -0.108 | -0.089 (-0.094) / -0.087 (-0.100) | -0.018 / -0.355 | 0.95 / 1.02 | +0.049 / +0.073 | +0.169 / +0.291 |
+| 1 s0 / s1 | 45.0 / 51.0 | -0.065 / +0.123 | -0.081 (-0.092) / -0.117 (-0.110) | -0.306 / -0.154 | 1.05 / 1.15 | +0.071 / +0.061 | +0.421 / +0.201 |
+| 2 s0 / s1 | 53.8 / 50.6 | +0.354 / +0.088 | -0.123 / -0.106 | +0.071 / -0.178 | 1.12 / 1.15 | +0.084 / +0.107 | +0.166 / +0.024 |
+| 3 s0 / s1 | 55.6 / 55.5 | +0.500 / +0.369 | -0.137 / -0.140 | +0.203 / +0.069 | 1.12 / 1.20 | +0.156 / +0.150 | +1.642 / +1.856 |
+| 4 s0 / s1 | 56.3 / 51.5 | +0.609 / +0.368 | -0.186 / -0.157 | +0.263 / +0.050 | 1.12 / 1.03 | +0.151 / +0.130 | +0.607 / +0.323 |
+| 5 s0 / s1 | 56.6 / 57.9 | +0.131 / +0.206 | -0.273 (-0.188) / -0.274 (-0.213) | -0.303 / -0.229 | 1.47 / 1.51 | +0.098 / +0.069 | +0.454 / +0.562 |
+| 6 s0 / s1 | 61.0 / 60.7 | +0.383 / +0.529 | -0.289 (-0.180) / -0.273 (-0.169) | -0.066 / +0.096 | 1.61 / 1.49 | +0.088 / +0.083 | -0.148 / -0.024 |
+
+- The short's exp() part is negative in 14 of 14 runs (-0.08 to -0.29 %), the long's positive in 14 of 14. The
+  short's log part is positive in 12 of 14.
+- Folds 5 and 6 (2025-06 .. 2026-06) are the clearest case of "wins more often and still loses": the short wins 57-61 %
+  of its trades with losses 1.5-1.6 x its wins. There the realised exp() part (-0.27 .. -0.29 %) is larger than the
+  model's sigma predicts (-0.17 .. -0.21 %), so the tails are heavier than the predictive distribution.
+- The best scorecard row of each fold varies: `top 20 % confidence | LONG` is best in 3 of the first 4 folds, and 5 of
+  14 folds pass the verdict. Each pass is the best of 27 rows on ~175 days, so it counts only as a look; the
+  pre-registered test is `rolling-single-002`.
+
 ## What the model learned
 
 - **Direction in log units, on both sides of the top rows.** Log part per trade, top 10 % |mu|: long +0.352 % /
