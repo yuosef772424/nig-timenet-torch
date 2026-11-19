@@ -58,3 +58,16 @@ worktree at 458bcdb (`git -C /content/nig_ind worktree add -f /content/nig_ind_4
 ## What is next
 1. (done) stage 1 choice.
 2. Launch stage 2 (6 processes), read it, write `docs/results/arch-indicators-001.md` (failure reading if IR fails).
+
+## Stopped by the owner (2026-11-19 ~22:20 UTC: "close the Colab session")
+Every process of this session was killed; nothing runs on the runtime. State on Drive (`MyDrive/nig_timenet_runs/`):
+- `rolling-ind-001` arm I: finished, both seeds (`out_I_s{0,1}/rolling_summary.json`); NOT read yet.
+- arm IR: stopped in its last fold (6 of 7 folds written per seed); resumes from its checkpoints with the SAME
+  command on a worktree at 458bcdb (configs `/content/cfg_ind/wf_IR_s{0,1}.json` are lost with the runtime: rebuild
+  them from `docs/jobs/rolling-ind-001.json`, model_overrides tcn 64 x 2, run_dir `train_IR_s<seed>`).
+- BR1 (`rolling-btcrel-lbl-001`, commit 02dd45f): the label artifact was built and the smoke ran on the runtime's
+  local disk; the two seeds were killed seconds after start. Re-run from the start: `art_btcrel` (btc_relative on
+  art1) then `--label-only`, smoke, seeds 0 and 1 (`docs/jobs/rolling-btcrel-lbl-001.json`).
+- Artifacts on the runtime's local disk (`/content/art_ind`, `/content/art_btcrel`, `/content/art_btcrel_lbl`) are
+  lost with it; `art_ind` has a Drive copy (`crypto_model/torch_artifacts/preprocessing_output_1_plus_ind`); the two
+  BTC artifacts rebuild in about 1 minute from the Drive candle cache (`crypto_model/candle_cache_4h_hlcqv`).
