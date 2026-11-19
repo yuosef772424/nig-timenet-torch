@@ -10,8 +10,9 @@ PITFALLS: exploratory (rule C5); the fold geometry (``rolling``: spans, step, em
 
 Config (``RollingConfig``): ``device``, ``run_dir`` (required), ``rolling`` (RollingSettings fields, required: the spans
 have no defaults), ``artifact``, ``base_tf``, ``max_rows`` (smoke mode), ``batch_size``, ``lr``, ``model_overrides``,
-``train`` (other TrainSettings fields, e.g. ``epochs``, ``staged``), ``split``. Outputs: ``rolling_summary.json`` /
-``.md``, ``rolling_folds.csv`` and one folder per fold x seed (test report, test table, battery files).
+``train`` (other TrainSettings fields, e.g. ``epochs``, ``staged``), ``split``, ``input_timeframes`` (the frames read
+side by side, e.g. ["4h", "1h"] of an artifact made by data_io/lower_timeframe.py). Outputs: ``rolling_summary.json``
+/ ``.md``, ``rolling_folds.csv`` and one folder per fold x seed (test report, test table, battery files).
 """
 
 import os
@@ -46,6 +47,7 @@ class RollingConfig:
     split: dict = field(default_factory=dict)
     day_metrics: bool = False          # D-032: every fold also writes the day metrics; the study pools their days
     architecture: str = "nig_timenet_v2"   # model.architectures.ARCHITECTURES ("snapshot_panel": owner 2026-11-18)
+    input_timeframes: list = field(default_factory=list)   # [] = the artifact's one frame; ["4h", "1h"] side by side
 
     def __post_init__(self):
         if self.device not in DEVICES:
@@ -64,7 +66,7 @@ def run_settings(cfg: RollingConfig, code_sha: str = "") -> RunSettings:
     s = job_run_settings(device=cfg.device, run_dir=cfg.run_dir, artifact=cfg.artifact, base_tf=cfg.base_tf,
                          max_rows=cfg.max_rows, batch_size=cfg.batch_size, lr=cfg.lr,
                          model_overrides=cfg.model_overrides, train=cfg.train, split=cfg.split, code_sha=code_sha,
-                         architecture=cfg.architecture)
+                         architecture=cfg.architecture, input_timeframes=tuple(cfg.input_timeframes))
     return updated(s, {"evaluation.battery.day_metrics": cfg.day_metrics})
 
 

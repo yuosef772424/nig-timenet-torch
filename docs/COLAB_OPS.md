@@ -64,3 +64,9 @@ of the entry runs first, on the same commit (rule E5).
 - Colab's torch (2.14.1+cu130) is older than the pyproject pin; the cached env never installs torch.
 - The `panel` entry stops at `--max-minutes` and exits 0 with `finished: false`; the `rolling` entry does not read
   the limit. Both resume from `run_dir`: start the SAME command again after a cut.
+- A cut job resumes ONLY on the commit it started on: the run identity in its checkpoints holds the code commit
+  (`trainer/identity.py:check_resume` raises `ResumeMismatchError` on any other). After pushing new commits, resume
+  from a second checkout pinned at the job's commit (`git_sha` in its `out/manifest.json`, or the commit of the
+  first run): `git -C /content/nig-timenet-torch worktree add -f /content/nig_old <sha>`, then start the job with
+  `NIG_REPO_DIR=/content/nig_old` and `PYTHONPATH` pointing to `/content/nig_old/src` instead of the main checkout's
+  `src` (`two_frames_chain.sh` does this for `panel-rolling-ls-001`, 2026-11-18).

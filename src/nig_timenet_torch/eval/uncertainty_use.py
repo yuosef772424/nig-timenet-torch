@@ -5,7 +5,8 @@ TAGS: uncertainty use, sd ranks error, across coins, across time, t-sharp, calib
 PITFALLS: works on the day-metric frame (``eval.day_metrics.FRAME_COLUMNS``; one stage of one run); a confidence
     threshold is fitted on the VAL frame and applied to the scored frame, never fitted on it; "across time" is a
     correlation inside each coin over its timestamps (it needs >= ``MIN_GROUP`` rows per coin), "across coins" inside
-    each timestamp. Every number is descriptive: no trade rule is chosen here.
+    each timestamp. Every number is descriptive: no trade rule is chosen here. The kept-row rules print the
+    net mean day with its 95 % CI and the CI at 1 - 0.05 / (number of rules): the rules are variants (multiple testing).
 
 Trivial models (rule C1): a constant sd gives NaN rank correlations (no ranking), sharpness 0 or 1 and whatever
 coverage the constant gives; a model whose mean is 0 everywhere has no direction (share_pred_up 0).
@@ -81,10 +82,15 @@ def confidence_selection(frame: pd.DataFrame, val: pd.DataFrame, keep: float = 0
     # every row trades, but the book of metric 2 is ranked by mu / sd (a small move of a calm coin counts as much as
     # a large move of a wild one): the use of the sd that keeps the whole cross-section
     scores["ranked_by_mu_over_sd"] = conf(frame) * np.sign(frame["mu"].to_numpy(np.float64))
+    # owner 2026-11-19: the kept-row rules were the only positive net numbers and had no CI; every rule tried here is
+    # a variant (ROADMAP T-profit), so the net mean day also gets the CI at 1 - 0.05 / (number of rules)
+    adjusted = 1.0 - 0.05 / len(scores)
     for name, score in scores.items():
+        net = absolute_days(frame, score, cost=cost)
         out[name] = {"rows_share": float(np.isfinite(score).mean()),
                      "absolute_gross": day_summary(absolute_days(frame, score)),
-                     "absolute_net": day_summary(absolute_days(frame, score, cost=cost)),
+                     "absolute_net": day_summary(net),
+                     "absolute_net_adjusted": {"level": adjusted, **day_summary(net, level=adjusted)},
                      "neutral_gross": day_summary(neutral_days(frame, score, top_share=top_share))}
     return out
 
@@ -114,14 +120,23 @@ def render(report: dict) -> str:
                   f"{b['per_coin_pred_up_max']:.2f} (correlation with the realised share {b['per_coin_corr']:+.2f}); "
                   f"per-day correlation {b['per_day_corr']:+.2f}; timestamps with one sign for every coin "
                   f"{b['one_sign_timestamps']:.2f}.", "",
-              "| rows kept | share | metric 1 winning days, gross | metric 1 mean day, net | metric 2 winning days |",
-              "|---|---|---|---|---|"]
-    for name, r in report["confidence_selection"].items():
+              "| rows kept | share | metric 1 winning days, gross | metric 1 mean day, net [95 % CI] | "
+              "net CI at 1 - 0.05 / rules | above 0 | metric 2 winning days |",
+              "|---|---|---|---|---|---|---|"]
+    sel = report["confidence_selection"]
+    for name, r in sel.items():
         a, n, m = r["absolute_gross"], r["absolute_net"], r["neutral_gross"]
         if not a.get("n_days"):
-            lines.append(f"| {name} | {r['rows_share']:.2f} | no days | | |")
+            lines.append(f"| {name} | {r['rows_share']:.2f} | no days | | | | |")
             continue
         m2 = f"{m['win_share'] * 100:.1f} % ({m['n_days']} d)" if m.get("n_days") else "no days"
+        adj = r.get("absolute_net_adjusted", {})
+        ci = (f"[{adj['mean_lo'] * 100:+.4f}, {adj['mean_hi'] * 100:+.4f}] ({adj['level'] * 100:.0f} %)"
+              if adj.get("n_days") else "")
+        above = "YES" if adj.get("n_days") and adj["mean_lo"] > 0 else "no"
         lines.append(f"| {name} | {r['rows_share']:.2f} | {a['win_share'] * 100:.1f} % ({a['n_days']} d) | "
-                     f"{n['mean'] * 100:+.4f} % | {m2} |")
+                     f"{n['mean'] * 100:+.4f} % [{n['mean_lo'] * 100:+.4f}, {n['mean_hi'] * 100:+.4f}] | {ci} | "
+                     f"{above} | {m2} |")
+    lines += ["", f"{len(sel)} rules read on the same rows (thresholds from VAL): a rule counts only when the CI at "
+                  f"1 - 0.05 / {len(sel)} is above 0, and on every seed (rule C4)."]
     return "\n".join(lines) + "\n"

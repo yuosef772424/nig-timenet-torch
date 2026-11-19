@@ -12,6 +12,8 @@ dependencies = ["numpy==2.4.6", "pandas==3.0.6", "pyarrow~=25.0.1", "torch>=2.15
 [project.scripts]
 nig-data = "nig_timenet_torch.data.cli:main"
 nig-envs = "nig_timenet_torch.data_io.environments:main"
+nig-add-timeframe = "nig_timenet_torch.data_io.lower_timeframe:main"
+nig-market-channel = "nig_timenet_torch.data_io.market_channel:main"
 nig-backtest = "nig_backtest.__main__:main"
 
 [project.optional-dependencies]

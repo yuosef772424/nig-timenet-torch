@@ -50,6 +50,10 @@ ARMS = {
     # per-head affine map, so it reads the same ranking while the NIG heads start centred on each label
     "relative_rank_loss_logret_std": {"model": {**_REL, "input_scaler": "train_std", "target_norm": "logret_std"},
                                       "train": {"cross_section_loss": "rank_ic"}},
+    # owner 2026-11-19 (B-084): the same with the ordered means applied on prices (model order_in_label_units)
+    "relative_rank_loss_logret_std_label_order": {
+        "model": {**_REL, "input_scaler": "train_std", "target_norm": "logret_std", "order_in_label_units": True},
+        "train": {"cross_section_loss": "rank_ic"}},
 }
 #: the arms of panel-001 (the job's default list; later arms are opted into by name)
 PANEL_001_ARMS = ("per_coin", "relative", "relative_rank_loss", "relative_rank_loss_center", "relative_rank_loss_ls")
