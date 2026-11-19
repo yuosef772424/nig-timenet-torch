@@ -96,3 +96,34 @@ def test_derived_artifact_keeps_rows_and_the_run_reads_eleven_channels(tmp_path)
     assert r.x["train"].shape[2] == len(br.CHANNELS)
     steps.train(steps.build(r))
     assert r.result.epochs_done == 1 and np.isfinite(r.result.best_value)
+
+
+def test_btc_move_over_the_label_span():
+    btc = _candles(np.exp(np.linspace(0.0, 1.0, 50)))
+    ts = np.array([btc.index[10].value, btc.index[49].value])
+    m = br.btc_moves_over_horizon(btc, ts, "4h", 2)
+    np.testing.assert_allclose(m[0], 2.0 / 49)
+    assert np.isnan(m[1])                                                              # no bar 2 steps later
+
+
+def test_relative_close_label_subtracts_btc_and_still_decodes(tmp_path):
+    from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
+    from nig_timenet_torch.workflow.run_common import check_decode
+
+    src = tmp_path / "e4.dataset"
+    write_artifact(build_panel_synthetic(PanelSyntheticSettings(n_coins=4, n_bars=400)), src, source_commit="0" * 40)
+    a = load_artifact(src).dataset
+    base = _fetch_from_artifact(a)
+    first = a["asset_bounds"][0]["name"]
+    rec = br.relative_close_labels(src, tmp_path / "e4_r.dataset",
+                                   fetch=lambda s_, tf, st, en: base(first if s_ == br.BTC else s_, tf, st, en))
+    b = load_artifact(tmp_path / "e4_r.dataset").dataset
+    ts = np.asarray(a["last_candles"])[:, LAST_COLUMN_INDEX["timestamp"]].astype(np.int64)
+    m = br.btc_moves_over_horizon(base(first, "4h", None, None), ts, a["base_tf"], int(a["forecast_horizon"]))
+    ok = np.isfinite(m)
+    assert ok.mean() > 0.5 and rec["rows_without_btc"] == int((~ok).sum())
+    want = np.clip(np.asarray(a["y_close_reg"], np.float64)[ok] - m[ok], -1, 1)
+    np.testing.assert_allclose(np.asarray(b["y_close_reg"], np.float64)[ok], want, atol=1e-6)
+    np.testing.assert_array_equal(np.asarray(b["y_high_reg"]), np.asarray(a["y_high_reg"]))
+    np.testing.assert_array_equal(np.asarray(b["X_4h"]), np.asarray(a["X_4h"]))
+    check_decode(b, ("close", "high", "low"))

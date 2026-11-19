@@ -10,12 +10,16 @@ Why: the artifact `c572b1b36960` holds only three channels (log high / low / clo
 - `btc_relative` (owner message 2026-11-19: inputs minus BTC per bar, RSI / stochastic on the coin / BTC price,
   BTC as a feature): `cache`, `fetch`, `overwrite`, `workers` mean what they mean for `add_indicator_channels`;
   `coin_channels(is_btc)` False = a normal coin (True only for BTC's own rows: zero relative channels).
+  `relative_close_labels(fetch, overwrite)` (BR1, the next hypothesis of `docs/results/btc-relative-001.md`): the
+  same meaning as above.
 
 - `nig_timenet_torch.data_io.btc_relative.add_btc_relative(cache)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.btc_relative.add_btc_relative(fetch)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.btc_relative.add_btc_relative(overwrite)`: `<new>` -> `False`
 - `nig_timenet_torch.data_io.btc_relative.add_btc_relative(workers)`: `<new>` -> `16`
 - `nig_timenet_torch.data_io.btc_relative.coin_channels(is_btc)`: `<new>` -> `False`
+- `nig_timenet_torch.data_io.btc_relative.relative_close_labels(fetch)`: `<new>` -> `None`
+- `nig_timenet_torch.data_io.btc_relative.relative_close_labels(overwrite)`: `<new>` -> `False`
 - `nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(cache)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(fetch)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(overwrite)`: `<new>` -> `False`

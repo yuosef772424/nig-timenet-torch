@@ -37,9 +37,11 @@ from nig_timenet_torch.data_io.indicator_channels import (
     _coin_candles,
 )
 
-__all__ = ["CHANNELS", "BTC", "rsi", "stoch_close", "add_btc_relative", "DERIVATION_JSON", "main"]
+__all__ = ["CHANNELS", "BTC", "rsi", "stoch_close", "add_btc_relative", "btc_moves_over_horizon",
+           "relative_close_labels", "DERIVATION_JSON", "LABEL_JSON", "main"]
 
 DERIVATION_JSON = "derivation_btc_relative.json"
+LABEL_JSON = "derivation_btc_relative_label.json"
 BTC = "BTCUSDT"
 CHANNELS = ("rel_high", "rel_low", "rel_close", "ratio_rsi_14", "ratio_stoch_k_14_3", "ratio_stoch_d_3",
             "volume_rel_30", "btc_high", "btc_low", "btc_close", "btc_rsi_14")
@@ -177,6 +179,59 @@ def add_btc_relative(src, dst, *, cache=None, workers: int = 16, fetch=None, ove
     return record
 
 
+def btc_moves_over_horizon(btc: pd.DataFrame, ts: np.ndarray, base_tf: str, horizon: int) -> np.ndarray:
+    """log(BTC close of the bar opening at ts + horizon bars / BTC close of the bar opening at ts) per row (the close
+    label's own span: label_end = ts + (horizon + 1) bars); NaN where a BTC bar is missing."""
+    idx = pd.DatetimeIndex(btc.index)
+    idx = idx.tz_convert("UTC") if idx.tz is not None else idx.tz_localize("UTC")
+    close = pd.Series(btc["close"].to_numpy(np.float64), index=idx.as_unit("ns").asi8)
+    close = close[~close.index.duplicated()]
+    t = np.asarray(ts, dtype=np.int64)
+    now = close.reindex(t).to_numpy()
+    later = close.reindex(t + horizon * pd.Timedelta(base_tf).value).to_numpy()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.log(later / now)
+
+
+def relative_close_labels(src, dst, *, fetch=None, overwrite: bool = False) -> dict:
+    """Write ``dst``: ``src`` with the CLOSE label made relative to BTC: y_close_reg = clip(log(coin future / last
+    close) - log(BTC future / BTC last close), +-scale), y_close_class = (it > 0), and last_candles future_close =
+    last_close * exp(label) so the codec decodes it (rule B3). High / low labels, inputs and rows are unchanged; rows
+    without a BTC bar keep their own label and are counted."""
+    from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
+    from nig_timenet_torch.data.artifact_writer import write_artifact
+    from nig_timenet_torch.data.fetch import vision_klines
+
+    fetch = fetch or vision_klines
+    src, dst = Path(src), Path(dst)
+    man = read_manifest(src)
+    ds = npy_dir.load(src, mmap=False)
+    lc = np.array(ds["last_candles"], dtype=np.float64)
+    ts = lc[:, TS_COL].astype(np.int64)
+    h, bar = int(ds["forecast_horizon"]), pd.Timedelta(ds["base_tf"])
+    btc = _coin_candles(BTC, ds["base_tf"], pd.Timestamp(int(ts.min()), tz="UTC") - bar,
+                        pd.Timestamp(int(ts.max()), tz="UTC") + bar * (h + 2), None, fetch)
+    m = btc_moves_over_horizon(btc, ts, ds["base_tf"], h)
+    ok = np.isfinite(m)
+    scale = float(ds.get("reg_target_scale", 1.0))
+    y = np.asarray(ds["y_close_reg"], dtype=np.float64)
+    rel = np.where(ok, np.clip(y - np.where(ok, m, 0.0), -scale, scale), y)
+    lc[:, LAST_COLUMN_INDEX["future_close"]] = lc[:, LAST_COLUMN_INDEX["last_close"]] * np.exp(rel)
+    ds = {**ds, "y_close_reg": rel.astype(np.asarray(ds["y_close_reg"]).dtype),
+          "y_close_class": (rel > 0).astype(np.asarray(ds["y_close_class"]).dtype), "last_candles": lc}
+    manifest = write_artifact(ds, dst, source_commit=man.source_commit, overwrite=overwrite,
+                              producer=f"nig_timenet_torch.data_io.btc_relative close label (on "
+                                       f"{man.data_fingerprint})")
+    record = {"source_artifact": str(src), "source_fingerprint": man.data_fingerprint,
+              "fingerprint": manifest["export"]["data_sha256"],
+              "rule": "y_close_reg = clip(own close label - log BTC move over the same span, +-scale); "
+                      "last_candles future_close = last_close * exp(label)",
+              "rows": int(len(ts)), "rows_without_btc": int((~ok).sum()),
+              "share_up_before": float((y > 0).mean()), "share_up_after": float((rel > 0).mean())}
+    (dst / LABEL_JSON).write_text(json.dumps(record, indent=1), encoding="utf-8")
+    return record
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m nig_timenet_torch.data_io.btc_relative", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -185,7 +240,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cache", default=None)
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--overwrite", action="store_true")
+    ap.add_argument("--label-only", action="store_true",
+                    help="only make the close label relative to BTC (relative_close_labels); channels unchanged")
     a = ap.parse_args(argv)
+    if a.label_only:
+        print(json.dumps(relative_close_labels(a.src, a.dst, overwrite=a.overwrite), indent=1))
+        return 0
     r = add_btc_relative(a.src, a.dst, cache=a.cache, workers=a.workers, overwrite=a.overwrite)
     print(json.dumps({k: v for k, v in r.items() if k != "per_coin"}, indent=1))
     return 0
