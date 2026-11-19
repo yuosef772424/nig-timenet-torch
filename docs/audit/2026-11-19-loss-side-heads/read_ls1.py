@@ -1,4 +1,4 @@
-"""LS1 walk-forward reading (spec: PREREGISTERED.md section 2 and amendment 1): books P1 / P1L / P3 per arm and seed,
+"""LS1 walk-forward reading (spec: PREREGISTERED.md section 2, amendments 1-2): books P1 / P1L / P3 / P4 per arm,
 P2 (S against R), health (close rank IC against A0, q_up coverage).
 
 Usage: python docs/audit/2026-11-19-loss-side-heads/read_ls1.py <runs root> [--seeds 2,3] [--arms a0,r,s,w]
@@ -36,9 +36,28 @@ def scores(df: pd.DataFrame) -> dict:
     return out
 
 
+def linear_payoff(val: pd.DataFrame, test: pd.DataFrame) -> dict:
+    """Amendment 2 (P4): per side, least squares on VAL of the realised payoff after cost on [1, log(1 + mu), s, s^2],
+    applied to TEST and to VAL (the VAL score sets the top-5 % threshold)."""
+    def design(df):
+        mu, sig = df["mu"].to_numpy(), df["sigma"].to_numpy()
+        s = np.log1p(sig / (1.0 + mu))
+        return np.c_[np.ones(len(df)), np.log1p(mu), s, s**2]
+    a, b = design(val), design(test)
+    ok = (val["dir_true"] != 0).to_numpy()
+    y = val["y_ret"].to_numpy()
+    out = {}
+    for name, pay in (("lin_long", y - RT), ("lin_short", -y - RT)):
+        w = np.linalg.lstsq(a[ok], pay[ok], rcond=None)[0]
+        out[name] = (a @ w, b @ w)
+    return out
+
+
 def books(val: pd.DataFrame, test: pd.DataFrame) -> dict:
     """{book name: (side, TEST mask)}; side +1 long, -1 short."""
     sv, st = scores(val), scores(test)
+    for name, (v_score, t_score) in linear_payoff(val, test).items():
+        sv[name], st[name] = v_score, t_score
     ok_v, ok_t = (val["dir_true"] != 0).to_numpy(), (test["dir_true"] != 0).to_numpy()
 
     def top(name):
@@ -46,6 +65,8 @@ def books(val: pd.DataFrame, test: pd.DataFrame) -> dict:
 
     out = {"SHORT top5 -mu": (-1, top("-mu")), "SHORT top5 E_short": (-1, top("E_short")),
            "LONG top5 mu": (1, top("mu")), "LONG top5 E_long": (1, top("E_long"))}
+    out["SHORT top5 lin_short"] = (-1, top("lin_short"))
+    out["LONG top5 lin_long"] = (1, top("lin_long"))
     if "pay_short" in st:
         out["SHORT top5 pay_short"] = (-1, top("pay_short"))
         out["LONG top5 pay_long"] = (1, top("pay_long"))
@@ -90,17 +111,25 @@ def read_seed(folder: Path, seed: int) -> dict:
 def verdict(res: dict, seeds) -> dict:
     """The pre-registered accept rules (PREREGISTERED.md section 2)."""
     v = {}
+    def beats(g, s, book, others):
+        b = g[s][book]
+        return all(b["net"] > g[s][o]["net"] and b["mean_busy"] > g[s][o]["mean_busy"] for o in others)
+
+    for arm in ("a0", "r"):                   # amendment 2: P4 on the baseline and on R
+        if arm in res:
+            g = {s: res[arm][s] for s in seeds}
+            v[f"P4 {arm}"] = all(beats(g, s, "SHORT top5 lin_short", ("SHORT top5 -mu", "SHORT top5 E_short"))
+                                 for s in seeds)
+            v[f"P4L {arm}"] = all(beats(g, s, "LONG top5 lin_long", ("LONG top5 mu", "LONG top5 E_long"))
+                                  for s in seeds)
     for arm in ("r", "w"):
         if arm not in res:
             continue
         g = {s: res[arm][s] for s in seeds}
 
-        def beats(s, book, others, g=g):
-            b = g[s][book]
-            return all(b["net"] > g[s][o]["net"] and b["mean_busy"] > g[s][o]["mean_busy"] for o in others)
-
-        v[f"P1 {arm}"] = all(beats(s, "SHORT top5 pay_short", ("SHORT top5 -mu", "SHORT top5 E_short")) for s in seeds)
-        v[f"P1L {arm}"] = all(beats(s, "LONG top5 pay_long", ("LONG top5 mu", "LONG top5 E_long")) for s in seeds)
+        v[f"P1 {arm}"] = all(beats(g, s, "SHORT top5 pay_short", ("SHORT top5 -mu", "SHORT top5 E_short"))
+                             for s in seeds)
+        v[f"P1L {arm}"] = all(beats(g, s, "LONG top5 pay_long", ("LONG top5 mu", "LONG top5 E_long")) for s in seeds)
         v[f"P3 {arm}"] = all(g[s]["P3 kept q_up"]["net"] > g[s]["P3 kept nig_q90"]["net"]
                              and g[s]["P3 dropped q_up"]["net"] < g[s]["P3 kept q_up"]["net"] for s in seeds)
         if "a0" in res:

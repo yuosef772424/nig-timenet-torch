@@ -72,3 +72,20 @@ checks E1-a .. E1-e (E1-d / E1-e also on W). If W passes E1-a / E1-b, W joins th
 the tests P1, P3 and P1L read on W exactly as on R; A0 / R / S already run on commit b8e0051, W runs on a later commit
 that differs only by the off-by-default switch (P1 / P3 / P1L compare books inside one arm, so the commit difference
 does not enter them).
+
+## Amendment 2 (2026-11-19, after the clean E1 run, the read-out diagnostic and the 10-epoch E1 run; no walk-forward number read)
+
+E1 results (`E1_OUTPUT.txt`, `E1_READOUT.txt`, `E1_10EPOCHS.txt`): the side-payoff heads fail E1-a / E1-b on every seed
+for R, S and W, also at 10 epochs (head 0.43-0.64 against the closed form 0.70-0.82); the quantile head passes E1-d
+and the read-out leaves mu alone (E1-e). A ridge of the realised payoff on the trunk h reaches the closed form
+(0.64-0.70), and a ridge on (mu, s) beats it (0.73-0.75): the information is in the model, the small nonlinear head
+loses it on a target whose per-row signal is ~1 % of its variance. Consequences, fixed now:
+
+- W is NOT run on the GPU (it failed its E1 gate, MODEL_DEV_PROTOCOL section 2). R and S run as planned; their P1 /
+  P1L / P2 are read and are expected to fail.
+- New primary test **P4** (the owner's "train each side on its real payoff", with three parameters per side instead of
+  a head): per fold, least squares on the fold's VAL rows of each side's realised payoff after cost (long `y - RT`,
+  short `-y - RT`, y = the realised return) on `[1, log(1 + mu), s, s^2]`; the score `lin_short` / `lin_long` is that
+  fit applied to TEST. Books: SHORT top 5 % by `lin_short` against SHORT top 5 % by `-mu` and by `E_short`; accept on
+  BOTH seeds as P1 (net per trade and busy-day mean above both). Read on A0 (the baseline model, so a pass needs no new
+  training) and on R. LONG top 5 % by `lin_long` is reported as P4L (secondary). Four primary tests now (P1, P2, P3, P4).
