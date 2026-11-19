@@ -71,3 +71,13 @@ N1 of rolling-single-002: is the edge only market beta?), and always-long on all
 If IR fails, the failure reading of rule C7 is written before any next arm. Arm I is read the same way (it shows
 what the channels alone do). The live-trading candidate is whichever arm passes; if none passes, none is
 recommended for live money and the note says so.
+
+## Amendment 1 (owner 2026-11-19, before any number of the arms was read)
+
+Every reading separates buys from sells: the long book above is read alone; a short book (the 10th percentile of
+mu on VAL, sell every row at or below it, net = -y_ret - 0.0016) is reported in its own columns, information only.
+No number mixes the two sides. Reading `rolling-single-002` with this script (a reference, already read in its own
+note) gave: long top 10 % mean day +0.218 % / +0.158 % (CI above 0, seeds 2 / 3), but the long book minus the
+equal-weight market move of the same timestamp is -0.125 % / -0.156 % per day: the long trades sit at timestamps
+where the whole market rose (+0.30 % on average over the horizon), i.e. the model times the market, it does not pick
+coins. Both readings are added to the accept rule as information; the rule itself is unchanged.

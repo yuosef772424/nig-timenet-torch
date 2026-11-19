@@ -4,7 +4,9 @@
 
 OUT_DIR is a rolling job's ``--out`` (folders ``fold_<k>_seed_<s>`` holding ``battery_table_val.parquet`` and
 ``battery_table_test.parquet``). The long book: threshold = the 90th percentile of mu on the fold's VAL table; buy every
-row of the read stage with mu >= threshold; net = y_ret - 2 * 0.0008 (y_ret is the simple close return). Writes
+row of the read stage with mu >= threshold; net = y_ret - 2 * 0.0008 (y_ret is the simple close return). The SHORT
+book is read apart (owner 2026-11-19: buys and sells are never mixed in one number): the 10th percentile of mu on VAL,
+sell every row with mu <= it, net = -y_ret - 2 * 0.0008; it is information only (the trading candidate is long). Writes
 ``arms_<stage>.csv`` (per arm x seed, pooled over folds), ``folds_<stage>.csv`` and, with ``--charts``, PNG charts.
 A study script (rule G6): reads files, no training.
 """
@@ -43,6 +45,7 @@ def fold_frames(out_dir: Path, stage: str):
         st["mkt"] = st.groupby("end_time")["y_ret"].transform("mean")
         st["day"] = pd.to_datetime(st["end_time"]).dt.floor("D")
         st["long"] = st["mu"] >= thr
+        st["short"] = st["mu"] <= float(np.quantile(val["mu"], 1 - Q))
         st["fold"], st["seed"] = int(m.group(1)), int(m.group(2))
         yield int(m.group(1)), int(m.group(2)), thr, st
 
@@ -53,6 +56,9 @@ def book_days(st: pd.DataFrame) -> pd.DataFrame:
     days = pd.DataFrame({"always_long": st.groupby("day")["y_ret"].mean() - COST})
     days["long"] = (lg["y_ret"] - COST).groupby(lg["day"]).mean()
     days["long_hedged"] = (lg["y_ret"] - lg["mkt"] - COST).groupby(lg["day"]).mean()
+    sh = st[st["short"]]
+    days["short"] = (-sh["y_ret"] - COST).groupby(sh["day"]).mean()
+    days["short_hedged"] = (-(sh["y_ret"] - sh["mkt"]) - COST).groupby(sh["day"]).mean()
     days["trades"] = lg.groupby("day").size()
     return days.fillna({"trades": 0})
 
@@ -87,6 +93,7 @@ def main(argv=None) -> int:
                           "trades": len(lg), "net_per_trade": float((lg["y_ret"] - COST).mean()),
                           "hedged_per_trade": float((lg["y_ret"] - lg["mkt"] - COST).mean()),
                           "always_long_per_trade": float((st["y_ret"] - COST).mean()),
+                          "short_net_per_trade": float((-st.loc[st["short"], "y_ret"] - COST).mean()),
                           "rank_ic_close": _rank_ic(st)})
             per_seed.setdefault(seed, []).append(st)
         for seed, parts in per_seed.items():
@@ -96,7 +103,7 @@ def main(argv=None) -> int:
             all_days[(name, seed)] = days
             r = {"arm": name, "seed": seed, "folds": len(parts), "trades": int(st["long"].sum()),
                  "net_per_trade": float((st.loc[st["long"], "y_ret"] - COST).mean())}
-            for col in ("long", "long_hedged", "always_long"):
+            for col in ("long", "long_hedged", "always_long", "short", "short_hedged"):
                 r.update(summarise(days, col, a.level))
             rows.append(r)
     res, fres = pd.DataFrame(rows), pd.DataFrame(frows)
@@ -105,7 +112,7 @@ def main(argv=None) -> int:
     with pd.option_context("display.width", 250, "display.max_columns", 40, "display.float_format", "{:.5f}".format):
         print(res.to_string(index=False))
         print(fres.groupby("arm")[["net_per_trade", "hedged_per_trade", "always_long_per_trade",
-                                   "rank_ic_close"]].mean().to_string())
+                                   "short_net_per_trade", "rank_ic_close"]].mean().to_string())
     if a.charts:
         charts(all_days, tables, fres, out, a.stage)
     return 0
