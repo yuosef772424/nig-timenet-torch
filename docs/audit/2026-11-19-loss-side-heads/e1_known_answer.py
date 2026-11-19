@@ -27,6 +27,9 @@ ARMS = {
     "base": {},
     "R": {"model": {"aux_heads": ["side_payoff", "upper_quantile"], "aux_trunk_grad": 0.0}},
     "S": {"model": {"aux_heads": ["side_payoff"], "aux_trunk_grad": 0.3}},
+    # amendment 1 (PREREGISTERED.md): the side-payoff rows weighted by 1 / NIG predictive variance (WLS)
+    "W": {"model": {"aux_heads": ["side_payoff", "upper_quantile"], "aux_trunk_grad": 0.0},
+          "train": {"aux_variance_weight": 1.0}},
 }
 NIG = head_spec("nig_regression", "close")
 SIDE = head_spec("side_payoff", "close").output_keys
@@ -86,7 +89,7 @@ def verdict(res: list[dict]) -> dict:
             checks[f"E1-c {k}"] = abs(r["pay_long_bias_sd"]) <= 0.3 and abs(r["pay_short_bias_sd"]) <= 0.3
         if "q_coverage" in r:
             checks[f"E1-d {k}"] = 0.87 <= r["q_coverage"] <= 0.93 and r["q_rho"] >= 0.8
-        if r["arm"] == "R":
+        if r["arm"] in ("R", "W"):
             checks[f"E1-e {k}"] = lo <= r["mu_rho"] <= hi
     return checks
 

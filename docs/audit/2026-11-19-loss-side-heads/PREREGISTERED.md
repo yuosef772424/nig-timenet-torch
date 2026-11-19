@@ -58,3 +58,17 @@ Three primary tests (multiple testing is counted in the reading). Profit is not 
 is whether the loss helps the decision); each book's scorecard verdict is reported beside it. A P that passes is a
 hypothesis for the next walk-forward on new seeds, not a result (rule C5). A P that fails gets the failure reading of
 `docs/PHILOSOPHY.md` section 3 before the next arm.
+
+## Amendment 1 (2026-11-19, after reading the E1 rows of R and S, before any walk-forward number)
+
+E1 showed the side-payoff heads (plain squared error) ranking the oracle payoff at 0.43-0.64 against 0.59-0.73 for
+the closed form of mu (E1-a / E1-b fail on every seed), while the quantile head passes (E1-d) and the read-out leaves
+mu alone (E1-e). Named cause, to be checked: the squared error on a heteroscedastic payoff is dominated by the
+volatile rows' noise, while the NIG loss weights each row by its inverse variance. New switch
+`TrainSettings.aux_variance_weight` (rows weighted by the detached NIG predictive variance^-v, batch mean 1; the
+minimiser stays the conditional mean payoff). New arm `W` = R with `aux_variance_weight` 1. E1 is re-run from fresh
+folders for ALL arms (the first run's seeds 0 and 1 resumed from the checkpoints of an interrupted run) with the same
+checks E1-a .. E1-e (E1-d / E1-e also on W). If W passes E1-a / E1-b, W joins the walk-forward as a fourth arm with
+the tests P1, P3 and P1L read on W exactly as on R; A0 / R / S already run on commit b8e0051, W runs on a later commit
+that differs only by the off-by-default switch (P1 / P3 / P1L compare books inside one arm, so the commit difference
+does not enter them).

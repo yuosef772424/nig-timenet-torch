@@ -131,3 +131,24 @@ def test_battery_table_carries_the_aux_columns():
     out = adapt(table)
     assert (out["pay_long"] == 0.01).all() and (out["pay_short"] == -0.02).all()
     np.testing.assert_allclose(out["q_up"], math.expm1(0.1))
+
+
+def test_variance_weight_reweights_rows_by_the_nig_variance_and_reaches_the_trainer_config():
+    n = 1000
+    y = torch.zeros(n)
+    keys = {"nu": "nu", "alpha": "alpha", "beta": "beta"}
+    calm, wild = torch.full((n // 2,), 1e-4), torch.full((n // 2,), 4e-4)
+    nig = {"nu": torch.ones(n), "alpha": torch.full((n,), 2.0), "beta": torch.cat([calm, wild]) / 2.0}
+    err = torch.cat([torch.zeros(n // 2), torch.full((n // 2,), 0.02)])   # only the volatile rows are wrong
+    long, short = side_payoffs(y, 0.0)
+    outs = {SIDE.output_keys["long"]: long + err, SIDE.output_keys["short"]: short + err, **nig}
+    plain = float(side_payoff_task_loss(y, outs, _cfg("side_payoff", cost_per_side=0.0), {})[0])
+    wls = float(side_payoff_task_loss(y, outs, _cfg("side_payoff", cost_per_side=0.0, variance_weight=1.0,
+                                                    nig_keys=keys), {})[0])
+    assert wls == pytest.approx(plain * 2 * (1 / 4) / (1 + 1 / 4))   # weights 1 / var scaled to mean 1: wild rows 0.4
+    on = flat_run.trainer_config(TARGET_COLUMNS, 0.1, TrainSettings(aux_variance_weight=1.0),
+                                 aux_kinds={"close": ["side_payoff"]})["targets"][SIDE.name]
+    assert on["variance_weight"] == 1.0 and on["nig_keys"]["beta"] == head_spec("nig_regression", "close").output_keys[
+        "beta"]
+    off = flat_run.trainer_config(TARGET_COLUMNS, 0.1, TrainSettings(), aux_kinds={"close": ["side_payoff"]})
+    assert "variance_weight" not in off["targets"][SIDE.name]

@@ -262,7 +262,11 @@ def _squared_or_huber(error: torch.Tensor, delta: float) -> torch.Tensor:
 def side_payoff_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_weight=None):
     """Each side's head regresses that side's payoff (``side_payoffs``): the squared error (or Huber,
     ``huber_delta`` > 0) of (prediction - payoff) / ``scale``, the short term weighted by ``short_weight``. The
-    predictions are in price-return units, so ``pred > 0`` reads "this side pays after cost"."""
+    predictions are in price-return units, so ``pred > 0`` reads "this side pays after cost".
+    ``variance_weight`` v > 0: each row's term is weighted by (its NIG predictive variance)^-v, detached and scaled to
+    a batch mean of 1 (``nig_keys`` names the nu / alpha / beta outputs of the target's NIG head). The weights depend
+    on the inputs only, so the minimiser stays the conditional mean payoff; v = 1 is weighted least squares, which
+    stops the volatile rows' noise from drowning the signal of the calm ones (LS1 E1 reading)."""
     keys = target_cfg["output_keys"]
     w = None if sample_weight is None else _flat(sample_weight)
     pay_long, pay_short = side_payoffs(_flat(y_true), target_cfg["cost_per_side"])
@@ -271,13 +275,21 @@ def side_payoff_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_we
     err_short = _flat(outputs[keys["short"]]) - pay_short
     per = (_squared_or_huber(err_long / scale, delta)
            + float(target_cfg["short_weight"]) * _squared_or_huber(err_short / scale, delta))
+    v = float(target_cfg["variance_weight"])
+    if v > 0:
+        nig = target_cfg["nig_keys"]
+        nu, alpha, beta = (_flat(outputs[nig[k]]).detach() for k in ("nu", "alpha", "beta"))
+        var = torch.clamp_min(beta * (1.0 + nu) / (nu * torch.clamp_min(alpha - 1.0, 1e-6)), 1e-12)
+        rw = var.pow(-v)
+        per = per * (rw / rw.mean())
     return _wmean(per, w), {"mae_long": _wmean(err_long.abs(), w), "mae_short": _wmean(err_short.abs(), w)}
 
 
 register_task_type("side_payoff", side_payoff_task_loss, ["mae_long", "mae_short"], supports_sample_weight=True,
-                   config_keys=("cost_per_side", "scale", "huber_delta", "short_weight"),
+                   config_keys=("cost_per_side", "scale", "huber_delta", "short_weight", "variance_weight",
+                                "nig_keys"),
                    default_options={"cost_per_side": 0.0008, "scale": 0.02, "huber_delta": 0.0,
-                                    "short_weight": 1.0})
+                                    "short_weight": 1.0, "variance_weight": 0.0, "nig_keys": {}})
 
 
 def quantile_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_weight=None):

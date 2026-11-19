@@ -155,7 +155,11 @@ def trainer_config(targets, label_smoothing: float, train: TrainSettings | None 
     for t_, extra in (aux_kinds or {}).items():   # LS1: only when the model has auxiliary heads (config pinned)
         kinds[t_] = kinds[t_] + list(extra)
         loss["uncertainty_weighting_exclude_task_types"] = ["evidential", *AUX_TASK_TYPES]
-        options.update({"side_payoff": {"loss_weight": t.aux_loss_weight, "cost_per_side": cost_per_side},
+        side = {"loss_weight": t.aux_loss_weight, "cost_per_side": cost_per_side}
+        if t.aux_variance_weight:
+            nig = head_spec("nig_regression", t_).output_keys
+            side.update(variance_weight=t.aux_variance_weight, nig_keys={k: nig[k] for k in ("nu", "alpha", "beta")})
+        options.update({"side_payoff": side,
                         "upper_quantile": {"loss_weight": t.aux_loss_weight, "quantile": t.aux_quantile}})
     used = {k for ks in kinds.values() for k in ks}
     return {"targets": targets_config(kinds, options_by_kind={k: v for k, v in options.items() if k in used}),
