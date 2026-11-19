@@ -39,6 +39,11 @@ out_s{0,1}` and `rolling-mres-001/out_s{0,1}`. Started again on the SAME commit 
 - M3: the three commands of `PREREGISTERED_M3_FULL.md` (reference A = `rolling-ind-001/out_R_s{0,1}`).
 - Write `docs/results/br1-001.md` and `docs/results/m3-full-001.md` with the seven headings of rule C7.
 
+- Hysteresis (owner, amendment 3 of `PREREGISTERED_M3.md`; local result in `m3-local-001.md`: helps M, pays for
+  neither on 60 coins): run `hold_exit.py --arm R=.../rolling-ind-001/out_R_s0 --arm R=..._s1 --arm BR=...
+  --arm M3=.../rolling-mres-001/out_s0 ...` on the full-artifact tables, where the long book was stronger (+0.17 to
+  +0.22 % per day for R). Note: an M3 / BR1 table's y_ret is the residual / BTC-relative return, not the own return.
+
 ## Also waiting on Drive (no new training needed)
 - `rolling-ind-001` arm I (tcn 64, 7 indicator channels, lr 1e-5): finished, not read. Read with `read_arms.py`
   against R; also BTC-hedged.
@@ -61,5 +66,5 @@ out_s{0,1}` and `rolling-mres-001/out_s{0,1}`. Started again on the SAME commit 
 | M3c | residual model as a FILTER for the long book (skip its lowest 3 deciles) | m3-local-001 |
 | M3e | target = mean simple residual return (or an upper-tail quantile head): the P&L sits in the right tail | m3-local-001 |
 | C1 | maker orders (about 0.02 % per side): at 0.04 % per round trip M's +0.04 % per trade breaks even | m3 note, owner question |
-| C2 | hold while a coin stays in the top decile (fewer round trips) | m3 note |
+| C2 | hold while a coin stays in the top 25-30 % (hysteresis): tested locally (amendment 3): helps M, pays for neither; repeat on the full artifact | m3 note, owner (another model's idea) |
 | LR | lr 1e-5 still improves at the last epoch: a warm-up + cosine schedule or more epochs before judging it | stage-1 look |

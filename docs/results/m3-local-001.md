@@ -42,6 +42,20 @@ residual inputs / residual label. Outputs stay in the session scratchpad (not on
   No variant is above V0 on both numbers on both seeds; V1 is below V0 on both seeds (the beta x market term brings
   back the noisy market forecast, amplified by the high-beta coins). On these 60 coins no long book pays at all.
 
+- **Exit threshold / hysteresis (amendment 3, owner; enter at the VAL 90th percentile of mu, exit below the 75th or
+  70th):** better for M, not for A, and it pays for neither. Mean day [95 % CI] / without the best 5 % of days, seed 0
+  and seed 1:
+
+  | book | exit at q90 (today) | exit at q75 | exit at q70 | periods held per entry (q90 -> q70) |
+  |---|---|---|---|---|
+  | A, own returns | +0.026 / -0.294; +0.012 / -0.312 | +0.054 / -0.256; -0.000 / -0.315 | +0.055 / -0.244; +0.001 / -0.310 | 1.1 -> 1.3-1.4 |
+  | M, residual returns (one leg's cost) | -0.051 [-0.085, -0.017] / -0.112; -0.050 / -0.111 | -0.005 / -0.059; +0.002 / -0.057 | +0.002 [-0.029, +0.031] / -0.050; +0.012 / -0.044 | 1.6 -> 3.3-3.5 |
+  | M's picks, OWN returns (long only; read after, information) | -0.022 / -0.171; -0.022 / -0.181 | -0.009 / -0.138; +0.001 / -0.142 | +0.001 / -0.127; -0.007 / -0.151 | as M |
+
+  M's mu is stable, so its picks stay in the top 30 % about 3.4 periods (27 h): the hysteresis cuts the round trips
+  by 25 % and takes M's hedged book from a CI below 0 to about 0. A's mu jumps (1.3 periods), so the rule changes
+  little for A (better on seed 0, not on seed 1: not "better" by the rule). No variant's CI is above 0.
+
 ## What the model learned
 
 M learned to rank coins inside a timestamp (IC 0.077 in every fold), and the ridge shows the label is what matters:
