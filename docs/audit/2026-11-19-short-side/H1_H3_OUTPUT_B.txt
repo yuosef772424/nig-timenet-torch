@@ -1,0 +1,24 @@
+
+######## seed 2: 654,487 TEST rows; U shorts 59,861, U longs 67,539
+H1b q per fold: f0=0.9, f1=0.5, f2=0.5, f3=0.7, f4=0.8, f5=0.9, f6=0.5
+  rule | kept shorts:      n  share  win%    net%              mean d% [CI]  busy d% | dropped:      n    net% | book:     net%              mean d% [CI] win d% w/o best%  busy d%
+  R0   | 59,861 100.0%  50.2  -0.139    +0.155 [-0.049, +0.346]   -0.083 |      0    +nan |   -0.013    +0.015 [-0.081, +0.107]   53.7    -0.129   -0.027
+  H1a  | 56,857  95.0%  50.2  -0.112    +0.154 [-0.008, +0.330]   -0.057 |  3,004  -0.649 |   +0.003    +0.020 [-0.080, +0.112]   53.7    -0.130   -0.008
+  H1b  | 20,174  33.7%  48.7  -0.184    +0.218 [-0.032, +0.468]   -0.126 | 39,687  -0.116 |   +0.034    +0.069 [-0.024, +0.175]   52.8    -0.107   +0.050
+  H3   | 17,438  29.1%  47.4  -0.132    +0.045 [-0.091, +0.223]   -0.114 | 42,423  -0.142 |   +0.052    +0.076 [-0.040, +0.191]   53.2    -0.109   +0.072
+  H13  | 12,578  21.0%  47.2  -0.145    -0.049 [-0.219, +0.117]   -0.159 | 47,283  -0.137 |   +0.061    +0.088 [-0.022, +0.218]   53.2    -0.105   +0.070
+
+######## seed 3: 654,487 TEST rows; U shorts 57,142, U longs 66,893
+H1b q per fold: f0=0.5, f1=0.6, f2=0.7, f3=0.8, f4=0.6, f5=0.5, f6=0.5
+  rule | kept shorts:      n  share  win%    net%              mean d% [CI]  busy d% | dropped:      n    net% | book:     net%              mean d% [CI] win d% w/o best%  busy d%
+  R0   | 57,142 100.0%  50.5  -0.078    +0.123 [-0.023, +0.277]   -0.026 |      0    +nan |   +0.015    +0.011 [-0.106, +0.107]   51.8    -0.147   -0.019
+  H1a  | 52,186  91.3%  50.3  -0.058    +0.107 [-0.059, +0.259]   +0.060 |  4,956  -0.286 |   +0.027    +0.020 [-0.097, +0.122]   52.6    -0.146   -0.020
+  H1b  | 20,949  36.7%  50.5  -0.012    +0.213 [+0.004, +0.472]   +0.121 | 36,193  -0.117 |   +0.069    +0.077 [-0.022, +0.185]   54.2    -0.100   +0.104
+  H3   | 15,607  27.3%  48.5  -0.070    +0.113 [-0.046, +0.275]   +0.061 | 41,535  -0.081 |   +0.063    +0.087 [-0.022, +0.206]   53.8    -0.097   +0.063
+  H13  | 12,693  22.2%  48.7  -0.042    +0.111 [-0.061, +0.279]   +0.093 | 44,449  -0.089 |   +0.072    +0.108 [-0.018, +0.227]   53.8    -0.080   +0.071
+
+== accept rule (each condition must hold on EVERY seed)
+  H1a  (1) kept net>0 and >R0 short: {2: False, 3: False}; (2) dropped<kept: {2: True, 3: True}; (3) book net and busy > R0: {2: True, 3: False}; accepted: False
+  H1b  (1) kept net>0 and >R0 short: {2: False, 3: False}; (2) dropped<kept: {2: False, 3: True}; (3) book net and busy > R0: {2: True, 3: True}; accepted: False
+  H3   (1) kept net>0 and >R0 short: {2: False, 3: False}; (2) dropped<kept: {2: True, 3: True}; (3) book net and busy > R0: {2: True, 3: True}; accepted: False
+  H13  (1) kept net>0 and >R0 short: {2: False, 3: False}; (2) dropped<kept: {2: False, 3: True}; (3) book net and busy > R0: {2: True, 3: True}; accepted: False
