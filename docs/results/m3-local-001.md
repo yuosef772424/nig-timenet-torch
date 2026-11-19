@@ -29,6 +29,19 @@ residual inputs / residual label. Outputs stay in the session scratchpad (not on
   And the BOTTOM decile earns more in mean simple return than the top at every horizon (24 h +0.154 %, 48 h +0.270 %):
   the ranking is right in log / median terms, the mean P&L is carried by the right tail of volatile coins.
 
+- **Putting the market back (amendment 2, owner): NOT better.** Long only, own returns, net of 0.16 %, TEST pooled
+  per seed (seed 0 / seed 1), mean day [95 % CI] and without the best 5 % of days:
+
+  | variant | net per trade | mean day | without best 5 % |
+  |---|---|---|---|
+  | V0: A's long book (today's way) | -0.115 / -0.088 % | +0.073 [-0.126, +0.279] / +0.020 [-0.176, +0.223] % | -0.261 / -0.317 % |
+  | V1: M's mu + beta x A's market forecast | -0.213 / -0.193 % | -0.021 / -0.072 % | -0.324 / -0.365 % |
+  | V2: A's bullish timestamps x M's top 10 % | -0.055 / -0.142 % | +0.034 / -0.052 % | -0.285 / -0.290 % |
+  | always long | -0.148 % | -0.148 [-0.254, -0.051] % | -0.302 % |
+
+  No variant is above V0 on both numbers on both seeds; V1 is below V0 on both seeds (the beta x market term brings
+  back the noisy market forecast, amplified by the high-beta coins). On these 60 coins no long book pays at all.
+
 ## What the model learned
 
 M learned to rank coins inside a timestamp (IC 0.077 in every fold), and the ridge shows the label is what matters:
