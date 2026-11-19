@@ -77,6 +77,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | module | what it is for | tags |
 |---|---|---|
 | `data_io/artifact.py` | Loader of a contract artifact exported by the TF side: refuses it unless every rule D1 field is present and consistent with the data itself. | artifact loader, rule d1, manifest, sealed coins, time seal, hash verification |
+| `data_io/btc_relative.py` | Write a BTC-relative copy of a contract artifact: each bar's log high / low / close moves minus BTC's of the same bar, RSI and stochastic of the coin / BTC price ratio, the coin's relative volume and BTC's own moves and RSI. | btc relative, market neutral inputs, ratio price, alt btc pair, rsi, stochastic, derived artifact, btc features |
 | `data_io/environments.py` | Test environments of MODEL_DEV_PROTOCOL section 3: E2 = one global label permutation, E3 = a training-era slice of the real artifact, E3p = its panel form (whole timestamps); nig-envs writes E1 .. E4. | e2 environment, e3 environment, shuffled labels, label permutation, real slice, panel slice, whole timestamps, training era, purged split, leakage canary, gates |
 | `data_io/indicator_channels.py` | Add indicator channels (RSI 14, stochastic %K / %D 14-3-3, relative quote volume) to every bar of the base frame's windows of a contract artifact, from the coin's own base-frame candles with full warm-up history. | indicator channels, rsi, stochastic, volume, relative volume, derived artifact, binance vision, no lookahead |
 | `data_io/loading.py` | One way to load a prepared dataset by base name, latest name or full name, memory-mapped or copied to local disk, with the rule D1 artifact checks applied by default. | dataset loading, latest name, mmap, local copy, artifact checks, rule d1 |
@@ -254,6 +255,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `colab_ops/scripts/run_models.py`: runnable (`python -m nig_timenet_torch.colab_ops.scripts.run_models`)
 - `data/cli.py`: runnable (`python -m nig_timenet_torch.data.cli`)
 - `data_io/artifact.py`: runnable (`python -m nig_timenet_torch.data_io.artifact`)
+- `data_io/btc_relative.py`: runnable (`python -m nig_timenet_torch.data_io.btc_relative`)
 - `data_io/environments.py`: runnable (`python -m nig_timenet_torch.data_io.environments`)
 - `data_io/indicator_channels.py`: runnable (`python -m nig_timenet_torch.data_io.indicator_channels`)
 - `data_io/lower_timeframe.py`: runnable (`python -m nig_timenet_torch.data_io.lower_timeframe`)
