@@ -73,6 +73,7 @@ def test_git_head_of_a_checkout_and_the_failure_without_one(tmp_path):
     assert len(git_head(tmp_path)) == 40
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_build_artifact_writes_when_a_path_is_set(tmp_path):
     s = tiny_settings(**{"output.path": str(tmp_path / "out"), "output.source_commit": SHA,
                          "output.producer": "unit-test"})
@@ -82,6 +83,7 @@ def test_build_artifact_writes_when_a_path_is_set(tmp_path):
     assert build_artifact(tiny_settings())[1] is None
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_named_output_writes_a_dated_folder_and_latest_that_the_loader_finds(dataset, tmp_path):
     from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
     out = {"output.directory": str(tmp_path), "output.source_commit": SHA, "output.stamp": "20261027_153000"}

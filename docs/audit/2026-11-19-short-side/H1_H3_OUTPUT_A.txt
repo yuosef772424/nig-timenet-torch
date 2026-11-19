@@ -1,0 +1,38 @@
+
+######## seed 0: 654,487 TEST rows; U shorts 46,007, U longs 69,810
+H1b q per fold: f0=0.9, f1=0.5, f2=0.7, f3=0.6, f4=0.9, f5=0.5, f6=0.5
+  rule | kept shorts:      n  share  win%    net%              mean d% [CI]  busy d% | dropped:      n    net% | book:     net%              mean d% [CI] win d% w/o best%  busy d%
+  R0   | 46,007 100.0%  52.0  -0.043    +0.152 [+0.007, +0.338]   +0.088 |      0    +nan |   +0.056    +0.043 [-0.065, +0.155]   52.1    -0.124   +0.013
+  H1a  | 43,478  94.5%  52.1  -0.016    +0.174 [+0.019, +0.349]   +0.097 |  2,529  -0.502 |   +0.068    +0.044 [-0.066, +0.161]   52.1    -0.123   +0.040
+  H1b  | 14,730  32.0%  51.4  -0.064    +0.209 [+0.013, +0.447]   +0.071 | 31,277  -0.033 |   +0.088    +0.055 [-0.088, +0.194]   52.9    -0.141   +0.099
+  H3   | 11,890  25.8%  50.3  -0.020    +0.134 [-0.008, +0.290]   -0.016 | 34,117  -0.051 |   +0.100    +0.073 [-0.075, +0.203]   52.4    -0.139   +0.100
+  H13  |  8,051  17.5%  49.4  -0.095    +0.100 [-0.056, +0.263]   -0.047 | 37,956  -0.032 |   +0.098    +0.081 [-0.046, +0.237]   52.7    -0.142   +0.109
+
+######## seed 1: 654,487 TEST rows; U shorts 53,052, U longs 60,620
+H1b q per fold: f0=0.9, f1=0.8, f2=0.8, f3=0.7, f4=0.7, f5=0.7, f6=0.8
+  rule | kept shorts:      n  share  win%    net%              mean d% [CI]  busy d% | dropped:      n    net% | book:     net%              mean d% [CI] win d% w/o best%  busy d%
+  R0   | 53,052 100.0%  51.4  -0.069    +0.127 [-0.028, +0.278]   -0.048 |      0    +nan |   +0.031    +0.017 [-0.085, +0.109]   52.3    -0.132   +0.032
+  H1a  | 51,241  96.6%  51.4  -0.049    +0.160 [-0.020, +0.327]   -0.027 |  1,811  -0.641 |   +0.042    +0.022 [-0.082, +0.116]   53.1    -0.129   +0.046
+  H1b  | 10,731  20.2%  50.5  -0.061    +0.312 [+0.069, +0.575]   -0.002 | 42,321  -0.071 |   +0.092    +0.080 [-0.040, +0.197]   54.5    -0.103   +0.126
+  H3   | 14,524  27.4%  49.4  -0.070    +0.080 [-0.078, +0.244]   -0.064 | 38,528  -0.069 |   +0.082    +0.064 [-0.072, +0.188]   53.9    -0.130   +0.116
+  H13  |  5,943  11.2%  48.7  -0.060    +0.045 [-0.152, +0.238]   -0.015 | 47,109  -0.070 |   +0.103    +0.108 [-0.031, +0.247]   54.8    -0.106   +0.133
+
+== accept rule (each condition must hold on EVERY seed)
+  H1a  (1) kept net>0 and >R0 short: {0: False, 1: False}; (2) dropped<kept: {0: True, 1: True}; (3) book net and busy > R0: {0: True, 1: True}; accepted: False
+  H1b  (1) kept net>0 and >R0 short: {0: False, 1: False}; (2) dropped<kept: {0: False, 1: True}; (3) book net and busy > R0: {0: True, 1: True}; accepted: False
+  H3   (1) kept net>0 and >R0 short: {0: False, 1: False}; (2) dropped<kept: {0: True, 1: False}; (3) book net and busy > R0: {0: True, 1: True}; accepted: False
+  H13  (1) kept net>0 and >R0 short: {0: False, 1: False}; (2) dropped<kept: {0: False, 1: True}; (3) book net and busy > R0: {0: True, 1: True}; accepted: False
+
+######## lead check and reading (2026-11-19), dataset A = rolling-single-001 seeds 0, 1 (development data)
+- Re-run by the lead from the PR branch: output identical. R0 matches short-side-001 (short top 20 % net -0.043 / -0.069 %).
+- Accept rule: no rule passes (condition 1 fails for every rule on both seeds: the kept shorts stay below 0).
+- Trivial comparison, NOT pre-registered (a reading aid, not a rule): the book with NO shorts (longs of U only)
+    seed 0: n=69,810 net=+0.121% mean day +0.157 [-0.007, +0.330] busy +0.127 w/o best -0.094 win days 52.9%
+    seed 1: n=60,620 net=+0.119% mean day +0.204 [+0.047, +0.396] busy +0.135 w/o best -0.042 win days 55.3%
+  It beats every rule's book (best rule book net +0.100 / +0.103, busy +0.109 / +0.133): the rules raise the book
+  only by trading fewer shorts. None of them finds shorts that pay.
+- What H1a does find: the 3-5 % of shorts whose predicted log fall does not cover s^2/2 + cost lose -0.50 / -0.64 %
+  per trade (kept: -0.016 / -0.049 %). The price-unit test picks the worst shorts, but what remains still loses.
+- The long-only book itself fails the scorecard verdict: negative without its best 5 % of days on both seeds (the
+  late-2024 rally, fold 3).
+- Dataset B (rolling-single-002, seeds 2 and 3, real VAL tables) is the pre-registered test; not run yet.

@@ -89,6 +89,7 @@ def test_render_table_has_one_line_per_check():
     assert len(render_table(checks, only={"fail"}).splitlines()) == 3
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_run_build_fitted_the_scalers_on_the_train_rows(ctx):
     """The default model (D-023 + D-026) has an input scaler (model.scalers) and a fitted NIG label scale (the
     ``label_scale`` buffer of model.label_scale, fitted in ``run.build``): both come from TRAIN rows only."""

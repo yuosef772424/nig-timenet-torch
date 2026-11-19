@@ -113,6 +113,7 @@ def test_per_coin_and_flip():
     assert "trade the direction" in flip[0] and "AGAINST" in flip[1]
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_verdict_separates_an_edge_from_noise():
     good = _frame(good=True)
     sections = battery(good, good, cost=0.0008)

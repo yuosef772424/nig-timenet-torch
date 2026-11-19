@@ -26,6 +26,7 @@ def report(tmp_path_factory):
     return gate_run.run_gates(run_settings(cfg, SHA), gate_settings(cfg), d / "out"), d
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_gate_run_writes_a_keyed_report(report):
     rep, d = report
     on_disk = json.loads((d / "out" / gate_run.GATE_REPORT).read_text())
@@ -57,6 +58,7 @@ def e1_art(tmp_path_factory):
     return d
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_gate_check_refuses_an_ungated_full_training(e1_art, tmp_path, report):
     tiny = ModelSettings("tiny_mlp", {})
     r = _built(e1_art, tmp_path, model=tiny)

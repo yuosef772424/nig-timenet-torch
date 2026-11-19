@@ -124,6 +124,7 @@ def test_the_no_equivalent_table_names_real_roadmap_steps(nb):
     assert "Later" in roadmap
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_main_notebook_runs_the_fixture_end_to_end_on_a_fake_drive(tmp_path, art):
     """Settings -> paths -> restore -> data -> split -> model -> train -> push -> health -> test report -> battery ->
     summary -> push -> battery of the finished folder, through the workflow.run steps, on the fixture artifact
@@ -148,6 +149,7 @@ def test_main_notebook_runs_the_fixture_end_to_end_on_a_fake_drive(tmp_path, art
     assert ns2["restored"]["copied"] > 0 and ns2["restored"]["restored_from"] == str(drive / "t3b")
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_experiment_switches_reach_the_settings_and_a_finished_run_is_read_with_its_last_weights(tmp_path, art):
     """FX1_BUNDLE / FX1_NIG_SCALE land in model.overrides, KEEP_LAST_WEIGHTS in the early-stop section, and
     LOAD_WEIGHTS reads a finished run (best or last epoch) without training; bad combinations raise."""

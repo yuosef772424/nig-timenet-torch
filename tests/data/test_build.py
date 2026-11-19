@@ -75,6 +75,7 @@ def test_a_missing_reference_coin_is_an_error_not_silent_zeros():
         build_dataset(s, loader=loader)
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_spill_and_workers_do_not_change_the_numbers(tmp_path):
     base = build_dataset(tiny_settings())
     for extra in ({"runtime.workers": 3}, {"runtime.spill_dir": str(tmp_path / "spill")}):
@@ -84,6 +85,7 @@ def test_spill_and_workers_do_not_change_the_numbers(tmp_path):
     assert not (tmp_path / "spill").exists()
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_window_count_follows_stride_and_horizon():
     a = build_dataset(tiny_settings())
     b = build_dataset(tiny_settings(**{"windows.stride": 16}))
@@ -105,6 +107,7 @@ def test_no_window_crosses_a_gap():
     assert not ((first_input <= gap_lo) & (ts >= gap_hi)).any()
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_sample_filters_by_feature_and_by_expression():
     df = pd.DataFrame({"close": [1.0, 2.0, 3.0], "RSI_14": [10.0, 50.0, 90.0]})
     assert sample_filter_mask(df, [{"feature": "RSI_14", "op": ">", "value": 20}]).tolist() == [False, True, True]

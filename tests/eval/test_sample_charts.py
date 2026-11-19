@@ -50,6 +50,7 @@ def test_vision_klines_reads_the_archive_between_the_bounds():
     assert list(f.columns) == ["open", "high", "low", "close", "volume", "quote_volume", "trades"]
 
 
+@pytest.mark.slow  # rule E3: fast suite under 100 s on CI (owner 2026-11-19); still runs in CI
 def test_facts_see_the_pump_and_the_chart_is_written(tmp_path):
     pytest.importorskip("matplotlib")
     s = sc.Sample("PUMPUSDT", "2026-04-18", "short", -172.0, "test", "pump")
