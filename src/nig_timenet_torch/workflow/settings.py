@@ -46,6 +46,9 @@ class RollingSettings:
     max_folds: int | None = None
     retrain_every_k: int = 1           # retrain on fold i iff i % k == 0, else reuse the last trained model
     seeds: tuple[int, ...] = (0,)
+    # only these fold indices (None = every fold): several processes share one study, each on its folds (owner
+    # 2026-11-20); needs retrain_every_k == 1 (a reused model comes from an earlier fold)
+    fold_ids: tuple[int, ...] | None = None
     # D-031: a fold has no validation set of its own; the last ``val_share`` of its train window (by time, purged by
     # label end + embargo) is cut off as the validation of epoch selection and early stopping. The test window is
     # never read by training or selection.
@@ -63,6 +66,13 @@ class RollingSettings:
         if self.retrain_every_k < 1 or (self.max_folds is not None and self.max_folds < 1):
             raise ValueError("retrain_every_k and max_folds must be >= 1")
         object.__setattr__(self, "seeds", tuple(int(s) for s in self.seeds))
+        if self.fold_ids is not None:
+            ids = tuple(int(i) for i in self.fold_ids)
+            if not ids or min(ids) < 0 or len(set(ids)) != len(ids):
+                raise ValueError(f"fold_ids must be distinct indices >= 0, got {self.fold_ids!r}")
+            if self.retrain_every_k != 1:
+                raise ValueError("fold_ids needs retrain_every_k == 1 (a reused model comes from an earlier fold)")
+            object.__setattr__(self, "fold_ids", ids)
 
 
 @dataclass(frozen=True)

@@ -14,6 +14,12 @@ Why: the artifact `c572b1b36960` holds only three channels (log high / low / clo
   same meaning as above.
   `market_residual` (owner 2026-11-19, method 3): `add_market_residual(candles)` None = candles from the archive
   through the cache (`cache`, `fetch` as above); a callable (tests, the local vision_slice raw files) replaces it.
+- `RollingSettings.fold_ids` (AI2, owner message 2026-11-20: "can all folds run in parallel, since each fold trains
+  an independent model", then "try it with the next run"): None = every fold, exactly as before. A tuple runs only
+  those fold indices, so several processes share one study and one `out`; the process that finds every fold x seed
+  on disk writes `rolling_summary.*`, the pooled days and the manifest (the others print "rolling part OK"). Needs
+  `retrain_every_k == 1`. Side effect for every run: `rolling_summary.json` `settings` gains the key
+  `fold_ids: null`.
 
 - `nig_timenet_torch.data_io.btc_relative.add_btc_relative(cache)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.btc_relative.add_btc_relative(fetch)`: `<new>` -> `None`
@@ -31,3 +37,4 @@ Why: the artifact `c572b1b36960` holds only three channels (log high / low / clo
 - `nig_timenet_torch.data_io.market_residual.add_market_residual(candles)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.market_residual.add_market_residual(fetch)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.market_residual.add_market_residual(overwrite)`: `<new>` -> `False`
+- `nig_timenet_torch.workflow.settings.RollingSettings(fold_ids)`: `<new>` -> `None`

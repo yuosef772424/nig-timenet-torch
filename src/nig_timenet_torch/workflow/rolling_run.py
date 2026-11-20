@@ -6,6 +6,9 @@ PITFALLS: a fold has no validation set of its own: the last ``val_share`` of its
     and stops early, the test window is touched only by the report after training (D-031); a fold that REUSES the
     last model (retrain_every_k) is evaluated with the scalers and weights of the fold it was trained on; every fold
     x seed has its own run folder, so a cut job resumes (a finished fold re-reads its checkpoint, nothing retrains);
+    with ``fold_ids`` several processes share one ``out``: each writes only its folds, and the summary files are
+    written by the process that finds every fold x seed of the geometry on disk (the others return
+    ``complete: False``);
     ``split.train_end`` / ``val_end`` / ``embargo_hours`` of the RunSettings are ignored (the fold geometry decides),
     the coin exclusions, ``max_rows`` and everything under ``train`` / ``model`` / ``evaluation`` apply per fold.
     Exploratory (rule C5): the spread across folds is a look, the number of folds is small.
@@ -74,6 +77,17 @@ def _reuse(run: steps.Run, last: steps.Run, fold: RollingFold) -> None:
     run.bounds = (last.bounds[0], run.bounds[1])     # the table says when the model's training data ended
 
 
+def _rows_on_disk(out, folds: list[int], seeds) -> list[dict]:
+    """The fold rows already written under ``out`` (by this process or another one sharing the study)."""
+    rows = []
+    for f in folds:
+        for seed in seeds:
+            p = fold_dir(out, f, seed) / "fold_row.json"
+            if p.is_file():
+                rows.append(json.loads(p.read_text(encoding="utf-8")))
+    return rows
+
+
 def _scalars(report: dict) -> dict:
     return {k: float(v) for k, v in steps._flat(report) if not any(t in k for t in _SKIP)}
 
@@ -121,6 +135,13 @@ def run_rolling(settings: RunSettings, rolling: RollingSettings, out, *, on_epoc
             if trained:
                 last[seed] = run
             run.x.clear(), run.y.clear(), run.extra.pop("tables", None)    # free the tensors; the model stays
+    if rolling.fold_ids is not None:     # a share of the study: the summary waits for every fold x seed
+        every = rolling_folds(art.dataset, dataclasses.replace(rolling, fold_ids=None))
+        rows, rolling = _rows_on_disk(out, [f.index for f in every], rolling.seeds), dataclasses.replace(
+            rolling, fold_ids=None)
+        if len(rows) < len(every) * len(rolling.seeds):
+            return {"complete": False, "n_folds": len({r["fold"] for r in rows}),
+                    "data_fingerprint": art.manifest.data_fingerprint}
     summary = {**summarize(rows, rolling), "data_fingerprint": art.manifest.data_fingerprint}
     pd.DataFrame([{k: v for k, v in r.items() if k != "metrics"} | r["metrics"] for r in rows]).to_csv(
         out / "rolling_folds.csv", index=False)

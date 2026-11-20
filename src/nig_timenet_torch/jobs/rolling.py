@@ -6,7 +6,9 @@ PITFALLS: exploratory (rule C5); the fold geometry (``rolling``: spans, step, em
     single split of ``split`` (its coin exclusions and ``max_rows`` still apply per fold); every fold x seed has its own
     checkpoint folder under ``run_dir`` so a cut job resumes; ``train.staged`` makes every fold train staged;
     a config key not in RollingConfig raises and ``rolling`` / ``train`` are built strictly from their dataclasses;
-    the gates of rule C6 are not run here (the study reads a configuration that passed them, ROADMAP F2).
+    the gates of rule C6 are not run here (the study reads a configuration that passed them, ROADMAP F2);
+    ``rolling.fold_ids`` runs a share of the folds: the process that completes the set writes the summary, the pooled
+    days and the manifest, the others print "rolling part OK" and write none of them.
 
 Config (``RollingConfig``): ``device``, ``run_dir`` (required), ``rolling`` (RollingSettings fields, required: the spans
 have no defaults), ``artifact``, ``base_tf``, ``max_rows`` (smoke mode), ``batch_size``, ``lr``, ``model_overrides``,
@@ -85,9 +87,12 @@ def main(argv: list[str] | None = None) -> int:
     contract.write_device_json(out, cfg.device)
     summary = rolling_run.run_rolling(run_settings(cfg, _code_sha()), rolling_settings(cfg), out,
                                       ckpt_root=cfg.run_dir)
+    if summary.get("complete") is False:     # rolling.fold_ids: another process finishes the study
+        print(f"rolling part OK: {summary['n_folds']} folds on disk, the summary waits for the other parts")
+        return 0
     if cfg.day_metrics:        # the days of every fold's test window, pooled per seed (the folds do not overlap)
         for seed in rolling_settings(cfg).seeds:
-            folders = [rolling_run.fold_dir(out, f, seed) for f in range(summary["n_folds"])]
+            folders = [rolling_run.fold_dir(out, p["fold"], seed) for p in summary["per_fold"]]
             panel_report.panel_from_folders(folders, out_dir=out / f"pooled_days_seed_{seed}")
     contract.write_manifest(out, config, input_fingerprint=summary["data_fingerprint"], started=started)
     print(f"rolling OK: {summary['n_folds']} folds")
