@@ -77,10 +77,13 @@ line range). A module without a card shows its first docstring line; it gets a c
 | module | what it is for | tags |
 |---|---|---|
 | `data_io/artifact.py` | Loader of a contract artifact exported by the TF side: refuses it unless every rule D1 field is present and consistent with the data itself. | artifact loader, rule d1, manifest, sealed coins, time seal, hash verification |
+| `data_io/btc_relative.py` | Write a BTC-relative copy of a contract artifact: each bar's log high / low / close moves minus BTC's of the same bar, RSI and stochastic of the coin / BTC price ratio, the coin's relative volume and BTC's own moves and RSI. | btc relative, market neutral inputs, ratio price, alt btc pair, rsi, stochastic, derived artifact, btc features |
 | `data_io/environments.py` | Test environments of MODEL_DEV_PROTOCOL section 3: E2 = one global label permutation, E3 = a training-era slice of the real artifact, E3p = its panel form (whole timestamps); nig-envs writes E1 .. E4. | e2 environment, e3 environment, shuffled labels, label permutation, real slice, panel slice, whole timestamps, training era, purged split, leakage canary, gates |
+| `data_io/indicator_channels.py` | Add indicator channels (RSI 14, stochastic %K / %D 14-3-3, relative quote volume) to every bar of the base frame's windows of a contract artifact, from the coin's own base-frame candles with full warm-up history. | indicator channels, rsi, stochastic, volume, relative volume, derived artifact, binance vision, no lookahead |
 | `data_io/loading.py` | One way to load a prepared dataset by base name, latest name or full name, memory-mapped or copied to local disk, with the rule D1 artifact checks applied by default. | dataset loading, latest name, mmap, local copy, artifact checks, rule d1 |
 | `data_io/lower_timeframe.py` | Add a finer timeframe's input window (X_<tf>, e.g. the last 32 1h bars) to an existing contract artifact, row by row, from Binance archive candles, as a new contract artifact with the same rows, labels and coins. | lower timeframe, multi timeframe, 1h window, derived artifact, log moves, binance vision, alignment, x_1h |
 | `data_io/market_channel.py` | Add a market-level input channel from an outside DAILY series (e.g. the USDT supply) to a contract artifact: for every bar of every window, the log growth of the series over k days as known the day BEFORE that bar. | market channel, outside data, usdt supply, stablecoin, daily series, log growth, no lookahead, derived artifact |
+| `data_io/market_residual.py` | Write a market-residual copy of a contract artifact: each bar's coin moves minus beta x the equal-weight market move (beta per coin from its own past only), residual RSI / stochastic, market features, and the close label made residual too. | market residual, beta, market neutral, idiosyncratic return, equal weight market, derived artifact, rolling beta |
 | `data_io/npy_dir.py` | Reader of the npy_dir dataset format (manifest.json + one .npy per array + meta.pkl), optionally memory- mapped, and a local-disk copy helper. | npy dir, dataset reader, mmap, localize, data format, manifest |
 | `data_io/split_plan.py` | One global train/val/test split with purge by label end and embargo, plus the per-row times it needs (feature start, feature end, label end) derived from last_candles. | split plan, purge embargo, label end, sample times, leakage check |
 | `data_io/synthetic.py` | E1 test environment (MODEL_DEV_PROTOCOL section 3): synthetic 4h bars from intrabar random walks, HAR-like volatility, a planted close drift of known IC; a contract artifact with each label's exact conditional mean / sd. | synthetic data, e1 environment, oracle, planted signal, known ic, heteroscedastic noise, har volatility, intrabar path, contract artifact, gates |
@@ -253,9 +256,12 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `colab_ops/scripts/run_models.py`: runnable (`python -m nig_timenet_torch.colab_ops.scripts.run_models`)
 - `data/cli.py`: runnable (`python -m nig_timenet_torch.data.cli`)
 - `data_io/artifact.py`: runnable (`python -m nig_timenet_torch.data_io.artifact`)
+- `data_io/btc_relative.py`: runnable (`python -m nig_timenet_torch.data_io.btc_relative`)
 - `data_io/environments.py`: runnable (`python -m nig_timenet_torch.data_io.environments`)
+- `data_io/indicator_channels.py`: runnable (`python -m nig_timenet_torch.data_io.indicator_channels`)
 - `data_io/lower_timeframe.py`: runnable (`python -m nig_timenet_torch.data_io.lower_timeframe`)
 - `data_io/market_channel.py`: runnable (`python -m nig_timenet_torch.data_io.market_channel`)
+- `data_io/market_residual.py`: runnable (`python -m nig_timenet_torch.data_io.market_residual`)
 - `data_io/vision_slice.py`: runnable (`python -m nig_timenet_torch.data_io.vision_slice`)
 - `doctor/__main__.py`: runnable (`python -m nig_timenet_torch.doctor`)
 - `doctor/influence.py`: runnable (`python -m nig_timenet_torch.doctor.influence`)

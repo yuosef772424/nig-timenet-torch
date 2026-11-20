@@ -131,3 +131,45 @@ def test_summarize_mean_and_spread():
     assert out["per_fold"][0]["metrics"]["m"] == {"mean": 2.0, "sd": pytest.approx(np.sqrt(2.0)), "min": 1.0,
                                                   "max": 3.0, "n": 2}
     assert out["across_folds"]["m"]["mean"] == 3.5 and out["across_folds"]["m"]["min"] == 2.0
+
+
+@pytest.mark.slow  # rule E3: trains 2 x 2 folds on CPU; runs in CI's slow step
+def test_fold_ids_split_a_study_into_parts_that_give_the_full_result(art, tmp_path):  # noqa: F811
+    """Owner 2026-11-20: folds train independent models, so processes may share one study by fold_ids. The part that
+    completes the set writes the summary; it equals the summary of the whole study run in one process."""
+    whole = run_rolling(settings(art, tmp_path), rolling(max_folds=2), tmp_path / "whole")
+    out = tmp_path / "parts"
+    first = run_rolling(settings(art, tmp_path), rolling(max_folds=2, fold_ids=(1,)), out)
+    assert first == {"complete": False, "n_folds": 1, "data_fingerprint": whole["data_fingerprint"]}
+    assert not (out / "rolling_summary.json").exists() and (fold_dir(out, 1, 0) / "fold_row.json").is_file()
+    last = run_rolling(settings(art, tmp_path), rolling(max_folds=2, fold_ids=(0,)), out)
+    assert last == whole and last["settings"]["fold_ids"] is None
+    assert json.loads((out / "rolling_summary.json").read_text()) == json.loads(
+        (tmp_path / "whole" / "rolling_summary.json").read_text())
+    for f in (0, 1):
+        a, b = read_table(fold_dir(out, f, 0) / "test_table.parquet"), read_table(
+            fold_dir(tmp_path / "whole", f, 0) / "test_table.parquet")
+        pd.testing.assert_frame_equal(a, b)
+
+
+def test_fold_ids_are_checked():
+    assert rolling(fold_ids=[2, 0]).fold_ids == (2, 0)
+    for bad in ((), (0, 0), (-1,)):
+        with pytest.raises(ValueError, match="distinct"):
+            rolling(fold_ids=bad)
+    with pytest.raises(ValueError, match="retrain_every_k"):
+        rolling(fold_ids=(1,), retrain_every_k=2)
+
+
+def test_fold_ids_keep_the_same_folds_and_refuse_a_missing_one(art):  # noqa: F811
+    from nig_timenet_torch.workflow import run_common
+    ds = run_common.load_data(RunSettings(run_dir="x", data=LoaderSettings(name=str(art)))).dataset
+    every = rolling_folds(ds, rolling())
+    some = rolling_folds(ds, rolling(fold_ids=(len(every) - 1, 0)))
+    assert [f.index for f in some] == [0, len(every) - 1]
+    for f in some:
+        g = every[f.index]
+        assert (f.train_end, f.test_end) == (g.train_end, g.test_end)
+        assert np.array_equal(f.plan.train_idx, g.plan.train_idx) and np.array_equal(f.plan.test_idx, g.plan.test_idx)
+    with pytest.raises(ValueError, match="do not exist"):
+        rolling_folds(ds, rolling(fold_ids=(len(every),)))
