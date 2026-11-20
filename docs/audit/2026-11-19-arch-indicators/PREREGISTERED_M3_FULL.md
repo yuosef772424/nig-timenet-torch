@@ -21,3 +21,12 @@ lr 3e-4, 8 epochs, patience 3, 400k rows, top 100 coins, 7 expanding folds, seed
 - Pays: M's top-decile residual gross per trade above 0.16 %.
 - Market back better: V1 or V2 above V0 on the mean day AND on the mean without the best 5 % of days.
 A fail gets the failure reading of rule C7 before any next arm.
+
+## Amendment 1 (2026-11-20, after the three readings above, before the numbers below)
+V1 (M's residual forecast + beta x the market forecast, VAL 90th percentile) passed "market back better" on both
+seeds (`docs/results/m3-full-001.md`). Before any claim, V1 is read as a sceptic with
+`docs/audit/2026-11-20-readings/m3_v1_read.py` (information, no new accept rule): day mean per fold and per year;
+the same book minus the equal-weight market move and minus BTC (two round trips); beta to BTC; share of days with a
+trade and trades per day; and a timing-only book on the same timestamps (every row of a timestamp that V1 trades,
+equal weight) to separate the coin choice from the timing. V1 stays a hypothesis for live use until it repeats on
+other seeds (2, 3) of the same commit.
