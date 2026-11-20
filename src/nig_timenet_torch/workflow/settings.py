@@ -17,6 +17,7 @@ import pandas as pd
 
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
+from nig_timenet_torch.trainer.day_weights import DayWeightSettings
 from nig_timenet_torch.trainer.groups import BATCH_ORDERS
 from nig_timenet_torch.trainer.staged import StageSettings
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
@@ -162,6 +163,10 @@ class TrainSettings:
     # rows inside in time order, the batches shuffled (trainer.groups.BATCH_ORDERS). No extra input channel.
     batch_order: str = "rows"
     time_block_bars: int = 1                               # read only by "time_blocks"; >= 1
+    # owner 2026-11-20 (D-039): None = every training row weighs 1 (as before); a DayWeightSettings = every UTC day
+    # carries the same total weight and the days the model fails on (high loss, measured each epoch) weigh more
+    # (trainer.day_weights); flat epoch loop with row batches only
+    day_weights: DayWeightSettings | None = None
 
     def __post_init__(self):
         if self.batch_by not in BATCHINGS:
@@ -239,6 +244,11 @@ class RunSettings:
         if self.split.cross_section and BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]:
             raise ValueError(f"train.batch_order {self.train.batch_order!r} groups rows by timestamp; the panel path "
                              f"(split.cross_section = True) already batches whole timestamps: use batch_order 'rows'")
+        if self.train.day_weights is not None and (
+                self.split.cross_section or self.train.staged is not None or BATCHINGS[self.train.batch_by]
+                or BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]):
+            raise ValueError("train.day_weights needs the flat epoch loop with batches of shuffled rows: not with "
+                             "split.cross_section, train.staged, a grouping batch_by or a timestamp batch_order")
         if self.train.staged is not None and BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]:
             raise NotImplementedError(f"train.batch_order {self.train.batch_order!r} is not implemented for staged "
                                       f"training (it samples its own batches from the stage rows)")
