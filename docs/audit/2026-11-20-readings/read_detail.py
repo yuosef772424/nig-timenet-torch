@@ -6,11 +6,12 @@ OUT_DIR is a rolling job's ``--out`` (``fold_<k>_seed_<s>/battery_table_{val,tes
 The long book is the one of ``2026-11-19-arch-indicators/read_arms.py`` (VAL 90th percentile of mu, net = y_ret -
 0.0016). Writes CSVs to DIR and prints them:
 
-- ``training.csv``: best epoch, epochs done, the report's close rank IC per fold x seed (learned, underfit,
+- ``training.csv``: best epoch, epochs done, the report's TEST close rank IC per fold x seed (learned, underfit,
   memorised?);
 - ``error_map.csv``: the long book per group (decile of sigma and of mu inside the book, coin volatility tercile,
   market regime = sign of the equal-weight move of the timestamp, year): trades, days, hit rate after cost, gross,
-  net, net minus the market, and the trivial baseline on the SAME group = always long on all rows of the group;
+  net, net minus the market, and the trivial baseline on the SAME group = always long on all rows of the group
+  (empty for the groups inside the book, whose baseline is the market column);
 - ``worst.csv``: the 20 long trades with the largest loss among the top 2 % of mu, and the 10 worst days;
 - ``bias.csv``: per fold, share of rows with mu > 0 against share with y_ret > 0, mean mu against mean y_ret;
 - ``selection.csv``: four rules fitted on VAL only (top 5 % mu; top 10 % mu with sigma under its VAL median; top 10 %
@@ -56,7 +57,7 @@ def prepare(val: pd.DataFrame, st: pd.DataFrame) -> pd.DataFrame:
     return st
 
 
-def group_rows(st: pd.DataFrame, key: pd.Series, name: str) -> list[dict]:
+def group_rows(st: pd.DataFrame, key: pd.Series, name: str, baseline: bool = True) -> list[dict]:
     rows = []
     for g, part in st.groupby(key, observed=True):
         lg = part[part["long"]]
@@ -64,7 +65,7 @@ def group_rows(st: pd.DataFrame, key: pd.Series, name: str) -> list[dict]:
                      "days": int(lg["day"].nunique()), "hit_after_cost": float((lg["net"] > 0).mean()),
                      "gross": float(lg["y_ret"].mean()), "net": float(lg["net"].mean()),
                      "net_minus_mkt": float((lg["net"] - lg["mkt"]).mean()),
-                     "always_long_same_rows": float(part["net"].mean())})
+                     "always_long_same_rows": float(part["net"].mean()) if baseline else np.nan})
     return rows
 
 
@@ -73,9 +74,9 @@ def error_map(st: pd.DataFrame) -> list[dict]:
     out = []
     sig_dec = pd.Series(np.nan, index=st.index)
     sig_dec[lg_mask] = pd.qcut(st.loc[lg_mask, "sigma"].rank(method="first"), 5, labels=False) + 1
-    out += group_rows(st[lg_mask], sig_dec[lg_mask], "sigma quintile in book (5 = widest)")
+    out += group_rows(st[lg_mask], sig_dec[lg_mask], "sigma quintile in book (5 = widest)", False)
     mu_dec = pd.qcut(st.loc[lg_mask, "mu"].rank(method="first"), 5, labels=False) + 1
-    out += group_rows(st[lg_mask], mu_dec, "mu quintile in book (5 = most bullish)")
+    out += group_rows(st[lg_mask], mu_dec, "mu quintile in book (5 = most bullish)", False)
     vol = st.groupby("coin")["y_ret"].std()
     terc = pd.qcut(vol.rank(method="first"), 3, labels=["calm", "mid", "wild"])
     out += group_rows(st, st["coin"].map(terc), "coin volatility tercile")
@@ -116,7 +117,7 @@ def main(argv=None) -> int:
             st = prepare(val, st)
             train.append({"arm": name, "fold": fold, "seed": seed,
                           "best_epoch": meta.get("best_epoch"), "epochs_done": meta.get("epochs_done"),
-                          "val_close_rank_ic": meta.get("metrics", {}).get(
+                          "test_close_rank_ic": meta.get("metrics", {}).get(
                               "targets.close.skill.rank_ic_by_timestamp")})
             bias.append({"arm": name, "fold": fold, "seed": seed, "share_mu_up": float((st["mu"] > 0).mean()),
                          "share_y_up": float((st["y_ret"] > 0).mean()), "mean_mu": float(st["mu"].mean()),
