@@ -28,3 +28,9 @@ more processes add information, not speed. Added: R and M3 on seeds 4 and 5 (job
 `rolling-mres45-001`), same commit and configuration. The rule is unchanged and now applies to seeds 2, 3, 4 and 5:
 "V1 replicates" if it holds on at least 3 of the 4 new seeds (one seed of four may fail by chance), and V1 is NOT
 recommended for live use if it fails on 2 or more.
+
+## Amendment 2 (2026-11-20, owner: "two seeds are enough"; before any number of any seed was read)
+Seeds 4 and 5 were stopped a few minutes after their start (no fold finished; their partial checkpoints stay under
+`rolling-r45-001/train_s*` and `rolling-mres45-001/train_s*`, unread). Amendment 1 is withdrawn: the rule applies to
+seeds 2 and 3 only, as first written ("V1 replicates" if it holds on BOTH). The 8 processes went back to the GPU,
+which is the bottleneck (99 % busy), not the RAM.
