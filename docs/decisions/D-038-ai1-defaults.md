@@ -20,6 +20,11 @@ Why: the artifact `c572b1b36960` holds only three channels (log high / low / clo
   on disk writes `rolling_summary.*`, the pooled days and the manifest (the others print "rolling part OK"). Needs
   `retrain_every_k == 1`. Side effect for every run: `rolling_summary.json` `settings` gains the key
   `fold_ids: null`.
+- `market_residual` study options (AI2, owner message 2026-11-20: "verify the M3 results, form hypotheses to improve
+  it and test them on the local CPU"; local study `docs/results/m3-improve-local-001.md`): `add_market_residual(label)`
+  "residual" = the residual close label as before ("cs_rank_gauss" = its normal score inside the timestamp, H3);
+  `add_market_residual(beta_bars)` and `rolling_beta(bars)` 180 = the beta window as before (`BETA_BARS`, H4). The
+  default output is unchanged (fingerprint 71c1f2bd on the local artifact).
 
 - `nig_timenet_torch.data_io.btc_relative.add_btc_relative(cache)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.btc_relative.add_btc_relative(fetch)`: `<new>` -> `None`
@@ -33,8 +38,11 @@ Why: the artifact `c572b1b36960` holds only three channels (log high / low / clo
 - `nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(overwrite)`: `<new>` -> `False`
 - `nig_timenet_torch.data_io.indicator_channels.add_indicator_channels(workers)`: `<new>` -> `16`
 - `nig_timenet_torch.data_io.indicator_channels.indicator_windows(x_close)`: `<new>` -> `None`
+- `nig_timenet_torch.data_io.market_residual.add_market_residual(beta_bars)`: `<new>` -> `180`
 - `nig_timenet_torch.data_io.market_residual.add_market_residual(cache)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.market_residual.add_market_residual(candles)`: `<new>` -> `None`
 - `nig_timenet_torch.data_io.market_residual.add_market_residual(fetch)`: `<new>` -> `None`
+- `nig_timenet_torch.data_io.market_residual.add_market_residual(label)`: `<new>` -> `'residual'`
 - `nig_timenet_torch.data_io.market_residual.add_market_residual(overwrite)`: `<new>` -> `False`
+- `nig_timenet_torch.data_io.market_residual.rolling_beta(bars)`: `<new>` -> `180`
 - `nig_timenet_torch.workflow.settings.RollingSettings(fold_ids)`: `<new>` -> `None`
