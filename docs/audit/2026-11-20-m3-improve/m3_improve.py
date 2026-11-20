@@ -2,6 +2,7 @@
 
     python m3_improve.py leak RAW_DIR RAW_ART RES_ART
     python m3_improve.py variants RAW_DIR RAW_ART RES_ART RG_ART
+    python m3_improve.py detail --base OUT_DIR [--base ...] [--arm NAME=OUT_DIR ...] --raw RAW_DIR --res-art RES_ART
     python m3_improve.py read --base OUT_DIR [--base ...] --arm NAME=OUT_DIR[:mean] [--arm ...] --res-art RES_ART
         [--own NAME ...]
 
@@ -403,6 +404,83 @@ def read(base: str, arms: list[str], res_art: str, own: list[str]) -> None:
         print(pd.DataFrame(bias).to_string(index=False))
 
 
+# ---------------------------------------------------------------------------------------------------------- detail
+def _load_arm(paths, ref, triv):
+    """{seed: (val, test)} of one arm joined to B's residual return and the trivial scores."""
+    per_seed: dict[int, list] = {}
+    for f, s, va, te in (x for p in paths for x in _folds(Path(p))):
+        yv, yt = ref[(f, s)]
+        parts = []
+        for df, yr in ((va, yv), (te, yt)):
+            df = df.join(yr.rename("y_res"), on=["coin", "end_time"]).dropna(subset=["y_res"])
+            df["fold"] = f
+            parts.append(df.join(triv, on=["coin", "end_time"]))
+        per_seed.setdefault(s, []).append(parts)
+    return {s: (pd.concat(p[0] for p in v), pd.concat(p[1] for p in v)) for s, v in sorted(per_seed.items())}
+
+
+def detail(base: list[str], arms: list[str], raw: str, res_art: str) -> None:
+    """The C7 reading of each arm (score = mu): IC and top-decile residual gross per group of rows, the worst
+    top-decile rows, and three VAL-fitted selection rules (information: residual gross per trade, no cost)."""
+    ref = {}
+    for f, s, va, te in (x for b in base for x in _folds(Path(b))):
+        ref[(f, s)] = (va.set_index(["coin", "end_time"])["y_ret"], te.set_index(["coin", "end_time"])["y_ret"])
+    triv = _trivial(res_art)
+    closes, _ = _grid(raw)
+    first, mkt, _ = mr.market_panel(closes, STEP)
+    cum = np.concatenate([[0.0], np.cumsum(np.nan_to_num(mkt))])
+    specs: dict[str, list] = {"B": list(base)}
+    for a in arms:
+        n, p = a.split("=", 1)
+        specs.setdefault(n, []).append(p)
+    for name, paths in specs.items():
+        for s, (val, st) in _load_arm(paths, ref, triv).items():
+            et = pd.to_datetime(st["end_time"]).dt.tz_localize("UTC").astype("int64").to_numpy()
+            p = (et - pd.Timedelta("4h").value - first) // STEP
+            st["mkt_span"] = cum[p + 3] - cum[p + 1]
+            q = val.groupby("fold")["mu"].quantile(0.9)
+            st["long"] = st["mu"] >= st["fold"].map(q)
+            groups = {
+                "market span up / down": np.where(st["mkt_span"] > 0, "up", "down"),
+                "market span |move| tercile": pd.qcut(st["mkt_span"].abs(), 3, labels=["calm", "mid", "wild"]),
+                "coin volatility tercile (window sd)": pd.qcut(-st["low_vol"], 3, labels=["calm", "mid", "wild"]),
+                "sigma tercile": pd.qcut(st["sigma"], 3, labels=["narrow", "mid", "wide"]),
+                "year": pd.to_datetime(st["end_time"]).dt.year.to_numpy(),
+            }
+            out = []
+            for gname, key in groups.items():
+                for k, g in st.groupby(np.asarray(key)):
+                    lg = g[g["long"]]
+                    out.append({"group": gname, "value": k, "rows": len(g), "IC": ic_mean(g["mu"], g["y_res"],
+                                g["end_time"]), "IC low_vol (trivial)": ic_mean(g["low_vol"], g["y_res"],
+                                g["end_time"]), "top10 n": len(lg), "top10 gross %": 100 * lg["y_res"].mean(),
+                                "group mean y_res %": 100 * g["y_res"].mean(),
+                                "top10 hit": float((lg["y_res"] > 0).mean())})
+            with pd.option_context("display.width", 250, "display.float_format", "{:.4f}".format):
+                print(f"=== {name} seed {s}: error map")
+                print(pd.DataFrame(out).to_string(index=False))
+                lg = st[st["long"]].nsmallest(12, "y_res")
+                print(f"=== {name} seed {s}: worst top-decile rows")
+                print(lg[["coin", "end_time", "mu", "sigma", "y_res", "mkt_span", "beta", "low_vol"]].to_string(
+                    index=False))
+                rules = {"top 5 % mu": ("mu", 0.95, None), "top 10 % mu, sigma < VAL median": ("mu", 0.9, "lo_sig"),
+                         "top 10 % mu / sigma": ("z", 0.9, None)}
+                st["z"], val["z"] = st["mu"] / st["sigma"], val["mu"] / val["sigma"]
+                sel = []
+                for rn, (c, qq, extra) in rules.items():
+                    thr = st["fold"].map(val.groupby("fold")[c].quantile(qq))
+                    keep = st[c] >= thr
+                    if extra:
+                        keep &= st["sigma"] < st["fold"].map(val.groupby("fold")["sigma"].median())
+                    k = st[keep]
+                    sel.append({"rule (VAL-fitted)": rn, "share kept": float(keep.mean()),
+                                "gross per trade %": 100 * k["y_res"].mean(),
+                                "minus timestamp mean %": 100 * (k["y_res"] - st.groupby("end_time")["y_res"]
+                                                                  .transform("mean")[keep]).mean()})
+                print(f"=== {name} seed {s}: selection rules (3 tried)")
+                print(pd.DataFrame(sel).to_string(index=False))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -417,8 +495,15 @@ def main(argv=None) -> int:
     q.add_argument("--arm", action="append", default=[])
     q.add_argument("--res-art", required=True)
     q.add_argument("--own", action="append", default=[])
+    d = sub.add_parser("detail")
+    d.add_argument("--base", action="append", required=True)
+    d.add_argument("--arm", action="append", default=[])
+    d.add_argument("--raw", required=True)
+    d.add_argument("--res-art", required=True)
     a = ap.parse_args(argv)
-    if a.cmd == "leak":
+    if a.cmd == "detail":
+        detail(a.base, a.arm, a.raw, a.res_art)
+    elif a.cmd == "leak":
         leak(a.raw, a.raw_art, a.res_art)
     elif a.cmd == "variants":
         variants(a.raw, a.raw_art, a.res_art, a.rg_art)
