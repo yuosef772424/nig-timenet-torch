@@ -105,20 +105,20 @@ percentile of mu, residual gross per trade; the trivial low-volatility IC on the
 - The ranking holds in every group (no group carries it); it is a bit stronger on wild-market spans.
 - Inside one predicted-sigma tercile the IC drops to about 0.04: roughly half of the timestamp IC is the ordering
   BETWEEN volatility classes, half within a class.
-- The top decile is 80 - 87 % narrow-sigma (calm) coins in every arm (H3's symmetric target included: 10,633 of
-  12,270); the few wide-sigma rows that reach it earn +0.12 .. +0.21 % per trade. The book's small gross is a composition
-  effect: it buys calm coins whose residual moves are small.
+- The top decile is 80 - 87 % narrow-sigma (calm) coins in every arm (H3's symmetric target included: 10,633 of 12,270);
+  the few wide-sigma rows that reach it earn +0.12 .. +0.21 % per trade. The book's small gross is a composition effect:
+  it buys calm coins whose residual moves are small.
 - Decile curve inside the timestamp (excess over the timestamp mean, d1 / d2 / d5 / d9 / d10): B +0.029 / -0.027 /
   -0.017 / +0.014 / +0.028 % (s0), +0.059 / -0.032 / +0.002 / +0.013 / +0.040 % (s1): the top is monotone (d10 > d9 >
   d5) on both seeds but the bottom decile is POSITIVE (U shape), in every arm.
 
 ## The samples it failed on
 
-The worst top-decile rows of B (the two seeds share about half of their 12 worst): the crash of 2025-10-10 20:00 (market -21.6 % over
-the 8 h span): THETA -9.1 %, ENJ -10.3 %, ICP -8.4 %, VET -7.8 %, ATOM -7.7 %, COMP -5.5 % residual, all calm coins
-(window sd 0.4 - 0.6 %) with beta 0.8 - 1.1 that fell about 1.1 - 1.5 x the market; ETH 2024-08-04 20:00 (market
--14 %, beta 0.74, -7.0 %), BCH 2025-02-02 20:00 (market -18 %, beta 0.79, -6.8 %); and single-coin events in calm
-markets (CRV 2024-06-12 -23 %, UNI 2024-04-10 -7.3 %, KAVA 2025-04-01 -8.9 %). In crashes the residual of calm,
+The worst top-decile rows of B (the two seeds share about half of their 12 worst): the crash of 2025-10-10 20:00 (market
+-21.6 % over the 8 h span): THETA -9.1 %, ENJ -10.3 %, ICP -8.4 %, VET -7.8 %, ATOM -7.7 %, COMP -5.5 % residual, all
+calm coins (window sd 0.4 - 0.6 %) with beta 0.8 - 1.1 that fell about 1.1 - 1.5 x the market; ETH 2024-08-04 20:00
+(market -14 %, beta 0.74, -7.0 %), BCH 2025-02-02 20:00 (market -18 %, beta 0.79, -6.8 %); and single-coin events in
+calm markets (CRV 2024-06-12 -23 %, UNI 2024-04-10 -7.3 %, KAVA 2025-04-01 -8.9 %). In crashes the residual of calm,
 low-beta coins is strongly negative: the 180-bar beta under-states their fall (E5 holds on these rows), although the
 mean residual over all bottom-5 % market spans is +0.012 % (the under-statement is concentrated in a few crashes).
 
