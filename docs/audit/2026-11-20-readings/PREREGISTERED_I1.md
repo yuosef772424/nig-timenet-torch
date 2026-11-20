@@ -24,3 +24,10 @@ Reported next to it, information only: CI of the long book (`read_arms.py`, leve
 BTC-hedged books, the best epoch per fold (`read_detail.py` training table), the overlap of I1's and R's trades.
 If (1) holds and (2) fails, the channels help ranking but not the book (the cost wall again); if (1) fails, the
 channels add nothing at R's budget either. Either fail gets the failure reading of rule C7 before any next arm.
+
+## Amendment 1 (owner 2026-11-20, before any number): folds split over processes
+The owner asked to run the folds in parallel (each fold trains an independent model). `i1_chain.sh` now runs each
+seed as three processes over fold groups {0, 1, 2}, {3, 4}, {5, 6} (`RollingSettings.fold_ids`, D-038); the model,
+data and accept rule are unchanged (the fold geometry and identities are the same: tested in
+`tests/workflow/test_rolling_run.py`). Also measured: wall time per fold against M3's walk-forward of today (same
+configuration and size, 4 processes, one per seed).
