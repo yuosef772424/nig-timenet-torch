@@ -4,9 +4,18 @@ training row, the measurement runs from epoch 1, and day_weights.csv lands next 
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.core.config import updated
+from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.workflow import flat_run
 from nig_timenet_torch.workflow import run as steps
-from tests.workflow.test_time_blocks_run import OVER, settings
+from nig_timenet_torch.workflow.settings import RunSettings
+
+OVER = {"split.max_rows": 60, "evaluation.battery.enabled": False}
+
+
+def settings(art_dir, tmp_path, **over):
+    base = RunSettings(run_dir=str(tmp_path / "run"), data=LoaderSettings(name=str(art_dir)))
+    return updated(base, {"train.epochs": 1, "train.batch_size": 64, "train.device": "cpu", **over})
 
 
 def test_day_weights_run_writes_the_day_table(art, tmp_path):  # noqa: F811

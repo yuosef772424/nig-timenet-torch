@@ -73,7 +73,8 @@ def row_losses(trainer, x, y, chunk: int) -> torch.Tensor:
             with torch.no_grad():
                 outputs = model(xb)
             w = torch.ones(len(xb), device=dev, dtype=torch.float32, requires_grad=True)
-            with torch.enable_grad():
+            # cuDNN off (the guard of every autograd call outside the train step); the graph holds only the loss
+            with torch.enable_grad(), torch.backends.cudnn.flags(enabled=False):
                 total = trainer.compute_losses(None, yb, sample_weight=w, outputs=outputs, plain=True)[0]
                 (grad,) = torch.autograd.grad(total, w)
             out.append((grad.double() * len(xb) + total.detach().double()).cpu())
