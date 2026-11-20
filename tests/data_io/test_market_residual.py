@@ -115,3 +115,24 @@ def test_close_label_option_default_unchanged_and_unknown_raises(tmp_path):
     check_decode(g, ("close", "high", "low"))
     with pytest.raises(ValueError, match="label must be one of"):
         mr.add_market_residual(src, tmp_path / "x.dataset", candles=candles, label="nope")
+
+
+def test_beta_window_option_shorter_window_past_only_and_default_unchanged(tmp_path):
+    rng = np.random.default_rng(1)
+    m = 0.01 * rng.standard_normal(300)
+    r = np.where(np.arange(300) < 150, 0.5, 2.0) * m + 0.001 * rng.standard_normal(300)
+    np.testing.assert_array_equal(mr.rolling_beta(r, m, mr.BETA_BARS), mr.rolling_beta(r, m))
+    b60 = mr.rolling_beta(r, m, 60)
+    assert np.isnan(b60[28]) and np.isfinite(b60[29])                   # at least half the window when shorter
+    assert abs(b60[-1] - 2.0) < 0.1 and abs(mr.rolling_beta(r, m)[-1] - 2.0) > 0.1   # the short window adapts
+    r2 = r.copy()
+    r2[200:] *= -3
+    np.testing.assert_array_equal(mr.rolling_beta(r2, m, 60)[:200], b60[:200])
+    src = tmp_path / "e4.dataset"
+    write_artifact(build_panel_synthetic(PanelSyntheticSettings(n_coins=5, n_bars=300)), src, source_commit="0" * 40)
+    base = _fetch_from_artifact(load_artifact(src).dataset)
+    rec = mr.add_market_residual(src, tmp_path / "b.dataset", candles=lambda n, s, e: base(n, "4h", s, e),
+                                 beta_bars=60)
+    assert rec["beta_bars"] == 60 and rec["beta_min"] == 30
+    with pytest.raises(ValueError, match="beta_bars"):
+        mr.add_market_residual(src, tmp_path / "x.dataset", candles=lambda n, s, e: base(n, "4h", s, e), beta_bars=1)
