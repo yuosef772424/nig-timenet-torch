@@ -26,6 +26,7 @@ from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES, cross_section_loss
+from nig_timenet_torch.trainer.day_weights import DayWeightSettings, make_day_weighter
 from nig_timenet_torch.trainer.direction_balance import direction_balance_loss
 from nig_timenet_torch.trainer.groups import BATCH_ORDERS, group_batches, group_chunks, row_batches, row_groups
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
@@ -76,6 +77,9 @@ class FitSettings:
     # ``time_block_bars`` consecutive timestamps (the trainer needs ``row_times``); left out of the identity at default
     batch_order: str = "rows"
     time_block_bars: int = 1
+    # owner 2026-11-20 (D-039, off by default): day-balanced, failure-weighted loss (trainer.day_weights); ``fit``
+    # then needs ``day_groups`` (the UTC day of every training row); left out of the identity at default (None)
+    day_weights: DayWeightSettings | None = None
 
     def __post_init__(self):
         BATCH_ORDERS.entry(self.batch_order)  # unknown names raise now
@@ -183,6 +187,8 @@ class Trainer:
         self.row_times = None
         #: the same for the VALIDATION rows (``fit`` hands them to ``evaluate`` as the groups of the cross-section term)
         self.val_times = None
+        #: the ``trainer.day_weights.DayWeighter`` of the current ``fit`` (None = unweighted rows)
+        self.day_weighter = None
         config = tasks_cfg  # kept as given: it is hashed into the RunIdentity (defaults are never written into it)
         self.model, self.config = model, config
         self.targets_cfg = resolve_targets(config)
@@ -351,8 +357,11 @@ class Trainer:
         """One shuffled pass; the mean of every log, weighted by batch size; ``ema`` is updated after every step.
         The logs of ``settings.steps_per_execution`` steps are read back together (one host sync per group).
         ``monitor`` (a ``trainer.batch_influence.BatchInfluence``, log-only) is called around every step.
-        ``batch_groups``: one batch per group (all its rows), the groups in a shuffled order (``batch_by``)."""
+        ``batch_groups``: one batch per group (all its rows), the groups in a shuffled order (``batch_by``).
+        With a ``day_weighter`` the rows carry its weights of this epoch (their summary joins the logs)."""
         logs, dev = GroupedLogs(settings.steps_per_execution), self._device()
+        weights, day_logs = (None, {}) if self.day_weighter is None else self.day_weighter.epoch_weights(
+            self, x, y, epoch)
         if batch_groups is not None:
             batches = group_batches(batch_groups, 1)
         elif self.group_channel:
@@ -365,13 +374,14 @@ class Trainer:
                 monitor.before_step(self, epoch, ix)
             gb = None if self.row_times is None else self.row_times[ix].to(dev)
             step = self.train_step(x[ix].to(dev), {k: v[ix].to(dev) for k, v in y.items()},
+                                   sample_weight=None if weights is None else weights[ix].to(dev),
                                    grad_clip_norm=settings.grad_clip_norm, as_tensors=True, groups=gb)
             if monitor is not None:
                 monitor.after_step(self, step)
             if ema is not None:
                 ema.update(self.model)
             logs.add(len(ix), step)
-        return logs.means(len(x))
+        return {**logs.means(len(x)), **day_logs}
 
     def _begin_epoch(self, epoch: int, settings: FitSettings, schedules: dict[str, ParamSchedule]) -> float:
         """Everything that must be a pure function of (settings, epoch) so that resume equals an uninterrupted
@@ -393,6 +403,8 @@ class Trainer:
             state["balance"] = self.balancer.state_dict()
         if ema is not None:  # only with the switch on: a default checkpoint keeps its keys
             state["ema"] = ema.state_dict()
+        if self.day_weighter is not None:
+            state["day_weights"] = self.day_weighter.state_dict()
         return state
 
     def _restore(self, ckpt: dict, tracker: BestTracker, identity: RunIdentity, ema: EmaWeights | None = None
@@ -406,6 +418,8 @@ class Trainer:
         self.optimizer.load_state_dict(ckpt["optimizer"])
         if self.balancer.needs_shared:
             self.balancer.load_state_dict(ckpt["balance"])
+        if self.day_weighter is not None:
+            self.day_weighter.load_state_dict(ckpt["day_weights"])
         tracker.load_state(ckpt["tracker"])
         return list(ckpt["history"])
 
@@ -458,7 +472,7 @@ class Trainer:
     def fit(self, x_train, y_train, x_val, y_val, settings: FitSettings, *, run_dir=None,
             identity: RunIdentity | None = None, resume: bool = True,
             deadline: float | None = None, on_epoch=None, trace_batches=None, batch_monitor=None,
-            batch_groups=None) -> FitResult:
+            batch_groups=None, day_groups=None) -> FitResult:
         """Epoch loop with lambda / LR schedules, early stopping and best weights chosen by ``selection_metric``.
 
         With ``run_dir`` the state is saved after every epoch (checkpoint.py) and a run folder that already holds a
@@ -475,8 +489,11 @@ class Trainer:
         start of a fresh fit (not on resume); ``grad_clip_norm`` clips every step; with ``ema_decay`` the EMA copy is
         what validation, selection, the best weights and the model at the end hold (the checkpoint keeps both).
         ``batch_monitor``: a log-only ``BatchInfluence`` (trainer/batch_influence.py); ``batch_groups``: the group id
-        of every training row, required by (and only by) a grouping ``batch_by`` (``_batch_groups``)."""
+        of every training row, required by (and only by) a grouping ``batch_by`` (``_batch_groups``); ``day_groups``:
+        the UTC day of every training row, required by (and only by) ``settings.day_weights``."""
         groups = self._check_fit(settings, run_dir, identity, x_train, batch_groups)
+        self.day_weighter = make_day_weighter(settings.day_weights, day_groups, len(x_train), grouped_batches=(
+            groups is not None or self.group_channel or BATCH_ORDERS.entry(settings.batch_order).meta["needs_times"]))
         seed_everything(settings.seed)
         ema = None
         higher = SELECTION_METRICS.entry(self.selection_metric).meta["higher_is_better"]

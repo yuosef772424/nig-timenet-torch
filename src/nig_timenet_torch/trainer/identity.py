@@ -134,10 +134,10 @@ def build_run_identity(fit_settings, model_settings, trainer_config, optimizer, 
                        seed=int(payload["fit"]["seed"]), data_fingerprint=data_fingerprint, code_sha=code_sha)
 
 
-#: FitSettings switches of D-021, D-034 (batch_by, IF1), D-035 (batch_order, time_block_bars; AB1), with their
-#: defaults (left out of the hash at the default)
+#: FitSettings switches of D-021, D-034 (batch_by, IF1), D-035 (batch_order, time_block_bars; AB1), D-039
+#: (day_weights), with their defaults (left out of the hash at the default)
 FIT_SWITCH_DEFAULTS = {"grad_clip_norm": None, "ema_decay": None, "init": "torch", "batch_by": "rows",
-                       "batch_order": "rows", "time_block_bars": 1}
+                       "batch_order": "rows", "time_block_bars": 1, "day_weights": None}
 
 
 def _payload(fit_settings, model_settings, trainer_config, optimizer) -> dict:
