@@ -1,0 +1,16 @@
+== seed 0
+  MODEL long book (net)              mean +0.173  w/o best5 -0.072  sym-trim5 +0.169  median +0.144
+  always long, all coins (net)       mean -0.147  w/o best5 -0.279  sym-trim5 -0.122  median -0.078
+  BTC long every row (net)           mean -0.115  w/o best5 -0.220  sym-trim5 -0.128  median -0.149
+  placebo (same timing, random coins) mean      mean +0.170  p95 +0.198  model +0.173  model beats 57.5% of placebos
+  placebo (same timing, random coins) wo_best5  mean -0.039  p95 -0.016  model -0.072  model beats 0.0% of placebos
+  placebo (same timing, random coins) sym_trim  mean +0.168  p95 +0.189  model +0.169  model beats 52.0% of placebos
+  placebo (same timing, random coins) median    mean +0.126  p95 +0.167  model +0.144  model beats 81.0% of placebos
+== seed 1
+  MODEL long book (net)              mean +0.215  w/o best5 -0.022  sym-trim5 +0.231  median +0.208
+  always long, all coins (net)       mean -0.147  w/o best5 -0.279  sym-trim5 -0.122  median -0.078
+  BTC long every row (net)           mean -0.115  w/o best5 -0.220  sym-trim5 -0.128  median -0.149
+  placebo (same timing, random coins) mean      mean +0.165  p95 +0.189  model +0.215  model beats 99.5% of placebos
+  placebo (same timing, random coins) wo_best5  mean -0.042  p95 -0.019  model -0.022  model beats 93.5% of placebos
+  placebo (same timing, random coins) sym_trim  mean +0.166  p95 +0.186  model +0.231  model beats 100.0% of placebos
+  placebo (same timing, random coins) median    mean +0.152  p95 +0.188  model +0.208  model beats 99.5% of placebos

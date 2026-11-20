@@ -1,0 +1,18 @@
+== seed 0
+  placebo 0 (same count/timestamp, random coins, slots 101): CAGR +14.2% Sharpe 1.01 maxDD -17.1%
+  placebo 1 (same count/timestamp, random coins, slots 101): CAGR +14.5% Sharpe 1.02 maxDD -18.0%
+  placebo 2 (same count/timestamp, random coins, slots 101): CAGR +14.1% Sharpe 1.00 maxDD -17.6%
+  fee 0.02%/side: model long slots 101 CAGR +24.6% Sharpe 1.53
+  fee 0.05%/side: model long slots 101 CAGR +19.0% Sharpe 1.23
+  fee 0.08%/side: model long slots 101 CAGR +13.6% Sharpe 0.92
+  fee 0.10%/side: model long slots 101 CAGR +10.2% Sharpe 0.72
+  fee 0.15%/side: model long slots 101 CAGR +2.0% Sharpe 0.21
+== seed 1
+  placebo 0 (same count/timestamp, random coins, slots 101): CAGR +13.1% Sharpe 0.92 maxDD -18.3%
+  placebo 1 (same count/timestamp, random coins, slots 101): CAGR +13.1% Sharpe 0.92 maxDD -19.0%
+  placebo 2 (same count/timestamp, random coins, slots 101): CAGR +13.7% Sharpe 0.96 maxDD -18.3%
+  fee 0.02%/side: model long slots 101 CAGR +25.5% Sharpe 1.54
+  fee 0.05%/side: model long slots 101 CAGR +19.8% Sharpe 1.24
+  fee 0.08%/side: model long slots 101 CAGR +14.3% Sharpe 0.94
+  fee 0.10%/side: model long slots 101 CAGR +10.7% Sharpe 0.74
+  fee 0.15%/side: model long slots 101 CAGR +2.4% Sharpe 0.23
