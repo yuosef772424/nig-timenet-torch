@@ -101,3 +101,11 @@ predictable is more useful information; this is weaker evidence than H2 / H3 and
 Each CPU run <= about 20 minutes (both seeds in parallel); rows are reduced before seeds. Variants read: H1, H2, H3
 (+ its ridge), H4 (3 model-free variants, at most 1 trained) = up to 4 trained arms + 1 evaluation-only score + the
 trivial scores; every number is a look on 60 coins and 2 test years, a GPU run on the full artifact decides.
+
+## Amendment 1 (written after reading B, H1, H2, H3 and the H4 gate; before H4's and H5's numbers)
+Reading that motivates it: B's best epoch is the LAST epoch (5 of 5) in all 8 fold x seed runs (and in all 8 of H3):
+the baseline may stop before it has read what the data hold, so every arm is compared at an under-trained point.
+### H5 - longer training (one change: the epoch budget)
+Change: `train.epochs` 10, `early_stop.patience` 3 (B: 5 / 2); everything else as B (the full-artifact run used 8 /
+3 and stopped at epoch 4-7). Accept: as H2 (IC above B on both seeds, the paired day-block CI above 0 on both seeds,
+above B in >= 3 of 4 folds on each seed). Also reported: the best epoch per run (still the last = still learning).
