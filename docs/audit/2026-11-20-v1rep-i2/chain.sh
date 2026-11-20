@@ -4,7 +4,7 @@
 # into fold groups, all at once. The part that completes a seed writes its rolling_summary.json. Resumes on the SAME
 # commit.
 #
-#   bash chain.sh REPO_DIR ["0,1,2,3 4,5,6"]
+#   [JOBS="job ..."] bash chain.sh REPO_DIR ["0,1,2,3 4,5,6"]   (JOBS: default the three jobs of PREREGISTERED.md)
 set -euo pipefail
 REPO=${1:?usage: chain.sh REPO_DIR [GROUPS]}
 GROUPS_=${2:-"0,1,2,3 4,5,6"}
@@ -19,13 +19,13 @@ echo "commit $(git rev-parse --short HEAD) groups $GROUPS_ start $(date -u +%T)"
   --drop res_rsi_14,res_stoch_k_14_3,res_stoch_d_3,volume_rel_30 | tail -n 12
 CFG=/content/cfg_v1i2
 mkdir -p "$CFG"
-python3 - "$CFG" "$GROUPS_" <<'PY'
+python3 - "$CFG" "$GROUPS_" "${JOBS:-rolling-r23-001 rolling-mres23-001 rolling-mres-noind-001}" <<'PY'
 import json, sys
 cfg, groups = sys.argv[1], [[int(i) for i in g.split(",")] for g in sys.argv[2].split()]
 c = json.load(open("docs/jobs/rolling-mres-noind-smoke-001.json"))["config"]
 for f in (0, 1):
     json.dump(dict(c, rolling=dict(c["rolling"], fold_ids=[f])), open(f"{cfg}/smoke_f{f}.json", "w"))
-for job in ("rolling-r23-001", "rolling-mres23-001", "rolling-mres-noind-001"):
+for job in sys.argv[3].split():
     c = json.load(open(f"docs/jobs/{job}.json"))["config"]
     for s in c["rolling"]["seeds"]:
         for g in groups:
@@ -39,7 +39,7 @@ if [ ! -f "$R/rolling-mres-noind-smoke-001/out/rolling_summary.json" ]; then
       --out "$R/rolling-mres-noind-smoke-001/out" --max-minutes 20 | tail -n 1
   done
 fi
-for job in rolling-r23-001 rolling-mres23-001 rolling-mres-noind-001; do
+for job in ${JOBS:-rolling-r23-001 rolling-mres23-001 rolling-mres-noind-001}; do
   for cfgf in "$CFG/${job}"_s*_f*.json; do
     b=$(basename "$cfgf" .json); s=${b#${job}_s}; s=${s%%_*}
     [ -f "$R/$job/out_s$s/rolling_summary.json" ] && continue

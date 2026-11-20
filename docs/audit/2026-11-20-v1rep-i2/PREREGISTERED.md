@@ -21,3 +21,10 @@ seeds 0 and 1 (job `rolling-mres-noind-001`, smoke `rolling-mres-noind-smoke-001
 Rule: "the channels carry information" if the close rank IC by timestamp against the residual label falls by more than
 0.005 (from 0.093 / 0.094) on BOTH seeds; "they do not" if it is within 0.005 on both; mixed otherwise. Reported next
 to it: the top-decile residual gross per trade and the decile-10 excess over the timestamp mean.
+
+## Amendment 1 (2026-11-20, after the start, before any number): seeds 4 and 5 for V1-rep
+The owner asked to use the RAM (free RAM under 10 GB); the 12 processes left 26 GB free with the GPU at 99 %, so
+more processes add information, not speed. Added: R and M3 on seeds 4 and 5 (jobs `rolling-r45-001`,
+`rolling-mres45-001`), same commit and configuration. The rule is unchanged and now applies to seeds 2, 3, 4 and 5:
+"V1 replicates" if it holds on at least 3 of the 4 new seeds (one seed of four may fail by chance), and V1 is NOT
+recommended for live use if it fails on 2 or more.
