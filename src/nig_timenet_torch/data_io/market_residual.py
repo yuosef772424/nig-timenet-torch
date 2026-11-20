@@ -6,14 +6,16 @@ PITFALLS: beta at bar k uses bars <= k only (rolling ``BETA_BARS``, at least ``B
     the market is the equal-weight mean of the artifact's own coins' close log moves per bar (each clipped at
     +-``MOVE_CLIP``, at least ``MARKET_MIN`` coins), so it depends on the universe; the close label becomes
     clip(own - beta_t x market move over the label span) and last_candles future_close is rebuilt so the codec
-    decodes it; high / low labels unchanged. Owner task 2026-11-19 (method 3).
+    decodes it; high / low labels unchanged. Owner task 2026-11-19 (method 3). ``label="cs_rank_gauss"`` (study
+    2026-11-20 H3, off by default) replaces that close label by the normal score of its rank inside the timestamp
+    times the residual label's sd (one constant over all rows: it carries no row's information).
 
 Channels (``CHANNELS``): ``res_high`` / ``res_low`` / ``res_close`` = the artifact's log(x / previous close) minus
 beta_k x market move of bar k; ``res_rsi_14``, ``res_stoch_k_14_3``, ``res_stoch_d_3`` of the residual price path
 (exp of the cumulative residual close move; stochastic on its closes); ``volume_rel_30``; ``mkt_close`` (the market's
 log move) and ``mkt_rsi_14``; ``beta`` (the coin's beta at bar k).
 
-    python -m nig_timenet_torch.data_io.market_residual SRC DST (--cache DIR | --raw VISION_RAW_DIR)
+    python -m nig_timenet_torch.data_io.market_residual SRC DST (--cache DIR | --raw VISION_RAW_DIR) [--label NAME]
 """
 
 import argparse
@@ -21,6 +23,7 @@ import json
 import sys
 import time
 from pathlib import Path
+from statistics import NormalDist
 
 import numpy as np
 import pandas as pd
@@ -31,7 +34,8 @@ from nig_timenet_torch.data_io.artifact import read_manifest
 from nig_timenet_torch.data_io.btc_relative import rsi, stoch_close
 from nig_timenet_torch.data_io.indicator_channels import VOL_CLIP, VOL_LEN, WARMUP_BARS, _coin_candles
 
-__all__ = ["CHANNELS", "market_panel", "rolling_beta", "add_market_residual", "DERIVATION_JSON", "main"]
+__all__ = ["CHANNELS", "CLOSE_LABELS", "market_panel", "rolling_beta", "rank_gauss_label", "add_market_residual",
+           "DERIVATION_JSON", "main"]
 
 DERIVATION_JSON = "derivation_market_residual.json"
 CHANNELS = ("res_high", "res_low", "res_close", "res_rsi_14", "res_stoch_k_14_3", "res_stoch_d_3", "volume_rel_30",
@@ -73,6 +77,21 @@ def rolling_beta(r: np.ndarray, m: np.ndarray) -> np.ndarray:
     roll = df.rolling(BETA_BARS, min_periods=BETA_MIN)
     beta = roll.cov()["r"].xs("m", level=1) / roll.var()["m"]
     return np.clip(beta.to_numpy(), *BETA_CLIP)
+
+
+def rank_gauss_label(y: np.ndarray, ts: np.ndarray) -> np.ndarray:
+    """The normal score of ``y``'s average rank inside each timestamp (u = rank / (n + 1) -> inverse normal CDF; a
+    timestamp with one row gets 0) times the sd of ``y`` over all rows (a constant, so the label stays in return
+    units)."""
+    s = pd.Series(np.asarray(y, dtype=np.float64))
+    g = s.groupby(np.asarray(ts))
+    u = (g.rank(method="average") / (g.transform("count") + 1)).to_numpy()
+    z = np.vectorize(NormalDist().inv_cdf, otypes=[np.float64])(u)
+    return z * float(np.std(s.to_numpy()))
+
+
+#: the close label of the residual artifact: name -> None (the residual itself, the default) or fn(residual, ts)
+CLOSE_LABELS = {"residual": None, "cs_rank_gauss": rank_gauss_label}
 
 
 def _coin_series(g_r: np.ndarray, mkt: np.ndarray, vol: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -119,14 +138,18 @@ def _fill_coin(b, f, coin_moves, mkt, cum_mkt, first, step, ts, x, h, window, y,
     return {"rows": e - s, "written": int(len(r)), "label_rows": int(len(rows))}, unknown
 
 
-def add_market_residual(src, dst, *, candles=None, cache=None, fetch=None, overwrite: bool = False) -> dict:
-    """Write ``dst``: ``src`` with its base-frame channels replaced by ``CHANNELS`` and the close label residual.
+def add_market_residual(src, dst, *, candles=None, cache=None, fetch=None, overwrite: bool = False,
+                        label: str = "residual") -> dict:
+    """Write ``dst``: ``src`` with its base-frame channels replaced by ``CHANNELS`` and the close label residual
+    (``label``: a ``CLOSE_LABELS`` name; unknown names raise).
     ``candles(name, start, end)`` returns a coin's base-frame candles (high / low / close / volume or quote_volume,
     indexed by bar open time); default: the archive through ``_coin_candles`` (``cache`` / ``fetch``)."""
     from nig_timenet_torch.data.artifact_writer import write_artifact
     from nig_timenet_torch.data.fetch import vision_klines
     from nig_timenet_torch.model.heads import head_spec
 
+    if label not in CLOSE_LABELS:
+        raise ValueError(f"label must be one of {sorted(CLOSE_LABELS)}, not {label!r}")
     src, dst = Path(src), Path(dst)
     man = read_manifest(src)
     ds = npy_dir.load(src, mmap=False)
@@ -166,6 +189,8 @@ def add_market_residual(src, dst, *, candles=None, cache=None, fetch=None, overw
         rec, unknown = _fill_coin(b, frames[b["name"]], moves[b["name"]], mkt, cum_mkt, first, step, ts, x, h,
                                   window, y, y_new, new, scale)
         per_coin[b["name"]], n_unknown_beta = rec, n_unknown_beta + unknown
+    if CLOSE_LABELS[label] is not None:
+        y_new = np.clip(CLOSE_LABELS[label](y_new, ts), -scale, scale)
     lc[:, LAST_COLUMN_INDEX["future_close"]] = lc[:, LAST_COLUMN_INDEX["last_close"]] * np.exp(y_new)
     ds = {**ds, f"X_{base_tf}": new, "feature_order": list(CHANNELS), "last_candles": lc,
           reg_key: y_new.astype(np.asarray(ds[reg_key]).dtype),
@@ -176,8 +201,9 @@ def add_market_residual(src, dst, *, candles=None, cache=None, fetch=None, overw
     lab = sum(v["label_rows"] for v in per_coin.values())
     record = {"source_artifact": str(src), "source_fingerprint": man.data_fingerprint,
               "fingerprint": manifest["export"]["data_sha256"], "channels": list(CHANNELS),
-              "beta_bars": BETA_BARS, "beta_min": BETA_MIN, "market": "equal-weight close log move of the artifact's "
-              "coins", "rows": int(len(ts)), "rows_with_channels": int(written),
+              "close_label": label, "beta_bars": BETA_BARS, "beta_min": BETA_MIN,
+              "market": "equal-weight close log move of the artifact's coins", "rows": int(len(ts)),
+              "rows_with_channels": int(written),
               "rows_with_residual_label": int(lab), "label_rows_with_beta_1": n_unknown_beta,
               "label_var_own": float(np.var(y)), "label_var_residual": float(np.var(y_new)),
               "seconds": time.monotonic() - t0, "per_coin": per_coin}
@@ -207,11 +233,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cache", default=None, help="candle cache folder (archive fetch)")
     ap.add_argument("--raw", default=None, help="a vision_slice raw folder instead of the archive")
     ap.add_argument("--overwrite", action="store_true")
+    ap.add_argument("--label", default="residual", choices=sorted(CLOSE_LABELS), help="the close label (CLOSE_LABELS)")
     a = ap.parse_args(argv)
     candles = None
     if a.raw:
         candles = _vision_raw_candles(Path(a.raw), npy_dir.load(a.src, mmap=True)["base_tf"])
-    r = add_market_residual(a.src, a.dst, candles=candles, cache=a.cache, overwrite=a.overwrite)
+    r = add_market_residual(a.src, a.dst, candles=candles, cache=a.cache, overwrite=a.overwrite, label=a.label)
     print(json.dumps({k: v for k, v in r.items() if k != "per_coin"}, indent=1))
     return 0
 
