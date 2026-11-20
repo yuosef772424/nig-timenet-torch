@@ -92,8 +92,8 @@ def _robust_z(e: torch.Tensor) -> torch.Tensor:
 
 def day_weights_from_losses(ema: torch.Tensor | None, counts: torch.Tensor, inverse: torch.Tensor,
                             cfg: DayWeightSettings) -> torch.Tensor:
-    """Row weights (float32, mean ~1; the scale cancels in the batch's weighted mean) from the per-day loss EMA (None = not measured yet: balance only) and the
-    day of every row (``inverse``: index into ``counts``)."""
+    """Row weights (float32, mean ~1; the scale cancels in the batch's weighted mean) from the per-day loss EMA
+    (None = not measured yet: balance only) and the day of every row (``inverse``: index into ``counts``)."""
     n, n_days = len(inverse), len(counts)
     q = torch.ones(n_days, dtype=torch.float64)
     if ema is not None and cfg.strength > 0:
