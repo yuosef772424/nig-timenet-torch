@@ -13,7 +13,6 @@ from tests.scan import ROOT
 
 LIVE_DOCS = ("CLAUDE.md", "docs/STATUS.md", "docs/RULES.md", "docs/ROADMAP.md", "NOTES.md", "notebooks/README.md")
 PATH_IN_BACKTICKS = re.compile(r"`((?:docs|tests|src|reference|notebooks|\.github)/[^`\s]*)`")
-STATE_WORDS = {"todo", "in progress", "PR open", "merged", "closed (rejected)"}
 
 #: quoted paths that are legitimately absent today -> the reason (remove the entry the day the file exists; the
 #: test below fails on a stale entry)
@@ -44,23 +43,29 @@ def test_notes_does_not_claim_there_is_no_pytorch_code():
 
 def test_status_is_short():
     limit = int(re.search(r"STATUS\.md`? stays under (\d+) lines", _read("CLAUDE.md")).group(1))
-    assert limit == 60, "CLAUDE.md and ROADMAP R0 say 60"
+    from tools.status_row import STATUS_MAX
+
+    assert limit == STATUS_MAX, f"CLAUDE.md says {limit}, tools/status_row.py STATUS_MAX says {STATUS_MAX}"
     assert f"Keep this file under {limit} lines" in _read("docs/STATUS.md")
     n = len(_read("docs/STATUS.md").splitlines())
     assert n < limit, f"docs/STATUS.md has {n} lines, the limit is < {limit}: move detail to docs/ or a PR description"
 
-#: B1.., R0r/T5r/T4b, H5 / H6, I3 (one id or two joined by ' / ')
-STEP_ID = re.compile(r"^(B\d+|([RTHI]\d+[a-z]?r?)( / [RTHI]\d+[a-z]?r?)?)$")
-
-
 def test_status_states_are_the_documented_ones():
+    """Every row of every STATUS table (step ids are free text: PN1, MG4, ...; E-11 of the 2026-11b audit: the old
+    id pattern skipped most rows), checked with the one state definition (tools.status_row.valid_state)."""
+    from tools.status_row import STATES, valid_state
+
     text = _read("docs/STATUS.md")
-    assert "States: `todo` / `in progress` / `PR open` / `merged` / `closed (rejected)` / `skipped (reason)`." in text
+    listed = " / ".join(f"`{s}`" for s in STATES)
+    assert f"States: {listed} / `skipped (reason)`." in text
+    rows = 0
     for line in text.splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if line.startswith("|") and len(cells) >= 5 and STEP_ID.match(cells[0]):
-            state = cells[3] if cells[0].startswith("B") else cells[2]
-            assert state in STATE_WORDS or state.startswith("skipped ("), f"{cells[0]}: unknown state {state!r}"
+        if not line.startswith("|") or len(cells) < 5 or cells[0] in ("Step", "") or set(cells[0]) <= set("-"):
+            continue
+        rows += 1
+        assert valid_state(cells[2]), f"{cells[0]}: unknown state {cells[2]!r}"
+    assert rows >= 10, f"only {rows} STATUS rows were checked: did the table layout change?"
 
 
 def test_review_is_not_overdue():

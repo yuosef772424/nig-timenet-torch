@@ -1,5 +1,7 @@
 # Manager handoff (2026-11-07, end of the hardening campaign)
 
+> **Superseded (2026-11-21, hardening 2026-11b E-08):** the working method here (one agent at a time, the manager only plans) was replaced by `CLAUDE.md` and rules A1 / A4 / A7 (owner 2026-11-16); kept as history. Start from `CLAUDE.md`.
+
 For the next MANAGER session (the owner clears the conversation). Read this file, then `docs/STATUS.md`,
 `docs/PLANNER_HANDOFF.md` (facts, Colab queue), and only then the ROADMAP step you are launching. Reply to the owner in
 Arabic.

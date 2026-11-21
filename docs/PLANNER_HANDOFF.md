@@ -1,5 +1,7 @@
 # Planner handoff (rewritten 2026-11-07 by H6, after the hardening campaign; for a fresh planner)
 
+> **Superseded in part (2026-11-21, hardening 2026-11b E-08):** the facts below are of 2026-11-07; the working method and reading order are in `CLAUDE.md` (rules A1 / A4 / A7), the current state in `docs/STATUS.md`. The Colab queue route below is described only here until HB7 moves it to `docs/COLAB_OPS.md` (E-09).
+
 > Manager sessions (owner clears conversations): read `docs/hardening/MANAGER_HANDOFF.md` first.
 
 The planner conversation plans, reviews and merges; step sessions or ONE background agent at a time do the work. Reply to
