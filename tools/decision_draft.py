@@ -83,13 +83,15 @@ def pick_target(root: Path, added: list[Path], decision: str | None) -> Path | N
 
 def draft_lines(current: dict[str, str], base_eff: dict[str, str], other_eff: dict[str, str],
                 other_pr_keys: set[str]) -> list[Line]:
-    """One ``(key, old, new)`` per default that differs from the base and is not already on a line of another record of
-    the PR. ``old`` is the value in force without the record being drafted (``other_eff``), ``<new>`` for a default that
-    did not exist at the base, ``<removed>`` as ``new`` for one that is gone."""
+    """One ``(key, old, new)`` per default that differs from the base and that the other records of the PR do not
+    already bring to its current value (a merge PR can hold two records that change the same default in turn: the
+    later one keeps its line, old = the value after the earlier one). ``old`` is the value in force without the
+    record being drafted (``other_eff``), ``<new>`` for a default that did not exist at the base, ``<removed>`` as
+    ``new`` for one that is gone."""
     out: list[Line] = []
     for key in sorted(set(current) | set(base_eff) | set(other_eff)):
-        if key in other_pr_keys:
-            continue
+        if key in other_pr_keys and current.get(key) == other_eff.get(key):
+            continue  # another record of the PR already brings this default to its current value
         cur = current.get(key)
         if key not in base_eff:
             if cur is not None:
@@ -173,6 +175,29 @@ def clash_warnings(number: int, name: str, remote: dict[str, list[str]]) -> list
     return [f"WARNING: decision number D-{number:03d} is also taken on another branch ({where}). "
             f"First number free everywhere: D-{highest + 1:03d}; renumber with --number {highest + 1} (the file "
             "and the heading), or accept that the second PR to merge renumbers."]
+
+
+def open_clashes(root: Path, added: list[Path], remote: dict[str, list[str]] | None = None) -> list[str]:
+    """Warnings for each decision this PR adds whose NUMBER another branch uses for a different file, counting only
+    branches whose work is not already in HEAD (a merged or included branch is history, not a clash). Two open PRs
+    that both took the next free number are found here before the second one merges."""
+    remote = remote if remote is not None else remote_decision_files(root)
+    out = []
+    for path in added:
+        num, name = decision_number(path.name), path.name
+        hits = sorted((ref, other) for ref, names in remote.items() for other in names
+                      if decision_number(other) == num and other != name and not _in_head(root, ref))
+        if hits:
+            free = max([num] + [decision_number(n) for names in remote.values() for n in names]
+                       + local_numbers(root)) + 1
+            where = "; ".join(f"{ref}: {other}" for ref, other in hits)
+            out.append(f"decision number D-{num:03d} ({name}) is also used on a branch not merged here ({where}); "
+                       f"the PR that merges second renumbers (first number free everywhere: D-{free:03d})")
+    return out
+
+
+def _in_head(root: Path, ref: str) -> bool:
+    return git(root, "merge-base", "--is-ancestor", ref, "HEAD", check=False) is not None
 
 
 def next_number(root: Path, override: int | None = None) -> int:
