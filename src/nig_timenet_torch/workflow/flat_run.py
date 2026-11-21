@@ -208,7 +208,8 @@ def predict_stage(trainer: Trainer, dataset: dict, idx: np.ndarray, x: torch.Ten
             else [slice(s, s + chunk) for s in range(0, len(idx), chunk)])
     for c in cuts:
         meta = table_meta(dataset, idx[c], stage=stage, fold=fold, train_end=train_end)
-        parts.append(predict_table(trainer.model, x[c].to(device), meta, ident))
+        groups = row_groups(x[c]) if trainer.group_channel else None   # whole timestamps per batch (C-01)
+        parts.append(predict_table(trainer.model, x[c].to(device), meta, ident, groups=groups))
     return pd.concat(parts, ignore_index=True)
 
 

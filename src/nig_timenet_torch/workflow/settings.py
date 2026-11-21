@@ -17,6 +17,7 @@ import pandas as pd
 
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
+from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES
 from nig_timenet_torch.trainer.day_weights import DayWeightSettings
 from nig_timenet_torch.trainer.groups import BATCH_ORDERS
 from nig_timenet_torch.trainer.schedules import LR_KINDS
@@ -260,6 +261,12 @@ class RunSettings:
         if BATCHINGS[self.train.batch_by] and (self.split.cross_section or self.train.staged is not None):
             raise ValueError(f"train.batch_by={self.train.batch_by!r} needs the flat epoch loop: not with "
                              f"split.cross_section (it batches whole timestamps already) or train.staged")
+        whole_timestamps = (self.split.cross_section or BATCHINGS[self.train.batch_by]
+                            or BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"])
+        if CROSS_SECTION_LOSSES.get(self.train.cross_section_loss) is not None and not whole_timestamps:   # (C-08)
+            raise ValueError(f"train.cross_section_loss={self.train.cross_section_loss!r} ranks the rows of one "
+                             f"timestamp: it needs whole-timestamp batches (split.cross_section, a grouping "
+                             f"train.batch_by or a timestamp train.batch_order such as 'time_blocks')")
         if self.split.cross_section and BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]:
             raise ValueError(f"train.batch_order {self.train.batch_order!r} groups rows by timestamp; the panel path "
                              f"(split.cross_section = True) already batches whole timestamps: use batch_order 'rows'")

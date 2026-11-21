@@ -39,7 +39,7 @@ from nig_timenet_torch.model.scalers import fit_scalers
 from nig_timenet_torch.model.target_norm import fit_target_norm
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
-from nig_timenet_torch.trainer.groups import BATCH_ORDERS
+from nig_timenet_torch.trainer.groups import BATCH_ORDERS, group_batches, row_groups
 from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
 from nig_timenet_torch.trainer.staged import StagedResult, plan_stages, staged_fit
 from nig_timenet_torch.trainer.trainer import FitResult, FitSettings, Trainer
@@ -194,7 +194,7 @@ def train(run: Run, *, deadline: float | None = None, on_epoch=None, on_interrup
     groups = flat_run.batch_groups(run.dataset, run.idx["train"], run.settings.train.batch_by)
     days = (None if run.settings.train.day_weights is None
             else flat_run.batch_groups(run.dataset, run.idx["train"], "day"))
-    n_batches = -(-n['train'] // run.fit_settings.batch_size) if groups is None else len(torch.unique(groups))
+    n_batches = batches_per_epoch(run, groups)
     print(f"data: {n['train']} train / {n['val']} val / {n['test']} test windows "
           f"(max_rows {run.settings.split.max_rows}), split train_end {run.bounds[0]} val_end {run.bounds[1]}; "
           f"{n_batches} batches per epoch (batch_by {run.settings.train.batch_by}) on {run.device}", flush=True)
@@ -316,16 +316,19 @@ def _copy_best_weights(run: Run) -> None:
 
 
 def health_step(run: Run) -> Run:
-    """Health report on an evenly strided subsample of the validation rows (they must fit on the device); written
-    to the run folder and copied to ``out``."""
+    """Health report on an evenly strided subsample of the validation rows (they must fit on the device); a
+    cross-section model gets whole timestamps (C-01 / C-02: a cut timestamp changes its outputs); written to the run
+    folder and copied to ``out``."""
     _need(run, "result", "train")
     ds, dev = run.dataset, run.device
-    val_idx = run.idx["val"]
-    pick = run_common.stride_rows(np.arange(len(val_idx)), run.settings.evaluation.health_max_rows)
+    val_idx, cap = run.idx["val"], run.settings.evaluation.health_max_rows
+    grouped = run.trainer.group_channel
+    pick = (run_common.stride_groups(row_groups(run.x["val"]).numpy(), cap) if grouped
+            else run_common.stride_rows(np.arange(len(val_idx)), cap))
     idx = val_idx[pick]
     xs = run.x["val"][torch.as_tensor(pick)].to(dev)
     meta = table_meta(ds, idx, stage="val", fold=0, train_end=run.bounds[0])
-    table = predict_table(run.trainer.model, xs, meta, run.ident)
+    table = predict_table(run.trainer.model, xs, meta, run.ident, groups=row_groups(xs).cpu() if grouped else None)
     lc, codec = np.asarray(ds["last_candles"]), run_common.codec_state(ds)
     probe_target = "close" if "close" in run.targets else run.targets[0]
     labels = {k: v[torch.as_tensor(pick)].numpy() for k, v in run.y["val"].items()}
@@ -377,12 +380,27 @@ def test_lines(report: dict) -> list[str]:
             for k, v in _flat(report) if "per_coin" not in k and "deciles" not in k]
 
 
+def batches_per_epoch(run: Run, groups) -> int:
+    """How many optimizer steps one epoch takes, by the batching ``fit`` uses (C-13: the summary divided the epoch time
+    by ceil(rows / batch_size) also for grouped batches): one per group of ``batch_by`` (``groups``), whole-timestamp
+    batches of a cross-section run, the batches of a timestamp ``batch_order``, else ceil(rows / batch_size)."""
+    fs, tr, n = run.fit_settings, run.trainer, len(run.idx["train"])
+    if groups is not None:
+        return int(len(torch.unique(groups)))
+    if tr.group_channel:
+        return len(group_batches(row_groups(run.x["train"]), fs.batch_size, shuffle=False))
+    order = BATCH_ORDERS.entry(fs.batch_order)
+    if order.meta["needs_times"]:
+        return len(order.meta["fn"](n, fs.batch_size, tr.row_times, fs.time_block_bars))
+    return -(-n // fs.batch_size)
+
+
 def write_summary(run: Run, extra: dict | None = None) -> dict:
     """``baseline_summary.json`` in ``out``; ``extra`` (device, gpu name, ...) is merged in by the caller."""
     _need(run, "result", "train")
     s, res, fs, ds = run.settings, run.result, run.fit_settings, run.dataset
     secs = [r["trace_epoch_seconds"] for r in res.history if "trace_epoch_seconds" in r]  # epochs of earlier jobs too
-    n_batches = -(-len(run.idx["train"]) // fs.batch_size)
+    n_batches = batches_per_epoch(run, flat_run.batch_groups(ds, run.idx["train"], s.train.batch_by))
     summary = {"seed": s.train.seed, "epochs_requested": fs.epochs, "epochs_done": res.epochs_done,
                "finished": res.epochs_done >= fs.epochs or res.stopped_early, "stopped_early": res.stopped_early,
                "best_epoch": res.best_epoch, "best_value": res.best_value,

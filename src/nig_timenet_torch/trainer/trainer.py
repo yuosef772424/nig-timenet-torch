@@ -98,6 +98,9 @@ class FitSettings:
         INITS.entry(self.init)  # unknown init names raise now
         if self.batch_by not in BATCHINGS:
             raise ValueError(f"batch_by must be one of {sorted(BATCHINGS)}, not {self.batch_by!r}")
+        if BATCHINGS[self.batch_by] and BATCH_ORDERS.entry(self.batch_order).meta["needs_times"]:  # order was ignored
+            raise ValueError(f"batch_by={self.batch_by!r} (one batch per group) and batch_order="
+                             f"{self.batch_order!r} both decide what one batch is: set one of them, the other 'rows'")
 
 
 @dataclass
