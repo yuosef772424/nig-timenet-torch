@@ -216,3 +216,57 @@ Needs an owner decision (listed, not reordered):
 
 ### Actions
 - Next review after 5 more merged PRs (counter in `docs/STATUS.md`, derived once H7 lands).
+
+## 2026-11-21 — fifth review (inside MG4 #74; covers #48-#73)
+
+Nineteen PRs merged since the fourth review (#48-#52, #54, #57-#69) and four more are merged by MG4 (#70-#73), while
+the STATUS counter still said 5 (hand-kept; fourth failure: H7 derives it). Inputs: friction rows 117-147, suggestions
+rows 162-217 (rows of #60-#73 are not collected yet: `docs/registers_collected.json` holds only #59, the weekly
+`collect-registers` run is due 2026-11-23), bottlenecks B-060..B-089 and the open older rows, the results notes of
+#61-#73 and `docs/results/independent-review-001.md`. Row numbers are CSV line numbers (line 1 = header).
+
+### Open bottlenecks ranked by gain / difficulty (goal: T-profit)
+
+| rank | id | what | gain | difficulty | addressed by |
+|---|---|---|---|---|---|
+| 1 | B-053 (fixed in MG4), audit E1-E5 | the measurement: TP at mu paid a falling long +\|mu\| (fixed), the verdict drops only the best 5 % of days with no benchmark under the same test, the mean day is not an account return, a round trip on every row, TEST drops outcome-chosen flat rows | high: every reading since T5r used it | S-M | ROADMAP N8 |
+| 2 | B-074 | the cost wall: coin-choice edges (relative rank IC 0.06-0.11, M3 residual IC 0.09) pay 0.03-0.08 % per trade against 0.16 % | high | M | N9 (timing: fewer instruments, less turnover), N3 (horizon) |
+| 3 | B-086, B-077, B-088 | the short side loses the exp() part of 1 - e^y and fights the drift; side heads pick worse shorts | medium (closes a door) | - | long only until a short rule passes (N9) |
+| 4 | B-089 | day weights driven by the day's NIG loss become volatility weights | medium | S | DW1 next hypothesis, after N8 |
+| 5 | B-080, B-001 | alpha frozen at its floor 2.0 in every scaled run | medium (uncertainty as filter / size) | S-M | T6b (suggestion 181) |
+| 6 | B-038 | memorisation at lr 3e-4 after epoch 1; under-training at lr 1e-5 (best epoch = last in 14 / 14) | medium | M | M1 / M2r |
+| 7 | B-085 | Colab runtime / tunnel loss kills unfinished folds | medium runtime | S-M | fold_ids (AI2) mitigates; H7 (suggestion 207) |
+| 8 | B-076 | doctor / health report do not read a cross-section run | low-medium | M | doctor step (suggestion 199) |
+| 9 | B-082, B-083 | default model larger than its data; snapshot model reads little | low-medium | S | owner / next GPU session |
+| - | B-087, B-088 | constant lr, side heads | measured: switches kept off | - | none |
+
+### Repeated frictions -> rule proposals
+
+| friction (rows) | count | proposal | where |
+|---|---|---|---|
+| STATUS at its 60-line limit, every PR adds a row and none removes one (140, 144, 146) | 3 | no new rule: `tools.status_row` moves rows merged before the last review into this file's history (the H0-H6 table was moved by hand) | H7 |
+| G3 400-line cap reached (122, 125, 127, 133) | 4 | none: the cap is 1000 since D-028 | - |
+| decision files chained by number / two PRs take one number (136, 138, 139, 142; D-038 in #70 and #71) | 5 | no new rule: MG4 adds `close_step --merge`, the shared-key line fix and the CI clash warning (`tools.decision_clash`) | done |
+| Colab runtime / tunnel loss (130, 135, B-085) | 3 | no new rule (A6 handoff holds); fold parts write their own summaries (AI2 `fold_ids`) | H7 for the study entries' deadline (207) |
+| a guard not re-run before pushing (119, 121, 147) | 3 | none: `close_step --check` (TL1) covers MAP, pins, decisions, STATUS | - |
+| arm tables read at different epochs or at an epoch limit (134, 135, 193) | 3 | none: readings now print the best epoch and flag best = last | - |
+
+### Rules: retire / amend
+- Retired: none.
+- Weaker than claimed: F3 (the counter, fourth failure; H7 first in the queue after N8), F1 / F5 (registers 14 PRs
+  behind: the collector's PR must be merged by the owner each week).
+- Amend (proposal, owner): a merge PR (MG1-MG4) is a recurring step type; CLAUDE.md now names `close_step --merge`.
+
+### Suggestions decided (rows 165-216)
+Every row that was open now carries `2026-11-21 review (fifth): ...`: accepted 23 (H7 12, G3r 5, TR1 2, T6b 1,
+artifact 1, doctor step 1, when touched 1), done 12 (most by D-023 / D-028 / MG2 / TL1 / MG4), declined 9 (parked
+studies, closed B-065, causes removed by MG4), owner's call 2 (165, 166: rule wording, unchanged since the fourth
+review).
+
+### ROADMAP order
+N8 (evaluation in a capital account) before the next arm is read, then N9 (market timing, pre-registered, fresh
+walk-forward), then H7 (counter, registers, RunIdentity with the split settings). The older Now rows N1-N7 are
+superseded by the walk-forward readings of #61-#73 except N3 (horizon), which N9 absorbs.
+
+### Actions
+- Next review after 5 more merged PRs (the counter in `docs/STATUS.md` counts #74 as the review itself).
