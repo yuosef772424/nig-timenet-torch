@@ -181,6 +181,9 @@ Multiple testing: 23 model rows were tried. A Bonferroni CI at 99.8 % would be w
 
 ### How the "REALISTIC EXECUTION — limit at mu" rows are computed (explanation only, no leakage audit)
 
+> Correction 2026-11-21 (MG4): the defect B-053 below is fixed in `eval/battery_lib.py::limit_at_mu` (a target only
+> when sign(mu) == side, reached on the realised high / low); the rows of this section were computed before the fix.
+
 `eval/battery.py::limit_execution` (lines 125–143):
 - **Rows.** The side comes from the close class head (`p_dir > 0.5` long, else short). Rows are the top-k % by |mu| of
   the close regression head within that side.

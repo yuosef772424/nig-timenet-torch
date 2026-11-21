@@ -147,6 +147,11 @@ def repo_url(root: Path, override: str | None) -> str | None:
 
 
 def current_branch(root: Path) -> str | None:
+    """The branch the PR is pushed from: the upstream's name when one is set (a local branch pushed under another
+    name, e.g. a worktree branch pushed to the session branch), else the local branch name."""
+    up = (git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}", check=False) or "").strip()
+    if up and "/" in up:
+        return up.split("/", 1)[1]
     name = (git(root, "rev-parse", "--abbrev-ref", "HEAD", check=False) or "").strip()
     return name if name and name != "HEAD" else None
 

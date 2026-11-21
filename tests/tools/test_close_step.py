@@ -389,3 +389,12 @@ def test_decision_clash_cli_warns_in_github_format_and_never_fails(repo, fake, c
     assert capsys.readouterr().out.startswith("::warning title=decision number clash::decision number D-003")
     assert decision_clash.main(["--base", "no-such-ref"], root=repo) == 0
     assert "not checked" in capsys.readouterr().out
+
+
+def test_the_status_note_names_the_pushed_branch_when_the_local_one_differs(repo):
+    _git(repo, "remote", "add", "origin", str(repo))
+    _git(repo, "update-ref", "refs/remotes/origin/session-branch", "HEAD")
+    _git(repo, "branch", "-q", "--set-upstream-to=origin/session-branch")
+    assert cs.current_branch(repo) == "session-branch"
+    _git(repo, "branch", "-q", "--unset-upstream")
+    assert cs.current_branch(repo) == "my-branch"
