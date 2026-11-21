@@ -26,7 +26,9 @@ from nig_timenet_torch.model.cross_coin import CROSS_INPUTS, CrossCoin, center_g
 from nig_timenet_torch.model.encoders import ENCODERS, CausalConv1D, EncoderDims, tcn_n_blocks
 from nig_timenet_torch.model.har_range import HarRange
 from nig_timenet_torch.model.heads import (
+    AUX_TASK_TYPES,
     HEAD_REGISTRY,
+    aux_outputs,
     class_head_kind,
     class_outputs,
     head_spec,
@@ -57,6 +59,7 @@ __all__ = ["DEFAULT_HEAD_TYPES", "NigTimeNetV2", "build_nig_timenet_v2", "torch_
            "tcn_n_blocks"]
 
 DEFAULT_HEAD_TYPES = {t: ["nig_regression"] for t in TARGET_COLUMNS}
+AUX_TARGET = "close"   # the target the auxiliary heads (aux_heads) are attached to: the two-sided one
 #: InstanceNorm stats_mode values that return no per-window statistics
 NO_STATS_MODES = tuple(m for m, f in STATS_TRANSFORMS.items() if f is None)
 
@@ -84,7 +87,8 @@ class NigTimeNetV2(OracleWeights, nn.Module):
                  nig_head="dense", nig_head_dropout=0.0, ffn="swiglu",
                  ffn_dim=None, cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
                  cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none",
-                 har_range=None, use_instance_norm=True, order_in_label_units=False):
+                 har_range=None, use_instance_norm=True, order_in_label_units=False, aux_heads=(),
+                 aux_trunk_grad=1.0):
         super().__init__()
         self.use_instance_norm = bool(use_instance_norm)   # owner 2026-11-18: False = no per-window normalisation
         self.har_range = None if har_range is None else tuple(int(c) for c in har_range)   # H3 (owner 2026-11-18)
@@ -182,6 +186,26 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             setattr(self, f"class_fc_{t}", nn.Linear(h_dim, class_head_hidden))
             setattr(self, f"class_drop_{t}", nn.Dropout(dropout))
             setattr(self, self.class_specs[t].output_keys["logits"], nn.Linear(class_head_hidden, k))
+        # owner 2026-11-19 (LS1): auxiliary heads on the close target (side payoffs, an upper quantile); they read h
+        # through grad_scale(h, aux_trunk_grad): 0 = a read-out of the trunk the other heads train (no feedback)
+        self.aux_trunk_grad = float(aux_trunk_grad)
+        self.aux_specs = {}
+        for kind in aux_heads:
+            if HEAD_REGISTRY.entry(kind).meta["task_type"] not in AUX_TASK_TYPES:
+                raise ValueError(f"aux_heads takes the auxiliary head kinds (task types {AUX_TASK_TYPES}), "
+                                 f"not {kind!r}")
+            if AUX_TARGET not in self.nig_targets:
+                raise ValueError(f"aux_heads need the {AUX_TARGET!r} NIG head (their label)")
+            spec = head_spec(kind, AUX_TARGET)
+            if spec.name in self.aux_specs:
+                raise ValueError(f"aux head {kind!r} is named twice")
+            self.aux_specs[spec.name] = spec
+            setattr(self, f"aux_fc_{spec.name}", nn.Linear(h_dim, class_head_hidden))
+            setattr(self, f"aux_drop_{spec.name}", nn.Dropout(dropout))
+            out_layer = nn.Linear(class_head_hidden, head_width(kind, 1))
+            nn.init.normal_(out_layer.weight, std=1e-3)   # start near 0: a payoff / quantile is ~1e-2, not ~1
+            nn.init.zeros_(out_layer.bias)
+            setattr(self, f"aux_out_{spec.name}", out_layer)
 
     def _build_branch(self, sfx, T, nf, dims, *, kernel_sizes, norm_eps, input_clip, stats_mode, input_noise_std,
                       feature_dropout, level_norm, bn_warmup):
@@ -359,7 +383,18 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             probs = HEAD_REGISTRY.get(kind)(h, getattr(self, f"class_fc_{t}"), out_layer,
                                             getattr(self, f"class_drop_{t}"))
             out.update(class_outputs(spec, probs))
+        if self.aux_specs:
+            h_aux = grad_scale(h, self.aux_trunk_grad)
+            for name, spec in self.aux_specs.items():
+                fc, out_layer, drop = (getattr(self, f"aux_{part}_{name}") for part in ("fc", "out", "drop"))
+                values = HEAD_REGISTRY.get(spec.kind)(h_aux, fc, out_layer, drop)
+                out.update(aux_outputs(spec, values))
         return out
+
+    @property
+    def aux_kinds(self) -> dict[str, list[str]]:
+        """{target: [auxiliary head kind, ...]} of the aux heads (the trainer adds their losses; {} = none)."""
+        return {AUX_TARGET: [spec.kind for spec in self.aux_specs.values()]} if self.aux_specs else {}
 
     default_probe_points = ("trunk_norm",)  # layer-probe points of the health report (module names)
     balance_point = "trunk_drop"            # the shared representation h a loss balancer measures (FX2)
@@ -372,7 +407,8 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         names = dict(self.named_modules())
         branch = [n + sfx for sfx in self.branch_suffixes for n in ("stats_proj", "readout_fc")]
         heads = [f"nig_{t}.fc" for t in self.nig_targets] + [f"conf_{t}.d1" for t in self.nig_targets]
-        return tuple(n for n in branch + heads + [f"class_fc_{t}" for t in self.class_targets] if n in names)
+        aux = [f"aux_fc_{name}" for name in self.aux_specs]
+        return tuple(n for n in branch + heads + [f"class_fc_{t}" for t in self.class_targets] + aux if n in names)
 
     def head_modules(self) -> dict[str, NIGHead]:
         """{target: NIGHead} of every nig_regression head (floors and diagnostics read them, never by name)."""
@@ -401,7 +437,8 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          nig_head="dense", nig_head_dropout=0.0, ffn="swiglu", ffn_dim=None,
                          cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
                          cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none",
-                         har_range=None, use_instance_norm=True, order_in_label_units=False, **options) -> NigTimeNetV2:
+                         har_range=None, use_instance_norm=True, order_in_label_units=False, aux_heads=(),
+                         aux_trunk_grad=1.0, **options) -> NigTimeNetV2:
     """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
     multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
@@ -423,7 +460,10 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
     per-window normalisation is skipped (``InstanceNorm(normalize=False)``: z = the scaled input; stats unchanged).
     ``order_in_label_units`` (owner 2026-11-19, B-084; needs the ordered means and a fitted ``target_norm``): the
     order mu_low <= mu_close <= mu_high is applied on prices after the inverse map (high / low = close +- their label
-    sd x the offset) instead of in the per-head normalised space, where it has no meaning. False = as before."""
+    sd x the offset) instead of in the per-head normalised space, where it has no meaning. False = as before.
+    ``aux_heads`` (owner 2026-11-19, LS1; () = none): auxiliary head kinds of model.heads (task types
+    ``AUX_TASK_TYPES``: side_payoff, upper_quantile) on the close target, each reading the trunk through
+    ``grad_scale(h, aux_trunk_grad)`` (0 = a read-out: the trunk and the other heads train as without them)."""
     ENCODERS.entry(encoder)
     TARGET_NORMS.entry(target_norm)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
@@ -460,4 +500,5 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
         cross_coin_layers=cross_coin_layers, cross_coin_heads=cross_coin_heads,
         cross_coin_peer_dropout=cross_coin_peer_dropout, cross_coin_kind=cross_coin_kind,
         cross_input=cross_input, cross_center=cross_center, target_norm=target_norm, har_range=har_range,
-        use_instance_norm=use_instance_norm, order_in_label_units=order_in_label_units)
+        use_instance_norm=use_instance_norm, order_in_label_units=order_in_label_units,
+        aux_heads=tuple(aux_heads), aux_trunk_grad=aux_trunk_grad)

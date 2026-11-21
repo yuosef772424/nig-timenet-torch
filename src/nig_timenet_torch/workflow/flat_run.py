@@ -17,10 +17,11 @@ import torch
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io.target_codec import anchor_column
 from nig_timenet_torch.model.architectures import ModelSettings, build_model
-from nig_timenet_torch.model.heads import head_spec
+from nig_timenet_torch.model.heads import AUX_TASK_TYPES, head_spec
 from nig_timenet_torch.trainer.batch_set import representative_batches
 from nig_timenet_torch.trainer.groups import group_chunks, row_groups
 from nig_timenet_torch.trainer.identity import RunIdentity
+from nig_timenet_torch.trainer.schedules import LrSettings
 from nig_timenet_torch.trainer.switches import param_groups
 from nig_timenet_torch.trainer.targets import targets_config
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
@@ -122,10 +123,13 @@ def model_settings(base: ModelSettings, targets: tuple[str, ...]) -> ModelSettin
     return ModelSettings(base.architecture, overrides)
 
 
-def trainer_config(targets, label_smoothing: float, train: TrainSettings | None = None) -> dict:
+def trainer_config(targets, label_smoothing: float, train: TrainSettings | None = None, *,
+                   aux_kinds: dict | None = None, cost_per_side: float = 0.0008) -> dict:
     """The oracle's trainer config (reference/data_default/config.json) with the run's label smoothing; the per-target
     part comes from ``trainer.targets.targets_config`` (HeadSpec), only the options are the run's. ``train`` carries
-    the D-021 loss switches; a switch at its default leaves the config byte-equal to the baseline's (pinned)."""
+    the D-021 loss switches; a switch at its default leaves the config byte-equal to the baseline's (pinned).
+    ``aux_kinds`` ({target: [kind]}, the model's ``aux_kinds``; LS1): the auxiliary heads' targets join with a fixed
+    loss weight (``train.aux_loss_weight``, never Kendall), the side payoffs net of ``cost_per_side`` per side."""
     t = train or TrainSettings()
     options = {"nig_regression": {"use_calibration_loss": True, "lambda_reg_var": "lambda_reg",
                                   "lambda_calib_var": "lambda_calib"},
@@ -148,7 +152,18 @@ def trainer_config(targets, label_smoothing: float, train: TrainSettings | None 
     if t.direction_balance != TrainSettings.direction_balance:        # D-032: the close heads are the two-sided ones
         loss.update(direction_balance=t.direction_balance, direction_balance_targets=[
             head_spec(kind, c).name for c in targets if c == BALANCED_TARGET for kind in HEAD_KINDS])
-    return {"targets": targets_config({t_: list(HEAD_KINDS) for t_ in targets}, options_by_kind=options),
+    kinds = {t_: list(HEAD_KINDS) for t_ in targets}
+    for t_, extra in (aux_kinds or {}).items():   # LS1: only when the model has auxiliary heads (config pinned)
+        kinds[t_] = kinds[t_] + list(extra)
+        loss["uncertainty_weighting_exclude_task_types"] = ["evidential", *AUX_TASK_TYPES]
+        side = {"loss_weight": t.aux_loss_weight, "cost_per_side": cost_per_side}
+        if t.aux_variance_weight:
+            nig = head_spec("nig_regression", t_).output_keys
+            side.update(variance_weight=t.aux_variance_weight, nig_keys={k: nig[k] for k in ("nu", "alpha", "beta")})
+        options.update({"side_payoff": side,
+                        "upper_quantile": {"loss_weight": t.aux_loss_weight, "quantile": t.aux_quantile}})
+    used = {k for ks in kinds.values() for k in ks}
+    return {"targets": targets_config(kinds, options_by_kind={k: v for k, v in options.items() if k in used}),
             "loss": loss, "constraints": []}
 
 
@@ -164,7 +179,9 @@ def make_trainer(settings: RunSettings, ms: ModelSettings, targets, seq_len: int
 
 def _trainer(settings: RunSettings, model, targets) -> Trainer:
     t = settings.train
-    return Trainer(model, trainer_config(targets, t.label_smoothing, t), selection_metric=t.selection_metric,
+    cfg = trainer_config(targets, t.label_smoothing, t, aux_kinds=getattr(model, "aux_kinds", None),
+                         cost_per_side=settings.evaluation.battery.cost_per_side)
+    return Trainer(model, cfg, selection_metric=t.selection_metric,
                    optimizer=lambda ps: torch.optim.AdamW(
                        param_groups(t.weight_decay_groups, model, ps, t.weight_decay), lr=t.lr,
                        weight_decay=t.weight_decay))
@@ -172,10 +189,13 @@ def _trainer(settings: RunSettings, model, targets) -> Trainer:
 
 def fit_settings_of(settings: RunSettings) -> FitSettings:
     t = settings.train
+    lr = (None if t.lr_schedule == TrainSettings.lr_schedule      # LR1: constant = no schedule (as before)
+          else LrSettings(lr_initial=t.lr, lr_min=t.lr * t.lr_min_ratio, kind=t.lr_schedule,
+                          total_epochs=max(t.epochs - 1, 1)))   # the last epoch runs at the floor
     return FitSettings(epochs=t.epochs, batch_size=t.batch_size, seed=t.seed, early_stop=t.early_stop, trace=True,
                        grad_clip_norm=t.grad_clip_norm, ema_decay=t.ema_decay, init=t.init,
                        steps_per_execution=t.steps_per_execution, batch_by=t.batch_by, batch_order=t.batch_order,
-                       time_block_bars=t.time_block_bars, day_weights=t.day_weights)
+                       time_block_bars=t.time_block_bars, day_weights=t.day_weights, lr=lr)
 
 
 @torch.no_grad()
