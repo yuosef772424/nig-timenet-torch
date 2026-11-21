@@ -59,6 +59,24 @@ def test_rolling_entry_pools_the_day_metrics_of_its_folds(tmp_path, art, monkeyp
                        rolling={"train_span": "20D", "test_span": "7D", "step": "5D", "embargo": "1D"})
 
 
+@pytest.mark.slow  # rule E3: trains 2 folds on CPU; runs in CI's slow step
+def test_rolling_entry_parts_share_one_study(tmp_path, art, monkeypatch):  # noqa: F811
+    """Owner 2026-11-20: two processes split the folds (``rolling.fold_ids``) into ONE out folder; only the part that
+    completes the set writes the summary, the pooled days and the manifest."""
+    roll = {"train_span": "20D", "test_span": "7D", "step": "10D", "embargo": "1D", "max_folds": 2}
+    common = dict(day_metrics=True, train={"epochs": 1, "selection_metric": "val_raw_loss"},
+                  run_dir=str(tmp_path / "parts_run"))
+    out = run_entry(rolling, tmp_path, "parts", art, monkeypatch, rolling={**roll, "fold_ids": [1]}, **common)
+    assert (out / "fold_001_seed_0" / "fold_row.json").is_file()
+    assert not any((out / n).exists() for n in ("rolling_summary.json", "manifest.json", "pooled_days_seed_0"))
+    run_entry(rolling, tmp_path, "parts", art, monkeypatch, rolling={**roll, "fold_ids": [0]}, **common)
+    summary = json.loads((out / "rolling_summary.json").read_text())
+    assert summary["n_folds"] == 2 and (out / "manifest.json").is_file()
+    pooled = json.loads((out / "pooled_days_seed_0" / "panel_report.json").read_text())
+    folds = [json.loads((out / f"fold_00{i}_seed_0" / "panel_report.json").read_text()) for i in (0, 1)]
+    assert pooled["test"]["settings"]["rows"] == sum(f["test"]["settings"]["rows"] for f in folds) > 0
+
+
 def test_configs_are_strict():
     ok = {"device": "cpu", "run_dir": "x"}
     with pytest.raises(ValueError, match="unknown key"):
@@ -86,7 +104,7 @@ def test_rolling_entry_pools_the_day_metrics_of_a_single_coin_run(tmp_path, art,
 
 
 @pytest.mark.parametrize("name", ["panel-rolling-001", "panel-rolling-base-001", "rolling-single-001",
-                                  "rolling-single-smoke-001"])
+                                  "rolling-single-smoke-001", "rolling-indr-001", "rolling-indr-smoke-001"])
 def test_walk_forward_job_files_build_their_config(name):
     job = parse_job((ROOT / "docs" / "jobs" / f"{name}.json").read_text())
     cfg = rolling.CONFIG(**job["config"])

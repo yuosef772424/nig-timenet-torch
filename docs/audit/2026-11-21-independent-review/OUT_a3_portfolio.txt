@@ -1,0 +1,14 @@
+== seed 0
+  MODEL long book, fee per trade (battery)     x  0.01  CAGR   -76.0%  Sharpe -1.20  maxDD  -99.6%  years -27% -78% -84% -69%
+  MODEL long book, fee on turnover             x  0.01  CAGR   -73.6%  Sharpe -1.09  maxDD  -99.4%  years -19% -76% -83% -68%
+  placebo same timing random coins, turnover   x  0.04  CAGR   -60.2%  Sharpe -1.04  maxDD  -97.4%  years -4% -64% -74% -53%
+  timing only: all coins when model>0, turnover x  0.50  CAGR   -18.3%  Sharpe -0.02  maxDD  -81.4%  years +62% -17% -40% -38%
+  always long all coins, turnover              x  0.67  CAGR   -11.2%  Sharpe  0.19  maxDD  -84.1%  years +115% +18% -63% -30%
+  BTC buy and hold                             x  3.62  CAGR   +45.5%  Sharpe  1.06  maxDD  -52.5%  years +157% +109% -10% -25%
+== seed 1
+  MODEL long book, fee per trade (battery)     x  0.06  CAGR   -57.0%  Sharpe -0.64  maxDD  -97.4%  years -10% -26% -76% -65%
+  MODEL long book, fee on turnover             x  0.07  CAGR   -53.1%  Sharpe -0.55  maxDD  -96.9%  years -1% -20% -74% -63%
+  placebo same timing random coins, turnover   x  0.05  CAGR   -57.5%  Sharpe -0.95  maxDD  -97.1%  years -21% -58% -69% -49%
+  timing only: all coins when model>0, turnover x  0.69  CAGR   -10.1%  Sharpe  0.13  maxDD  -77.2%  years +78% +15% -44% -40%
+  always long all coins, turnover              x  0.67  CAGR   -11.2%  Sharpe  0.19  maxDD  -84.1%  years +115% +18% -63% -30%
+  BTC buy and hold                             x  3.62  CAGR   +45.5%  Sharpe  1.06  maxDD  -52.5%  years +157% +109% -10% -25%

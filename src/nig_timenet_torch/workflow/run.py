@@ -192,6 +192,8 @@ def train(run: Run, *, deadline: float | None = None, on_epoch=None, on_interrup
     _check_on_interrupt(on_interrupt)
     n = {k: int(len(v)) for k, v in run.idx.items()}
     groups = flat_run.batch_groups(run.dataset, run.idx["train"], run.settings.train.batch_by)
+    days = (None if run.settings.train.day_weights is None
+            else flat_run.batch_groups(run.dataset, run.idx["train"], "day"))
     n_batches = -(-n['train'] // run.fit_settings.batch_size) if groups is None else len(torch.unique(groups))
     print(f"data: {n['train']} train / {n['val']} val / {n['test']} test windows "
           f"(max_rows {run.settings.split.max_rows}), split train_end {run.bounds[0]} val_end {run.bounds[1]}; "
@@ -203,14 +205,31 @@ def train(run: Run, *, deadline: float | None = None, on_epoch=None, on_interrup
         run.result = run.trainer.fit(run.x["train"], run.y["train"], run.x["val"], run.y["val"], run.fit_settings,
                                      run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline,
                                      on_epoch=on_epoch, trace_batches=trace_batches, batch_monitor=batch_monitor,
-                                     batch_groups=groups)
+                                     batch_groups=groups, day_groups=days)
     except KeyboardInterrupt as err:
         if on_interrupt is None:
             raise
         _interrupted(run, on_interrupt, err)
         return run
     _copy_best_weights(run)
+    _write_day_table(run)
     return run
+
+
+#: per-day table of a run with ``train.day_weights`` (rows, measured loss, weight), written next to the checkpoint
+DAY_WEIGHTS_CSV = "day_weights.csv"
+
+
+def _write_day_table(run: Run) -> None:
+    """The day weighter's last table (``trainer.day_weights.DayWeighter.table``; the day as a UTC date) in
+    ``run_dir`` (D-039; read when looking for the training days the model fails on). No-op without day weights."""
+    weighter = run.trainer.day_weighter
+    if weighter is None:
+        return
+    table = pd.DataFrame(weighter.table())
+    table.insert(0, "date", pd.to_datetime(table["day"], unit="D", utc=True).dt.strftime("%Y-%m-%d"))
+    Path(run.settings.run_dir).mkdir(parents=True, exist_ok=True)
+    table.to_csv(Path(run.settings.run_dir) / DAY_WEIGHTS_CSV, index=False)
 
 
 def train_staged(run: Run, *, deadline: float | None = None, on_eval=None, stages=None,

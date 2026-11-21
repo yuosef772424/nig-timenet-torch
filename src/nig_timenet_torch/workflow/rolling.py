@@ -10,7 +10,8 @@ Fold i (origin = earliest feature_start; cut_i = origin + train_span + i * step)
   train = samples with label_end <= cut_i   (expanding: feature_start >= origin; sliding: >= cut_i - train_span)
   test  = samples with feature_start > cut_i + embargo and label_end <= cut_i + embargo + test_span
 Each fold is built through P25's purge_embargo_split (empty val) and re-checked with check_split_purity after the
-window bounds are applied. Folds stop when a test window would pass the last label, or at max_folds.
+window bounds are applied. Folds stop when a test window would pass the last label, or at max_folds; ``fold_ids``
+keeps a subset (the same folds, same indices).
 """
 
 import dataclasses
@@ -65,7 +66,12 @@ def rolling_folds_from_times(feature_start: np.ndarray, feature_end: np.ndarray,
         test = base.test_idx[le[base.test_idx] <= test_end.value]
         folds.append(RollingFold(i, _restrict(base, train, test), train_start, cut, test_start, test_end))
         i += 1
-    return folds
+    if settings.fold_ids is None:
+        return folds
+    missing = sorted(set(settings.fold_ids) - {f.index for f in folds})
+    if missing:
+        raise ValueError(f"fold_ids {missing} do not exist: the geometry gives folds 0 .. {len(folds) - 1}")
+    return [f for f in folds if f.index in settings.fold_ids]
 
 
 def fold_with_val(fold: RollingFold, embargo, val_share: float) -> tuple[SplitPlan, pd.Timestamp]:

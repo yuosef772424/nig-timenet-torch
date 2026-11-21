@@ -17,6 +17,7 @@ import pandas as pd
 
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
+from nig_timenet_torch.trainer.day_weights import DayWeightSettings
 from nig_timenet_torch.trainer.groups import BATCH_ORDERS
 from nig_timenet_torch.trainer.staged import StageSettings
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
@@ -46,6 +47,9 @@ class RollingSettings:
     max_folds: int | None = None
     retrain_every_k: int = 1           # retrain on fold i iff i % k == 0, else reuse the last trained model
     seeds: tuple[int, ...] = (0,)
+    # only these fold indices (None = every fold): several processes share one study, each on its folds (owner
+    # 2026-11-20); needs retrain_every_k == 1 (a reused model comes from an earlier fold)
+    fold_ids: tuple[int, ...] | None = None
     # D-031: a fold has no validation set of its own; the last ``val_share`` of its train window (by time, purged by
     # label end + embargo) is cut off as the validation of epoch selection and early stopping. The test window is
     # never read by training or selection.
@@ -63,6 +67,13 @@ class RollingSettings:
         if self.retrain_every_k < 1 or (self.max_folds is not None and self.max_folds < 1):
             raise ValueError("retrain_every_k and max_folds must be >= 1")
         object.__setattr__(self, "seeds", tuple(int(s) for s in self.seeds))
+        if self.fold_ids is not None:
+            ids = tuple(int(i) for i in self.fold_ids)
+            if not ids or min(ids) < 0 or len(set(ids)) != len(ids):
+                raise ValueError(f"fold_ids must be distinct indices >= 0, got {self.fold_ids!r}")
+            if self.retrain_every_k != 1:
+                raise ValueError("fold_ids needs retrain_every_k == 1 (a reused model comes from an earlier fold)")
+            object.__setattr__(self, "fold_ids", ids)
 
 
 @dataclass(frozen=True)
@@ -152,6 +163,10 @@ class TrainSettings:
     # rows inside in time order, the batches shuffled (trainer.groups.BATCH_ORDERS). No extra input channel.
     batch_order: str = "rows"
     time_block_bars: int = 1                               # read only by "time_blocks"; >= 1
+    # owner 2026-11-20 (D-039): None = every training row weighs 1 (as before); a DayWeightSettings = every UTC day
+    # carries the same total weight and the days the model fails on (high loss, measured each epoch) weigh more
+    # (trainer.day_weights); flat epoch loop with row batches only
+    day_weights: DayWeightSettings | None = None
 
     def __post_init__(self):
         if self.batch_by not in BATCHINGS:
@@ -229,6 +244,11 @@ class RunSettings:
         if self.split.cross_section and BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]:
             raise ValueError(f"train.batch_order {self.train.batch_order!r} groups rows by timestamp; the panel path "
                              f"(split.cross_section = True) already batches whole timestamps: use batch_order 'rows'")
+        if self.train.day_weights is not None and (
+                self.split.cross_section or self.train.staged is not None or BATCHINGS[self.train.batch_by]
+                or BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]):
+            raise ValueError("train.day_weights needs the flat epoch loop with batches of shuffled rows: not with "
+                             "split.cross_section, train.staged, a grouping batch_by or a timestamp batch_order")
         if self.train.staged is not None and BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]:
             raise NotImplementedError(f"train.batch_order {self.train.batch_order!r} is not implemented for staged "
                                       f"training (it samples its own batches from the stage rows)")
