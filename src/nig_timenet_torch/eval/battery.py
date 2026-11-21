@@ -10,7 +10,7 @@ SOURCE: ported from feat/ar-stream 7c9736b, f052cf6 (owner's work)
 
 The evaluation battery: a many-angle judgment of one run, the way a trader would interrogate it before trusting
 money to it. Every section is a pure function over the tidy table, so the notebook stays a thin runner (rule E4/G6).
-Sections: sanity (IC + bias), confidence calibration, anti-cowardice, trading grids (market exit and limit-at-mu),
+Sections: sanity (IC + bias), confidence calibration, anti-cowardice, trading grids (market exit and take-profit at mu),
 an uncertainty filter, shock-regime splits, weekly stability, per-coin, the flip test, the classics ported from the
 old project (battery_classics) and a ranked verdict.
 """
@@ -33,6 +33,7 @@ from nig_timenet_torch.eval.battery_lib import (
     _section,
     _stats,
     _top_abs,
+    limit_at_mu,
     round_trip,
 )
 from nig_timenet_torch.eval.battery_profit import profit_sections
@@ -124,24 +125,27 @@ def trade_grid(test, cost: float, pcts: tuple = (0.05, 0.10, 0.20)) -> dict:
 
 
 def limit_execution(test, cost: float, pcts: tuple = (0.05, 0.10, 0.20)) -> dict:
-    """Section 5: realistic execution - a limit order AT the predicted mu; if the market never reaches
-    it, fall back to the market exit (the true close). This is the closest to a tradeable backtest."""
-    rows = [f"{'strategy':<44}{'n':>8}{'fill%':>8}{'avg%':>10}{'Sharpe':>9}{'PF':>7}"]
-    mu, y, rt = test["mu"].values, test["y_ret"].values, round_trip(cost)
+    """Section 5: market entry at the last close with a take-profit AT the predicted mu (battery_lib.limit_at_mu):
+    the target exists only on the trade's side and is checked on the realised extreme when the table has it; a row
+    without a target, or whose target is not reached, exits at the true close."""
+    rows = [f"{'strategy':<44}{'n':>8}{'fill%':>8}{'tgt%':>7}{'avg%':>10}{'Sharpe':>9}{'PF':>7}"]
+    path = True
     for pct in pcts:
         for side, sign in (("LONG", 1.0), ("SHORT", -1.0)):
             mask = (np.where(test["p_dir"].values > 0.5, 1.0, -1.0) == sign) & _scored(test)
             idx = _top_abs(test, "mu", pct, mask)
-            hit = (y[idx] >= mu[idx]) if sign > 0 else (y[idx] <= mu[idx])
-            pnl = np.where(hit, np.abs(mu[idx]) - rt, sign * y[idx] - rt)
-            s = _stats(pnl)
+            r = limit_at_mu(test, idx, sign, cost)
+            path = r["path"]
+            s = _stats(r["pnl"])
             if s:
-                rows.append(f"{f'{side} top{int(pct * 100)}% (limit at mu)':<44}{s['n']:>8,}"
-                           f"{float(hit.mean()) * 100:>7.1f}%{s['avg'] * 100:>+9.4f}%"
-                           f"{s['sharpe']:>+9.3f}{s['pf']:>7.2f}")
-    return _section("REALISTIC EXECUTION (TEST) - limit at mu, fallback close", rows,
-                    "A high fill% with a positive avg means the model's magnitude is honest; fills with negative "
-                    "avg mean the limit sits inside noise.")
+                rows.append(f"{f'{side} top{int(pct * 100)}% (TP at mu)':<44}{s['n']:>8,}"
+                            f"{float(r['hit'].mean()) * 100:>7.1f}%{float(r['target'].mean()) * 100:>6.1f}%"
+                            f"{s['avg'] * 100:>+9.4f}%{s['sharpe']:>+9.3f}{s['pf']:>7.2f}")
+    reach = "the realised high / low" if path else "the CLOSE only (no fut_high / fut_low: fills are a lower bound)"
+    return _section("REALISTIC EXECUTION (TEST) - take-profit at mu, else exit at the close", rows,
+                    f"Target reached on {reach}. tgt% = share of rows whose mu lies on the trade's side (the others "
+                    "have no target and exit at the close). A high fill% with a positive avg means the model's "
+                    "magnitude is honest; fills with a negative avg mean the target sits inside noise.")
 
 
 def uncertainty_filter(val, test, cost: float, pct: float = 0.10, quantiles: tuple = (0.3, 0.5, 0.7)) -> dict:

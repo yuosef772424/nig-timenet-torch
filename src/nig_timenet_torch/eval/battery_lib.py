@@ -4,7 +4,8 @@ PURPOSE: Shared private helpers of the battery: trade stats, row masks, top-|x| 
 TAGS: battery helpers, trade stats, sharpe, profit factor, section
 PITFALLS: cost is PER SIDE (round_trip = 2x); the direction of a trade is p_dir, never sign(mu); _stats returns None
     below 50 trades; Sharpe is per trade; _top_abs ranks by |field|, so the side comes
-    from the mask.
+    from the mask; limit_at_mu sets a target only when sign(mu) == side and checks it on the realised extreme
+    (fut_high / fut_low) when the table has it, else on the close (a lower bound of the fill).
 SOURCE: ported from feat/ar-stream 7c9736b, f052cf6 (owner's work)
 
 Split out of battery.py so the core and the classic sections share ONE implementation (rule C2).
@@ -14,7 +15,8 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["SIDES", "round_trip", "_stats", "_scored", "_top_abs", "_dir_pnl", "_section", "_fmt", "_HEADER"]
+__all__ = ["SIDES", "round_trip", "limit_at_mu", "_stats", "_scored", "_top_abs", "_dir_pnl", "_section", "_fmt",
+           "_HEADER"]
 
 
 #: a round trip pays the cost on entry AND exit: ``cost`` everywhere in the battery is the cost PER SIDE
@@ -56,6 +58,26 @@ def _dir_pnl(df, idx: np.ndarray, cost: float) -> np.ndarray:
     """Trade the model's direction (p_dir) on the true return, minus the round-trip cost (``cost`` per side)."""
     sign = np.where(df["p_dir"].values[idx] > 0.5, 1.0, -1.0)
     return sign * df["y_ret"].values[idx] - round_trip(cost)
+
+
+def limit_at_mu(df, idx: np.ndarray, side, cost: float) -> dict:
+    """Market entry at the last close with a take-profit AT the predicted close move ``mu``, else exit at the close.
+
+    The target exists only on the trade's side (``sign(mu) == side``). A row whose mu points against the side
+    (p_dir long with mu below zero) has no target and exits at the close; B-053: the old rule paid such a long
+    ``+|mu|`` when its price fell. The target is reached when the realised favourable extreme over the horizon
+    touches it (``fut_high >= mu`` long, ``fut_low <= mu`` short). Without those columns the close stands in for
+    the extreme, which only misses fills (a lower bound). Returns ``pnl`` (after the round trip), ``hit``,
+    ``target`` (the row had a target) and ``path`` (True when the extreme columns were used)."""
+    idx = np.asarray(idx)
+    side = np.broadcast_to(np.asarray(side, dtype=np.float64), (len(idx),))
+    mu, y = df["mu"].values[idx], df["y_ret"].values[idx]
+    path = {"fut_high", "fut_low"} <= set(df.columns)
+    reach = np.where(side > 0, df["fut_high"].values[idx], df["fut_low"].values[idx]) if path else y
+    target = np.greater(side * mu, 0.0)
+    hit = target & (side * reach >= side * mu)
+    pnl = np.where(hit, side * mu, side * y) - round_trip(cost)
+    return {"pnl": pnl, "hit": hit, "target": target, "path": path}
 
 
 def _section(title: str, rows: list[str], note: str = "") -> dict:
