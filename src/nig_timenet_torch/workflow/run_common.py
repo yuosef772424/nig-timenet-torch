@@ -118,6 +118,18 @@ def stride_rows(idx: np.ndarray, max_rows: int | None) -> np.ndarray:
     return idx[np.unique(np.linspace(0, len(idx) - 1, max_rows).astype(np.int64))]
 
 
+def stride_groups(gid: np.ndarray, max_rows: int | None) -> np.ndarray:
+    """Positions of at most about ``max_rows`` rows made of WHOLE groups (``gid``: the rows' group ids, e.g. the
+    timestamp ids of a cross-section run), the groups evenly strided over their range; ``None`` keeps all."""
+    pos = np.arange(len(gid))
+    if max_rows is None or len(gid) <= max_rows:
+        return pos
+    uniq = np.unique(gid)
+    keep = max(1, int(round(len(uniq) * max_rows / len(gid))))
+    chosen = uniq[np.unique(np.linspace(0, len(uniq) - 1, keep).astype(np.int64))]
+    return pos[np.isin(gid, chosen)]
+
+
 def excluded_rows(dataset: dict, coins) -> np.ndarray:
     """Boolean mask over ALL rows: True for the rows of the coins named in ``coins`` (``split.exclude_coins``). A name
     that is not a coin of the artifact raises (with a did-you-mean); excluding every coin raises."""

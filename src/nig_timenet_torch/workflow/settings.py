@@ -17,7 +17,10 @@ import pandas as pd
 
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
+from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES
+from nig_timenet_torch.trainer.day_weights import DayWeightSettings
 from nig_timenet_torch.trainer.groups import BATCH_ORDERS
+from nig_timenet_torch.trainer.schedules import LR_KINDS
 from nig_timenet_torch.trainer.staged import StageSettings
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import BATCHINGS
@@ -46,6 +49,9 @@ class RollingSettings:
     max_folds: int | None = None
     retrain_every_k: int = 1           # retrain on fold i iff i % k == 0, else reuse the last trained model
     seeds: tuple[int, ...] = (0,)
+    # only these fold indices (None = every fold): several processes share one study, each on its folds (owner
+    # 2026-11-20); needs retrain_every_k == 1 (a reused model comes from an earlier fold)
+    fold_ids: tuple[int, ...] | None = None
     # D-031: a fold has no validation set of its own; the last ``val_share`` of its train window (by time, purged by
     # label end + embargo) is cut off as the validation of epoch selection and early stopping. The test window is
     # never read by training or selection.
@@ -63,6 +69,13 @@ class RollingSettings:
         if self.retrain_every_k < 1 or (self.max_folds is not None and self.max_folds < 1):
             raise ValueError("retrain_every_k and max_folds must be >= 1")
         object.__setattr__(self, "seeds", tuple(int(s) for s in self.seeds))
+        if self.fold_ids is not None:
+            ids = tuple(int(i) for i in self.fold_ids)
+            if not ids or min(ids) < 0 or len(set(ids)) != len(ids):
+                raise ValueError(f"fold_ids must be distinct indices >= 0, got {self.fold_ids!r}")
+            if self.retrain_every_k != 1:
+                raise ValueError("fold_ids needs retrain_every_k == 1 (a reused model comes from an earlier fold)")
+            object.__setattr__(self, "fold_ids", ids)
 
 
 @dataclass(frozen=True)
@@ -152,6 +165,22 @@ class TrainSettings:
     # rows inside in time order, the batches shuffled (trainer.groups.BATCH_ORDERS). No extra input channel.
     batch_order: str = "rows"
     time_block_bars: int = 1                               # read only by "time_blocks"; >= 1
+    # owner 2026-11-20 (D-039): None = every training row weighs 1 (as before); a DayWeightSettings = every UTC day
+    # carries the same total weight and the days the model fails on (high loss, measured each epoch) weigh more
+    # (trainer.day_weights); flat epoch loop with row batches only
+    day_weights: DayWeightSettings | None = None
+    # LS1 (owner 2026-11-19): the losses of the auxiliary close heads (ModelSettings override ``aux_heads``:
+    # side_payoff / upper_quantile; read only when the model has them): their fixed loss weight (they are never
+    # Kendall-weighted) and the quantile the upper_quantile head learns. The side payoffs use the battery's cost.
+    aux_loss_weight: float = 1.0
+    aux_quantile: float = 0.9
+    # LS1: the side-payoff rows weighted by (close NIG predictive variance)^-this (0 = plain squared error; 1 = WLS)
+    aux_variance_weight: float = 0.0
+    # LR1 (owner 2026-11-19, "a gap in the settings or the training"): the learning-rate schedule over ``epochs``
+    # (trainer.schedules.LR_KINDS; "constant" = lr every epoch, as every run before; "cosine" = from lr down to
+    # lr * lr_min_ratio at the last epoch). The run path never passed a schedule before, so every run was constant.
+    lr_schedule: str = "constant"
+    lr_min_ratio: float = 0.1                              # read only by a non-constant schedule; in (0, 1]
 
     def __post_init__(self):
         if self.batch_by not in BATCHINGS:
@@ -164,9 +193,15 @@ class TrainSettings:
         if self.lr <= 0 or self.weight_decay < 0 or not 0.0 <= self.label_smoothing < 1.0:
             raise ValueError("lr > 0, weight_decay >= 0, 0 <= label_smoothing < 1")
         if min(self.class_loss_weight, self.lambda_reg_end, self.lambda_calib_end, self.beta_nll,
-               self.cross_section_weight, self.direction_balance) < 0:
-            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end, beta_nll, cross_section_weight "
-                             "and direction_balance must be >= 0")
+               self.cross_section_weight, self.direction_balance, self.aux_loss_weight, self.aux_variance_weight) < 0:
+            raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end, beta_nll, cross_section_weight, "
+                             "direction_balance, aux_loss_weight and aux_variance_weight must be >= 0")
+        if self.lr_schedule not in LR_KINDS:
+            raise ValueError(f"TrainSettings.lr_schedule must be one of {sorted(LR_KINDS)}, not {self.lr_schedule!r}")
+        if not 0.0 < self.lr_min_ratio <= 1.0:
+            raise ValueError(f"TrainSettings.lr_min_ratio must be in (0, 1], got {self.lr_min_ratio!r}")
+        if not 0.0 < self.aux_quantile < 1.0:
+            raise ValueError(f"TrainSettings.aux_quantile must be in (0, 1), got {self.aux_quantile!r}")
 
 
 @dataclass(frozen=True)
@@ -226,9 +261,20 @@ class RunSettings:
         if BATCHINGS[self.train.batch_by] and (self.split.cross_section or self.train.staged is not None):
             raise ValueError(f"train.batch_by={self.train.batch_by!r} needs the flat epoch loop: not with "
                              f"split.cross_section (it batches whole timestamps already) or train.staged")
+        whole_timestamps = (self.split.cross_section or BATCHINGS[self.train.batch_by]
+                            or BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"])
+        if CROSS_SECTION_LOSSES.get(self.train.cross_section_loss) is not None and not whole_timestamps:   # (C-08)
+            raise ValueError(f"train.cross_section_loss={self.train.cross_section_loss!r} ranks the rows of one "
+                             f"timestamp: it needs whole-timestamp batches (split.cross_section, a grouping "
+                             f"train.batch_by or a timestamp train.batch_order such as 'time_blocks')")
         if self.split.cross_section and BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]:
             raise ValueError(f"train.batch_order {self.train.batch_order!r} groups rows by timestamp; the panel path "
                              f"(split.cross_section = True) already batches whole timestamps: use batch_order 'rows'")
+        if self.train.day_weights is not None and (
+                self.split.cross_section or self.train.staged is not None or BATCHINGS[self.train.batch_by]
+                or BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]):
+            raise ValueError("train.day_weights needs the flat epoch loop with batches of shuffled rows: not with "
+                             "split.cross_section, train.staged, a grouping batch_by or a timestamp batch_order")
         if self.train.staged is not None and BATCH_ORDERS.entry(self.train.batch_order).meta["needs_times"]:
             raise NotImplementedError(f"train.batch_order {self.train.batch_order!r} is not implemented for staged "
                                       f"training (it samples its own batches from the stage rows)")

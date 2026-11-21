@@ -39,10 +39,10 @@ def test_time_blocks_with_a_cross_section_loss_without_the_channel(art, tmp_path
 
 
 def test_cross_section_loss_without_channel_or_time_blocks_still_raises(art, tmp_path):  # noqa: F811
-    r = steps.build(steps.prepare(settings(art, tmp_path, **OVER, **{"train.cross_section_loss": "rank_ic"}),
-                                  tmp_path / "out"))
+    """Since the hardening campaign of 2026-11-21 (C-08) the settings refuse it, before any data is read (it failed
+    at the first training step before)."""
     with pytest.raises(ValueError, match="whole-timestamp"):
-        steps.train(r)
+        settings(art, tmp_path, **OVER, **{"train.cross_section_loss": "rank_ic"})
 
 
 def test_time_blocks_settings_are_strict(tmp_path):
@@ -55,3 +55,14 @@ def test_time_blocks_settings_are_strict(tmp_path):
         updated(base, {"train.time_block_bars": 0})
     with pytest.raises(KeyError):
         updated(base, {"train.batch_order": "nope"})
+
+
+def test_batch_by_groups_and_a_batch_order_together_are_refused():
+    """A-30 (hardening 2026-11-21): a grouping batch_by made fit use one batch per group and silently ignored a
+    non-rows batch_order (MG3 left the combination unguarded)."""
+    from nig_timenet_torch.trainer.trainer import FitSettings
+
+    with pytest.raises(ValueError, match="both decide what one batch is"):
+        FitSettings(epochs=1, batch_by="day", batch_order="time_blocks")
+    FitSettings(epochs=1, batch_by="day")                 # each alone is fine
+    FitSettings(epochs=1, batch_order="time_blocks")

@@ -1,4 +1,4 @@
-"""PURPOSE: Every use of the model outputs as a trade rule over a battery table (direction, top-|mu| grid, limit at mu,
+"""PURPOSE: Every use of the model outputs as a trade rule over a battery table (direction, top-|mu| grid, TP at mu,
     limit at the predicted extreme, take-profit), each with trivial controls, on VAL and TEST with a day-block CI.
 TAGS: t-profit, strategy book, trade rules, trivial controls, volatility baseline, day block bootstrap, val and test
 PITFALLS: cost is PER SIDE (2x per round trip, battery_lib.SIDES); every threshold (aleatoric, volatility, top-k)
@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.eval.battery_lib import SIDES
+from nig_timenet_torch.eval.battery_lib import SIDES, limit_at_mu
 from nig_timenet_torch.stats.metrics import block_bootstrap_ci
 
 __all__ = ["direction_trades", "limit_at_mu_trades", "limit_extreme_trades", "tp_trades", "summarize", "book",
@@ -48,15 +48,16 @@ def direction_trades(df, idx, side, cost: float) -> pd.DataFrame:
 
 
 def limit_at_mu_trades(df, idx, side, cost: float) -> pd.DataFrame:
-    """The battery's 'REALISTIC EXECUTION - limit at mu' rule (eval/battery.py::limit_execution), exactly: market
-    entry at the last close; 'hit' when the CLOSE return reaches mu (y >= mu long, y <= mu short); a hit is paid
-    |mu|, a miss the close return; cost per side x2."""
+    """The battery's 'REALISTIC EXECUTION - take-profit at mu' rule (eval/battery.py::limit_execution), exactly: market
+    entry at the last close; a target at mu only on the trade's side, reached on the realised extreme (or the close
+    without the extreme columns); a hit is paid |mu|, a miss or a row without a target the close return; cost per
+    side x2 (one implementation: battery_lib.limit_at_mu)."""
     idx = np.asarray(idx)
     side = np.broadcast_to(np.asarray(side, dtype=np.float64), (len(idx),))
+    r = limit_at_mu(df, idx, side, cost)
     mu, y = df["mu"].values[idx], df["y_ret"].values[idx]
-    hit = np.where(side > 0, y >= mu, y <= mu)
-    pnl = np.where(hit, np.abs(mu), side * y) - SIDES * cost
-    return _frame(df, idx, pnl, side, hit.astype(float), _adverse_market(df, idx, side), np.abs(mu), side * y)
+    hit = np.where(r["target"], r["hit"].astype(float), np.nan)
+    return _frame(df, idx, r["pnl"], side, hit, _adverse_market(df, idx, side), np.abs(mu), side * y)
 
 
 def limit_extreme_trades(df, mask, side: float, cost: float, pred_high=None, pred_low=None) -> pd.DataFrame:
@@ -136,7 +137,7 @@ def _direction_uses(d, cost, rng):
             yield use, "volatility selection", direction_trades(d, _top(d, d["vol"].values, pct, m), sg, cost)
             yield use, "random selection", direction_trades(d, rng.choice(np.where(m)[0], len(idx), replace=False), sg,
                                                             cost)
-            yield f"{name} top{int(pct * 100)}% (limit at mu)", "model", limit_at_mu_trades(d, idx, sg, cost)
+            yield f"{name} top{int(pct * 100)}% (TP at mu)", "model", limit_at_mu_trades(d, idx, sg, cost)
 
 
 def _level_uses(d, cost, thr, vol_scale, rng):

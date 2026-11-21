@@ -829,6 +829,8 @@ panel-smoke-001
 
 ## #181 Owner-pasted evaluation report of a previous single-coin run (user message, 14:49:59)
 
+> Correction 2026-11-21: the 'limit at mu' rows in the output below carry the B-053 defect (fixed in MG4, `eval/battery_lib.py::limit_at_mu`).
+
 ```
 TABLE INTEGRITY - the data first
   VAL   n=54,438  NaN rows=0  dir_true mismatches=0  p_dir in [0.419, 0.569]

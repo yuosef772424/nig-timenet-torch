@@ -1,10 +1,11 @@
 """End-of-step bookkeeping in one run: MAP and pins, decision record, STATUS row, the PR's B1 section.
 
 PURPOSE:  Regenerate MAP and stale pins, draft or update the PR's decision record, set the step's STATUS row and
-  write the B1 PR section; --check changes nothing and fails on anything stale, missing or unfinished.
+  write the B1 PR section; --merge leaves decisions alone; --check changes nothing and fails on anything stale.
 TAGS:     tools, close, step, bookkeeping, map, pins, decisions, status, pr, description, check
 PITFALLS: Run from the repo root on the PR branch with origin/main fetched. Pin files are regenerated only when their
-  test fails (so float noise never rewrites them). A TODO in a drafted decision fails pin_diff and --check.
+  test fails (so float noise never rewrites them). A TODO in a drafted decision fails pin_diff and --check. A merge
+  PR (several records from merged PRs) runs with --merge: the records are history and stay as they are.
 """
 
 from __future__ import annotations
@@ -146,6 +147,11 @@ def repo_url(root: Path, override: str | None) -> str | None:
 
 
 def current_branch(root: Path) -> str | None:
+    """The branch the PR is pushed from: the upstream's name when one is set (a local branch pushed under another
+    name, e.g. a worktree branch pushed to the session branch), else the local branch name."""
+    up = (git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}", check=False) or "").strip()
+    if up and "/" in up:
+        return up.split("/", 1)[1]
     name = (git(root, "rev-parse", "--abbrev-ref", "HEAD", check=False) or "").strip()
     return name if name and name != "HEAD" else None
 
@@ -161,6 +167,11 @@ def close(root: Path, args: argparse.Namespace, hooks: Hooks) -> Report:
     rep.messages += [f"rewrote {rel}" for rel in regenerate(root, hooks, current, args.no_pin_tests)]
 
     added = dd.pr_added_decisions(root, mb)
+    if args.merge:
+        _finish(root, args, rep, status_path, status_new, mb, added)
+        rep.messages.append(f"--merge: the {len(added)} decision record(s) of this PR were not edited")
+        rep.warnings += [f"WARNING: {w}" for w in dd.open_clashes(root, added)]
+        return rep
     target = dd.pick_target(root, added, args.decision)
     other = [p for p in added if p != target]
     folder = dd.decisions_dir(root)
@@ -172,6 +183,12 @@ def close(root: Path, args: argparse.Namespace, hooks: Hooks) -> Report:
     elif target:
         rep.messages.append(f"{target.name}: no default differs from the base any more; its decision lines are kept "
                             "as they are, delete the file by hand if it is not needed")
+    _finish(root, args, rep, status_path, status_new, mb, added)
+    return rep
+
+
+def _finish(root: Path, args: argparse.Namespace, rep: Report, status_path: Path, status_new: str, mb: str,
+            added: list[Path]) -> None:
     status_path.write_text(status_new, encoding="utf-8")
     rep.messages.append(f"updated the {args.step} row of {STATUS_REL}")
     rep.section = behaviour_section(root, mb, added)
@@ -179,7 +196,6 @@ def close(root: Path, args: argparse.Namespace, hooks: Hooks) -> Report:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(rep.section, encoding="utf-8")
     rep.messages.append(f"wrote {OUT_REL} (paste it into the PR description)")
-    return rep
 
 
 def _write_record(root: Path, target: Path | None, lines: list[dd.Line], args: argparse.Namespace, hooks: Hooks,
@@ -238,6 +254,11 @@ def check(root: Path, base: str, hooks: Hooks, *, step: str | None = None, skip_
     return problems
 
 
+def check_warnings(root: Path, base: str) -> list[str]:
+    """What --check reports without failing: decision numbers this PR shares with a branch not merged here."""
+    return dd.open_clashes(root, dd.pr_added_decisions(root, merge_base(root, base)))
+
+
 # --------------------------------------------------------------------------------------------------------- CLI
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="python -m tools.close_step", description=__doc__.split("\n\n")[0])
@@ -247,6 +268,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--state", help="row state: in progress / PR open / merged / ...")
     p.add_argument("--base", default="origin/main", help="PR base ref (default origin/main; its merge-base is used)")
     p.add_argument("--decision", help="update this decision record of the PR (D-NNN) instead of the only/new one")
+    p.add_argument("--merge", action="store_true",
+                   help="a merge PR: keep every decision record as it is (STATUS row, MAP, pins and B1 section only)")
     p.add_argument("--slug", help="slug of a new decision file (default <step>-defaults)")
     p.add_argument("--number", type=int, help="number of a new decision (default: the next free local number)")
     p.add_argument("--repo", help="repository URL for PR links (default: from git remote origin)")
@@ -264,6 +287,8 @@ def main(argv: list[str] | None = None, root: Path = ROOT, hooks: Hooks | None =
             problems = check(root, args.base, hooks, step=args.step, skip_pin_tests=args.skip_pin_tests)
             for p in problems:
                 print(f"STALE: {p}", file=sys.stderr)
+            for w in check_warnings(root, args.base):
+                print(f"WARNING: {w}", file=sys.stderr)
             print("close_step --check: " + (f"{len(problems)} problem(s)" if problems else "clean"))
             return 1 if problems else 0
         if not args.step:

@@ -90,3 +90,29 @@ def test_write_read_round_trip(model, data, tmp_path):
     other = RunIdentity(schema_version=1, settings_hash="x" * 64, seed=0, data_fingerprint="d", code_sha="c")
     with pytest.raises(ValueError, match="identity_hash"):
         write_table(tmp_path / "bad.parquet", df, other)
+
+
+class GroupCentred(torch.nn.Module):
+    """A cross-section stand-in: each row's output is its first channel minus the mean of that channel over the rows
+    of ITS group in the same batch (the group id is the last channel, as in a split.cross_section run)."""
+
+    def forward(self, x):
+        v, gid = x[:, -1, 0], x[:, -1, -1].round().long()
+        uniq, inv = torch.unique(gid, return_inverse=True)
+        mean = torch.zeros(len(uniq)).index_add_(0, inv, v) / torch.bincount(inv).float()
+        return {"y_close": (v - mean[inv]).unsqueeze(-1)}
+
+
+def test_group_batches_never_split_a_group_so_cross_section_outputs_do_not_depend_on_the_batch_size(data):
+    """C-01: predict_stage cut whole timestamps, then predict_table re-sliced them into fixed 512-row batches, so a
+    cross-section model saw part of a timestamp on the rows at each batch border."""
+    idx = np.arange(98)
+    x = torch.as_tensor(data["X_1h"][idx], dtype=torch.float32)
+    gid = torch.arange(len(idx)) // 7                          # 14 groups of 7 rows, contiguous
+    x = torch.cat([x, gid.view(-1, 1, 1).expand(-1, x.shape[1], 1).float()], dim=-1)
+    meta = table_meta(data, idx, stage="report", fold=0, train_end=data["split_dates"]["train_end"])
+    whole = predict_table(GroupCentred(), x, meta, IDENTITY, batch_size=len(idx))["y_close"].to_numpy()
+    grouped = predict_table(GroupCentred(), x, meta, IDENTITY, batch_size=16, groups=gid)["y_close"].to_numpy()
+    fixed = predict_table(GroupCentred(), x, meta, IDENTITY, batch_size=16)["y_close"].to_numpy()
+    np.testing.assert_allclose(grouped, whole, atol=1e-6)
+    assert not np.allclose(fixed, whole, atol=1e-6)            # the old slicing cut groups 2, 4, ... at 16-row borders

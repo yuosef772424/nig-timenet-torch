@@ -14,6 +14,9 @@ nig-data = "nig_timenet_torch.data.cli:main"
 nig-envs = "nig_timenet_torch.data_io.environments:main"
 nig-add-timeframe = "nig_timenet_torch.data_io.lower_timeframe:main"
 nig-market-channel = "nig_timenet_torch.data_io.market_channel:main"
+nig-add-indicators = "nig_timenet_torch.data_io.indicator_channels:main"
+nig-btc-relative = "nig_timenet_torch.data_io.btc_relative:main"
+nig-market-residual = "nig_timenet_torch.data_io.market_residual:main"
 nig-backtest = "nig_backtest.__main__:main"
 
 [project.optional-dependencies]

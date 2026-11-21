@@ -19,8 +19,14 @@ BRANCH_NOTE = re.compile(r"branch `[^`]*`;? ?")
 STEP_CELL = re.compile(r"\s*[/,]\s*")
 
 
+#: a row merged inside a merge PR names it: "merged (MG3)"
+MERGED_VIA = re.compile(r"^merged \([A-Z]+\d+\)$")
+
+
 def valid_state(state: str) -> bool:
-    return state in STATES or (state.startswith("skipped (") and state.endswith(")"))
+    """One of ``STATES``, ``skipped (<reason>)`` or ``merged (<merge step>)`` (the one definition; the docs test
+    imports it)."""
+    return state in STATES or (state.startswith("skipped (") and state.endswith(")")) or bool(MERGED_VIA.match(state))
 
 
 def _cells(line: str) -> list[str]:

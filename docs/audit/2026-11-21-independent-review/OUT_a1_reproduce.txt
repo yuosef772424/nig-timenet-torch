@@ -1,0 +1,6 @@
+seed 0: rows 654,487 coins 101 step-hours mode 4.0 | long trades 65,409 days 1203
+  long book mean day +0.173%  w/o best5 -0.072%  always-long -0.147%
+  dup (coin,end_time): 0  folds overlap in time:  False
+seed 1: rows 654,487 coins 101 step-hours mode 4.0 | long trades 66,044 days 1205
+  long book mean day +0.215%  w/o best5 -0.022%  always-long -0.147%
+  dup (coin,end_time): 0  folds overlap in time:  False

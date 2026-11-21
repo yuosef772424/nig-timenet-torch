@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nig_timenet_torch.eval import battery, battery_profit
+from nig_timenet_torch.eval import battery, battery_lib, battery_profit
 from nig_timenet_torch.eval import strategy_book as sb
 
 COST = 0.0008
@@ -76,3 +76,22 @@ def test_a_martingale_market_has_no_profit_in_any_tp_or_limit_rule():
     d["y_ret"], d["fut_high"], d["fut_low"] = path[:, -1], path.max(1), path.min(1)
     tr = sb.tp_trades(d, np.ones(n, bool), 1.0, 0.0)
     assert abs(tr["pnl"].mean()) < 0.002  # the B-051 misdecode showed +1.3% here on real data
+
+
+def test_take_profit_at_mu_pays_no_target_against_the_side_and_reads_the_extreme():
+    """B-053: a long whose mu points down has no target (it was paid +|mu| while its price fell); a target touched by
+    the realised high mid-horizon is a fill even when the close ends below it."""
+    d = table(n=40).iloc[:4].reset_index(drop=True)
+    d.loc[:, ["mu", "y_ret", "fut_high", "fut_low"]] = [[-0.02, -0.01, 0.001, -0.03],   # long, mu against the side
+                                                       [0.01, -0.005, 0.015, -0.01],   # long, high touched mu
+                                                       [0.01, 0.002, 0.008, -0.01],    # long, target missed
+                                                       [-0.01, 0.004, 0.02, -0.012]]  # short, low touched mu
+    side = np.array([1.0, 1.0, 1.0, -1.0])
+    tr = sb.limit_at_mu_trades(d, np.arange(4), side, COST)
+    rt = 2 * COST
+    assert tr["pnl"].tolist() == pytest.approx([-0.01 - rt, 0.01 - rt, 0.002 - rt, 0.01 - rt])
+    assert np.isnan(tr["hit"].values[0]) and tr["hit"].values[1:].tolist() == [1.0, 0.0, 1.0]
+    close_only = d.drop(columns=["fut_high", "fut_low"])   # without the extremes the close stands in (lower bound)
+    r2 = battery_lib.limit_at_mu(close_only, np.arange(4), side, COST)
+    assert not r2["path"] and r2["pnl"].tolist() == pytest.approx([-0.01 - rt, -0.005 - rt, 0.002 - rt, -0.004 - rt])
+    assert (r2["pnl"] <= tr["pnl"].values + 1e-12).all()

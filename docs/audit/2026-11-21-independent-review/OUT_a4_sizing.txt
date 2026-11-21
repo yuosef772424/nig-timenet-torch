@@ -1,0 +1,12 @@
+== seed 0  VAL breadth gates per fold: {0: np.float64(0.25), 1: np.float64(0.30000000000000004), 2: np.float64(0.15000000000000002), 3: np.float64(0.15000000000000002), 4: np.float64(0.25), 5: np.float64(0.5), 6: np.float64(0.4)}
+  model long, slots = all coins (1/101)      x 1.55 CAGR  +13.6% Sharpe  0.92 maxDD  -19.7%  years +15% +32% +5% -3%
+  model long, slots = 20                     x 0.73 CAGR   -8.9% Sharpe -0.15 maxDD  -59.5%  years +37% -15% -25% -17%
+  model long + VAL breadth gate, slots 101   x 1.76 CAGR  +17.8% Sharpe  1.19 maxDD  -18.3%  years +14% +34% +13% +2%
+  always long, slots = all coins             x 0.81 CAGR   -6.0% Sharpe  0.08 maxDD  -78.5%  years +102% +20% -56% -25%
+  BTC hold                                   x 3.62 CAGR  +45.5% Sharpe  1.34 maxDD  -52.5%  years +157% +109% -10% -25%
+== seed 1  VAL breadth gates per fold: {0: np.float64(0.15000000000000002), 1: np.float64(0.2), 2: np.float64(0.15000000000000002), 3: np.float64(0.45), 4: np.float64(0.35000000000000003), 5: np.float64(0.4), 6: np.float64(0.6000000000000001)}
+  model long, slots = all coins (1/101)      x 1.58 CAGR  +14.3% Sharpe  0.94 maxDD  -20.0%  years +16% +42% -0% -3%
+  model long, slots = 20                     x 1.14 CAGR   +3.9% Sharpe  0.29 maxDD  -51.9%  years +45% +37% -29% -19%
+  model long + VAL breadth gate, slots 101   x 1.84 CAGR  +19.4% Sharpe  1.26 maxDD  -17.0%  years +13% +49% +6% +3%
+  always long, slots = all coins             x 0.81 CAGR   -6.0% Sharpe  0.08 maxDD  -78.5%  years +102% +20% -56% -25%
+  BTC hold                                   x 3.62 CAGR  +45.5% Sharpe  1.34 maxDD  -52.5%  years +157% +109% -10% -25%

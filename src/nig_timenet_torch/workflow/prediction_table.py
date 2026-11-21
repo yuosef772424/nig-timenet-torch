@@ -2,7 +2,7 @@
     writer and one validating reader.
 TAGS: prediction table, batched predict, table meta, table writer, table reader
 PITFALLS: meta arrays must align with x row by row; the timestamp column is taken by name (core.schema.TS_COL), never
-    by an integer subscript.
+    by an integer subscript; a cross-section model needs ``groups`` so no batch splits a timestamp.
 
 ONE batched predict -> canonical PredictionTable, one writer, one validating reader (C5; BUILD_PLAN.md P27).
 
@@ -22,6 +22,7 @@ import torch
 from nig_timenet_torch.core.prediction_schema import SCHEMA_VERSION, validate_table
 from nig_timenet_torch.core.schema import TS_COL
 from nig_timenet_torch.data_io.split_plan import sample_times
+from nig_timenet_torch.trainer.groups import group_chunks
 from nig_timenet_torch.trainer.identity import RunIdentity
 
 __all__ = ["predict_table", "write_table", "read_table", "table_meta"]
@@ -49,9 +50,11 @@ def table_meta(dataset: dict, idx: np.ndarray, *, stage: str, fold: int, train_e
 
 
 def predict_table(model: torch.nn.Module, x, meta: dict, identity: RunIdentity,
-                  batch_size: int = 512) -> pd.DataFrame:
+                  batch_size: int = 512, groups: torch.Tensor | None = None) -> pd.DataFrame:
     """``x``: (N, T, F) tensor, or a dict {timeframe: (N, T_tf, F_tf)} for a multi-timeframe model (P45); the
-    model runs on whatever device ``x`` is on, outputs come back to CPU."""
+    model runs on whatever device ``x`` is on, outputs come back to CPU. ``groups`` (the rows' group ids, rows
+    contiguous per group): every batch ends at a group border, so a cross-section model (relative inputs, cross-coin
+    layers, cross_center) sees whole timestamps, as in ``Trainer.evaluate``; None = fixed ``batch_size`` slices."""
     first = next(iter(x.values())) if isinstance(x, dict) else x
     n = first.shape[0]
     if isinstance(x, dict) and any(v.shape[0] != n for v in x.values()):
@@ -59,8 +62,9 @@ def predict_table(model: torch.nn.Module, x, meta: dict, identity: RunIdentity,
     model.eval()
     chunks: dict[str, list[np.ndarray]] = {}
     with torch.no_grad():
-        for start in range(0, n, batch_size):
-            sl = slice(start, start + batch_size)
+        cuts = (group_chunks(groups, batch_size) if groups is not None
+                else [slice(start, start + batch_size) for start in range(0, n, batch_size)])
+        for sl in cuts:
             out = model({k: v[sl] for k, v in x.items()} if isinstance(x, dict) else x[sl])
             for k, v in out.items():
                 chunks.setdefault(k, []).append(v.detach().cpu().numpy().reshape(v.shape[0], -1))

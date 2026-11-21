@@ -4,6 +4,56 @@
    "friction": 2,
    "merged_at": "2026-11-16T00:35:30Z",
    "suggestions": 4
+  },
+  "60": {
+   "friction": 2,
+   "merged_at": "2026-11-16T00:45:22Z",
+   "suggestions": 7
+  },
+  "61": {
+   "friction": 3,
+   "merged_at": "2026-11-17T20:57:03Z",
+   "suggestions": 5
+  },
+  "62": {
+   "friction": 6,
+   "merged_at": "2026-11-17T21:09:57Z",
+   "suggestions": 7
+  },
+  "63": {
+   "friction": 3,
+   "merged_at": "2026-11-19T14:03:43Z",
+   "suggestions": 4
+  },
+  "64": {
+   "friction": 2,
+   "merged_at": "2026-11-19T14:03:43Z",
+   "suggestions": 1
+  },
+  "65": {
+   "friction": 1,
+   "merged_at": "2026-11-19T14:03:44Z",
+   "suggestions": 2
+  },
+  "66": {
+   "friction": 5,
+   "merged_at": "2026-11-19T14:03:43Z",
+   "suggestions": 5
+  },
+  "67": {
+   "friction": 2,
+   "merged_at": "2026-11-19T14:03:44Z",
+   "suggestions": 3
+  },
+  "68": {
+   "friction": 5,
+   "merged_at": "2026-11-19T14:03:43Z",
+   "suggestions": 6
+  },
+  "69": {
+   "friction": 1,
+   "merged_at": "2026-11-19T14:03:42Z",
+   "suggestions": 2
   }
  },
  "since": "2026-11-16T00:01:00Z"

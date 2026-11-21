@@ -149,6 +149,46 @@ def test_two_records_in_the_pr_need_the_flag(repo, fake, capsys):
     assert dp.parse_decision(repo / dd.DECISIONS_REL / "D-004-y.md") == [("m.f(x)", "3", "9"), ("m.k(q)", "<new>", "1")]
 
 
+def test_a_later_record_keeps_its_line_for_a_default_an_earlier_record_of_the_pr_also_changed(repo, fake):
+    """MG4: D-039 and D-040 (two merged PRs) change one default in turn; updating D-040 must not drop its line."""
+    _decision(repo, "D-003-x.md", "- `m.f(x)`: `3` -> `4`")
+    _decision(repo, "D-004-y.md", "- `m.f(x)`: `4` -> `5`", "- `m.k(q)`: `<new>` -> `1`")
+    fake.current |= {"m.f(x)": "5", "m.k(q)": "1"}
+    assert run(repo, fake, "--decision", "D-004") == 0
+    assert dp.parse_decision(repo / dd.DECISIONS_REL / "D-004-y.md") == [("m.f(x)", "4", "5"), ("m.k(q)", "<new>", "1")]
+    assert check(repo, fake) == []
+
+
+def test_merge_mode_keeps_every_record_and_lists_them_all(repo, fake, capsys):
+    _decision(repo, "D-003-x.md", "- `m.g(y)`: `'a'` -> `'b'`")
+    _decision(repo, "D-004-y.md", "- `m.k(q)`: `<new>` -> `1`")
+    fake.current |= {"m.g(y)": "'b'", "m.k(q)": "1"}
+    before = {p.name: p.read_text(encoding="utf-8") for p in (repo / dd.DECISIONS_REL).glob("D-*.md")}
+    assert run(repo, fake, "--merge", "--state", "PR open") == 0
+    after = {p.name: p.read_text(encoding="utf-8") for p in (repo / dd.DECISIONS_REL).glob("D-*.md")}
+    assert after == before
+    section = (repo / cs.OUT_REL).read_text(encoding="utf-8")
+    assert "| `m.g(y)` | `'a'` | `'b'` | D-003 |" in section and "| `m.k(q)` | (new default) | `1` | D-004 |" in section
+    assert "| ST1 | Staged | PR open |" in (repo / "docs" / "STATUS.md").read_text(encoding="utf-8")
+
+
+def test_a_number_used_by_a_branch_not_merged_here_is_reported_and_a_merged_one_is_not(repo, fake):
+    _git(repo, "checkout", "-q", "-b", "other", "main")
+    _decision(repo, "D-003-other-work.md", "- `m.z(a)`: `<new>` -> `1`")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "other")
+    _git(repo, "update-ref", "refs/remotes/origin/other", "HEAD")
+    _git(repo, "checkout", "-q", "my-branch")
+    _decision(repo, "D-003-mine.md", "- `m.f(x)`: `3` -> `4`")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "mine")
+    warnings = cs.check_warnings(repo, "origin/main")
+    assert len(warnings) == 1 and "D-003 (D-003-mine.md)" in warnings[0] and "origin/other" in warnings[0]
+    assert "D-004" in warnings[0]
+    _git(repo, "merge", "-q", "--no-edit", "other")   # once the other branch is merged here it is history
+    assert cs.check_warnings(repo, "origin/main") == []
+
+
 # -------------------------------------------------------------------------------------- numbering and clashes
 def test_number_taken_on_another_branch_warns(repo, fake, capsys):
     _git(repo, "checkout", "-q", "-b", "other", "main")
@@ -333,3 +373,28 @@ def test_pin_diff_fails_on_a_todo_in_a_decision_the_pr_adds(repo, monkeypatch, c
     _git(repo, "commit", "-qm", "pr")
     assert pin_diff.main("origin/main") == 1
     assert "TODO left: docs/decisions/D-003-x.md" in capsys.readouterr().out
+
+
+def test_decision_clash_cli_warns_in_github_format_and_never_fails(repo, fake, capsys):
+    from tools import decision_clash
+
+    _git(repo, "checkout", "-q", "-b", "other", "main")
+    _decision(repo, "D-003-other-work.md", "- `m.z(a)`: `<new>` -> `1`")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "other")
+    _git(repo, "update-ref", "refs/remotes/origin/other", "HEAD")
+    _git(repo, "checkout", "-q", "my-branch")
+    _decision(repo, "D-003-mine.md", "- `m.f(x)`: `3` -> `4`")
+    assert decision_clash.main([], root=repo) == 0
+    assert capsys.readouterr().out.startswith("::warning title=decision number clash::decision number D-003")
+    assert decision_clash.main(["--base", "no-such-ref"], root=repo) == 0
+    assert "not checked" in capsys.readouterr().out
+
+
+def test_the_status_note_names_the_pushed_branch_when_the_local_one_differs(repo):
+    _git(repo, "remote", "add", "origin", str(repo))
+    _git(repo, "update-ref", "refs/remotes/origin/session-branch", "HEAD")
+    _git(repo, "branch", "-q", "--set-upstream-to=origin/session-branch")
+    assert cs.current_branch(repo) == "session-branch"
+    _git(repo, "branch", "-q", "--unset-upstream")
+    assert cs.current_branch(repo) == "my-branch"
