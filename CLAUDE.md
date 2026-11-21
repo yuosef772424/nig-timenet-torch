@@ -23,7 +23,8 @@ ROADMAP allows).
   (`docs/handoff/`, rule A6). Colab steps: `docs/COLAB_OPS.md`; never write the bridge token or tunnel URL to a file.
 - Tests: `pytest -q` (fast suite). Run the tests of what you touched; CI runs everything. Lint: `ruff check src tests tools`.
 - `docs/STATUS.md` stays under 60 lines (checked by `tests/test_docs_claims.py`).
-- Before finishing: run `python -m tools.close_step --step <your id> [--title ...] [--pr N --state "PR open"]` (it
+- Before finishing: run `python -m tools.close_step --step <your id> [--title ...] [--pr N --state "PR open"]` (a merge
+  PR of other PRs adds `--merge`: their decision records stay as they are; it
   regenerates `docs/MAP.md` and stale pins, drafts or updates the decision record, sets your STATUS row and prints the
   PR section "Behaviour changes (rule B1)"), fill every `TODO` it left in the decision, and finish with
   `python -m tools.close_step --check`. Then, in the PR description (`.github/pull_request_template.md`):
