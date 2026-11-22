@@ -108,3 +108,15 @@ def test_a_gate_run_past_its_deadline_runs_nothing_and_does_not_pass(tmp_path):
     assert rep["finished"] is False and rep["key"] is None and not rep["rows"]
     assert not rep["summary"]["passed"] and "E1 seed 0: not run (deadline)" in rep["summary"]["failed"]
     assert "NOT finished" in (tmp_path / "out" / gate_run.GATE_REPORT_MD).read_text()
+
+
+def test_a_configuration_that_needs_the_cross_section_is_refused_by_the_config_and_by_run_gates(tmp_path):
+    """C-24: gates run on flat batches; a cross-section loss, a coin channel or a whole-timestamp model is refused."""
+    with pytest.raises(ValueError, match="cross_section_loss"):
+        GatesConfig(device="cpu", run_dir="x", train={"cross_section_loss": "rank_ic"})
+    with pytest.raises(ValueError, match="cross_coin_layers"):
+        GatesConfig(device="cpu", run_dir="x", model_overrides={"cross_coin_layers": 1})
+    base = run_settings(GatesConfig(device="cpu", run_dir=str(tmp_path / "w")), SHA)
+    for split in (SplitSettings(cross_section=True), SplitSettings(cross_section=True, coin_channel=True)):
+        with pytest.raises(ValueError, match="split.cross_section"):
+            gate_run.run_gates(replace(base, split=split), gate_run.GateSettings(), tmp_path / "out")

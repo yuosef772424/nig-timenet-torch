@@ -51,7 +51,8 @@ class GatesConfig:
         bad = sorted(set(self.train) & set(_NOT_CONFIGURATION))
         if bad:
             raise ValueError(f"GatesConfig.train may not set {bad}: the gate run sets them per env and seed")
-        run_settings(self), gate_settings(self)
+        gate_run.refuse_cross_section(run_settings(self))
+        gate_settings(self)
 
 
 CONFIG = GatesConfig

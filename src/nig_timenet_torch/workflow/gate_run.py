@@ -36,7 +36,7 @@ from nig_timenet_torch.workflow import flat_run, run, run_common
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, default_model_settings
 
 __all__ = ["GateSettings", "GateRefused", "run_gates", "gate_check", "configuration_key", "baseline_arm", "gate_stage",
-           "GATE_REPORT", "GATE_REPORT_MD", "REPORT_SCHEMA"]
+           "refuse_cross_section", "GATE_REPORT", "GATE_REPORT_MD", "REPORT_SCHEMA"]
 
 GATE_REPORT, GATE_REPORT_MD = "gate_report.json", "gate_report.md"
 REPORT_SCHEMA = "gate_report/1"
@@ -178,12 +178,41 @@ def _env_seed(settings: RunSettings, env: str, info: dict, seed: int, root: Path
     return rows, meta, configuration_key(r)
 
 
+def needs_cross_section(settings: RunSettings) -> list[str]:
+    """What in ``settings`` needs whole-timestamp batches (``split.cross_section``): the gate run only builds flat
+    batches, so each entry here is a reason to refuse the configuration."""
+    found = []
+    if settings.split.cross_section:
+        found.append("split.cross_section")
+    if settings.split.coin_channel:
+        found.append("split.coin_channel")
+    if settings.train.cross_section_loss != TrainSettings.cross_section_loss:
+        found.append(f"train.cross_section_loss={settings.train.cross_section_loss!r}")
+    over = settings.model.overrides
+    if over.get("cross_coin_layers", 0):
+        found.append("model cross_coin_layers (rows of one timestamp attend to each other)")
+    if over.get("cross_input", "none") != "none":
+        found.append(f"model cross_input={over['cross_input']!r}")
+    if over.get("cross_center", False):
+        found.append("model cross_center")
+    return found
+
+
+def refuse_cross_section(settings: RunSettings) -> None:
+    """Raise ValueError when ``settings`` needs ``split.cross_section`` (C-24): gates run on flat batches."""
+    reasons = needs_cross_section(settings)
+    if reasons:
+        raise ValueError("the gate run builds flat batches (one row per sample, no timestamp groups), but this "
+                         f"configuration needs split.cross_section: {', '.join(reasons)}")
+
+
 def run_gates(settings: RunSettings, g: GateSettings | None = None, out=None, *,
               deadline: float | None = None) -> dict:
     """The gate run; returns the report and writes ``gate_report.json`` / ``.md`` to ``out`` (if given).
     ``deadline`` (a ``time.monotonic()`` value): no env x seed starts after it; the report then says
     ``finished: false``, lists the runs not done under ``summary.failed`` and does not pass (gate runs never resume:
     run the job again with a larger ``max_minutes``)."""
+    refuse_cross_section(settings)
     g = g or GateSettings()
     t0 = time.monotonic()
     root = Path(settings.run_dir)
