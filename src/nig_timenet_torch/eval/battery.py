@@ -6,7 +6,8 @@ TAGS: battery, evaluation, trade grid, verdict, uncertainty filter, daily stabil
 PITFALLS: columns are the battery table, not the PredictionTable (build it with eval.battery_adapter); the cost
     default is battery_lib.DEFAULT_COST_PER_SIDE, charged PER SIDE (a trade pays it twice); direction source is p_dir
     via battery_lib.trade_side in every section (mu only ranks and sizes); Sharpe is per trade, not annualised;
-    verdict picks its best market-exit strategy ON TEST (a best-of-N, optimistic), the scorecard verdict is VAL-chosen.
+    verdict picks its best market-exit strategy ON TEST (a best-of-N, optimistic), the scorecard verdict is VAL-chosen;
+    drop_flat=False keeps the flat rows in every section (battery_lib.keep_flat); the account section always keeps them.
 SOURCE: ported from feat/ar-stream 7c9736b, f052cf6 (owner's work)
 
 The evaluation battery: a many-angle judgment of one run, the way a trader would interrogate it before trusting
@@ -15,13 +16,14 @@ Sections (names and print order: ``SECTION_ORDER``): sanity (IC + bias), confide
 trading grids (market exit, take-profit at mu and take-profit at multiples of the ATR), an uncertainty filter,
 shock-regime splits, daily stability,
 per-coin, the flip test, the classics ported from the old project (battery_classics), the T-profit and scorecard
-sections and a ranked verdict.
+sections, the capital account (eval.account, ROADMAP N8) and a ranked verdict.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
+from nig_timenet_torch.eval.account import account_section
 from nig_timenet_torch.eval.battery_classics import (
     market_neutral,
     persistence_baseline,
@@ -36,6 +38,7 @@ from nig_timenet_torch.eval.battery_lib import (
     TRADEABLE_SHARPE,
     direction_pnl,
     format_row,
+    keep_flat,
     net_pnl,
     round_trip,
     scored_rows,
@@ -55,7 +58,7 @@ SECTION_ORDER = ("integrity", "sanity", "confidence", "cowardice", "trades", "ta
                  "uncertainty",
                  "shocks", "daily", "per_coin", "flip", "baseline", "selective", "neutral", "profit_close",
                  "profit_limit", "profit_sigma", "scorecard", "buckets", "asymmetry", "scorecard_verdict",
-                 "verdict")
+                 "account", "verdict")
 
 __all__ = ["battery", "full_battery", "show", "SECTION_ORDER", "table_integrity", "persistence_baseline",
            "selective_evaluation", "market_neutral"]
@@ -364,10 +367,16 @@ def verdict(test, cost: float, sections: dict) -> dict:
     return out
 
 
-def full_battery(val, test, cost: float = DEFAULT_COST_PER_SIDE, n_variants: int = 1) -> dict:
+def full_battery(val, test, cost: float = DEFAULT_COST_PER_SIDE, n_variants: int = 1, *, trim: str = "best",
+                 drop_flat: bool = True, account_books: int | None = None) -> dict:
     """The sections, the T-profit sections (battery_profit; ``n_variants`` = variants tried so far, for the CI
-    level), the scorecard sections (only when TEST has ``end_time``) AND the verdict in one call - what the notebook
-    prints, in ``SECTION_ORDER``."""
+    level), the scorecard sections (only when TEST has ``end_time``; ``trim`` = the scorecard verdict's trim,
+    ``battery_scorecard.TRIM_KEYS``), the capital account (``eval.account.account_section``, ``account_books`` None =
+    read the horizon from the table) AND the verdict in one call - what the notebook prints, in ``SECTION_ORDER``.
+    ``drop_flat`` False keeps the rows with ``dir_true == 0`` in every section (audit E5)."""
+    if not drop_flat:
+        val, test = keep_flat(val), keep_flat(test)
     sections = battery(val, test, cost)
-    extra = {**profit_sections(test, cost, n_variants), **scorecard_sections(val, test, cost, n_variants)}
+    extra = {**profit_sections(test, cost, n_variants), **scorecard_sections(val, test, cost, n_variants, trim),
+             "account": account_section([(val, test)], cost, n_books=account_books)}
     return {**sections, **extra, "verdict": verdict(test, cost, {**sections, **extra})}
