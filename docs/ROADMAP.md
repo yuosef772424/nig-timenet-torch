@@ -1,9 +1,8 @@
 # ROADMAP — from a verified port to a finished, honestly evaluated model (owner 2026-11-02; rewritten H0c 2026-11-07)
 
-Read `docs/STATUS.md` first, then `docs/RULES.md` once, then ONLY your step below ("Now" is the current order). A step
-that touches the model, the trainer, the targets or a training job also reads `docs/PHILOSOPHY.md` (how the work is
-done) and `docs/MODEL_DEV_PROTOCOL.md` (rule C6: gates before any full training). The port (`docs/BUILD_PLAN.md`, B1-B10) is done; R0-T4 are done (their text is in git history, STATUS rows
-link the PRs).
+Reading order: `CLAUDE.md`. ("Now" below is the current order; a model step also follows rule C6, gates before any
+full training.) The port (`docs/BUILD_PLAN.md`, B1-B10) is done; R0-T4 are done (their text is in git history, STATUS rows
+link the PRs); merged steps are moved verbatim to `docs/roadmap_archive.md`.
 
 Goal: IMPROVE the model, then FINISH it professionally: meaningful confidence, sharp uncertainty, skill kept or
 raised, every claim next to its trivial baseline, an honest final evaluation (holdout opened once, only when the owner
@@ -54,17 +53,19 @@ book is under half of its cost (B-074). We are in the build phase: an arm that d
 which samples it fails, its bias, what a selection rule keeps: `docs/PHILOSOPHY.md` section 3, rule C7), and its
 hypotheses are added to this table. The steps, in order; each follows the loop of `docs/PHILOSOPHY.md` section 2:
 
-| # | Step | What | Done when |
-|---|---|---|---|
-| N1 | Read the three walk-forwards (`exp`, researcher) | `rolling-single-001` (the single-coin model), `panel-rolling-base-001` (per_coin on whole timestamps), `panel-rolling-001` (relative + rank term): 7 expanding folds x 2 seeds, the test days of all folds pooled per seed (about 1260 days). Reports on Drive `nig_timenet_runs/<job>/out` | the results note walk-forward-001 under docs/results: per fold and pooled, next to the baselines; does the IC gain hold in every fold, does any arm beat every baseline on the pooled days; for every arm that does not, the failure reading of rule C7 (it also covers `docs/results/panel-001.md`) |
-| N2 | Direction balance in the single-coin model (owner request; `exp`) | the look `single-balance-look-001` (E4 and the real long slice, weights 1 and 5, seeds 0 and 1; `docs/audit/2026-11-16-panel/single_coin_balance_look.py`) | read; only if the bias falls on both seeds without losing rank IC: a walk-forward arm with `train.direction_balance` on the folds of N1 |
-| N3 | The cost wall, model-free first (`exp`, researcher; B-074) | on the full artifact's TRAIN / VAL rows, a ridge on relative features at label horizons 2, 6, 12 and 42 bars and at a daily rebalance: gross edge per unit of turnover against 0.16 % | a table horizon x rebalance -> gross edge / cost; the horizon whose edge exceeds its cost (or the statement that none does) decides the label of the next training |
-| N4 | Card: a single-coin trainer that treats sudden moves differently (owner request; `docs`) | pumps, crashes and news bars are a small share of rows and a large share of the loss; a card (hypothesis, measurement that separates the cases, arms, accept rule) BEFORE any code; one uniform penalty is the thing to avoid (owner) | the card is written (`docs/cards/C-001-sudden-moves-single-coin.md`); next: its step 0 (S1-S4), a measurement, not a switch |
-| N5 | More than one timeframe for the panel model (owner request; `feat` then `exp`) | the run steps refuse an artifact with more than one timeframe (`input_key` in `workflow/run_common.py`); the data preset `hourly_4h_closed` exists | builder: the run steps read a two-timeframe artifact (default unchanged); then look arms one vs two timeframes on E3p, 2 seeds |
-| N6 | Encoders with relative inputs and the rank term (owner request; `exp`) | the look of 2026-11-16 (conv_transformer, transformer without ffn, tcn, itransformer against gru) was lost with the runtime | the look rerun with its outputs on Drive, 2 seeds, E4 and the real long slice |
-| N7 | Close PN1 (`docs`) | reports A and B of `docs/audit/2026-11-16-panel/` still hold table placeholders (their look outputs are lost) | placeholders filled from a rerun or replaced by the panel-001 numbers; the PR of PN1 merged |
-| N8 | Evaluation in a capital account (`feat` + `test`, builder; from `docs/results/independent-review-001.md`, owner 2026-11-21) | the battery judges rows by the equal-weight mean of a day's trades (E2), its verdict drops only the BEST 5 % of days and puts no benchmark through the same test (E1, `eval/battery_scorecard.py::scorecard_verdict`), every 8 h row pays a full round trip even when the coin is kept (E3, `battery_lib.round_trip`), and TEST drops `dir_true == 0` rows chosen by the outcome (E5, `battery_lib._scored`) | each a switch whose default reproduces today (rule B1), with a test: an `account` section (fixed slot per coin, cash for unused slots, fee on turnover, compounding; CAGR / Sharpe / max drawdown / per year) beside always-long, BTC buy-and-hold and a random-coin timing placebo at the same timestamps and counts; a symmetric trim (best AND worst 5 % of days) and the median day, printed for the benchmark too; the audit scripts a3-a6 of `docs/audit/2026-11-21-independent-review/` reproduce through the section on the saved rolling-dw1-r-001 tables |
-| N9 | Market timing as the target (`exp`, researcher; after N8) | the audit reads the long book's money as timing, not coin choice (a random-coin placebo earns the same; the breadth = share of coins with mu above the VAL q90 times the equal-weight basket: +18 % CAGR, Sharpe ~1.1, two seeds, not pre-registered), and it does not beat BTC buy-and-hold (+45 % CAGR, drawdown -52 %) | pre-registration first (rule C5 / PHILOSOPHY section 2): the breadth gate fitted on VAL and a market head (next 8 h - 3 d move of the equal-weight basket) on a FRESH walk-forward, seeds 2 and 3, read in the N8 account against BTC and the placebo; long only until a short rule passes (`short-side-001.md`) |
+| # | Step | State | What | Done when |
+|---|---|---|---|---|
+| N1 | Read the three walk-forwards (`exp`, researcher) | done under other names (`docs/results/rolling-single-002.md`, `panel-rolling-std-001.md`; no note `walk-forward-001` was written) | `rolling-single-001` (the single-coin model), `panel-rolling-base-001` (per_coin on whole timestamps), `panel-rolling-001` (relative + rank term): 7 expanding folds x 2 seeds, the test days of all folds pooled per seed (about 1260 days). Reports on Drive `nig_timenet_runs/<job>/out` | the results note walk-forward-001 under docs/results: per fold and pooled, next to the baselines; does the IC gain hold in every fold, does any arm beat every baseline on the pooled days; for every arm that does not, the failure reading of rule C7 (it also covers `docs/results/panel-001.md`) |
+| N2 | Direction balance in the single-coin model (owner request; `exp`) | todo | the look `single-balance-look-001` (E4 and the real long slice, weights 1 and 5, seeds 0 and 1; `docs/audit/2026-11-16-panel/single_coin_balance_look.py`) | read; only if the bias falls on both seeds without losing rank IC: a walk-forward arm with `train.direction_balance` on the folds of N1 |
+| N3 | The cost wall, model-free first (`exp`, researcher; B-074) | todo | on the full artifact's TRAIN / VAL rows, a ridge on relative features at label horizons 2, 6, 12 and 42 bars and at a daily rebalance: gross edge per unit of turnover against 0.16 % | a table horizon x rebalance -> gross edge / cost; the horizon whose edge exceeds its cost (or the statement that none does) decides the label of the next training |
+| N4 | Card: a single-coin trainer that treats sudden moves differently (owner request; `docs`) | in progress (card written, `docs/cards/C-001-sudden-moves-single-coin.md`; its step 0 not run) | pumps, crashes and news bars are a small share of rows and a large share of the loss; a card (hypothesis, measurement that separates the cases, arms, accept rule) BEFORE any code; one uniform penalty is the thing to avoid (owner) | the card is written (`docs/cards/C-001-sudden-moves-single-coin.md`); next: its step 0 (S1-S4), a measurement, not a switch |
+| N5 | More than one timeframe for the panel model (owner request; `feat` then `exp`) | done (`docs/results/two-frames-001.md`, PS1 merged #67) | the run steps refuse an artifact with more than one timeframe (`input_key` in `workflow/run_common.py`); the data preset `hourly_4h_closed` exists | builder: the run steps read a two-timeframe artifact (default unchanged); then look arms one vs two timeframes on E3p, 2 seeds |
+| N6 | Encoders with relative inputs and the rank term (owner request; `exp`) | done under another name (AI1 architecture look, `docs/audit/2026-11-19-arch-indicators/`) | the look of 2026-11-16 (conv_transformer, transformer without ffn, tcn, itransformer against gru) was lost with the runtime | the look rerun with its outputs on Drive, 2 seeds, E4 and the real long slice |
+| N7 | Close PN1 (`docs`) | todo (reports A and B still hold placeholders) | reports A and B of `docs/audit/2026-11-16-panel/` still hold table placeholders (their look outputs are lost) | placeholders filled from a rerun or replaced by the panel-001 numbers; the PR of PN1 merged |
+| N8 | Evaluation in a capital account (`feat` + `test`, builder; from `docs/results/independent-review-001.md`, owner 2026-11-21) | todo (after HB3 of the hardening campaign) | the battery judges rows by the equal-weight mean of a day's trades (E2), its verdict drops only the BEST 5 % of days and puts no benchmark through the same test (E1, `eval/battery_scorecard.py::scorecard_verdict`), every 8 h row pays a full round trip even when the coin is kept (E3, `battery_lib.round_trip`), and TEST drops `dir_true == 0` rows chosen by the outcome (E5, `battery_lib._scored`) | each a switch whose default reproduces today (rule B1), with a test: an `account` section (fixed slot per coin, cash for unused slots, fee on turnover, compounding; CAGR / Sharpe / max drawdown / per year) beside always-long, BTC buy-and-hold and a random-coin timing placebo at the same timestamps and counts; a symmetric trim (best AND worst 5 % of days) and the median day, printed for the benchmark too; the audit scripts a3-a6 of `docs/audit/2026-11-21-independent-review/` reproduce through the section on the saved rolling-dw1-r-001 tables |
+| N9 | Market timing as the target (`exp`, researcher; after N8) | todo (after N8) | the audit reads the long book's money as timing, not coin choice (a random-coin placebo earns the same; the breadth = share of coins with mu above the VAL q90 times the equal-weight basket: +18 % CAGR, Sharpe ~1.1, two seeds, not pre-registered), and it does not beat BTC buy-and-hold (+45 % CAGR, drawdown -52 %) | pre-registration first (rule C5 / PHILOSOPHY section 2): the breadth gate fitted on VAL and a market head (next 8 h - 3 d move of the equal-weight basket) on a FRESH walk-forward, seeds 2 and 3, read in the N8 account against BTC and the placebo; long only until a short rule passes (`short-side-001.md`) |
+
+State: `todo` / `in progress` / `done (where)`. N1..N9 here are ROADMAP steps; hypothesis labels inside a results note are local to that note (new notes use H1, H2, ...).
 
 N3 is the step that decides T-profit; N2, N5 and N6 change the IC, which the cost wall currently hides. N8 changes how every later arm is judged (the audit found the day metric and the one-sided trim, not the signal, behind part of the "no profit after cost" readings), so it comes before the next arm is read; N9 follows it. The hardening campaign 2026-11b (`docs/hardening/PLAN-2026-11b.md`) runs beside them: HB2 (run identity) before the next Colab run, HB3 (one implementation per trading rule) before N8. Steps of the
 blocks below that no N step needs stay parked until an R-REVIEW or the owner reorders them.
@@ -80,82 +81,11 @@ Step header: change type, size (S < ~150 changed lines, M ~150-500, L more), age
 the cheaper agent model suffices; **researcher** = open question, a stronger agent model, says why). `r` = a Colab run
 plus its reading in the next session.
 
-## Block 1 — hardening and integration — DONE 2026-11-07 (plan and per-package outcome: `docs/hardening/PLAN.md`; PRs #26-#39 in `docs/STATUS.md`)
-Order: `T4b -> I1 -> H2 -> H1 -> I5 -> I2 -> H3 -> H4 -> I3 -> H5 -> H6`. T4b is a ROADMAP fix that goes first (below).
-I4 is split: its rolling half becomes step F2, its panel half is parked (Later); I7 (ar-stream) is not opened (PLAN.md
-"Final campaign order" gives the reasons and the reopen condition). The T4b text below is kept as the record of the fix
-(merged, #29).
-
-### T4b — T-sharp per head vs the predicted move (`fix` + `test`, S, builder) — FIRST, before I1
-- `eval/target_report.py` `_sharp` (~L95-103): replace the range reference `pred_high - pred_low` by each head's
-  predicted move `|decode(mu_head, state, anchor_head) - last_close|`; the std in price units stays
-  `decode(mu + std) - decode(mu)`. `last_close` is passed explicitly (do not rely on the close head being trained);
-  the job passes `lc[:, LAST_COLUMNS.index("last_close")]`. Report keys: `share_std_below_move` (replaces
-  `share_width_below_range`), the zero-std baseline, `meets_target` per head = share >= 0.80 AND coverage in range;
-  every head is judged, not only when high and low exist. `stats.metrics.width_below_share` is reused (C2).
-- Mark the high / low class AUC in the report and `health_report.md` as "information only (direction suspended)".
-- Synthetic test with a KNOWN answer: random-walk paths with known conditional mean / sd; the oracle prediction gives
-  share 1.0 on high / low and ~0 on close; a zero std passes the share but fails coverage; a too-wide std fails share.
-- Behaviour change: report output keys only (no training change); no recorded result used the old definition.
-- Acceptance: the new tests green; `pytest -q` green; `health_report.md` column renamed.
-
-Then I1 ... H6 per `docs/hardening/PLAN.md`.
+## Block 1 (hardening, done 2026-11-07) and the merged steps T4b, T5r, T3b, G1, G2: their specs are in `docs/roadmap_archive.md` (PRs: `docs/status_archive.md`)
 
 ## Block 2 — read the baseline, then build the gates
 Fourth R-REVIEW (2026-11-08, `docs/reviews.md`): H7 added after G2; order proposals that need the manager or the owner
 are listed there and not applied here.
-
-### T5r — read the baseline (`docs`/`exp`, S-M, researcher: the stronger model, because it decides what to try next)
-- Inputs that already exist on `colab-results` (read with `git show origin/colab-results:<path>`, do not copy): `runs/baseline-001-s0-r2/`
-  (`baseline_summary.json`, `health_report.md`, `test_report.json`; 2026-11-07 @44f6e71, 5 epochs, T4, 972 s; its
-  `reg_target_mode` is `return`, scale 1.0, but `price_norm_mode` `logret_std`: the labels are log(future / last_close),
-  so the high / low decodes were WRONG until T5r (B-051, fixed with the `logret_close` codec; HF-13 was right)). Older: `baseline-001-s0`
-  (@55e2db4, pre-T4b, history only), `trial-002`, smoke `baseline-smoke-001`. Known so far: best epoch 1 of 5 (val
-  -5.062 -> -4.947 while train -5.75 -> -6.12: overfit after epoch 1, B-038); test rank IC high 0.393 / low 0.436 /
-  close 0.057 (shuffled ~0); T-sharp share 0.84 / 0.89 (a B-051 misdecode; 0.012 / 0.272 after the fix, fourth R-REVIEW note) but 80 % coverage 0.89 / 0.93 / 0.88 (> 0.85: intervals too
-  wide); confidence decile Spearman -0.81 / -1.00 / -0.99; ~169 s per epoch (median), 2,015,804 / 239,297 / 239,772
-  windows. NOT yet known: whether high/low IC beats the last-bar-range volatility baseline (rule C1/D), and any T-profit
-  number (the battery was wired in I3, after this run).
-- What the r2 run cannot give: the battery (`battery_report.txt`, `battery_profit.json`), the persisted predictions and the
-  volatility baseline inputs are not in its folder, and its checkpoint is NOT on Drive: the publish sent
-  `.../baseline-001-s0-r2/train` to the Drive trash (B-050, fixed 2026-11-08; restore it from the trash).
-  No entry recomputes a report from a checkpoint (`jobs/` has `baseline` and `device_smoke` only). DECISION: do NOT build a
-  recompute entry; queue a FRESH baseline at current main (about 16 minutes on a T4): new run_dir `baseline-002-s0`, same
-  config as `docs/jobs/baseline-001-s0.json` (5 epochs, seed 0; job file `docs/jobs/baseline-002-s0.json`), preceded by a
-  fresh smoke job (`baseline-smoke-002`) on the same commit (rule E5, the commit has not run on the GPU). The planner queues it; the reading session starts when its folder is on
-  `colab-results`. Compare it with r2 (same seed, same data; differences are code changes I2-I3 and nondeterminism).
-- Compute in the reading: (1) the volatility baseline for high/low (rank IC of the last bar's range vs the truth, same
-  rows) and report only the excess as skill; (2) the battery from the run folder (profit per use of the outputs with
-  its trivial baselines and day-block CI, cost 0.0008 per side); (3) T-conf / T-sharp per head from `test_report.json`;
-  (4) record whether B-020 (bar OPEN time) can be settled from the run's data; (5) the validation curve vs train
-  (best epoch 1) as the input to M1/M2r.
-- Output: `docs/results/baseline-001.md` (targets per head with trivial baselines, step time, GPU name, epochs, gate
-  failures if known), bottleneck rows (B-022, B-025, B-026, B-038, B-043 updated). Acceptance: every number has its source
-  file named; no statement of profit without the baseline rows and the CI.
-
-### T3b — interactive notebook section + Drive cached env (`feat`, M, builder)
-- Inputs: PLANNER_HANDOFF "Next" 2; the run steps of I3. A notebook section: a settings cell -> train -> test report
-  shown inline, over `workflow/run.py` steps (no logic in the notebook, G6). A cached Python env on Drive: venv
-  `--system-site-packages`, one tar keyed by Python + torch + requirements hash, rebuilt on a key change.
-- Acceptance: a CPU test of the cache key and restore logic; the notebook runs the fixture end to end in a test.
-
-### G1 — test environments E1 / E2 / E3 (`feat` + `test`, M, builder)
-- `data_io/synthetic.py`: the E1 generator of `docs/MODEL_DEV_PROTOCOL.md` section 3 (planted signal with known IC,
-  known heteroscedastic noise, intrabar paths, the exact conditional mean / sd stored next to the labels), written as a
-  contract artifact; E2 = global label permutation; E3 = a 20-coin x 6-month training-era slice of the real artifact
-  with its own purged split (through I1's loader). A new D-nnn for the generator defaults.
-- Acceptance: tests show the oracle columns reproduce the labels' conditional moments within MC error; the oracle
-  T-sharp share is 1.0 / 1.0 / ~0 (high / low / close); E2 keeps inputs byte-identical and labels permuted; E3 never
-  includes a row after the full run's train end.
-
-### G2 — gate tooling and gate job (`feat` + `test`, M, builder)
-- `trainer/grad_report.py` (gate A, checks A1-A7 on the representative batch set; gradient code stays in `trainer/`,
-  G5), `eval/gates.py` (gates B, C, rule D, leakage canary: verdicts from `target_report` per env x seed), job entry
-  `gates` (E1 -> E2 -> E3 x seeds -> `gate_report.json` / `.md` keyed by the settings hash), and the job-side check:
-  a full-training job refuses to start without a passing gate report for its settings hash (baseline arm exempt,
-  recorded). The trainer trace switches to the representative batch set (switch, default today, D-nnn).
-- Acceptance: on E1 a correct small model passes; a planted defect fails the right check (a detached head -> A2, a
-  constant confidence -> B, a zero std -> C coverage, a label leak -> canary); CPU < 60 s per test.
 
 ### H7 — register and review tooling (`test` + small `fix`, S, builder; added by the fourth R-REVIEW, no model behaviour)
 - From `docs/suggestions.csv` (fourth review decisions): derive the R-REVIEW counter from the last review's `covers #a-#b`
@@ -211,7 +141,7 @@ Registered options in `FitSettings` / `Trainer`, defaults reproduce today (D-nnn
   Train on a part of the data until the eval-mode train / validation gap shows memorisation, add rows, lower the lr,
   repeat; compare against equal-step baselines (all rows constant lr; all rows with the same lr decay).
 - Acceptance: the card's section 6 tests green; the per-stage table and the B1 / B2 / B3 comparison on >= 2 seeds.
-- Builder half (PR open, D-030): `trainer/staged.py` (`StageSettings`, `GROWTH`, `SignDetector`, `staged_fit` through the
+- Builder half (merged #58, D-030): `trainer/staged.py` (`StageSettings`, `GROWTH`, `SignDetector`, `staged_fit` through the
   one `Trainer`), `TrainSettings.staged` (None = today), `run.train_staged`, `workflow/staged_study.py` (staged arm + B1 / B2
   / B3 at equal steps, accept rule), entry `staged`, jobs `staged-smoke-001` then `staged-001`. Researcher half: run them,
   read `study.md`, write the results note under docs/results (the CPU smoke `docs/results/staged-cpu-smoke-001.md` is not a result).
@@ -302,7 +232,7 @@ Acceptance: every protocol section 6 check has a value and verdict on the T8 mod
 ### F2 — walk-forward stability on pre-seal data (`feat` + `exp`, M, builder then researcher; owner decision O-2)
 - The rolling half of I4 (rolling folds over the run steps, through the one `Trainer`), then the T8 model over >= 4
   expanding folds before the time seal: does skill / T-conf / T-sharp hold across folds (seed spread per fold)?
-- Builder half (PR open, D-031): `workflow/rolling_run.py` (`run_rolling`: per fold x seed one `Run`, fold split through
+- Builder half (merged #58, D-031): `workflow/rolling_run.py` (`run_rolling`: per fold x seed one `Run`, fold split through
   `purge_embargo_split` + `check_split_purity`, scalers fitted on the fold's train rows, `retrain_every_k`, seeds, per-fold
   tables, mean / spread per fold and across folds), `RollingSettings.val_share` (a fold's validation = the last 15 % of its
   train window, purged; the test window is never read before the report), entry `rolling`, `main.ipynb` section 13b, jobs

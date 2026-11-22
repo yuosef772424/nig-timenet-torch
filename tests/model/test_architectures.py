@@ -23,7 +23,7 @@ def test_default_architecture_builds_and_matches_contract():
     torch.manual_seed(0)
     model = ARCHITECTURES.get("nig_timenet_v2")(kw["seq_len"], kw["n_features"], **meta["default_config"])
     x = ol.load_inputs()
-    oracle_model = meta["build_fn"](**kw)
+    oracle_model = ARCHITECTURES.get("nig_timenet_v2")(**kw)
     check_contract(model, contract_of(oracle_model, x), x)
 
 

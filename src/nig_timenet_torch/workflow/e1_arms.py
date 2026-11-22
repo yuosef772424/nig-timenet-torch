@@ -28,13 +28,12 @@ from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.data_io.synthetic import SyntheticSettings, oracle_keys, write_synthetic
 from nig_timenet_torch.eval import gates
-from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.model.taps import record_taps
 from nig_timenet_torch.stats.metrics import auc, pearson
 from nig_timenet_torch.trainer.grad_report import a5_a6, grad_report
 from nig_timenet_torch.workflow import flat_run, gate_run, run
-from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, default_model_settings
+from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, model_for
 
 __all__ = ["mu_calibration", "readout_gap", "a6_label_probe", "class_scores", "arm_settings", "run_arm", "summary_line",
            "main"]
@@ -132,10 +131,7 @@ def arm_settings(arm: dict, run_dir: Path, env: Path, seed: int, epochs: int) ->
     unknown = sorted(set(arm) - set(ARM_KEYS))
     if unknown:
         raise KeyError(f"unknown arm key(s) {unknown}; known: {ARM_KEYS}")
-    base = default_model_settings()
-    arch = arm.get("architecture", base.architecture)
-    keep = arch == base.architecture and not arm.get("no_preset", False)
-    ms = ModelSettings(arch, {**(base.overrides if keep else {}), **arm.get("model", {})})
+    ms = model_for(arm.get("architecture"), arm.get("model"), preset=not arm.get("no_preset", False))
     train = from_dict(TrainSettings, {"device": "cpu", "batch_size": 512, "epochs": epochs, **arm.get("train", {})})
     return RunSettings(run_dir=str(run_dir), model=ms, train=replace(train, seed=seed), split=SplitSettings(),
                        data=LoaderSettings(name=str(env), mmap=False, local_dir=""))
@@ -151,7 +147,7 @@ def run_arm(name: str, arm: dict, seed: int, env: Path, root: Path, *, epochs: i
     a0 = grad_report(r.trainer, r.x["train"], r.y["train"], batches)
     run.train(r)
     a1 = grad_report(r.trainer, r.x["train"], r.y["train"], batches)
-    st = gate_run._stage(r, gates.ENVS[0], seed, with_oracle=True, with_losses=False)
+    st = gate_run.gate_stage(r, gates.ENVS[0], seed, with_oracle=True, with_losses=False)
     rows = (gates.gate_a_rows(gates.ENVS[0], seed, "start", a0) + gates.gate_a_rows(gates.ENVS[0], seed, "end", a1)
             + gates.stage_rows(st))
     return {"seed": seed, "rows": rows, "mu": mu_calibration(r.dataset, r.idx["test"], st.table, r.targets),

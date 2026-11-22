@@ -5,6 +5,7 @@ import sys
 
 import pytest
 
+from nig_timenet_torch.colab import paths
 from nig_timenet_torch.colab_ops import recipes
 from nig_timenet_torch.colab_ops.__main__ import build_parser
 from nig_timenet_torch.colab_ops.bridge import Bridge
@@ -14,7 +15,7 @@ def test_setup_script_is_valid_bash_idempotent_and_has_no_secret():
     s = recipes.setup_script("ccr-x/y z")
     assert subprocess.run(["bash", "-n"], input=s, text=True).returncode == 0
     assert "'ccr-x/y z'" in s  # the branch is shell-quoted
-    assert recipes.TOKEN_FILE in s and "x-access-token:%s" in s and "$T" in s
+    assert paths.TOKEN_FILE in s and "x-access-token:%s" in s and "$T" in s
     assert "if [ -d" in s and "git fetch" in s and "git clone" in s  # update or clone
     assert "[ -d /content/art1 ] ||" in s  # the artifact copy is skipped when present
     assert "ensure_env('pyproject.toml', '/content/nig_venv', '/content/drive/MyDrive/crypto/nig_timenet_env'" in s
@@ -38,12 +39,11 @@ def test_job_lines_load_the_cached_env_first():
     for line in (
         recipes.arms_line("/o", arms="gru:3e-4", rows=1, epochs=1, seed=0, device="cpu"),
         recipes.doctor_line("/r", "/o", encoder="gru", lr=1e-3, rows=1, epochs=1, device="cpu"),
-        recipes.runs_line("gru", 1e-3, 1e-4, 1, 1),
     ):
         assert line.startswith(". /content/nig_env.sh && ")
 
 
-def test_arms_doctor_runs_lines():
+def test_arms_and_doctor_lines():
     a = recipes.arms_line("/content/o", arms="gru:3e-4", rows=100, epochs=2, seed=1, device="cpu", n_variants=4)
     assert "--battery --n-variants 4" in a and "--device cpu" in a and "--seed 1" in a
     assert "--battery" not in recipes.arms_line(
@@ -51,8 +51,6 @@ def test_arms_doctor_runs_lines():
     )
     d = recipes.doctor_line("/r", "/o", encoder="transformer", lr=3e-4, rows=10, epochs=6, device="cuda")
     assert "--trained" in d and '"encoder": "transformer"' in d and "0.0003" in d
-    r = recipes.runs_line("itransformer,conv1d_net", 1e-4, 1e-6, 10, 320000)
-    assert r.endswith("itransformer,conv1d_net 0.0001 1e-06 10 320000 cuda") and "PYTHONPATH=/content/nig_uhub/src" in r
 
 
 def test_cli_parses_every_command():
@@ -67,7 +65,6 @@ def test_cli_parses_every_command():
         ["setup", "br"],
         ["arms", "/o"],
         ["doctor", "/r", "/o"],
-        ["runs", "gru"],
     ):
         assert p.parse_args(argv).cmd == argv[0]
 

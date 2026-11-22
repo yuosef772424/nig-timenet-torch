@@ -10,18 +10,18 @@ PITFALLS: every dict section is built with the strict ``from_dict`` (an unknown 
 
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.data_io.loading import LoaderSettings
-from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.workflow.settings import (
     EvalSettings,
     RunSettings,
     SplitSettings,
     TrainSettings,
-    default_model_settings,
+    model_for,
 )
+from nig_timenet_torch.workflow.settings_roles import JOB_KEY_FIELDS
 
 __all__ = ["job_run_settings"]
 
-_OWN_KEYS = ("device", "batch_size", "lr", "seed")
+_OWN_KEYS = JOB_KEY_FIELDS
 
 
 def job_run_settings(*, device: str, run_dir: str, artifact: str, base_tf: str | None, max_rows: int | None,
@@ -32,10 +32,7 @@ def job_run_settings(*, device: str, run_dir: str, artifact: str, base_tf: str |
     bad = sorted(set(train) & set(_OWN_KEYS))
     if bad:
         raise ValueError(f"config.train may not set {bad}: the config has its own keys for them")
-    base = default_model_settings()
-    arch = base.architecture if architecture is None else architecture
-    model = (ModelSettings(arch, {**base.overrides, **model_overrides}) if arch == base.architecture
-             else ModelSettings(arch, dict(model_overrides)))
+    model = model_for(architecture, model_overrides)
     return RunSettings(
         run_dir=run_dir, code_sha=code_sha,
         data=LoaderSettings(name=artifact, mmap=True, expect_base_tf=base_tf, input_timeframes=tuple(input_timeframes)),

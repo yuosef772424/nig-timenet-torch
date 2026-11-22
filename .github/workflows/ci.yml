@@ -27,6 +27,11 @@ jobs:
       - name: Decision numbers not taken by an unmerged branch (warning only)
         if: github.event_name == 'pull_request'
         run: python -m tools.decision_clash --base origin/${{ github.base_ref }}
+      - name: PR description has valid Friction and Suggestions sections
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}   # untrusted text: through the environment, never the shell
+        run: python -m tools.check_pr_sections
       # `python -m tools.close_step --check` is NOT a separate step: CI already covers each of its parts (MAP above,
       # pin_diff above incl. the TODO-in-a-decision check, the pin tests and tests/test_decisions.py in the test step,
       # the STATUS length in tests/test_docs_claims.py). It exists for the session's local run before pushing.

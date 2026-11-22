@@ -11,9 +11,9 @@ TASK_REGISTRY and the task losses, ported from crypto-signal-prediction trainer/
 (BUILD_PLAN.md P17): evidential NIG, regression, binary and multiclass classification (P42), confidence calibration.
 
 Every task fn is ``(y_true, outputs, target_cfg, scheduled_vars, sample_weight=None) -> (loss, stats)``; stats
-always carry the registered ``stat_keys``. Losses are float32. Not ported (off in the oracle's config; add when a
-step's test needs them): ``huber_weight``, ``normalize_reg``, ``alpha_floor_straight_through`` — each raises
-NotImplementedError when requested instead of being silently ignored. ``beta_nll`` is ported (FX1, TF semantics:
+always carry the registered ``stat_keys``. Losses are float32. The TF options ``huber_weight``, ``normalize_reg``
+and ``alpha_floor_straight_through`` are not implemented and not registered: a target config naming one fails
+``validate_trainer_config`` (unknown key). ``beta_nll`` is ported (FX1, TF semantics:
 NLL x stop_grad(w_St^2)^beta_nll) with the torch-only ``beta_nll_normalize`` (weights / their batch mean).
 """
 
@@ -23,7 +23,9 @@ import math
 import torch
 import torch.nn.functional as F
 
+from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.core.registry import Contract, Registry
+from nig_timenet_torch.model.nig_layers import alpha_minus_one
 
 __all__ = ["TASK_REGISTRY", "register_task_type", "with_defaults", "evidential_task_loss", "regression_task_loss",
            "classification_task_loss", "nig_regularizer", "nig_w_st", "compute_confidence_calibration_loss",
@@ -90,37 +92,53 @@ def _wstd(x, w=None) -> torch.Tensor:
     return torch.sqrt(_wmean((x - m).square(), w) + 1e-12)
 
 
-def _unported(target_cfg, keys):
-    on = [k for k in keys if target_cfg[k]]
-    if on:
-        raise NotImplementedError(f"target options {on} are not ported yet (BUILD_PLAN.md P17 'Do NOT')")
-
-
 # ----------------------------------------------------------------------------------------------- evidential (NIG)
+
+# The confidence-calibration loss constants (TF trainer/tasks.py @ aeafc564, kept verbatim; changing one changes
+# every run that switches ``use_calibration_loss`` on).
+#: expected error ceiling = mean + CALIB_SD_MULT * std of the batch's absolute errors
+CALIB_SD_MULT = 1.5
+#: guards the division by that ceiling
+CALIB_EPS = 1e-8
+#: the confidence's batch std must reach this, else a diversity penalty applies (stops a constant confidence)
+CALIB_MIN_STD = 0.15
+#: confidences above CALIB_SATURATION_HI or below CALIB_SATURATION_LO are penalised (stops 0 / 1 saturation)
+CALIB_SATURATION_HI, CALIB_SATURATION_LO = 0.95, 0.05
+#: weights of the diversity and saturation penalties next to the focal term
+CALIB_DIVERSITY_W, CALIB_SATURATION_W = 0.5, 0.3
+
 
 def compute_confidence_calibration_loss(y_true, y_pred, confidence, sample_weight=None) -> torch.Tensor:
     y_true, y_pred, confidence = _flat(y_true), _flat(y_pred), _flat(confidence)
     w = None if sample_weight is None else _flat(sample_weight)
     abs_error = (y_true - y_pred.detach()).abs()  # never pushes mu
-    max_expected_error = (_wmean(abs_error, w) + 1.5 * _wstd(abs_error, w)).detach()
-    target_confidence = 1.0 - torch.clamp(abs_error / (max_expected_error + 1e-8), 0.0, 1.0)
+    max_expected_error = (_wmean(abs_error, w) + CALIB_SD_MULT * _wstd(abs_error, w)).detach()
+    target_confidence = 1.0 - torch.clamp(abs_error / (max_expected_error + CALIB_EPS), 0.0, 1.0)
     diff = confidence - target_confidence
     focal = _wmean(diff.abs().pow(2.0) * diff.square(), w)
-    diversity_penalty = torch.clamp_min(0.15 - _wstd(confidence, w), 0.0)
-    saturation_penalty = _wmean(torch.clamp_min(confidence - 0.95, 0.0) + torch.clamp_min(0.05 - confidence, 0.0), w)
-    return focal + 0.5 * diversity_penalty + 0.3 * saturation_penalty
+    diversity_penalty = torch.clamp_min(CALIB_MIN_STD - _wstd(confidence, w), 0.0)
+    saturation_penalty = _wmean(torch.clamp_min(confidence - CALIB_SATURATION_HI, 0.0)
+                                + torch.clamp_min(CALIB_SATURATION_LO - confidence, 0.0), w)
+    return focal + CALIB_DIVERSITY_W * diversity_penalty + CALIB_SATURATION_W * saturation_penalty
 
 
-def nig_regularizer(error, nu, alpha, beta, normalize=False, stop_grad=True) -> torch.Tensor:
-    """|y - gamma| * (2 nu + alpha) (Amini et al. 2020). normalize=True (Meinert) is not ported yet."""
-    if normalize:
-        raise NotImplementedError("normalize_reg is not ported yet (BUILD_PLAN.md P17 'Do NOT')")
+def nig_regularizer(error, nu, alpha) -> torch.Tensor:
+    """|y - gamma| * (2 nu + alpha) (Amini et al. 2020); the Meinert normalised variant is not implemented."""
     return error.abs() * (2.0 * nu + alpha)
 
 
 def nig_w_st(nu, alpha, beta) -> torch.Tensor:
     """Width of the NIG's Student-t predictive: sqrt(beta (1 + nu) / (nu alpha)) (Meinert et al. 2023, eq. 9)."""
     return torch.sqrt(beta * (1.0 + nu) / (nu * alpha))
+
+
+#: ADDED to the (alpha - 1) denominators of the evidential task's logged ``aleatoric`` / ``epistemic`` stats (TF
+#: formula, kept so the logged stats equal the TF oracle's; alpha is clamped to >= 1 first). Not the model's floor:
+#: ``model.nig_layers.alpha_minus_one`` clamps at ``NIG_ALPHA_DEN_MIN`` (1e-2) for the model's uncertainty heads.
+EVIDENTIAL_STAT_EPS = 1e-6
+#: Floor of (alpha - 1) in the side-payoff variance weights (detached, a weighting only): much lower than
+#: ``NIG_ALPHA_DEN_MIN`` on purpose so the weights are not capped where alpha is near 1 (kept as written in LS1).
+SIDE_PAYOFF_ALPHA_DEN_MIN = 1e-6
 
 
 def _beta_nll_weighted(nig_base, nu, alpha, beta, target_cfg) -> torch.Tensor:
@@ -137,7 +155,6 @@ def _beta_nll_weighted(nig_base, nu, alpha, beta, target_cfg) -> torch.Tensor:
 
 
 def evidential_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_weight=None):
-    _unported(target_cfg, ("normalize_reg", "huber_weight", "alpha_floor_straight_through"))
     keys = target_cfg["output_keys"]
     w = None if sample_weight is None else _flat(sample_weight)
     y_true = _flat(y_true)
@@ -150,13 +167,13 @@ def evidential_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_wei
     nig_base = (0.5 * torch.log(math.pi / nu) - alpha * torch.log(omega)
                 + (alpha + 0.5) * torch.log(nu * error.square() + omega)
                 + torch.lgamma(alpha) - torch.lgamma(alpha + 0.5))
-    nig_pen = nig_regularizer(error, nu, alpha, beta)
+    nig_pen = nig_regularizer(error, nu, alpha)
     lambda_reg = float(scheduled_vars[target_cfg["lambda_reg_var"]])
     total = _wmean(_beta_nll_weighted(nig_base, nu, alpha, beta, target_cfg)
                    + torch.tensor(lambda_reg, dtype=torch.float32) * nig_pen, w)
 
-    aleatoric = beta / (alpha - 1.0 + 1e-6)
-    epistemic = beta / (nu * (alpha - 1.0) + 1e-6)
+    aleatoric = beta / (alpha - 1.0 + EVIDENTIAL_STAT_EPS)
+    epistemic = beta / (nu * (alpha - 1.0) + EVIDENTIAL_STAT_EPS)
     stats = {"nig_base": _wmean(nig_base, w), "nig_pen": _wmean(nig_pen, w), "mae": _wmean(error.abs(), w),
              "aleatoric": _wmean(aleatoric, w), "epistemic": _wmean(epistemic, w),
              "confidence": _wmean(1.0 / (1.0 + aleatoric + epistemic), w), "calib_loss": torch.tensor(0.0)}
@@ -171,14 +188,19 @@ def evidential_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_wei
 register_task_type(
     "evidential", evidential_task_loss,
     ["nig_base", "nig_pen", "mae", "aleatoric", "epistemic", "confidence", "calib_loss"], supports_sample_weight=True,
-    config_keys=("use_calibration_loss", "lambda_reg_var", "lambda_calib_var", "normalize_reg",
-                 "beta_nll", "beta_nll_normalize", "huber_weight", "alpha_floor_straight_through"),
+    config_keys=("use_calibration_loss", "lambda_reg_var", "lambda_calib_var", "beta_nll", "beta_nll_normalize"),
     default_options={"use_calibration_loss": False, "lambda_reg_var": "lambda_reg", "lambda_calib_var": "lambda_calib",
-                     "normalize_reg": False, "beta_nll": 0.0, "beta_nll_normalize": False, "huber_weight": 0.0,
-                     "alpha_floor_straight_through": False})
+                     "beta_nll": 0.0, "beta_nll_normalize": False})
 
 
 # ------------------------------------------------------------------------------------------------------ regression
+
+def _huber(error: torch.Tensor, delta: float) -> torch.Tensor:
+    """The Huber loss of ``error`` with threshold ``delta`` > 0: 0.5 e^2 inside it, delta (|e| - delta / 2) outside."""
+    a = error.abs()
+    q = torch.clamp_max(a, delta)
+    return 0.5 * q.square() + delta * (a - q)
+
 
 def regression_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_weight=None):
     keys = target_cfg["output_keys"]
@@ -188,10 +210,7 @@ def regression_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_wei
     if kind == "mae":
         per = error.abs()
     elif kind == "huber":
-        delta = float(target_cfg["huber_delta"])
-        a = error.abs()
-        q = torch.clamp_max(a, delta)
-        per = 0.5 * q.square() + delta * (a - q)
+        per = _huber(error, float(target_cfg["huber_delta"]))
     else:
         per = error.square()
     return _wmean(per, w), {"mae": _wmean(error.abs(), w)}
@@ -254,9 +273,7 @@ def _squared_or_huber(error: torch.Tensor, delta: float) -> torch.Tensor:
     """0.5 e^2 when ``delta`` is 0, else the Huber loss with that delta (in the error's units)."""
     if delta <= 0:
         return 0.5 * error.square()
-    a = error.abs()
-    q = torch.clamp_max(a, delta)
-    return 0.5 * q.square() + delta * (a - q)
+    return _huber(error, delta)
 
 
 def side_payoff_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_weight=None):
@@ -279,7 +296,7 @@ def side_payoff_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_we
     if v > 0:
         nig = target_cfg["nig_keys"]
         nu, alpha, beta = (_flat(outputs[nig[k]]).detach() for k in ("nu", "alpha", "beta"))
-        var = torch.clamp_min(beta * (1.0 + nu) / (nu * torch.clamp_min(alpha - 1.0, 1e-6)), 1e-12)
+        var = torch.clamp_min(beta * (1.0 + nu) / (nu * alpha_minus_one(alpha, SIDE_PAYOFF_ALPHA_DEN_MIN)), 1e-12)
         rw = var.pow(-v)
         per = per * (rw / rw.mean())
     return _wmean(per, w), {"mae_long": _wmean(err_long.abs(), w), "mae_short": _wmean(err_short.abs(), w)}
@@ -288,7 +305,7 @@ def side_payoff_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_we
 register_task_type("side_payoff", side_payoff_task_loss, ["mae_long", "mae_short"], supports_sample_weight=True,
                    config_keys=("cost_per_side", "scale", "huber_delta", "short_weight", "variance_weight",
                                 "nig_keys"),
-                   default_options={"cost_per_side": 0.0008, "scale": 0.02, "huber_delta": 0.0,
+                   default_options={"cost_per_side": DEFAULT_COST_PER_SIDE, "scale": 0.02, "huber_delta": 0.0,
                                     "short_weight": 1.0, "variance_weight": 0.0, "nig_keys": {}})
 
 

@@ -4,16 +4,19 @@ encoder branch per timeframe (P41), nig_regression / binary / multiclass heads (
 
 Module attribute names equal the Keras layer names, so weights.json ``attr_path`` strings map 1:1 onto torch
 parameter names (see ``torch_param_name``). Options of the upstream builder that this port does not implement yet
-are accepted and validated: any non-default value raises NotImplementedError naming the step that adds it.
+are accepted and validated: any non-default value raises NotImplementedError (not implemented, no step planned).
 
 PURPOSE:  NigTimeNetV2 (the fused model: input path, one encoder branch per timeframe, trunk, heads) and
           build_nig_timenet_v2; encoders come from model.encoders.ENCODERS, head kinds from HEAD_REGISTRY.
 TAGS:     builder, nig timenet v2, model assembly, encoder dispatch, head dispatch, oracle weights, state dict
 PITFALLS: THE default config is the registry's (architectures.NIG_TIMENET_V2_DEFAULT_CONFIG: d_model 16, 2 layers);
-          this signature mirrors the TF builder (d_model 128, 4 layers, NIG heads only) and must not be edited to
-          "fix" that (HF-08). Attribute names are Keras layer names = checkpoint keys: never rename.
+          the signature keeps the TF builder's core arguments and defaults (d_model 128, 4 layers; the options
+          documented in its docstring beyond the TF ones are port-only) and must not be edited to "fix" that (HF-08).
+          Attribute names are Keras layer names = checkpoint keys: never rename.
           ``activation_points`` only lists module names for gate A7 (no behaviour).
 """
+
+from dataclasses import dataclass, fields, replace
 
 import torch
 import torch.nn.functional as F
@@ -55,20 +58,85 @@ from nig_timenet_torch.model.parts import INPUT_SKIP_VARIANTS, skip_variant
 from nig_timenet_torch.model.scalers import INPUT_SCALERS
 from nig_timenet_torch.model.target_norm import TARGET_NORMS
 
-__all__ = ["DEFAULT_HEAD_TYPES", "NigTimeNetV2", "build_nig_timenet_v2", "torch_param_name", "CausalConv1D",
-           "tcn_n_blocks"]
+__all__ = ["DEFAULT_HEAD_TYPES", "BuilderOptions", "NigTimeNetV2", "build_nig_timenet_v2", "torch_param_name",
+           "CausalConv1D", "tcn_n_blocks"]
 
 DEFAULT_HEAD_TYPES = {t: ["nig_regression"] for t in TARGET_COLUMNS}
 AUX_TARGET = "close"   # the target the auxiliary heads (aux_heads) are attached to: the two-sided one
 #: InstanceNorm stats_mode values that return no per-window statistics
 NO_STATS_MODES = tuple(m for m, f in STATS_TRANSFORMS.items() if f is None)
 
-# option -> (value this port implements, step that adds the rest)
-_NOT_YET = {
-    "use_decomposition": (True, "P34"), "use_linear_path": (True, "P34"),
-    "level_film": (False, "P34"), "architecture": ("fused", "P34"), "fusion": ("concat", "P34"), "n_coins": (0, "P34"),
+# upstream option -> the one value this port implements; any other value is not implemented (no step planned)
+_UNIMPLEMENTED_OPTIONS = {
+    "use_decomposition": True, "use_linear_path": True, "level_film": False, "architecture": "fused",
+    "fusion": "concat", "n_coins": 0,
 }
 LEVEL_NORMS = (None, "batch")
+
+
+@dataclass(frozen=True)
+class BuilderOptions:
+    """The model's keyword options, written ONCE: ``build_nig_timenet_v2(seq_len, n_features, **options)`` fills it
+    (unknown names raise), ``NigTimeNetV2`` reads it. The core fields keep the TF builder's names and defaults
+    (d_model 128, 4 layers; HF-08), the rest are the port's opt-ins (see ``build_nig_timenet_v2``)."""
+    d_model: int = 128
+    num_layers: int = 4
+    num_heads: int = 4
+    num_kv_heads: int = 2
+    patch_len: int = 4
+    stride: int = 2
+    kernel_sizes: tuple = (3, 5, 9, 17)
+    max_rel_pos: int = 16
+    dropout: float = 0.1
+    attn_dropout: float = 0.0
+    causal: bool = False
+    window: int | None = None
+    price_targets: tuple = tuple(TARGET_COLUMNS)
+    head_types: dict | None = None
+    enforce_order: bool = True
+    head_hidden: int = 128
+    nu_min: float = 0.1
+    alpha_min: float = 2.0
+    beta_min: float = 0.01
+    unc_max: float = 20.0
+    class_head_hidden: int = 64
+    encoder: str = "transformer"
+    input_skip: str = "none"
+    n_classes: int | dict = 3
+    norm_eps: float = 1e-4
+    linear_path_l2: float = 1e-4
+    input_clip: float | None = None
+    stats_mode: str = "full"
+    input_noise_std: float = 0.0
+    feature_dropout: float = 0.0
+    level_passthrough: bool = False
+    level_norm: str | None = None
+    order_detach_close: bool = False
+    nig_scale: float | str | None = None
+    bn_warmup: bool = False
+    readout_dropout: float | None = None
+    nig_trunk_grad: float = 1.0
+    nig_scale_fit: str = "fixed"
+    input_scaler: str = "none"
+    nig_head: str = "dense"
+    nig_head_dropout: float = 0.0
+    ffn: str = "swiglu"
+    ffn_dim: int | None = None
+    cross_coin_layers: int = 0
+    cross_coin_heads: int = 4
+    cross_coin_peer_dropout: float = 0.0
+    cross_coin_kind: str = "attention"
+    cross_input: str = "none"
+    cross_center: bool = False
+    target_norm: str = "none"
+    har_range: tuple | None = None
+    use_instance_norm: bool = True
+    order_in_label_units: bool = False
+    aux_heads: tuple = ()
+    aux_trunk_grad: float = 1.0
+
+
+_OPTION_NAMES = frozenset(f.name for f in fields(BuilderOptions))
 
 
 class NigTimeNetV2(OracleWeights, nn.Module):
@@ -77,49 +145,53 @@ class NigTimeNetV2(OracleWeights, nn.Module):
     every module name suffixed ``_{timeframe}`` (Keras names), branch embeddings concatenated before trunk_norm.
     A dict with one timeframe is the single-timeframe model (upstream rule)."""
 
-    def __init__(self, seq_len, n_features, *, d_model, num_layers, num_heads, num_kv_heads, patch_len,
-                 stride, kernel_sizes, max_rel_pos, dropout, attn_dropout, causal, window, price_targets,
-                 head_types, enforce_order, head_hidden, nu_min, alpha_min, beta_min, unc_max, class_head_hidden,
-                 norm_eps, linear_path_l2, encoder="transformer", input_clip=None, stats_mode="full",
-                 input_noise_std=0.0, feature_dropout=0.0, level_passthrough=False, level_norm=None,
-                 input_skip="none", n_classes=3, order_detach_close=False, nig_scale=None, bn_warmup=False,
-                 readout_dropout=None, nig_trunk_grad=1.0, nig_scale_fit="fixed", input_scaler="none",
-                 nig_head="dense", nig_head_dropout=0.0, ffn="swiglu",
-                 ffn_dim=None, cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
-                 cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none",
-                 har_range=None, use_instance_norm=True, order_in_label_units=False, aux_heads=(),
-                 aux_trunk_grad=1.0):
+    def __init__(self, seq_len, n_features, options: BuilderOptions):
         super().__init__()
-        self.use_instance_norm = bool(use_instance_norm)   # owner 2026-11-18: False = no per-window normalisation
-        self.har_range = None if har_range is None else tuple(int(c) for c in har_range)   # H3 (owner 2026-11-18)
-        self.cross_center = bool(cross_center)   # D-032: the close mean is taken relative to its timestamp
-        self.nig_trunk_grad = float(nig_trunk_grad)
-        self.label_scale_name, fit_s = nig_scale_fit, label_scale.fitted(nig_scale_fit)   # FX2 (B-052)
-        self._gid = None  # the rows' timestamp ids during one forward (cross_input reads it inside the branch)
-        if cross_input not in CROSS_INPUTS:
-            raise ValueError(f"cross_input must be one of {tuple(CROSS_INPUTS)}, not {cross_input!r}")
-        if CROSS_INPUTS[cross_input] is not None:
+        o = options
+        self._set_options(o, seq_len, n_features)
+        branches = self._set_branches(o, seq_len, n_features)
+        h_dim = self._build_input_branches(o, branches)
+        readout_p = self._build_trunk(o, h_dim)
+        self._build_nig_heads(o, branches, h_dim, readout_p)
+        self._build_cross_coin(o, h_dim)
+        self._build_target_norm_and_order(o)
+        self._build_class_heads(o, h_dim)
+        self._build_aux_heads(o, h_dim)
+
+    def _set_options(self, o: BuilderOptions, seq_len, n_features) -> None:
+        """The plain attributes (and the one module, ``cross_input``, that must exist before the branches) the forward
+        pass and the trainer read; validates the head kinds and cross_input."""
+        self.use_instance_norm = bool(o.use_instance_norm)   # owner 2026-11-18: False = no per-window normalisation
+        self.har_range = None if o.har_range is None else tuple(int(c) for c in o.har_range)   # H3
+        self.cross_center = bool(o.cross_center)   # D-032: the close mean is taken relative to its timestamp
+        self.nig_trunk_grad = float(o.nig_trunk_grad)
+        self.label_scale_name, self._fit_s = o.nig_scale_fit, label_scale.fitted(o.nig_scale_fit)   # FX2 (B-052)
+        if o.cross_input not in CROSS_INPUTS:
+            raise ValueError(f"cross_input must be one of {tuple(CROSS_INPUTS)}, not {o.cross_input!r}")
+        if CROSS_INPUTS[o.cross_input] is not None:
             if isinstance(seq_len, dict):
                 raise NotImplementedError("cross_input needs one timeframe")
-            self.cross_input = CROSS_INPUTS[cross_input]()
+            self.cross_input = CROSS_INPUTS[o.cross_input]()
         self.n_group_features = None if isinstance(n_features, dict) else int(n_features)  # split_group reads it
-        self.nig_head_kind = check_nig_head(nig_head)
-        self.input_scaler_kind = input_scaler
+        self.nig_head_kind = check_nig_head(o.nig_head)
+        self.input_scaler_kind = o.input_scaler
         self._stream = None  # set by model.taps.stream_taps while recording (a plain attribute, not saved)
         self._stream_edit = {}  # {stream name: fn(tensor) -> tensor}, read only while recording
-        self.price_targets = tuple(price_targets)
-        self.head_types = {t: list(head_types.get(t, [])) for t in self.price_targets}
+        self.price_targets = tuple(o.price_targets)
+        self.head_types = {t: list(o.head_types.get(t, [])) for t in self.price_targets}
         for t, kinds in self.head_types.items():
             bad = [k for k in kinds if k not in HEAD_REGISTRY]
             if bad:
                 raise NotImplementedError(f"head types {bad} for {t!r} are not ported (known: {HEAD_REGISTRY.names()})")
         self.class_kind = {t: k for t in self.price_targets if (k := class_head_kind(self.head_types[t], t))}
-        self.linear_path_l2 = linear_path_l2  # kernel L2 of every linear_path, see regularization_loss()
-        self.num_layers, self.encoder = num_layers, encoder
-        self.use_stats = stats_mode not in NO_STATS_MODES
-        self.level_passthrough = level_passthrough
-        self.input_skip = input_skip
+        self.linear_path_l2 = o.linear_path_l2  # kernel L2 of every linear_path, see regularization_loss()
+        self.num_layers, self.encoder = o.num_layers, o.encoder
+        self.use_stats = o.stats_mode not in NO_STATS_MODES
+        self.level_passthrough = o.level_passthrough
+        self.input_skip = o.input_skip
 
+    def _set_branches(self, o: BuilderOptions, seq_len, n_features) -> list[tuple[str, int, int]]:
+        """[(module-name suffix, seq_len, n_features)] per timeframe; sets ``timeframes`` / ``branch_suffixes``."""
         if isinstance(seq_len, dict):
             tfs = [str(k) for k in seq_len]
             if isinstance(n_features, dict) and set(map(str, n_features)) != set(tfs):
@@ -132,65 +204,82 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             tfs = None
             branches = [("", int(seq_len), int(n_features))]
         self.timeframes = tuple(tfs) if tfs and len(tfs) > 1 else None
-        if self.timeframes and skip_variant(input_skip).adds_modules:
-            raise NotImplementedError("input_skip is defined on the single-timeframe transformer only (P34)")
+        if self.timeframes and skip_variant(o.input_skip).adds_modules:
+            raise NotImplementedError("input_skip on several timeframes is not implemented (single-timeframe only)")
         self.branch_suffixes = tuple(b[0] for b in branches)
+        return branches
+
+    def _build_input_branches(self, o: BuilderOptions, branches) -> int:
+        """One encoder branch per timeframe; returns the width of the concatenated embeddings."""
         self.branch_blocks = {}
-        dims = EncoderDims(d_model, num_layers, num_heads, num_kv_heads, patch_len, stride, max_rel_pos, dropout,
-                           attn_dropout, causal, window, ffn, ffn_dim)
+        dims = EncoderDims(o.d_model, o.num_layers, o.num_heads, o.num_kv_heads, o.patch_len, o.stride, o.max_rel_pos,
+                           o.dropout, o.attn_dropout, o.causal, o.window, o.ffn, o.ffn_dim)
         for sfx, T, nf in branches:
-            self._build_branch(sfx, T, nf, dims, kernel_sizes=kernel_sizes, norm_eps=norm_eps, input_clip=input_clip,
-                               stats_mode=stats_mode, input_noise_std=input_noise_std,
-                               feature_dropout=feature_dropout, level_norm=level_norm, bn_warmup=bn_warmup)
-        h_dim = d_model * len(branches)
+            self._build_branch(sfx, T, nf, dims, kernel_sizes=o.kernel_sizes, norm_eps=o.norm_eps,
+                               input_clip=o.input_clip, stats_mode=o.stats_mode, input_noise_std=o.input_noise_std,
+                               feature_dropout=o.feature_dropout, level_norm=o.level_norm, bn_warmup=o.bn_warmup)
+        return o.d_model * len(branches)
+
+    def _build_trunk(self, o: BuilderOptions, h_dim: int) -> float:
+        """trunk_norm + trunk_drop; returns the readout dropout rate (FX1: trunk_drop + NIG head dropout)."""
         self.trunk_norm = RMSNorm(h_dim)
-        readout_p = dropout if readout_dropout is None else readout_dropout  # FX1: trunk_drop + NIG head dropout
+        readout_p = o.dropout if o.readout_dropout is None else o.readout_dropout
         self.trunk_drop = nn.Dropout(readout_p)
         self.trunk_dim = h_dim
+        return readout_p
 
-        self.nig_targets = [t for t in self.price_targets
-                            if kinds_with_task(self.head_types[t], "evidential")]
+    def _build_nig_heads(self, o: BuilderOptions, branches, h_dim: int, readout_p: float) -> None:
+        """Per NIG target: the head, its uncertainty map and its confidence head."""
+        self.nig_targets = [t for t in self.price_targets if kinds_with_task(self.head_types[t], "evidential")]
         self.head_specs = {t: head_spec(k, t) for t in self.nig_targets
                            for k in kinds_with_task(self.head_types[t], "evidential")}
-        head = nig_head_builder(self, nig_head, h_dim, d_model,
-                                lambda: ENCODERS.get(encoder).n_tokens(branches[0][1], patch_len, stride),
-                                dict(nu_min=nu_min, alpha_min=alpha_min, beta_min=beta_min, scale=nig_scale,
-                                     fitted_scale=fit_s),
-                                dense=dict(hidden=head_hidden, dropout=readout_p), attn_dropout=nig_head_dropout)
+        head = nig_head_builder(self, o.nig_head, h_dim, o.d_model,
+                                lambda: ENCODERS.get(o.encoder).n_tokens(branches[0][1], o.patch_len, o.stride),
+                                dict(nu_min=o.nu_min, alpha_min=o.alpha_min, beta_min=o.beta_min, scale=o.nig_scale,
+                                     fitted_scale=self._fit_s),
+                                dense=dict(hidden=o.head_hidden, dropout=readout_p), attn_dropout=o.nig_head_dropout)
         for t in self.nig_targets:
             setattr(self, f"nig_{t}", head())
-            setattr(self, f"unc_{t}", NIGUncertainty(unc_max))
+            setattr(self, f"unc_{t}", NIGUncertainty(o.unc_max))
             setattr(self, f"conf_{t}", ConfidenceHead(h_dim))
-        if cross_coin_layers:  # rows of one timestamp attend to each other between the trunk and the heads
-            if self.timeframes or reads_sequence(nig_head):
+
+    def _build_cross_coin(self, o: BuilderOptions, h_dim: int) -> None:
+        if o.cross_coin_layers:  # rows of one timestamp attend to each other between the trunk and the heads
+            if self.timeframes or reads_sequence(o.nig_head):
                 raise NotImplementedError("cross_coin_layers needs one timeframe and a head that reads the trunk")
-            self.cross_coin = CrossCoin(h_dim, int(cross_coin_layers), cross_coin_heads, dropout,
-                                        cross_coin_peer_dropout, cross_coin_kind)
-        self.target_norm_kind = target_norm  # owner 2026-11-17: per-head label standardisation (model.target_norm)
-        if TARGET_NORMS.entry(target_norm).meta["fitted"]:
-            self.target_norm = TARGET_NORMS.get(target_norm)(self.nig_targets)
-        self.apply_order = enforce_order and set(TARGET_COLUMNS) <= set(self.nig_targets)
+            self.cross_coin = CrossCoin(h_dim, int(o.cross_coin_layers), o.cross_coin_heads, o.dropout,
+                                        o.cross_coin_peer_dropout, o.cross_coin_kind)
+
+    def _build_target_norm_and_order(self, o: BuilderOptions) -> None:
+        self.target_norm_kind = o.target_norm  # owner 2026-11-17: per-head label standardisation (model.target_norm)
+        if TARGET_NORMS.entry(o.target_norm).meta["fitted"]:
+            self.target_norm = TARGET_NORMS.get(o.target_norm)(self.nig_targets)
+        self.apply_order = o.enforce_order and set(TARGET_COLUMNS) <= set(self.nig_targets)
         # owner 2026-11-19 (B-084): with a fitted target normalisation, order the means on prices (after the inverse
         # map) instead of in the per-head normalised space, where the order has no meaning
-        self.order_in_label_units = bool(order_in_label_units)
+        self.order_in_label_units = bool(o.order_in_label_units)
         if self.order_in_label_units and not (self.apply_order and hasattr(self, "target_norm")):
             raise ValueError("order_in_label_units needs the ordered means (enforce_order, the three price targets) "
                              "and a fitted target normalisation (target_norm, e.g. 'logret_std'): without them it "
                              "would change nothing")
         if self.apply_order:
-            self.ordered_means = OrderedMeans(nig_scale, order_detach_close, fitted_scale=fit_s)
+            self.ordered_means = OrderedMeans(o.nig_scale, o.order_detach_close, fitted_scale=self._fit_s)
+
+    def _build_class_heads(self, o: BuilderOptions, h_dim: int) -> None:
         self.class_targets = list(self.class_kind)
         self.class_specs = {t: head_spec(kind, t) for t, kind in self.class_kind.items()}
         for t, kind in self.class_kind.items():
-            k = head_width(kind, n_classes[t] if isinstance(n_classes, dict) else n_classes)
-            setattr(self, f"class_fc_{t}", nn.Linear(h_dim, class_head_hidden))
-            setattr(self, f"class_drop_{t}", nn.Dropout(dropout))
-            setattr(self, self.class_specs[t].output_keys["logits"], nn.Linear(class_head_hidden, k))
-        # owner 2026-11-19 (LS1): auxiliary heads on the close target (side payoffs, an upper quantile); they read h
-        # through grad_scale(h, aux_trunk_grad): 0 = a read-out of the trunk the other heads train (no feedback)
-        self.aux_trunk_grad = float(aux_trunk_grad)
+            k = head_width(kind, o.n_classes[t] if isinstance(o.n_classes, dict) else o.n_classes)
+            setattr(self, f"class_fc_{t}", nn.Linear(h_dim, o.class_head_hidden))
+            setattr(self, f"class_drop_{t}", nn.Dropout(o.dropout))
+            setattr(self, self.class_specs[t].output_keys["logits"], nn.Linear(o.class_head_hidden, k))
+
+    def _build_aux_heads(self, o: BuilderOptions, h_dim: int) -> None:
+        """owner 2026-11-19 (LS1): auxiliary heads on the close target (side payoffs, an upper quantile); they read h
+        through grad_scale(h, aux_trunk_grad): 0 = a read-out of the trunk the other heads train (no feedback)."""
+        self.aux_trunk_grad = float(o.aux_trunk_grad)
         self.aux_specs = {}
-        for kind in aux_heads:
+        for kind in o.aux_heads:
             if HEAD_REGISTRY.entry(kind).meta["task_type"] not in AUX_TASK_TYPES:
                 raise ValueError(f"aux_heads takes the auxiliary head kinds (task types {AUX_TASK_TYPES}), "
                                  f"not {kind!r}")
@@ -200,9 +289,9 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             if spec.name in self.aux_specs:
                 raise ValueError(f"aux head {kind!r} is named twice")
             self.aux_specs[spec.name] = spec
-            setattr(self, f"aux_fc_{spec.name}", nn.Linear(h_dim, class_head_hidden))
-            setattr(self, f"aux_drop_{spec.name}", nn.Dropout(dropout))
-            out_layer = nn.Linear(class_head_hidden, head_width(kind, 1))
+            setattr(self, f"aux_fc_{spec.name}", nn.Linear(h_dim, o.class_head_hidden))
+            setattr(self, f"aux_drop_{spec.name}", nn.Dropout(o.dropout))
+            out_layer = nn.Linear(o.class_head_hidden, head_width(kind, 1))
             nn.init.normal_(out_layer.weight, std=1e-3)   # start near 0: a payoff / quantile is ~1e-2, not ~1
             nn.init.zeros_(out_layer.bias)
             setattr(self, f"aux_out_{spec.name}", out_layer)
@@ -261,13 +350,13 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             self._stream[name] = value
         return value
 
-    def branch(self, x: torch.Tensor, sfx: str = "") -> torch.Tensor:
+    def branch(self, x: torch.Tensor, sfx: str = "", gid=None) -> torch.Tensor:
         """One timeframe's encoder up to its pooled embedding h (after readout_fc + linear_path). Stream taps (in
         order): input, scaled, inst_norm, stats, level, tokens, enc_in, enc_block_i, enc_out, pooled, readout,
-        linear_path, branch_out (+ the branch suffix)."""
-        return self.branch_tokens(x, sfx)[0]
+        linear_path, branch_out (+ the branch suffix). ``gid``: the rows' timestamp ids (cross_input reads them)."""
+        return self.branch_tokens(x, sfx, gid)[0]
 
-    def branch_tokens(self, x: torch.Tensor, sfx: str = "") -> tuple[torch.Tensor, torch.Tensor]:
+    def branch_tokens(self, x: torch.Tensor, sfx: str = "", gid=None) -> tuple[torch.Tensor, torch.Tensor]:
         """``branch`` plus the encoder's output tokens (B, T', d_model) after final_norm (attention heads' input)."""
         tap = lambda name, v: self._tap(name + sfx, v)  # noqa: E731
         x = tap("input", x)
@@ -275,7 +364,7 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         if self._m("input_scaler", sfx) is not None:
             x = tap("scaled", self._m("input_scaler", sfx)(x))
         if hasattr(self, "cross_input"):
-            x = tap("cross_input", self.cross_input(x, self._gid))
+            x = tap("cross_input", self.cross_input(x, gid))
         z, stats = self._m("instance_norm", sfx)(x)
         z = tap("inst_norm", z)
         for name in ("feature_dropout", "input_noise"):
@@ -323,11 +412,11 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             raise ValueError(f"multi-timeframe model expects a dict or a sequence in order {list(self.timeframes)}")
         return list(x)
 
-    def trunk(self, x) -> torch.Tensor:
+    def trunk(self, x, gid=None) -> torch.Tensor:
         """x: (B, T, F) tensor, or for multi-timeframe a dict {timeframe: (B, T_tf, F_tf)} / sequence in the
         timeframe order. Returns trunk_drop's output (B, d_model * n_timeframes) — the panel encoder output."""
         xs = [xi.to(torch.float32) for xi in self._branch_inputs(x)]
-        hs = [self.branch(xi, sfx) for xi, sfx in zip(xs, self.branch_suffixes, strict=True)]
+        hs = [self.branch(xi, sfx, gid) for xi, sfx in zip(xs, self.branch_suffixes, strict=True)]
         h = hs[0] if len(hs) == 1 else torch.cat(hs, dim=-1)  # branch_concat
         return self.trunk_drop(self._tap("trunk", self.trunk_norm(h)))
 
@@ -340,20 +429,32 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         gid = None
         if torch.is_tensor(x) and self.n_group_features is not None:  # an optional last channel = the row's timestamp
             x, gid = split_group(x, self.n_group_features)
-        self._gid = gid
+        h, raw = self._shared_and_raw_heads(x, gid)
+        mus, betas = self._nig_means(raw, gid)
+        out = self._nig_outputs(raw, mus, betas, h)
+        out.update(self._class_outputs(h))
+        out.update(self._aux_outputs(h))
+        return out
+
+    def _shared_and_raw_heads(self, x, gid):
+        """(h, raw): the shared representation (the confidence / class / aux heads read it) and every NIG head's raw
+        output ``{target: (mu, nu, alpha, beta)}``."""
         if not reads_sequence(self.nig_head_kind):
-            h = self.trunk(x)
-            self._gid = None
+            h = self.trunk(x, gid)
             if hasattr(self, "cross_coin"):
                 h = self._tap("cross_coin", self.cross_coin(h, gid))
             h_nig = grad_scale(h, self.nig_trunk_grad)   # FX2: 1.0 = h itself
-            raw = {t: getattr(self, f"nig_{t}")(h_nig) for t in self.nig_targets}
-        else:  # experiment: the NIG heads read the head sequence, the confidence / class heads the pooled trunk
-            (xi,) = self._branch_inputs(x)
-            br, tokens = self.branch_tokens(xi.to(torch.float32))
-            h = self.trunk_drop(self._tap("trunk", self.trunk_norm(br)))
-            seq = self.head_seq_norm(torch.cat([br[:, None, :], tokens], dim=1))
-            raw = {t: getattr(self, f"nig_{t}")(grad_scale(seq, self.nig_trunk_grad)) for t in self.nig_targets}
+            return h, {t: getattr(self, f"nig_{t}")(h_nig) for t in self.nig_targets}
+        # experiment: the NIG heads read the head sequence, the confidence / class heads the pooled trunk
+        (xi,) = self._branch_inputs(x)
+        br, tokens = self.branch_tokens(xi.to(torch.float32), gid=gid)
+        h = self.trunk_drop(self._tap("trunk", self.trunk_norm(br)))
+        seq = self.head_seq_norm(torch.cat([br[:, None, :], tokens], dim=1))
+        return h, {t: getattr(self, f"nig_{t}")(grad_scale(seq, self.nig_trunk_grad)) for t in self.nig_targets}
+
+    def _nig_means(self, raw: dict, gid) -> tuple[dict, dict]:
+        """Means and betas in label units: the order of the means (in the heads' space, or on prices after the inverse
+        target-norm map: ``order_in_label_units``), the inverse map, the cross-section centring of the close mean."""
         if self.apply_order and not self.order_in_label_units:
             mu_h, mu_c, mu_l = self.ordered_means(raw["close"][0], raw["high"][0], raw["low"][0])
             mus = {"high": mu_h, "close": mu_c, "low": mu_l}
@@ -370,6 +471,9 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             mus.update(high=mu_h, close=mu_c, low=mu_l)
         if self.cross_center and gid is not None and "close" in mus:
             mus["close"] = center_groups(mus["close"], gid)
+        return mus, betas
+
+    def _nig_outputs(self, raw: dict, mus: dict, betas: dict, h) -> dict[str, torch.Tensor]:
         out: dict[str, torch.Tensor] = {}
         for t in self.nig_targets:
             _, nu, alpha, _ = raw[t]
@@ -377,12 +481,20 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             epi, ale = getattr(self, f"unc_{t}")(nu, alpha, beta)
             out.update(nig_outputs(self.head_specs[t], mus[t], nu, alpha, beta, epi, ale,
                                    getattr(self, f"conf_{t}")(h, nu, alpha, beta)))
+        return out
+
+    def _class_outputs(self, h) -> dict[str, torch.Tensor]:
+        out: dict[str, torch.Tensor] = {}
         for t, kind in self.class_kind.items():
             spec = self.class_specs[t]
             out_layer = getattr(self, spec.output_keys["logits"])
             probs = HEAD_REGISTRY.get(kind)(h, getattr(self, f"class_fc_{t}"), out_layer,
                                             getattr(self, f"class_drop_{t}"))
             out.update(class_outputs(spec, probs))
+        return out
+
+    def _aux_outputs(self, h) -> dict[str, torch.Tensor]:
+        out: dict[str, torch.Tensor] = {}
         if self.aux_specs:
             h_aux = grad_scale(h, self.aux_trunk_grad)
             for name, spec in self.aux_specs.items():
@@ -424,23 +536,10 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         return reg
 
 
-def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_layers=4, num_heads=4, num_kv_heads=2,
-                         patch_len=4, stride=2, kernel_sizes=(3, 5, 9, 17), max_rel_pos=16, dropout=0.1,
-                         attn_dropout=0.0, causal=False, window=None, price_targets=TARGET_COLUMNS,
-                         head_types: dict[str, list[str]] | None = None, enforce_order=True, head_hidden=128,
-                         nu_min=0.1, alpha_min=2.0, beta_min=0.01, unc_max=20.0, class_head_hidden=64,
-                         encoder: str = "transformer", input_skip: str = "none", n_classes=3, norm_eps=1e-4,
-                         linear_path_l2=1e-4, input_clip=None, stats_mode="full", input_noise_std=0.0,
-                         feature_dropout=0.0, level_passthrough=False, level_norm=None, order_detach_close=False,
-                         nig_scale=None, bn_warmup=False, readout_dropout=None, nig_trunk_grad=1.0,
-                         nig_scale_fit="fixed", input_scaler="none",
-                         nig_head="dense", nig_head_dropout=0.0, ffn="swiglu", ffn_dim=None,
-                         cross_coin_layers=0, cross_coin_heads=4, cross_coin_peer_dropout=0.0,
-                         cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none",
-                         har_range=None, use_instance_norm=True, order_in_label_units=False, aux_heads=(),
-                         aux_trunk_grad=1.0, **options) -> NigTimeNetV2:
-    """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
-    multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
+def build_nig_timenet_v2(seq_len: int, n_features: int, **options) -> NigTimeNetV2:
+    """The core keyword names and defaults are the upstream build_nig_timenet_v2's (``n_classes`` only matters for
+    the multiclass head, P17); the options described below are port-only additions (TF has none of them). The
+    anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
     nig_layers; bn_warmup: layers.BatchNormChannelsLast; readout_dropout: the rate of trunk_drop and of the NIG
     heads' dropout, None = ``dropout``; FX2: nig_trunk_grad (nig_layers.grad_scale), nig_scale_fit (model.label_scale))
@@ -464,41 +563,29 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
     ``aux_heads`` (owner 2026-11-19, LS1; () = none): auxiliary head kinds of model.heads (task types
     ``AUX_TASK_TYPES``: side_payoff, upper_quantile) on the close target, each reading the trunk through
     ``grad_scale(h, aux_trunk_grad)`` (0 = a read-out: the trunk and the other heads train as without them)."""
-    ENCODERS.entry(encoder)
-    TARGET_NORMS.entry(target_norm)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
-    INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
-    if skip_variant(input_skip).adds_modules and not ENCODERS.entry(encoder).meta["supports_input_skip"]:
-        raise NotImplementedError(f"input_skip={input_skip!r} is defined on the transformer encoder only (P34)")
-    if ffn not in TransformerBlock.FFN_KINDS:
-        raise ValueError(f"ffn must be one of {tuple(TransformerBlock.FFN_KINDS)}, not {ffn!r}")
-    if level_norm not in LEVEL_NORMS:
-        raise ValueError(f"level_norm must be one of {LEVEL_NORMS}, not {level_norm!r}")
-    options = dict(options)
+    known = {k: v for k, v in options.items() if k in _OPTION_NAMES}
+    o = BuilderOptions(**known)
+    ENCODERS.entry(o.encoder)
+    TARGET_NORMS.entry(o.target_norm)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
+    INPUT_SKIP_VARIANTS.entry(o.input_skip)  # likewise
+    if skip_variant(o.input_skip).adds_modules and not ENCODERS.entry(o.encoder).meta["supports_input_skip"]:
+        raise NotImplementedError(
+            f"input_skip={o.input_skip!r} is defined on the transformer encoder only (not planned)")
+    if o.ffn not in TransformerBlock.FFN_KINDS:
+        raise ValueError(f"ffn must be one of {tuple(TransformerBlock.FFN_KINDS)}, not {o.ffn!r}")
+    if o.level_norm not in LEVEL_NORMS:
+        raise ValueError(f"level_norm must be one of {LEVEL_NORMS}, not {o.level_norm!r}")
     for opt, value in options.items():
-        if opt not in _NOT_YET:
+        if opt in _OPTION_NAMES:
+            continue
+        if opt not in _UNIMPLEMENTED_OPTIONS:
             raise TypeError(f"build_nig_timenet_v2() got an unexpected keyword argument {opt!r}")
-        supported, step = _NOT_YET[opt]
+        supported = _UNIMPLEMENTED_OPTIONS[opt]
         if value != supported:
-            raise NotImplementedError(f"{opt}={value!r} is not ported yet (only {supported!r}); added in {step}")
+            raise NotImplementedError(f"{opt}={value!r} is not implemented (only {supported!r}; no step planned)")
     if isinstance(n_features, dict) and not isinstance(seq_len, dict):
         raise ValueError("n_features is a dict but seq_len is not: pass both as {timeframe: value}")
-    return NigTimeNetV2(
-        seq_len if isinstance(seq_len, dict) else int(seq_len),
-        n_features if isinstance(n_features, dict) else int(n_features), d_model=d_model, num_layers=num_layers,
-        num_heads=num_heads,
-        num_kv_heads=num_kv_heads, patch_len=patch_len, stride=stride, kernel_sizes=tuple(kernel_sizes),
-        max_rel_pos=max_rel_pos, dropout=dropout, attn_dropout=attn_dropout, causal=causal, window=window,
-        price_targets=price_targets, head_types=head_types or DEFAULT_HEAD_TYPES, enforce_order=enforce_order,
-        head_hidden=head_hidden, nu_min=nu_min, alpha_min=alpha_min, beta_min=beta_min, unc_max=unc_max,
-        class_head_hidden=class_head_hidden, norm_eps=norm_eps, linear_path_l2=linear_path_l2, encoder=encoder,
-        input_clip=input_clip, stats_mode=stats_mode, input_noise_std=input_noise_std, feature_dropout=feature_dropout,
-        level_passthrough=level_passthrough, level_norm=level_norm, input_skip=input_skip, n_classes=n_classes,
-        order_detach_close=order_detach_close, nig_scale=nig_scale,
-        bn_warmup=bn_warmup, readout_dropout=readout_dropout, nig_trunk_grad=nig_trunk_grad,
-        nig_scale_fit=nig_scale_fit, input_scaler=input_scaler,
-        nig_head=nig_head, nig_head_dropout=nig_head_dropout, ffn=ffn, ffn_dim=ffn_dim,
-        cross_coin_layers=cross_coin_layers, cross_coin_heads=cross_coin_heads,
-        cross_coin_peer_dropout=cross_coin_peer_dropout, cross_coin_kind=cross_coin_kind,
-        cross_input=cross_input, cross_center=cross_center, target_norm=target_norm, har_range=har_range,
-        use_instance_norm=use_instance_norm, order_in_label_units=order_in_label_units,
-        aux_heads=tuple(aux_heads), aux_trunk_grad=aux_trunk_grad)
+    o = replace(o, kernel_sizes=tuple(o.kernel_sizes), head_types=o.head_types or DEFAULT_HEAD_TYPES,
+                aux_heads=tuple(o.aux_heads))
+    return NigTimeNetV2(seq_len if isinstance(seq_len, dict) else int(seq_len),
+                        n_features if isinstance(n_features, dict) else int(n_features), o)

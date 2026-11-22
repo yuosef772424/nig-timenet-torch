@@ -27,6 +27,33 @@ def sources() -> dict[str, tuple[str, ast.Module]]:
     return out
 
 
+#: E-16 (2026-11b audit): the growth scans also read the backtest package and the tools; keys carry the top folder
+OTHER_TREES = {"nig_backtest": ROOT / "src" / "nig_backtest", "tools": ROOT / "tools"}
+
+
+@cache
+def other_sources() -> dict[str, tuple[str, ast.Module]]:
+    """{"nig_backtest/x.py" | "tools/x.py": (text, tree)} for the code that is not the main package."""
+    out = {}
+    for top, folder in OTHER_TREES.items():
+        for p in sorted(folder.rglob("*.py")):
+            text = p.read_text(encoding="utf-8")
+            out[f"{top}/{p.relative_to(folder).as_posix()}"] = (text, ast.parse(text))
+    return out
+
+
+def imported_modules(node: ast.AST) -> list[str]:
+    """Module names imported by ``node`` (the one helper of the tests): ``import a.b, c`` gives ``["a.b", "c"]``,
+    ``from a.b import x`` gives ``["a.b"]``, a relative ``from . import x`` / ``from .m import x`` gives ``"."`` /
+    ``".m"`` (leading dots kept, so a caller that wants absolute imports skips names starting with a dot); any
+    other node gives ``[]``."""
+    if isinstance(node, ast.Import):
+        return [a.name for a in node.names]
+    if isinstance(node, ast.ImportFrom):
+        return ["." * node.level + (node.module or "")]
+    return []
+
+
 def layer_of(rel: str) -> str:
     """Top-level folder of a module ("core", "model", ...); "" for files directly in the package."""
     parts = rel.split("/")
@@ -34,11 +61,11 @@ def layer_of(rel: str) -> str:
 
 
 # ---------------------------------------------------------------------------------------------------- G3 (size)
-def module_lines() -> dict[str, int]:
-    return {rel: len(text.splitlines()) for rel, (text, _) in sources().items()}
+def module_lines(srcs: dict | None = None) -> dict[str, int]:
+    return {rel: len(text.splitlines()) for rel, (text, _) in (sources() if srcs is None else srcs).items()}
 
 
-def function_lengths() -> dict[str, int]:
+def function_lengths(srcs: dict | None = None) -> dict[str, int]:
     """{"path:qualified_name": number of lines} for every function and method."""
     out = {}
 
@@ -52,7 +79,7 @@ def function_lengths() -> dict[str, int]:
             else:
                 walk(rel, child, prefix)
 
-    for rel, (_, tree) in sources().items():
+    for rel, (_, tree) in (sources() if srcs is None else srcs).items():
         walk(rel, tree, "")
     return out
 
@@ -221,7 +248,7 @@ ALLOWED_IMPORTS: dict[str, set[str] | None] = {
     "core": set(),
     "stats": {"core"},
     "data": {"core", "data_io"},
-    "data_io": None,
+    "data_io": {"core", "stats", "workflow"},   # workflow: only environments.main (the nig-envs script), lazily
     "eval": None,
     "model": None,
     "trainer": None,
@@ -242,12 +269,7 @@ def layer_import_violations() -> list[str]:
         if layer not in ALLOWED_IMPORTS:
             continue
         for node in ast.walk(tree):
-            targets = []
-            if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-                targets = [node.module]
-            elif isinstance(node, ast.Import):
-                targets = [a.name for a in node.names]
-            for t in targets:
+            for t in imported_modules(node):
                 parts = t.split(".")
                 if parts[0] != PKG or len(parts) < 2 or parts[1] == layer:
                     continue
@@ -284,11 +306,9 @@ def orphan_modules() -> list[str]:
     imported: set[str] = set()
     for _, tree in sources().values():
         for node in ast.walk(tree):
+            imported |= {m for m in imported_modules(node) if not m.startswith(".")}
             if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-                imported.add(node.module)
                 imported |= {f"{node.module}.{a.name}" for a in node.names}
-            elif isinstance(node, ast.Import):
-                imported |= {a.name for a in node.names}
     # console scripts declared in pyproject.toml are entry points: nothing else needs to import them
     scripts = re.findall(r'^\S+\s*=\s*"([\w.]+):\w+"', (ROOT / "pyproject.toml").read_text(), re.M)
     imported |= set(scripts)
@@ -325,21 +345,21 @@ def _calls_metrics_module(fn: ast.AST) -> bool:
     return any(isinstance(n, ast.Name) and n.id == "metrics" for n in ast.walk(fn))
 
 
-def metric_definitions_outside_stats() -> list[str]:
+def metric_definitions_outside_stats(srcs: dict | None = None) -> list[str]:
     """Function definitions that look like a metric, and imports of a third-party metric, outside ``stats/``."""
     found = []
-    for rel, (_, tree) in sources().items():
+    for rel, (_, tree) in (sources() if srcs is None else srcs).items():
         if layer_of(rel) == "stats":
             continue
         for node in ast.walk(tree):
             if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and METRIC_FUNCTION.search(node.name)
                     and node.name not in METRIC_NAME_EXCEPTIONS and not _calls_metrics_module(node)):
                 found.append(f"{rel}:{node.lineno}: def {node.name}")
-            elif isinstance(node, ast.ImportFrom) and node.module and node.module.startswith(METRIC_IMPORTS):
+            elif isinstance(node, ast.ImportFrom) and imported_modules(node)[0].startswith(METRIC_IMPORTS):
                 found.append(f"{rel}:{node.lineno}: from {node.module} import ...")
             elif isinstance(node, ast.Import):
-                found += [f"{rel}:{node.lineno}: import {a.name}" for a in node.names
-                          if a.name.startswith(METRIC_IMPORTS)]
+                found += [f"{rel}:{node.lineno}: import {m}" for m in imported_modules(node)
+                          if m.startswith(METRIC_IMPORTS)]
             elif (isinstance(node, ast.Attribute) and node.attr == "corrcoef"):
                 found.append(f"{rel}:{node.lineno}: corrcoef")
     return found
@@ -380,4 +400,24 @@ def rmtree_calls() -> list[str]:
                 name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", None)
                 if name == "rmtree":
                     found.append(f"{rel}:{n.lineno}: rmtree")
+    return found
+
+
+# ------------------------------------------------------------------ E-16: layer rules over the other code trees
+def other_layer_violations() -> list[str]:
+    """Imports that break the direction of the trees: the main package never imports ``nig_backtest`` or ``tools``;
+    ``nig_backtest`` imports ``nig_timenet_torch`` only in its ``bridges/`` (a separate package that moves to any
+    project); ``tools`` is never imported by ``src`` or ``nig_backtest``."""
+    found = []
+    for rel, (_, tree) in sources().items():
+        for node in ast.walk(tree):
+            found += [f"{PKG}/{rel}:{node.lineno}: imports {m}" for m in imported_modules(node)
+                      if m.split(".")[0] in ("nig_backtest", "tools")]
+    for rel, (_, tree) in other_sources().items():
+        if not rel.startswith("nig_backtest/"):
+            continue
+        bridge = rel.startswith("nig_backtest/bridges/")
+        for node in ast.walk(tree):
+            found += [f"{rel}:{node.lineno}: imports {m}" for m in imported_modules(node)
+                      if m.split(".")[0] == "tools" or (m.split(".")[0] == PKG and not bridge)]
     return found

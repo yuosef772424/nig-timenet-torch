@@ -15,7 +15,6 @@ L2 kernel regularisation: torch has no per-layer kernel_regularizer, so the mode
 total and raw loss, as the TF trainer adds ``model.losses``.
 """
 
-import json
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -23,13 +22,13 @@ from dataclasses import dataclass, field
 import torch
 
 from nig_timenet_torch.core.config import from_dict
-from nig_timenet_torch.core.seeds import seed_everything
-from nig_timenet_torch.trainer import checkpoint
+from nig_timenet_torch.core.seeds import epoch_seed, seed_everything
+from nig_timenet_torch.trainer import checkpoint, fit_state
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES, cross_section_loss
 from nig_timenet_torch.trainer.day_weights import DayWeightSettings, make_day_weighter
 from nig_timenet_torch.trainer.direction_balance import direction_balance_loss
-from nig_timenet_torch.trainer.groups import BATCH_ORDERS, group_batches, group_chunks, row_batches, row_groups
-from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
+from nig_timenet_torch.trainer.groups import BATCH_ORDERS, group_batches, group_chunks, row_groups
+from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.trainer.log_groups import GroupedLogs, tensor_logs
 from nig_timenet_torch.trainer.loss_balance import make_balancer
 from nig_timenet_torch.trainer.schedules import LrSettings, ParamSchedule, apply_schedules, lr_at
@@ -109,8 +108,9 @@ class FitResult:
     epochs_done: int
     best_epoch: int | None
     best_value: float | None       # the smoothed selection metric at best_epoch
-    stopped_early: bool
+    stopped_early: bool            # early-stop patience ran out (and nothing else)
     restored_best: bool            # the model now holds the weights of best_epoch
+    finished: bool                 # every epoch ran or early stopping ended it; False = cut by a deadline or a stop
 
 
 def weight_for_target(sample_weight, target_name: str, tcfg: dict):
@@ -129,7 +129,7 @@ def compute_losses(model: torch.nn.Module, x, y, targets_cfg: dict, scheduled_va
                    loss_weights: dict[str, float], uncertainty_layer: UncertaintyWeightedLoss | None,
                    kendall_task_names: list[str], fixed_task_names: list[str], sample_weight=None,
                    training: bool = False, outputs: dict | None = None, multipliers: dict | None = None):
-    """-> (total_loss, raw_loss, per_target_losses, per_stat_values, per_constraint_values).
+    """-> (total_loss, raw_loss, per_target_losses, per_stat_values).
     raw_loss = sum of loss * loss_weight (no Kendall terms) + regularisation; total applies Kendall to
     kendall_task_names and adds fixed_task_names unweighted. ``training`` only gates flooding (the model's own
     train()/eval() mode gates dropout). ``outputs``: precomputed model(x) (then x is not used). ``targets_cfg`` must be
@@ -166,7 +166,7 @@ def compute_losses(model: torch.nn.Module, x, y, targets_cfg: dict, scheduled_va
     if reg is not None:
         extra = reg()
         total, raw = total + extra, raw + extra
-    return total, raw, per_target, per_stat, {}
+    return total, raw, per_target, per_stat
 
 
 class Trainer:
@@ -215,8 +215,6 @@ class Trainer:
         first = next(iter(model.parameters()), None)
         if self.uncertainty_layer is not None and first is not None:  # Kendall log-vars live on the model's device
             self.uncertainty_layer.to(first.device)
-        if loss_cfg["all_constraints"]:
-            raise NotImplementedError("output constraints are not ported yet")
         #: D-032: the cross-section term ("none" = no term) and its weight; needs ``group_channel``
         self.cross_section, self.cross_section_weight = loss_cfg["cross_section"], float(
             loss_cfg["cross_section_weight"])
@@ -247,6 +245,13 @@ class Trainer:
         if self.uncertainty_layer is not None:
             yield from self.uncertainty_layer.parameters()
 
+    def _base_losses(self, x, y, sample_weight, training: bool, outputs: dict | None):
+        """The module-level ``compute_losses`` with this trainer's config (the NIG / class losses and Kendall)."""
+        return compute_losses(self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights,
+                              self.uncertainty_layer, self.kendall_task_names, self.fixed_task_names,
+                              sample_weight=sample_weight, training=training, outputs=outputs,
+                              multipliers=self.balancer.multipliers())
+
     def compute_losses(self, x, y, sample_weight=None, training: bool = False, outputs: dict | None = None,
                        groups: torch.Tensor | None = None, plain: bool = False):
         """``compute_losses`` with this trainer's config; the D-032 terms that are switched on (the cross-section
@@ -257,19 +262,13 @@ class Trainer:
         (the per-head gradient trace, whose rows are not whole timestamps)."""
         cross = CROSS_SECTION_LOSSES[self.cross_section] is not None
         if plain or (not cross and not self.direction_balance):
-            return compute_losses(self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights,
-                                  self.uncertainty_layer, self.kendall_task_names, self.fixed_task_names,
-                                  sample_weight=sample_weight, training=training, outputs=outputs,
-                                  multipliers=self.balancer.multipliers())
+            return self._base_losses(x, y, sample_weight, training, outputs)
         if cross and groups is None and not (self.group_channel and x is not None):
             raise ValueError(f"the cross-section loss {self.cross_section!r} needs whole-timestamp batches: run with "
                              f"SplitSettings.cross_section (the group channel) or TrainSettings.batch_order "
                              f"'time_blocks'")
         outputs = self.model(x) if outputs is None else outputs
-        total, raw, per_target, stats, cons = compute_losses(
-            self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights, self.uncertainty_layer,
-            self.kendall_task_names, self.fixed_task_names, sample_weight=sample_weight, training=training,
-            outputs=outputs, multipliers=self.balancer.multipliers())
+        total, raw, per_target, stats = self._base_losses(x, y, sample_weight, training, outputs)
         extra = []
         if cross:
             term = cross_section_loss(self.cross_section, outputs, y, self.targets_cfg,
@@ -281,13 +280,7 @@ class Trainer:
             stats["direction_balance_loss"] = term.detach().to(torch.float32)
             extra.append(self.direction_balance * term)
         add = torch.stack(extra).sum()
-        return total + add, raw + add, per_target, stats, cons
-
-    @staticmethod
-    def batch_indices(n: int, batch_size: int, shuffle: bool = True) -> list[torch.Tensor]:
-        """Mini-batch index tensors over n rows; the shuffle draws from torch's global RNG, so it derives from the
-        seed_everything(seed) call made before the Trainer is built."""
-        return row_batches(n, batch_size, shuffle)
+        return total + add, raw + add, per_target, stats
 
     @staticmethod
     def _logs(total, raw, per_target, stats) -> dict[str, float]:
@@ -306,7 +299,7 @@ class Trainer:
             raise RuntimeError("Trainer has no optimizer")
         self.model.train()
         self.optimizer.zero_grad(set_to_none=True)
-        total, raw, per_target, stats, _ = self.compute_losses(x, y, sample_weight=sample_weight, training=True,
+        total, raw, per_target, stats = self.compute_losses(x, y, sample_weight=sample_weight, training=True,
                                                                  groups=groups)
         self.balancer.update(per_target, self._shared)
         total.backward()
@@ -322,7 +315,7 @@ class Trainer:
         """No-grad eval() pass; scalar logs + ``selection_metric`` (the value of ``self.selection_metric``)."""
         self.model.eval()
         outputs = self.model(x)
-        total, raw, per_target, stats, _ = self.compute_losses(x, y, sample_weight=sample_weight, outputs=outputs)
+        total, raw, per_target, stats = self.compute_losses(x, y, sample_weight=sample_weight, outputs=outputs)
         logs = self._logs(total, raw, per_target, stats)
         logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, y, logs)
         return logs
@@ -335,7 +328,7 @@ class Trainer:
         timestamp ids, for the cross-section term and the rank selection metrics; the model sees plain chunks (its
         rows do not interact), only the loss reads the groups."""
         self.model.eval()
-        dev = self._device()
+        dev = self.device
         gid = row_groups(x) if self.group_channel else groups
         if self.group_channel:  # whole timestamps per chunk (rows are time-major: workflow cross_section)
             parts = [self.model(x[c].to(dev)) for c in group_chunks(gid, batch_size)]
@@ -343,14 +336,15 @@ class Trainer:
             parts = [self.model(xb.to(dev)) for xb in x.split(batch_size)]
         outputs = {k: torch.cat([p[k] for p in parts]) for k in parts[0]}
         y = {k: v.to(dev) for k, v in y.items()}
-        total, raw, per_target, stats, _ = self.compute_losses(None, y, outputs=outputs,
+        total, raw, per_target, stats = self.compute_losses(None, y, outputs=outputs,
                                                                groups=None if gid is None else gid.to(dev))
         logs = self._logs(total, raw, per_target, stats)
         labels = y if gid is None else {**y, GROUP_KEY: gid}  # a rank metric reads the timestamps
         logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, labels, logs)
         return logs
 
-    def _device(self) -> torch.device:
+    @property
+    def device(self) -> torch.device:
         """The model's device: data may stay on the CPU (a big dataset) and is moved batch by batch (B-019)."""
         first = next(iter(self.model.parameters()), None)
         return torch.device("cpu") if first is None else first.device
@@ -362,7 +356,7 @@ class Trainer:
         ``monitor`` (a ``trainer.batch_influence.BatchInfluence``, log-only) is called around every step.
         ``batch_groups``: one batch per group (all its rows), the groups in a shuffled order (``batch_by``).
         With a ``day_weighter`` the rows carry its weights of this epoch (their summary joins the logs)."""
-        logs, dev = GroupedLogs(settings.steps_per_execution), self._device()
+        logs, dev = GroupedLogs(settings.steps_per_execution), self.device
         weights, day_logs = (None, {}) if self.day_weighter is None else self.day_weighter.epoch_weights(
             self, x, y, epoch)
         if batch_groups is not None:
@@ -393,17 +387,12 @@ class Trainer:
         if settings.lr is not None:
             for group in self.optimizer.param_groups:
                 group["lr"] = lr_at(settings.lr, epoch)
-        torch.manual_seed(settings.seed * 1_000_003 + epoch)
+        torch.manual_seed(epoch_seed(settings.seed, epoch))
         return self.optimizer.param_groups[0]["lr"]
 
     def _state(self, epochs_done: int, tracker: BestTracker, history: list[dict], identity: RunIdentity,
                ema: EmaWeights | None = None) -> dict:
-        state = {"epochs_done": epochs_done, "model": self.model.state_dict(), "tracker": tracker.get_state(),
-                 "optimizer": self.optimizer.state_dict(), "history": history,
-                 "kendall": None if self.uncertainty_layer is None else self.uncertainty_layer.state_dict(),
-                 "identity": json.dumps(identity.to_json(), sort_keys=True)}
-        if self.balancer.needs_shared:  # FX2 balancer state; a default checkpoint keeps its keys
-            state["balance"] = self.balancer.state_dict()
+        state = fit_state.base_state(self, epochs_done, tracker, history, identity)
         if ema is not None:  # only with the switch on: a default checkpoint keeps its keys
             state["ema"] = ema.state_dict()
         if self.day_weighter is not None:
@@ -412,23 +401,17 @@ class Trainer:
 
     def _restore(self, ckpt: dict, tracker: BestTracker, identity: RunIdentity, ema: EmaWeights | None = None
                  ) -> list[dict]:
-        check_resume(RunIdentity.from_json(json.loads(ckpt["identity"])), identity)
-        self.model.load_state_dict(ckpt["model"])
+        fit_state.check_checkpoint_identity(ckpt, identity)
+        history = fit_state.restore_base(self, ckpt, tracker)
         if ema is not None:
             ema.load_state_dict(ckpt["ema"])
-        if self.uncertainty_layer is not None:
-            self.uncertainty_layer.load_state_dict(ckpt["kendall"])
-        self.optimizer.load_state_dict(ckpt["optimizer"])
-        if self.balancer.needs_shared:
-            self.balancer.load_state_dict(ckpt["balance"])
         if self.day_weighter is not None:
             self.day_weighter.load_state_dict(ckpt["day_weights"])
-        tracker.load_state(ckpt["tracker"])
-        return list(ckpt["history"])
+        return history
 
     def _trace(self, x, y, batch_size: int, batches) -> dict[str, float]:
         """The trace row of the epoch: on the first ``batch_size`` training rows, or the mean over ``batches``."""
-        dev = self._device()
+        dev = self.device
         if batches is None:
             return epoch_trace(self, x[:batch_size].to(dev), {k: v[:batch_size].to(dev) for k, v in y.items()})
         ix = [torch.as_tensor(b, dtype=torch.long) for b in batches]
@@ -438,7 +421,7 @@ class Trainer:
         """``evaluate`` with ``weights`` loaded for the pass (the live weights are put back after); None = live."""
         if weights is None:
             return self.evaluate(x, y, batch_size, groups)
-        live = {k: v.detach().clone() for k, v in self.model.state_dict().items()}
+        live = fit_state.clone_state(self.model)
         self.model.load_state_dict(weights)
         try:
             return self.evaluate(x, y, batch_size, groups)
@@ -447,13 +430,8 @@ class Trainer:
 
     def _check_fit(self, settings: FitSettings, run_dir, identity, x_train, batch_groups) -> torch.Tensor | None:
         """Refuse a fit that cannot run as asked (before anything runs); returns the checked ``batch_groups``."""
-        if self.optimizer is None:
-            raise RuntimeError("Trainer has no optimizer")
-        if run_dir is not None and identity is None:
-            raise ValueError("run_dir needs an identity (RunIdentity) so that a resume can be checked")
-        if identity is not None and identity.seed != settings.seed:
-            raise SeedMismatchError(f"identity.seed ({identity.seed}) != settings.seed ({settings.seed}): the identity "
-                                    f"would describe a different run than the one that is trained")
+        fit_state.require_optimizer(self)
+        fit_state.check_run_args(run_dir, identity, settings.seed)
         return self._batch_groups(settings, x_train, batch_groups)
 
     def _batch_groups(self, settings: FitSettings, x_train, batch_groups) -> torch.Tensor | None:
@@ -498,21 +476,9 @@ class Trainer:
         self.day_weighter = make_day_weighter(settings.day_weights, day_groups, len(x_train), grouped_batches=(
             groups is not None or self.group_channel or BATCH_ORDERS.entry(settings.batch_order).meta["needs_times"]))
         seed_everything(settings.seed)
-        ema = None
-        higher = SELECTION_METRICS.entry(self.selection_metric).meta["higher_is_better"]
-        tracker = BestTracker(settings.early_stop, higher)
-        history: list[dict] = []
-        best_weights = None
-        ckpt = None if run_dir is None else checkpoint.load_checkpoint(run_dir)
-        if ckpt is not None:
-            if not resume:
-                raise FileExistsError(f"{run_dir} already holds a checkpoint; resume=False refuses to overwrite it")
-            ema = None if settings.ema_decay is None else EmaWeights(self.model, settings.ema_decay)
-            history = self._restore(ckpt, tracker, identity, ema)
-            best_weights = None if tracker.best is None else checkpoint.load_best(run_dir)
-        else:
-            apply_init(settings.init, self.model)       # "torch" (default) changes nothing
-            ema = None if settings.ema_decay is None else EmaWeights(self.model, settings.ema_decay)
+        tracker = BestTracker(settings.early_stop, SELECTION_METRICS.entry(self.selection_metric).meta[
+            "higher_is_better"])
+        ema, history, best_weights = self._start_or_resume(settings, run_dir, identity, resume, tracker)
         longest = 0.0
         if batch_monitor is not None:
             batch_monitor.start(self)
@@ -522,32 +488,45 @@ class Trainer:
             if deadline is not None and longest and time.monotonic() + longest > deadline:
                 break
             t0 = time.monotonic()
-            lr = self._begin_epoch(epoch, settings, self.schedules)
-            row = {"epoch": epoch + 1, "lr": lr}
-            train_logs = self._train_epoch(x_train, y_train, settings, ema, batch_monitor, epoch, groups)
-            row.update({f"train_{k}": v for k, v in train_logs.items()})
-            val = self._evaluate_with(None if ema is None else ema.shadow, x_val, y_val, settings.batch_size,
-                                      self.val_times)
-            row.update({f"val_{k}": v for k, v in val.items()})
+            row = self._run_epoch(epoch, x_train, y_train, x_val, y_val, settings, ema, batch_monitor, groups,
+                                  trace_batches)
+            seconds = time.monotonic() - t0     # one measurement: the deadline estimate and the trace column
+            longest = max(longest, seconds)
             if settings.trace:
-                row.update(self._trace(x_train, y_train, settings.batch_size, trace_batches))
-            longest = max(longest, time.monotonic() - t0)
-            if settings.trace:
-                row["trace_epoch_seconds"] = time.monotonic() - t0
+                row["trace_epoch_seconds"] = seconds
             history.append(row)
             if on_epoch is not None:  # progress display only (e.g. a print); it cannot change training
                 on_epoch(dict(row))
-            if tracker.update(epoch + 1, val["selection_metric"]):
-                best_weights = ({k: v.detach().clone() for k, v in self.model.state_dict().items()} if ema is None
-                                else ema.weights())
-                if run_dir is not None:
-                    checkpoint.save_best(run_dir, best_weights, {"best": tracker.best, "best_epoch": tracker.best_epoch,
-                                                                 "metric": self.selection_metric})
+            if tracker.update(epoch + 1, row["val_selection_metric"]):
+                best_weights = fit_state.clone_state(self.model) if ema is None else ema.weights()
+                fit_state.save_best_weights(run_dir, best_weights, tracker, self.selection_metric)
             if run_dir is not None:
                 checkpoint.save_checkpoint(run_dir, self._state(epoch + 1, tracker, history, identity, ema))
-        restored = settings.early_stop.restore_best_weights and best_weights is not None
-        if restored:
-            self.model.load_state_dict(best_weights)
-        elif ema is not None:
-            self.model.load_state_dict(ema.weights())
-        return FitResult(history, len(history), tracker.best_epoch, tracker.best, tracker.should_stop(), restored)
+        restored = fit_state.finish_weights(self.model, best_weights, settings.early_stop.restore_best_weights, ema)
+        return FitResult(history, len(history), tracker.best_epoch, tracker.best, tracker.should_stop(), restored,
+                         tracker.should_stop() or len(history) >= settings.epochs)
+
+    def _start_or_resume(self, settings: FitSettings, run_dir, identity, resume: bool, tracker: BestTracker):
+        """(ema, history, best_weights): from the run folder's checkpoint, or a fresh start (``settings.init``)."""
+        ckpt = fit_state.load_resume_checkpoint(run_dir, resume)
+        ema = None
+        if ckpt is not None:
+            ema = None if settings.ema_decay is None else EmaWeights(self.model, settings.ema_decay)
+            history = self._restore(ckpt, tracker, identity, ema)
+            return ema, history, None if tracker.best is None else checkpoint.load_best(run_dir)
+        apply_init(settings.init, self.model)       # "torch" (default) changes nothing
+        ema = None if settings.ema_decay is None else EmaWeights(self.model, settings.ema_decay)
+        return ema, [], None
+
+    def _run_epoch(self, epoch: int, x_train, y_train, x_val, y_val, settings: FitSettings, ema, batch_monitor,
+                   groups, trace_batches) -> dict:
+        """One epoch: schedules, the training pass, validation (the EMA copy when there is one) and the trace."""
+        row = {"epoch": epoch + 1, "lr": self._begin_epoch(epoch, settings, self.schedules)}
+        train_logs = self._train_epoch(x_train, y_train, settings, ema, batch_monitor, epoch, groups)
+        row.update({f"train_{k}": v for k, v in train_logs.items()})
+        val = self._evaluate_with(None if ema is None else ema.shadow, x_val, y_val, settings.batch_size,
+                                  self.val_times)
+        row.update({f"val_{k}": v for k, v in val.items()})
+        if settings.trace:
+            row.update(self._trace(x_train, y_train, settings.batch_size, trace_batches))
+        return row

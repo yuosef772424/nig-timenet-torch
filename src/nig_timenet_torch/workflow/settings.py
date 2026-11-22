@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
+from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES
@@ -26,15 +27,7 @@ from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import BATCHINGS
 
 __all__ = ["RollingSettings", "RunSettings", "ROLLING_MODES", "SplitSettings", "TrainSettings", "EvalSettings",
-           "BatterySettings", "default_model_settings", "MODEL_FIRST_FIXES"]
-
-#: Model overrides every run gets on top of the anti-memorization preset since the 2026-11-14 model-first audit
-#: (docs/audit/2026-11-14-model-first/NOTES.md N-01..N-04; E1, 3 seeds: blocking gate fails 7.7 -> 2.7 at 3 epochs and
-#: 7.3 -> 2.7 at 10): BatchNorm moving statistics that follow the data from the first step, high / low offsets that
-#: no longer drag the close mean, train-standardised inputs. The audit also set ``nig_scale="train_std"`` (NIG heads in
-#: train-fitted label units); the run default takes the same idea from ``RUN_DEFAULT_SWITCHES["nig_scale_fit"]``
-#: (D-023) instead, the two are exclusive (D-026, MG2: E1 tie, kept). ``bn_warmup`` / ``order_detach_close`` agree.
-MODEL_FIRST_FIXES = {"bn_warmup": True, "order_detach_close": True, "input_scaler": "train_std"}
+           "BatterySettings", "default_model_settings", "DEFAULT_MODEL_OVERRIDES", "model_for"]
 
 ROLLING_MODES = ("expanding", "sliding")
 
@@ -208,7 +201,7 @@ class TrainSettings:
 class BatterySettings:
     """The evaluation battery (eval/battery.py) on the val and test stage of the run (owner goal: profit)."""
     enabled: bool = True
-    cost_per_side: float = 0.0008        # charged on EVERY side of a trade: a round trip pays twice this
+    cost_per_side: float = DEFAULT_COST_PER_SIDE   # charged on EVERY side of a trade: a round trip pays twice this
     n_variants: int = 1                  # variants tried so far (widens the confidence intervals)
     # D-032: also write the day metrics of a multi-coin run (winning days of the sign portfolio and of the top /
     # bottom book against their baselines, uncertainty use): workflow/panel_report.py; read even when ``enabled`` is
@@ -231,17 +224,33 @@ class EvalSettings:
             raise ValueError("chunk and health_max_rows must be >= 1")
 
 
-#: D-023 (owner 2026-11-09): the FX1 / FX2 switches the E1 evidence showed useful are ON in the run default; the
-#: builder's own defaults (and the TF-parity preset ANTI_MEMORIZATION_CONFIG) are unchanged
-RUN_DEFAULT_SWITCHES = {"bn_warmup": True, "order_detach_close": True, "nig_scale_fit": "train_std",
-                        "nig_trunk_grad": 0.3}
+#: What every run's model gets on top of ``ANTI_MEMORIZATION_CONFIG`` (the TF ``main.ipynb`` preset, unchanged for
+#: the builder's own defaults). D-023 (owner 2026-11-09, FX1 / FX2 switches the E1 evidence showed useful) and D-026
+#: (model-first audit 2026-11-14, N-01..N-04: blocking gate fails 7.7 -> 2.7 at 3 epochs), one line per key:
+DEFAULT_MODEL_OVERRIDES = {
+    "bn_warmup": True,              # BatchNorm moving statistics follow the data from the first step (D-023, N-01)
+    "order_detach_close": True,     # high / low offsets no longer drag the close mean (D-023, N-02)
+    "nig_scale_fit": "train_std",   # NIG heads in train-fitted label units (D-023), not ``nig_scale`` (D-026)
+    "nig_trunk_grad": 0.3,          # share of the NIG heads' gradient that reaches the trunk (D-023)
+    "input_scaler": "train_std",    # inputs standardised with train statistics (D-026, N-03)
+}
 
 
 def default_model_settings() -> ModelSettings:
     """The model every run builds unless told otherwise: ``nig_timenet_v2`` with the anti-memorization preset (the TF
-    ``main.ipynb`` model, BUILD_PLAN.md V1) plus ``RUN_DEFAULT_SWITCHES`` (D-023) and ``MODEL_FIRST_FIXES`` (D-026).
-    The model before both is ``ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))``."""
-    return ModelSettings("nig_timenet_v2", {**ANTI_MEMORIZATION_CONFIG, **RUN_DEFAULT_SWITCHES, **MODEL_FIRST_FIXES})
+    ``main.ipynb`` model, BUILD_PLAN.md V1) plus ``DEFAULT_MODEL_OVERRIDES``. The model before D-023 / D-026 is
+    ``ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))``."""
+    return ModelSettings("nig_timenet_v2", {**ANTI_MEMORIZATION_CONFIG, **DEFAULT_MODEL_OVERRIDES})
+
+
+def model_for(architecture: str | None, overrides: dict | None = None, *, preset: bool = True) -> ModelSettings:
+    """The ModelSettings of ``architecture`` (None = the default model's) with ``overrides``: they merge over the
+    default model (preset + switches) only for its own architecture and with ``preset``; any other architecture
+    starts from ITS registered default config."""
+    base = default_model_settings()
+    arch = base.architecture if architecture is None else architecture
+    keep = preset and arch == base.architecture
+    return ModelSettings(arch, {**(base.overrides if keep else {}), **(overrides or {})})
 
 
 @dataclass(frozen=True)

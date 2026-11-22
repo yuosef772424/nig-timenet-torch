@@ -1,4 +1,11 @@
-"""The ONE place a real run's ``RunIdentity`` is built (T2 review, deferred to T3).
+"""PURPOSE: The ONE place a real run's RunIdentity is built: from the built Trainer (its optimizer then holds the
+    Kendall group), the artifact manifest, the commit and the run context (split, frames, selection, staged; D-042).
+TAGS: run identity, identity for run, resume, optimizer check, kendall group, run context
+PITFALLS: call it after the Trainer exists, never with a bare optimizer; a torch upgrade can move the hash (below);
+    the run context is passed by workflow/run_common.run_identity, a caller that drops it hashes a run as if every
+    split / selection setting were at its default.
+
+The ONE place a real run's ``RunIdentity`` is built (T2 review, deferred to T3).
 
 ``Trainer.__init__`` adds the Kendall log-variances to the optimizer as an extra param group, so an identity built from
 the optimizer BEFORE the Trainer exists describes a different optimizer than the one that trains (and resume would
@@ -11,14 +18,17 @@ a checkpoint written under the old torch is then refused by ``Trainer.fit`` (``R
 ``settings_hash``). That is intended, the identity cannot tell a harmless default from a real change; start a new run.
 """
 
+from collections.abc import Mapping
+
 from nig_timenet_torch.data_io.artifact import ArtifactManifest
 from nig_timenet_torch.trainer.identity import RunIdentity, build_run_identity
 from nig_timenet_torch.trainer.trainer import Trainer
 
 
 def identity_for_run(trainer: Trainer, fit_settings, model_settings, manifest: ArtifactManifest,
-                     code_sha: str) -> RunIdentity:
-    """Identity of the run ``trainer`` is about to fit on the artifact described by ``manifest``."""
+                     code_sha: str, run_context: Mapping | None = None) -> RunIdentity:
+    """Identity of the run ``trainer`` is about to fit on the artifact described by ``manifest``; ``run_context`` as in
+    ``build_run_identity`` (a real run passes ``workflow.run_common.identity_context``)."""
     if not isinstance(trainer, Trainer):
         raise TypeError("identity_for_run takes the built Trainer (its optimizer holds the Kendall group only after "
                         f"construction), got {type(trainer).__name__}")
@@ -30,4 +40,4 @@ def identity_for_run(trainer: Trainer, fit_settings, model_settings, manifest: A
         raise ValueError(f"the optimizer does not hold {len(missing)} trainer parameter(s) (shapes {missing[:3]}): the "
                          f"identity would describe an optimizer that does not train them")
     return build_run_identity(fit_settings, model_settings, trainer.config, trainer.optimizer,
-                              manifest.data_fingerprint, code_sha=code_sha)
+                              manifest.data_fingerprint, code_sha=code_sha, run_context=run_context)

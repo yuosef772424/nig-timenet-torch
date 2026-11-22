@@ -1,4 +1,10 @@
-"""Command line of the Colab runner: ``python -m nig_timenet_torch.colab <command>``.
+"""PURPOSE: Command line of the Colab runner (``python -m nig_timenet_torch.colab``): republish a finished bundle to
+    colab-results, and check a job.json before it is queued.
+TAGS: colab cli, republish, check job, bundle folder, results branch, token file
+PITFALLS: ``republish`` needs only the bundle folder and a token file (no work dir clones); it refuses to replace an
+    existing ``runs/<job_id>/`` without ``--force``; the token is read from a file and never printed.
+
+``python -m nig_timenet_torch.colab <command>``:
 
     republish BUNDLE_DIR   push a finished run's bundle folder (the Drive copy) to colab-results (rule E2)
     check-job FILE         validate a job.json before queueing it
@@ -7,10 +13,7 @@
 import argparse
 import sys
 
-from nig_timenet_torch.colab import bootstrap, job, publish
-
-DEFAULT_REPO = "yuosef772424/nig-timenet-torch"
-DEFAULT_TOKEN_PATH = "/content/drive/MyDrive/crypto/secrets/github_token.txt"
+from nig_timenet_torch.colab import bootstrap, job, paths, publish
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -18,10 +21,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     rp = sub.add_parser("republish", help="push a bundle folder to the results branch")
     rp.add_argument("bundle_dir")
-    rp.add_argument("--repo", default=DEFAULT_REPO, help="owner/name (default %(default)s)")
+    rp.add_argument("--repo", default=paths.REPO_SLUG, help="owner/name (default %(default)s)")
     rp.add_argument("--url", default=None, help="full git URL instead of https://github.com/<repo>.git")
-    rp.add_argument("--token-path", default=DEFAULT_TOKEN_PATH, help="one-line token file (default %(default)s)")
-    rp.add_argument("--workdir", default="/content/nig_runner", help="scratch folder (default %(default)s)")
+    rp.add_argument("--token-path", default=paths.TOKEN_FILE, help="one-line token file (default %(default)s)")
+    rp.add_argument("--workdir", default=paths.WORKDIR, help="scratch folder (default %(default)s)")
     rp.add_argument("--branch", default=publish.RESULTS_BRANCH)
     rp.add_argument("--force", action="store_true", help="replace runs/<job_id>/ when it already exists")
     cj = sub.add_parser("check-job", help="validate a job.json")

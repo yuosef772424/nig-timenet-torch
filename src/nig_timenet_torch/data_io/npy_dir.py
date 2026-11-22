@@ -1,8 +1,9 @@
-"""PURPOSE: Reader of the npy_dir dataset format (manifest.json + one .npy per array + meta.pkl), optionally memory-
-    mapped, and a local-disk copy helper.
-TAGS: npy dir, dataset reader, mmap, localize, data format, manifest
+"""PURPOSE: The npy_dir dataset format (manifest.json + one .npy per array + meta.pkl): its reader (optionally memory-
+    mapped), its writer and a local-disk copy helper.
+TAGS: npy dir, dataset reader, dataset writer, mmap, localize, data format, manifest, sha256
 PITFALLS: with mmap=True arrays up to small_bytes (64 MiB) are read into memory, only bigger ones stay memmaps; localize
-    copies manifest.json last so an interrupted copy is never taken for a finished one.
+    copies and save writes manifest.json last so an interrupted copy / write is never taken for a finished one; save
+    writes into the given folder (the contract writer, data_io.artifact_writer, adds the temp folder + rename).
 
 Reader of the ``npy_dir`` dataset format (BUILD_PLAN.md P06; contract: docs/DATA_ARTIFACT_CONTRACT.md).
 
@@ -13,14 +14,18 @@ Reading order mirrors ``load_dataset_dir`` (lines 120-129): manifest, meta.pkl, 
 Pure numpy: no torch import here.
 """
 
+import datetime as dt
+import hashlib
 import json
 import pickle
 import shutil
+import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
 
-__all__ = ["load", "localize", "SMALL_ARRAY_BYTES"]
+__all__ = ["load", "save", "localize", "sha256_file", "SMALL_ARRAY_BYTES"]
 
 #: with ``mmap=True`` arrays up to this size are read into memory (labels, base params, last_candles); bigger ones
 #: stay on disk and only the pages that are read enter memory (same threshold as the TF project)
@@ -74,3 +79,38 @@ def load(path: str | Path, *, mmap: bool = False, small_bytes: int = SMALL_ARRAY
     if missing:
         raise ValueError(f"{src}: keys {missing} listed in manifest key_order are neither arrays nor in meta.pkl")
     return {k: (arrays[k] if k in arrays else meta[k]) for k in manifest["key_order"]}
+
+
+def sha256_file(path: str | Path) -> str:
+    """sha256 hex digest of a file (read in 4 MiB chunks)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 22), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def save(dataset: dict, directory: str | Path, *, export: Callable[[dict[str, str]], dict] | None = None) -> dict:
+    """Write ``dataset`` (a dict of numpy arrays and other values) as an npy_dir into the existing folder
+    ``directory``: one ``<key>.npy`` per non-object array, ``meta.pkl`` with every other key, ``manifest.json`` LAST
+    (key order, array shapes / dtypes, a fresh id and creation time). ``export(files)`` is called with
+    ``{file name: sha256}`` of every written file and returns the manifest's ``export`` block (None = no block).
+    Returns the manifest dict."""
+    directory = Path(directory)
+    arrays = {k: v for k, v in dataset.items() if isinstance(v, np.ndarray) and not v.dtype.hasobject}
+    meta = {k: v for k, v in dataset.items() if k not in arrays}
+    for k, a in arrays.items():
+        np.save(directory / f"{k}.npy", a, allow_pickle=False)
+    with open(directory / "meta.pkl", "wb") as f:
+        pickle.dump(meta, f, protocol=pickle.HIGHEST_PROTOCOL)
+    files = {f"{k}.npy": sha256_file(directory / f"{k}.npy") for k in sorted(arrays)}
+    files["meta.pkl"] = sha256_file(directory / "meta.pkl")
+    manifest = {"format": "npy_dir", "version": 1, "id": uuid.uuid4().hex,
+                "created": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "key_order": list(dataset), "arrays": {k: {"shape": list(a.shape), "dtype": str(a.dtype)}
+                                                        for k, a in arrays.items()}}
+    if export is not None:
+        manifest["export"] = export(files)
+    with open(directory / "manifest.json", "w", encoding="utf-8") as f:
+        json.dump(manifest, f)
+    return manifest

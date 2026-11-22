@@ -117,7 +117,9 @@ def test_the_no_equivalent_table_names_real_roadmap_steps(nb):
     md = _text(nb, "markdown")
     table = md[md.index("ما ليس هنا") if "ما ليس هنا" in md else md.index("## ١٤"):]
     roadmap = (ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
-    headings = set(re.findall(r"^### ([A-Za-z0-9-]+)", roadmap, flags=re.M))
+    # a done step's spec moved to the archive (HB7, 2026-11-22) is still a real ROADMAP step
+    archive = (ROOT / "docs" / "roadmap_archive.md").read_text(encoding="utf-8")
+    headings = set(re.findall(r"^### ([A-Za-z0-9-]+)", roadmap + "\n" + archive, flags=re.M))
     steps = set(re.findall(r"\*\*(T\d\w*|G\dr?|M\dr?|TR\d|D\d|F\d)\b", table))
     assert steps, "the table must cite ROADMAP steps in bold"
     assert steps <= headings, f"not ROADMAP steps: {sorted(steps - headings)}"
@@ -201,7 +203,7 @@ def test_notebook_stop_button_keeps_the_last_finished_epoch_and_runs_the_tests(t
     flat_run.epoch_line = boom
     try:
         ns = run_notebook("main", {**base, "RUN_NAME": "stop1"})
-        assert ns["run"].result.epochs_done == 2 and ns["run"].result.stopped_early
+        assert ns["run"].result.epochs_done == 2 and ns["run"].result.finished is False
         with pytest.raises(KeyboardInterrupt):
             run_notebook("main", {**base, "RUN_NAME": "stop2", "ON_STOP_WEIGHTS": None})
     finally:

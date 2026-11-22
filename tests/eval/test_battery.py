@@ -9,6 +9,7 @@ from nig_timenet_torch.eval.battery import (
     battery,
     confidence_buckets,
     cowardice,
+    daily_stability,
     flip_test,
     full_battery,
     market_neutral,
@@ -21,9 +22,8 @@ from nig_timenet_torch.eval.battery import (
     trade_grid,
     uncertainty_filter,
     verdict,
-    weekly_stability,
 )
-from nig_timenet_torch.eval.battery_lib import _dir_pnl
+from nig_timenet_torch.eval.battery_lib import direction_pnl
 
 
 def _frame(n: int = 2400, seed: int = 0, good: bool = True, coins=("AAA", "BBB")) -> pd.DataFrame:
@@ -45,7 +45,7 @@ def _frame(n: int = 2400, seed: int = 0, good: bool = True, coins=("AAA", "BBB")
         mu = rng.normal(0, 0.01, n)
         p_dir = rng.uniform(0.2, 0.8, n)
         sigma = rng.uniform(0.002, 0.02, n)
-    times = pd.date_range("2026-01-05", periods=n, freq="1h").values  # dense: weekly buckets fill
+    times = pd.date_range("2026-01-05", periods=n, freq="1h").values  # dense: daily buckets fill
     return pd.DataFrame({"step": np.tile(np.arange(1, 9), n // 8)[:n], "mu": mu, "sigma": sigma,
                          "p_dir": p_dir, "y_ret": y, "dir_true": dir_true,
                          "last_ret": rng.normal(0, 0.01, n),
@@ -99,10 +99,11 @@ def test_shock_split_spans_calm_to_wild():
     assert "dir_acc" in rows[0] and "dir_acc" in rows[-1]
 
 
-def test_weekly_stability_needs_and_uses_timestamps():
-    with_ts = weekly_stability(_frame(good=True), cost=0.0008, pct=0.5, min_n=20)
-    assert "week" in with_ts["rows"][0]  # hourly stamps: every week has enough trades
-    no_ts = weekly_stability(_frame(good=True).drop(columns=["end_time"]), cost=0.0008)
+def test_daily_stability_needs_and_uses_timestamps():
+    with_ts = daily_stability(_frame(good=True), cost=0.0008, pct=0.5, min_n=5)
+    assert with_ts["rows"][0].startswith("  day 20")  # hourly stamps: every day has enough trades
+    assert with_ts["title"] == "DAILY STABILITY (TEST)" and "days positive" in with_ts["note"]
+    no_ts = daily_stability(_frame(good=True).drop(columns=["end_time"]), cost=0.0008)
     assert "SKIPPED" in no_ts["title"]
 
 
@@ -129,11 +130,22 @@ def test_verdict_separates_an_edge_from_noise():
 
 def test_battery_sections_all_present():
     out = battery(_frame(good=True), _frame(good=True))
-    assert set(out) == {"integrity", "sanity", "confidence", "cowardice", "trades", "limit",
-                        "uncertainty", "shocks", "weekly", "per_coin", "flip", "baseline",
+    assert set(out) == {"integrity", "sanity", "confidence", "cowardice", "trades",
+                        "take_profit_at_mu", "uncertainty", "shocks", "daily", "per_coin", "flip", "baseline",
                         "selective", "neutral"}
     for section in out.values():
         assert section["rows"], section["title"]
+
+
+def test_section_order_names_every_full_battery_key_in_print_order():
+    from nig_timenet_torch.eval.battery import SECTION_ORDER
+    good = _frame(good=True)
+    assert tuple(full_battery(good, good)) == SECTION_ORDER
+    no_time = good.drop(columns=["end_time"])
+    out = full_battery(no_time, no_time)
+    assert tuple(out) == tuple(k for k in SECTION_ORDER if k not in ("scorecard", "buckets", "asymmetry",
+                                                                        "scorecard_verdict"))
+    assert "scorecard skipped: no end_time" in " ".join(out["verdict"]["rows"])
 
 
 def test_table_integrity_passes_an_honest_table_and_flags_a_broken_one():
@@ -218,7 +230,7 @@ def test_every_section_charges_the_cost_per_side():
     zero, one = trade_grid(test, 0.0)["rows"][-1], trade_grid(test, 0.001)["rows"][-1]
     assert abs(_avg(zero) - gross) < 1e-6 and abs(_avg(one) - (gross - round_trip(0.001))) < 1e-6
     assert round_trip(0.001) == 0.002
-    pnl0, pnl1 = (_dir_pnl(test, np.arange(len(test)), c) for c in (0.0, 0.001))
+    pnl0, pnl1 = (direction_pnl(test, np.arange(len(test)), c) for c in (0.0, 0.001))
     assert np.allclose(pnl0 - pnl1, 0.002)
     f0, f1 = (flip_test(test, c)["rows"][1] for c in (0.0, 0.001))
     assert "AGAINST" in f0 and f0 != f1
@@ -230,7 +242,7 @@ def test_direction_comes_from_p_dir_in_every_section():
     b["mu"] = -b["mu"]
     for fn in (sanity, ):
         assert fn(a, a)["rows"][0].split("dir_acc")[1] == fn(b, b)["rows"][0].split("dir_acc")[1]
-    for fn in (shock_split, weekly_stability, per_coin):
+    for fn in (shock_split, daily_stability, per_coin):
         ra, rb = fn(a, 0.0008)["rows"], fn(b, 0.0008)["rows"]
         assert [r.split("dir_acc=")[1].split()[0] for r in ra if "dir_acc=" in r] == \
                [r.split("dir_acc=")[1].split()[0] for r in rb if "dir_acc=" in r]

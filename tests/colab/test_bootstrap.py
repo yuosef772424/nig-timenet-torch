@@ -9,6 +9,7 @@ import urllib.error
 import pytest
 
 from nig_timenet_torch.colab import bootstrap as bs
+from tests import scan
 from tests.colab.helpers import git, make_origin
 from tests.scan import PKG_DIR
 
@@ -18,8 +19,7 @@ TOKEN = "ghp_abcdefghijklmnop1234"
 def test_bootstrap_imports_only_the_standard_library():
     """The notebook exec()s this one file before anything else exists on the VM."""
     tree = ast.parse((PKG_DIR / "colab" / "bootstrap.py").read_text(encoding="utf-8"))
-    mods = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
-    mods |= {n.module.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
+    mods = {m.split(".")[0] for n in ast.walk(tree) for m in scan.imported_modules(n)}
     assert mods <= set(sys.stdlib_module_names), sorted(mods - set(sys.stdlib_module_names))
 
 

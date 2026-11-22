@@ -11,8 +11,6 @@ envs and the short runs), ``architecture``, ``model_overrides``, ``train``, and 
 ``e3_train_end``, ``e3_n_coins``, ``e3_months``, ``e3_epochs``). Outputs: ``gate_report.json``, ``gate_report.md``.
 """
 
-import os
-import subprocess
 import sys
 import time
 from dataclasses import dataclass, field, fields
@@ -20,13 +18,13 @@ from dataclasses import dataclass, field, fields
 from nig_timenet_torch.colab import contract
 from nig_timenet_torch.colab.device import EXPECTED as DEVICES
 from nig_timenet_torch.core.config import from_dict
-from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.workflow import gate_run
-from nig_timenet_torch.workflow.settings import RunSettings, TrainSettings, default_model_settings
+from nig_timenet_torch.workflow.settings import RunSettings, TrainSettings, model_for
+from nig_timenet_torch.workflow.settings_roles import JOB_SET_FIELDS
 
 __all__ = ["GatesConfig", "CONFIG", "run_settings", "gate_settings", "main"]
 
-_NOT_CONFIGURATION = ("seed", "epochs", "device")      # set per env / seed / job, never by the configuration
+_NOT_CONFIGURATION = JOB_SET_FIELDS      # set per env / seed / job, never by the configuration
 
 
 @dataclass(frozen=True)
@@ -53,7 +51,8 @@ class GatesConfig:
         bad = sorted(set(self.train) & set(_NOT_CONFIGURATION))
         if bad:
             raise ValueError(f"GatesConfig.train may not set {bad}: the gate run sets them per env and seed")
-        run_settings(self), gate_settings(self)
+        gate_run.refuse_cross_section(run_settings(self))
+        gate_settings(self)
 
 
 CONFIG = GatesConfig
@@ -61,9 +60,7 @@ CONFIG = GatesConfig
 
 def run_settings(cfg: GatesConfig, code_sha: str = "") -> RunSettings:
     """The configuration under test as RunSettings (the default model's overrides, then ``model_overrides``)."""
-    base = default_model_settings()
-    model = (ModelSettings(cfg.architecture, {**base.overrides, **cfg.model_overrides})
-             if cfg.architecture == base.architecture else ModelSettings(cfg.architecture, dict(cfg.model_overrides)))
+    model = model_for(cfg.architecture, cfg.model_overrides)
     train = from_dict(TrainSettings, {**cfg.train, "device": cfg.device})
     return RunSettings(run_dir=cfg.run_dir, code_sha=code_sha, model=model, train=train)
 
@@ -74,15 +71,15 @@ def gate_settings(cfg: GatesConfig) -> gate_run.GateSettings:
 
 
 def main(argv: list[str] | None = None) -> int:
-    started = time.time()
-    config, out, _max_minutes, _rest = contract.entry_args(argv)
+    started, t_mono = time.time(), time.monotonic()
+    config, out, max_minutes, _rest = contract.entry_args(argv)
     cfg = from_dict(GatesConfig, config)
     contract.write_device_json(out, cfg.device)
-    sha = (subprocess.check_output(["git", "-C", os.environ["NIG_REPO_DIR"], "rev-parse", "HEAD"], text=True).strip()
-           if "NIG_REPO_DIR" in os.environ else "")
-    report = gate_run.run_gates(run_settings(cfg, sha), gate_settings(cfg), out)
+    report = gate_run.run_gates(run_settings(cfg, contract.code_sha()), gate_settings(cfg), out,
+                                deadline=contract.deadline(max_minutes, t_mono))
     s = report["summary"]
-    print(f"gates {report['key'][:16]}: passed {s['passed']}; gates {s['gates']}; failed {len(s['failed'])} checks")
+    print(f"gates {str(report['key'])[:16]}{'' if report['finished'] else ' NOT FINISHED (deadline)'}: passed "
+          f"{s['passed']}; gates {s['gates']}; failed {len(s['failed'])} checks")
     contract.write_manifest(out, config, input_fingerprint=report["envs"]["E1"]["fingerprint"], started=started)
     return 0
 

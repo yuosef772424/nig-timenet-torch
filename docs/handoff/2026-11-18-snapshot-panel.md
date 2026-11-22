@@ -1,5 +1,7 @@
 # Handoff: snapshot panel model (the owner's "100 x 3" design) on Colab, 2026-11-18
 
+Status: closed (`docs/results/snapshot-panel-001.md`)
+
 ## What was asked (owner, Arabic, 2026-11-18)
 Build a model in which the whole moment (about 100 coins x 3 channels x 32 bars) enters as one input and the model
 outputs NIG for every coin, designed for accuracy (not simplified for speed), test it on a small sample for errors, then

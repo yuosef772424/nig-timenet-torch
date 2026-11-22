@@ -1,4 +1,11 @@
-"""The run contract between the runner and a job entry (ROADMAP T3), both sides in one place.
+"""PURPOSE: The run contract between the runner and a job entry: the flags (entry_args), the one training deadline
+    from --max-minutes, device.json (rule E1), the hashed manifest, and the runner-side validation of all of them.
+TAGS: run contract, job entry, max minutes, deadline, device record, manifest, output validation
+PITFALLS: the runner SIGKILLs an entry at max_minutes * 60 + its grace, so an entry passes ``deadline`` to its
+    training and stops early with ``finished: false`` (resumable) instead of being killed with no manifest;
+    ``manifest.json`` is written last (it is the completion marker).
+
+The run contract between the runner and a job entry (ROADMAP T3), both sides in one place.
 
 Entry side: ``entry_args`` reads the flags the runner passes, ``write_device_json`` records the device (rule E1) and
 proves a tensor lands on it, ``write_manifest`` hashes every output. Runner side: ``validate_outputs`` recomputes
@@ -35,6 +42,19 @@ def _outputs(out_dir) -> list[Path]:
 
 
 # ------------------------------------------------------------------------------------------------ entry side
+#: the part of a job's ``max_minutes`` kept back from training for the reports, the manifest and the publish (C-22):
+#: ``min(RESERVE_SECONDS, RESERVE_SHARE * budget)``
+RESERVE_SECONDS = 600.0
+RESERVE_SHARE = 0.2
+
+
+def deadline(max_minutes: int, started_monotonic: float) -> float:
+    """The ``time.monotonic()`` value by which an entry's training stops (at an epoch, stage, fold or arm border):
+    the job's budget from ``started_monotonic`` (taken when the entry started) less the reserve for the outputs."""
+    budget = max_minutes * 60.0
+    return started_monotonic + budget - min(RESERVE_SECONDS, RESERVE_SHARE * budget)
+
+
 def entry_args(argv: list[str] | None = None) -> tuple[dict, Path, int, list[str]]:
     """-> (config dict, out dir, max minutes, remaining args) from the flags the runner passes."""
     ap = argparse.ArgumentParser()
@@ -57,11 +77,20 @@ def write_device_json(out_dir, expected: str, torch_mod=None) -> dict:
     return rep
 
 
+def code_sha() -> str:
+    """The commit of the checkout the runner points at (``NIG_REPO_DIR``): the one reader of it for the job entries
+    and ``write_manifest``. A missing variable is an error that says so (the runner always sets it)."""
+    repo_dir = os.environ.get("NIG_REPO_DIR")
+    if not repo_dir:
+        raise RuntimeError("NIG_REPO_DIR is not set: the job entries need the checkout (the runner sets it) to read "
+                           "the commit that the run identity and the manifest record")
+    return subprocess.check_output(["git", "-C", repo_dir, "rev-parse", "HEAD"], text=True).strip()
+
+
 def write_manifest(out_dir, config: dict, input_fingerprint: str, started: float | None = None) -> dict:
     """Hash every output file and write ``manifest.json`` (last: it is the completion marker). The commit is read
     from the checkout the runner points at (``NIG_REPO_DIR``), not from an argument."""
-    repo_dir = os.environ["NIG_REPO_DIR"]
-    sha = subprocess.check_output(["git", "-C", repo_dir, "rev-parse", "HEAD"], text=True).strip()
+    sha = code_sha()
     root = Path(out_dir)
     dev = json.loads((root / "device.json").read_text(encoding="utf-8"))
     man = {"git_sha": sha, "config": config, "input_fingerprint": input_fingerprint,

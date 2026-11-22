@@ -24,23 +24,25 @@ import torch
 
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
-from nig_timenet_torch.data.artifact_writer import write_artifact
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 from nig_timenet_torch.data_io.environments import permute_labels, real_slice
 from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
 from nig_timenet_torch.data_io.synthetic import SyntheticSettings, oracle_keys, write_synthetic
 from nig_timenet_torch.eval import gates
 from nig_timenet_torch.eval.vol_baseline import window_ranges
+from nig_timenet_torch.model.cross_coin import CROSS_INPUTS
 from nig_timenet_torch.trainer.grad_report import grad_report
 from nig_timenet_torch.trainer.identity import configuration_hash
 from nig_timenet_torch.workflow import flat_run, run, run_common
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, default_model_settings
+from nig_timenet_torch.workflow.settings_roles import BASELINE_PER_RUN_FIELDS, GATE_PER_RUN_FIELDS
 
-__all__ = ["GateSettings", "GateRefused", "run_gates", "gate_check", "configuration_key", "baseline_arm",
-           "GATE_REPORT", "GATE_REPORT_MD", "REPORT_SCHEMA"]
+__all__ = ["GateSettings", "GateRefused", "run_gates", "gate_check", "configuration_key", "baseline_arm", "gate_stage",
+           "refuse_cross_section", "GATE_REPORT", "GATE_REPORT_MD", "REPORT_SCHEMA"]
 
 GATE_REPORT, GATE_REPORT_MD = "gate_report.json", "gate_report.md"
 REPORT_SCHEMA = "gate_report/1"
-_PER_RUN_KEYS = ("seed", "epochs", "device", "trace_representative")   # not part of the configuration
+_PER_RUN_KEYS = GATE_PER_RUN_FIELDS   # not part of the configuration (workflow/settings_roles.py)
 
 
 @dataclass(frozen=True)
@@ -74,17 +76,16 @@ def _identity_parts(r: run.Run) -> tuple:
 
 
 def configuration_key(r: run.Run) -> str:
-    """The configuration hash of a built run (``trainer.identity.configuration_hash``)."""
-    run._need(r, "trainer", "build")
-    return configuration_hash(*_identity_parts(r))
+    """The configuration hash of a built run (``trainer.identity.configuration_hash``) with the configuration part of
+    the run context (selection metric, staged plan; D-042), not the data selection (the gates use their own data)."""
+    run.need(r, "trainer", "build")
+    return configuration_hash(*_identity_parts(r), run_common.identity_context(r.settings, selection=False))
 
 
 def baseline_arm(settings: RunSettings) -> bool:
     """True for today's default configuration: the default model and the default training settings except the
     per-run ones (seed, epochs, batch size, device, trace switch)."""
-    t = replace(settings.train, seed=TrainSettings.seed, epochs=TrainSettings.epochs,
-                batch_size=TrainSettings.batch_size, device=TrainSettings.device,
-                trace_representative=TrainSettings.trace_representative)
+    t = replace(settings.train, **{f: getattr(TrainSettings, f) for f in BASELINE_PER_RUN_FIELDS})
     return settings.model == default_model_settings() and t == TrainSettings()
 
 
@@ -135,7 +136,7 @@ def _losses(trainer, x, y, batch_size: int) -> dict:
             "constant": float(trainer.compute_losses(None, yd, outputs=const)[1])}
 
 
-def _stage(r: run.Run, env: str, seed: int, *, with_oracle: bool, with_losses: bool) -> gates.GateStage:
+def gate_stage(r: run.Run, env: str, seed: int, *, with_oracle: bool, with_losses: bool) -> gates.GateStage:
     ds = r.dataset
     table = r.table("test")
     rep = run.stage_report(r, "test", table)
@@ -168,7 +169,7 @@ def _env_seed(settings: RunSettings, env: str, info: dict, seed: int, root: Path
     a0 = grad_report(r.trainer, r.x["train"], r.y["train"], batches)
     run.train(r)
     a1 = grad_report(r.trainer, r.x["train"], r.y["train"], batches)
-    st = _stage(r, env, seed, with_oracle=env == gates.ENVS[0], with_losses=env == gates.ENVS[1])
+    st = gate_stage(r, env, seed, with_oracle=env == gates.ENVS[0], with_losses=env == gates.ENVS[1])
     rows = gates.gate_a_rows(env, seed, "start", a0) + gates.gate_a_rows(env, seed, "end", a1) + gates.stage_rows(st)
     meta = {"seed": seed, "rows": {k: int(len(v)) for k, v in r.idx.items()}, "epochs_done": r.result.epochs_done,
             "best_epoch": r.result.best_epoch, "seconds": round(time.monotonic() - t0, 1),
@@ -177,34 +178,73 @@ def _env_seed(settings: RunSettings, env: str, info: dict, seed: int, root: Path
     return rows, meta, configuration_key(r)
 
 
-def run_gates(settings: RunSettings, g: GateSettings | None = None, out=None) -> dict:
-    """The gate run; returns the report and writes ``gate_report.json`` / ``.md`` to ``out`` (if given)."""
+def needs_cross_section(settings: RunSettings) -> list[str]:
+    """What in ``settings`` needs whole-timestamp batches (``split.cross_section``): the gate run only builds flat
+    batches, so each entry here is a reason to refuse the configuration."""
+    found = []
+    if settings.split.cross_section:
+        found.append("split.cross_section")
+    if settings.split.coin_channel:
+        found.append("split.coin_channel")
+    if settings.train.cross_section_loss != TrainSettings.cross_section_loss:
+        found.append(f"train.cross_section_loss={settings.train.cross_section_loss!r}")
+    over = settings.model.overrides
+    if over.get("cross_coin_layers", 0):
+        found.append("model cross_coin_layers (rows of one timestamp attend to each other)")
+    if CROSS_INPUTS[over.get("cross_input", "none")] is not None:
+        found.append(f"model cross_input={over['cross_input']!r}")
+    if over.get("cross_center", False):
+        found.append("model cross_center")
+    return found
+
+
+def refuse_cross_section(settings: RunSettings) -> None:
+    """Raise ValueError when ``settings`` needs ``split.cross_section`` (C-24): gates run on flat batches."""
+    reasons = needs_cross_section(settings)
+    if reasons:
+        raise ValueError("the gate run builds flat batches (one row per sample, no timestamp groups), but this "
+                         f"configuration needs split.cross_section: {', '.join(reasons)}")
+
+
+def run_gates(settings: RunSettings, g: GateSettings | None = None, out=None, *,
+              deadline: float | None = None) -> dict:
+    """The gate run; returns the report and writes ``gate_report.json`` / ``.md`` to ``out`` (if given).
+    ``deadline`` (a ``time.monotonic()`` value): no env x seed starts after it; the report then says
+    ``finished: false``, lists the runs not done under ``summary.failed`` and does not pass (gate runs never resume:
+    run the job again with a larger ``max_minutes``)."""
+    refuse_cross_section(settings)
     g = g or GateSettings()
     t0 = time.monotonic()
     root = Path(settings.run_dir)
     envs = _write_envs(settings, g, root / "envs")
-    rows, meta, keys = [], {}, set()
+    rows, meta, keys, skipped = [], {}, set(), []
     for env, info in envs.items():
         meta[env] = {"path": info["path"], "fingerprint": info["manifest"]["export"]["data_sha256"],
                      "rows": info["manifest"]["export"]["rows"], "epochs": info["epochs"],
                      **({"permutes": info["permutes"]} if "permutes" in info else {}), "runs": []}
         for seed in g.seeds:
+            if skipped or (deadline is not None and time.monotonic() >= deadline):
+                skipped.append(f"{env} seed {seed}: not run (deadline)")
+                continue
             r_rows, r_meta, key = _env_seed(settings, env, info, seed, root)
             rows += r_rows
             meta[env]["runs"].append(r_meta)
             keys.add(key)
             print(f"gates {env} seed {seed}: {r_meta['seconds']} s", flush=True)
-    if len(keys) != 1:
+    if len(keys) > 1:
         raise RuntimeError(f"the envs built different configurations (keys {sorted(keys)}): check seq_len / features")
     summary = gates.summarize(rows)
-    report = {"schema": REPORT_SCHEMA, "key": keys.pop(), "configuration": _configuration(settings),
+    if skipped:
+        summary = {**summary, "passed": False, "failed": [*skipped, *summary.get("failed", [])]}
+    report = {"schema": REPORT_SCHEMA, "key": keys.pop() if keys else None, "finished": not skipped,
+              "configuration": _configuration(settings),
               "baseline_arm": baseline_arm(settings), "code_sha": run_common.code_sha(settings),
               "gate_settings": asdict(g), "envs": meta, "rows": rows, "summary": summary,
               "seconds": round(time.monotonic() - t0, 1)}
     if out is not None:
         out = Path(out)
         out.mkdir(parents=True, exist_ok=True)
-        (out / GATE_REPORT).write_text(json.dumps(report, indent=1, default=float), encoding="utf-8")
+        run_common.write_json(out / GATE_REPORT, report)
         (out / GATE_REPORT_MD).write_text(gates.report_markdown(report), encoding="utf-8")
     return report
 

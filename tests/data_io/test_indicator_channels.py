@@ -1,4 +1,4 @@
-"""data_io/indicator_channels.py (owner task 2026-11-19): RSI / stochastic / relative volume per bar use no later bar,
+"""data/indicator_channels.py (owner task 2026-11-19): RSI / stochastic / relative volume per bar use no later bar,
 take known values on simple paths, a window with a missing bar or a close that disagrees with the artifact is zeros
 and counted, and the derived artifact keeps the source's rows / labels and is read by the run steps."""
 
@@ -7,9 +7,9 @@ import pandas as pd
 
 from nig_timenet_torch.core.config import updated
 from nig_timenet_torch.core.schema import TS_COL
-from nig_timenet_torch.data.artifact_writer import write_artifact
-from nig_timenet_torch.data_io import indicator_channels as ic
+from nig_timenet_torch.data import indicator_channels as ic
 from nig_timenet_torch.data_io.artifact import load_artifact
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.data_io.synthetic_panel import PanelSyntheticSettings, build_panel_synthetic
 from nig_timenet_torch.workflow import run as steps

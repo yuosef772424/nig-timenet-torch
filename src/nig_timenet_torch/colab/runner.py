@@ -1,9 +1,10 @@
 """PURPOSE: One Colab job from queue to results: fetch job.json, refuse / repeat / version a finished job_id, check
     out the pinned commit, run the entry under a wall-clock guard, publish the bundle to Drive and colab-results.
 TAGS: colab runner, job queue, check rerun, job versions, wall clock guard, publish, rule e1, rule e2
-PITFALLS: steps never raise (a failure is recorded, later steps skip); with ``on_existing`` new_version the job is
-    REPLACED by its next free version in ``check_rerun`` (job_id, bundle folder, config.run_dir), so everything after
-    it sees the versioned id; the log file keeps the queued id's name.
+PITFALLS: steps never raise an Exception (a failure and its traceback are recorded, later steps skip; an interrupt
+    passes); with ``on_existing`` new_version the job is REPLACED by its next free version in ``check_rerun`` (job_id,
+    bundle folder, config.run_dir), so everything after it sees the versioned id; the log file keeps the queued id's
+    name.
 
 One Colab job from queue to results (ROADMAP T3): ``fetch`` job.json from ``colab-queue`` -> ``check_rerun`` ->
 ``checkout`` the pinned commit -> ``execute`` it under a wall-clock guard -> ``publish`` to ``colab-results`` and Drive.
@@ -31,19 +32,17 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
 
 from nig_timenet_torch.colab import device as device_mod
-from nig_timenet_torch.colab import publish
+from nig_timenet_torch.colab import paths, publish
 from nig_timenet_torch.colab.bootstrap import BootstrapError, Secrets, clean_clone, git_env
 from nig_timenet_torch.colab.contract import validate_outputs
 from nig_timenet_torch.colab.job import JobError, parse_job, versioned
 
-DEFAULT_WORKDIR = "/content/nig_runner"
-DEFAULT_DRIVE_ROOT = "/content/drive/MyDrive"
-DEFAULT_DRIVE_RUNS = DEFAULT_DRIVE_ROOT + "/nig_timenet_runs"
 ENV_PACKAGES = ("torch", "numpy", "pandas", "pyarrow", "scikit-learn", "scipy")
 SECRET_ENV_KEYS = ("GIT_ASKPASS", "COLAB_RUNNER_TOKEN", "GITHUB_TOKEN", "GH_TOKEN")
 
@@ -99,8 +98,8 @@ def package_versions(names=ENV_PACKAGES) -> dict:
 class Runner:
     """One job, one Runner. Order: fetch/load, check_rerun, checkout, execute, publish."""
 
-    def __init__(self, repo_url: str, token: str, workdir: str = DEFAULT_WORKDIR, drive_runs: str = DEFAULT_DRIVE_RUNS,
-                 drive_root: str = DEFAULT_DRIVE_ROOT, queue_branch: str = publish.QUEUE_BRANCH,
+    def __init__(self, repo_url: str, token: str, workdir: str = paths.WORKDIR, drive_runs: str = paths.DRIVE_RUNS,
+                 drive_root: str = paths.DRIVE_ROOT, queue_branch: str = publish.QUEUE_BRANCH,
                  results_branch: str = publish.RESULTS_BRANCH, echo=print, python: str | None = None,
                  grace_seconds: int = 120, device_check=device_mod.assert_device, runner_sha: str = "",
                  push_attempts: int = 4):
@@ -145,8 +144,10 @@ class Runner:
             return
         try:
             fn()
-        except (BootstrapError, device_mod.DeviceError, OSError) as e:
-            self._fail(phase, self.secrets.mask(f"{type(e).__name__}: {e}" if isinstance(e, OSError) else e))
+        except Exception as e:  # the step border: KeyboardInterrupt / SystemExit are not Exceptions and propagate
+            known = isinstance(e, (BootstrapError, device_mod.DeviceError))
+            self._fail(phase, self.secrets.mask(e if known else f"{type(e).__name__}: {e}"))
+            self._log(f"== {phase} traceback:\n{traceback.format_exc()}")
 
     def bundle_dir(self, job_id: str) -> str:
         """Drive when mounted, else the work dir: both survive a cleaned temp dir."""
@@ -270,7 +271,12 @@ class Runner:
         if self.job is None or self.refused:
             return self._block("REFUSED", "-", [f"problem  : {p}" for p in self.problems] + ["nothing was pushed"])
         if not self.problems:
-            self.problems += [f"validate: {p}" for p in validate_outputs(self.out_dir, self.job, self.job["repo_ref"])]
+            try:
+                found = validate_outputs(self.out_dir, self.job, self.job["repo_ref"])
+                self.problems += [f"validate: {p}" for p in found]
+            except Exception as e:  # a crashing validation is a recorded FAIL, not a dead cell
+                self.problems.append(self.secrets.mask(f"validate: {type(e).__name__}: {e}"))
+                self._log(f"== validate traceback:\n{traceback.format_exc()}")
         status = "OK" if not self.problems else "FAIL"
         bundle = self.bundle_dir(self.job["job_id"])
         publish.build_bundle(bundle, self.job, self.out_dir, self.log_path, self.env_info(datetime.now(UTC)), status,

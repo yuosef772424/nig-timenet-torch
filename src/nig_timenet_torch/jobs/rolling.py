@@ -13,12 +13,10 @@ PITFALLS: exploratory (rule C5); the fold geometry (``rolling``: spans, step, em
 Config (``RollingConfig``): ``device``, ``run_dir`` (required), ``rolling`` (RollingSettings fields, required: the spans
 have no defaults), ``artifact``, ``base_tf``, ``max_rows`` (smoke mode), ``batch_size``, ``lr``, ``model_overrides``,
 ``train`` (other TrainSettings fields, e.g. ``epochs``, ``staged``), ``split``, ``input_timeframes`` (the frames read
-side by side, e.g. ["4h", "1h"] of an artifact made by data_io/lower_timeframe.py). Outputs: ``rolling_summary.json``
+side by side, e.g. ["4h", "1h"] of an artifact made by data/lower_timeframe.py). Outputs: ``rolling_summary.json``
 / ``.md``, ``rolling_folds.csv`` and one folder per fold x seed (test report, test table, battery files).
 """
 
-import os
-import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -76,17 +74,17 @@ def rolling_settings(cfg: RollingConfig) -> RollingSettings:
     return from_dict(RollingSettings, cfg.rolling)
 
 
-def _code_sha() -> str:
-    return subprocess.check_output(["git", "-C", os.environ["NIG_REPO_DIR"], "rev-parse", "HEAD"], text=True).strip()
-
-
 def main(argv: list[str] | None = None) -> int:
-    started = time.time()
-    config, out, _max_minutes, _rest = contract.entry_args(argv)
+    started, t_mono = time.time(), time.monotonic()
+    config, out, max_minutes, _rest = contract.entry_args(argv)
     cfg = from_dict(RollingConfig, config)
     contract.write_device_json(out, cfg.device)
-    summary = rolling_run.run_rolling(run_settings(cfg, _code_sha()), rolling_settings(cfg), out,
-                                      ckpt_root=cfg.run_dir)
+    summary = rolling_run.run_rolling(run_settings(cfg, contract.code_sha()), rolling_settings(cfg), out,
+                                      ckpt_root=cfg.run_dir, deadline=contract.deadline(max_minutes, t_mono))
+    if summary.get("finished") is False:     # the deadline came first: the fold checkpoints resume
+        contract.write_manifest(out, config, input_fingerprint=summary["data_fingerprint"], started=started)
+        print(f"rolling NOT FINISHED (deadline): {summary['n_rows']} fold x seed row(s) this run; run the job again")
+        return 0
     if summary.get("complete") is False:     # rolling.fold_ids: another process finishes the study
         print(f"rolling part OK: {summary['n_folds']} folds on disk, the summary waits for the other parts")
         return 0

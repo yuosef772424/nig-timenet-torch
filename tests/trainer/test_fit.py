@@ -4,6 +4,7 @@ selection metric, checkpoint + resume (equal to an uninterrupted run), identity 
 import copy
 import dataclasses
 import json
+import time
 
 import pytest
 import torch
@@ -94,7 +95,8 @@ def test_early_stopping_stops_and_restores_the_best_weights(data, tmp_path):
                                                                                    smoothing="none"))
     t = make_trainer()
     result = fit(t, data, settings, run_dir=tmp_path, identity=identity_for(settings))
-    assert result.stopped_early and result.epochs_done == 3 and result.best_epoch == 1 and result.restored_best
+    assert result.stopped_early and result.finished and result.epochs_done == 3 and result.best_epoch == 1
+    assert result.restored_best
     best = checkpoint.load_best(tmp_path)
     assert all(torch.equal(best[k], v) for k, v in t.model.state_dict().items())
     assert json.loads((tmp_path / checkpoint.BEST_META).read_text())["metric"] == "val_raw_loss"
@@ -174,3 +176,11 @@ def test_resume_refuses_a_changed_loss_weight_or_optimizer_lr(data, tmp_path):
         with pytest.raises(ResumeMismatchError, match="settings_hash"):
             fit(t, data, dataclasses.replace(settings, epochs=3), run_dir=tmp_path, identity=ident)
     assert checkpoint.load_checkpoint(tmp_path)["epochs_done"] == 2  # the refused resumes touched nothing
+
+
+def test_finished_is_separate_from_stopped_early(data):
+    """C-09: ``finished`` = every epoch ran or patience ended it; ``stopped_early`` = patience only; a deadline cuts."""
+    full = fit(make_trainer(), data, FitSettings(epochs=2, batch_size=32))
+    assert full.finished and not full.stopped_early and full.epochs_done == 2
+    cut = fit(make_trainer(), data, FitSettings(epochs=4, batch_size=32), deadline=time.monotonic() - 1)
+    assert cut.epochs_done == 1 and not cut.finished and not cut.stopped_early

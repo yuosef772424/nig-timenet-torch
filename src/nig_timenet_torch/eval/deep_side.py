@@ -21,6 +21,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.eval.day_blocks import calendar_day
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["deep_frame", "score_columns", "orient", "skill", "close_link", "vol_buckets", "near_ties", "clip_counts",
@@ -44,7 +45,7 @@ def deep_frame(battery: pd.DataFrame, last_bar_deep: np.ndarray) -> pd.DataFrame
     d["close_log"] = np.log1p(d["mu"].to_numpy(np.float64))
     d["last_bar_deep"] = np.asarray(last_bar_deep, dtype=np.float64)
     d["ts"] = d["end_time"].values
-    d["day"] = d["end_time"].values.astype("datetime64[D]")
+    d["day"] = calendar_day(d["end_time"])
     return d
 
 

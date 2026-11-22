@@ -7,7 +7,6 @@ import pytest
 
 from nig_timenet_torch.eval.battery import full_battery
 from nig_timenet_torch.eval.battery_scorecard import (
-    DAY_BLOCK,
     day_profile,
     payoff_asymmetry,
     scorecard,
@@ -16,6 +15,7 @@ from nig_timenet_torch.eval.battery_scorecard import (
     selections,
     uncertainty_buckets,
 )
+from nig_timenet_torch.eval.day_blocks import DAY_BLOCK_DAYS
 
 
 def _frame(n: int = 6000, seed: int = 0, skill: float = 0.0, s: float = 0.05, per_day: int = 24) -> pd.DataFrame:
@@ -58,7 +58,7 @@ def test_day_profile_busy_days_expose_a_side_that_loses_when_crowded():
 
 
 def test_day_profile_trivial_baseline_constant_book_has_a_zero_width_ci():
-    days = np.repeat(np.arange(4 * DAY_BLOCK), 3).astype("datetime64[D]")
+    days = np.repeat(np.arange(4 * DAY_BLOCK_DAYS), 3).astype("datetime64[D]")
     p = day_profile(np.full(days.shape[0], 0.002), days, level=0.95)
     assert p["ci_lo"] == pytest.approx(0.002) and p["ci_hi"] == pytest.approx(0.002)
     assert p["tail_loss_share"] == 0.0 and p["max_dd"] == 0.0

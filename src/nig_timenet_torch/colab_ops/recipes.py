@@ -9,11 +9,10 @@ PITFALLS: the GitHub token is read from a Drive file on the runtime (``TOKEN_FIL
 
 import shlex
 
+from nig_timenet_torch.colab import paths
+
 __all__ = [
-    "TOKEN_FILE",
-    "ARTIFACT_DRIVE",
     "ARTIFACT_LOCAL",
-    "REPO",
     "ENV_CACHE",
     "VENV",
     "ENV_SH",
@@ -21,12 +20,8 @@ __all__ = [
     "env_script",
     "arms_line",
     "doctor_line",
-    "runs_line",
 ]
 
-REPO = "https://github.com/yuosef772424/nig-timenet-torch.git"
-TOKEN_FILE = "/content/drive/MyDrive/crypto/secrets/github_token.txt"
-ARTIFACT_DRIVE = "/content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1"
 ARTIFACT_LOCAL = "/content/art1"
 # the shared project folder `crypto` (other accounts see it): one env-<key>.tar lives here
 ENV_CACHE = "/content/drive/MyDrive/crypto/nig_timenet_env"
@@ -52,18 +47,18 @@ def setup_script(
     b, d = shlex.quote(branch), shlex.quote(dest)
     lines = [
         "set -e",
-        f'T=$(tr -d "\\r\\n " < {TOKEN_FILE}); B=$(printf "x-access-token:%s" "$T" | base64 -w0)',
+        f'T=$(tr -d "\\r\\n " < {paths.TOKEN_FILE}); B=$(printf "x-access-token:%s" "$T" | base64 -w0)',
         f"if [ -d {d}/.git ]; then",
         f"  cd {d} && {_GIT} git fetch -q origin {b} && git checkout -q -B {b} FETCH_HEAD",
         "else",
-        f"  {_GIT} git clone -q --branch {b} {REPO} {d}",
+        f"  {_GIT} git clone -q --branch {b} {paths.REPO_URL} {d}",
         "fi",
         f"git -C {d} log --oneline | head -1",
     ]
     if install:
         lines += [env_script(dest, torch_key=torch_key)]
     if artifact:
-        lines += [f"[ -d {ARTIFACT_LOCAL} ] || cp -r {ARTIFACT_DRIVE} {ARTIFACT_LOCAL}"]
+        lines += [f"[ -d {ARTIFACT_LOCAL} ] || cp -r {paths.ARTIFACT_DRIVE} {ARTIFACT_LOCAL}"]
     lines += ['python -c "import torch;print(torch.__version__, torch.cuda.is_available())"']
     return "\n".join(lines)
 
@@ -130,22 +125,4 @@ def doctor_line(
         f". {ENV_SH} && cd {shlex.quote(repo)} && python -u -m nig_timenet_torch.doctor {ARTIFACT_LOCAL} --run-dir "
         f"{shlex.quote(run_dir)} --trained --max-rows {int(rows)} --batch-size {int(batch_size)} "
         f"--seed {int(seed)} --model {shlex.quote(model)} --train {shlex.quote(train)} --out {shlex.quote(out)}"
-    )
-
-
-def runs_line(
-    models: str,
-    lr: float,
-    lr_min: float,
-    epochs: int,
-    rows: int,
-    *,
-    device: str = "cuda",
-    code: str = "/content/nig_uhub/src",
-    script: str = "/content/run_models.py",
-) -> str:
-    """The single-model runs of the sequential-gradient branch (scripts/run_models.py) with that branch's code."""
-    return (
-        f". {ENV_SH} && cd /content && PYTHONPATH={shlex.quote(code)}:$PYTHONPATH python -u {shlex.quote(script)} "
-        f"{shlex.quote(models)} {lr:g} {lr_min:g} {int(epochs)} {int(rows)} {shlex.quote(device)}"
     )

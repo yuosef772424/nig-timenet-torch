@@ -16,8 +16,19 @@ export COLAB_BRIDGE_TOKEN=<BRIDGE_TOKEN of the cell>
 | a second branch's code only | `colab_ops setup <branch> --dest /content/nig_uhub --no-artifact --no-install` |
 | small-sample encoder x lr arms (+ battery) | `colab_ops arms /content/out --arms gru:3e-4,transformer:1e-4 --rows 20000 --epochs 6` |
 | doctor on a finished run's best weights | `colab_ops doctor <run_dir>/ckpt /content/doc --encoder gru --lr 3e-4` |
-| single-model runs of `claude/sequential-gradient-model-uhub56` | `colab_ops runs itransformer,conv1d_net --rows 320000` |
+| run one command and wait (default timeout 120 s) | `colab_ops exec '<command>' [--timeout N]` |
+| start a background process, get its pid | `colab_ops start '<command>' <name>` |
 | follow a started process | `colab_ops wait <pid> --limit 400` / `colab_ops out <pid>` |
+| copy a small file to the runtime | `colab_ops put <local> <remote>` |
+
+## Queue route (the owner presses Run all; summary of `docs/PLANNER_HANDOFF.md` "How to queue a Colab job")
+
+The alternative to the bridge: a job file `docs/jobs/<job_id>.json` (`repo_ref` there is 40 zeros) is copied to
+`job.json` at the root of branch `colab-queue` with `repo_ref` replaced by the 40-hex merge commit to run (`rerun: true`
+only to repeat an existing `job_id`) and checked first with `python -m nig_timenet_torch.colab check-job job.json`; the
+owner runs `notebooks/colab_nig_timenet_torch.ipynb`; results appear on branch `colab-results` under `runs/<job_id>/`
+(`bundle_summary.md` first); a failed publish is retried with `python -m nig_timenet_torch.colab republish <bundle_dir>`.
+Smoke job first (rule E5); a code change means a new `run_dir` and `job_id`. Full steps: `docs/PLANNER_HANDOFF.md`.
 
 ## The environment cache (nobody installs per conversation)
 
@@ -62,8 +73,13 @@ of the entry runs first, on the same commit (rule E5).
   processes made every epoch 5 x slower (25 s -> 139 s). Check utilisation after starting each one.
 - A tool call that waits longer than 600 s is moved to the background: keep `wait --limit` at 400.
 - Colab's torch (2.14.1+cu130) is older than the pyproject pin; the cached env never installs torch.
-- The `panel` entry stops at `--max-minutes` and exits 0 with `finished: false`; the `rolling` entry does not read
-  the limit. Both resume from `run_dir`: start the SAME command again after a cut.
+- Every training entry (`baseline`, `panel`, `rolling`, `staged`, `gates`) stops training at
+  `colab/contract.py::deadline` (`--max-minutes` less min(600 s, 20 %) for the outputs; HB2, D-042) and exits 0;
+  `panel` / `staged` / `gates` write `finished: false`, `rolling` prints `NOT FINISHED` and writes no summary
+  (`device_smoke` runs seconds and has nothing to stop). `baseline`, `panel`, `rolling` and `staged` resume from
+  `run_dir`: start the SAME command again after a cut; a gate run never resumes (rerun it with a larger limit).
+- A rolling `out` holds one study: every `fold_row.json` carries its `study_hash` and a row of other settings (or
+  one written before D-042) stops the summary with `StudyMismatchError`; use a fresh `out` per configuration.
 - A cut job resumes ONLY on the commit it started on: the run identity in its checkpoints holds the code commit
   (`trainer/identity.py:check_resume` raises `ResumeMismatchError` on any other). After pushing new commits, resume
   from a second checkout pinned at the job's commit (`git_sha` in its `out/manifest.json`, or the commit of the

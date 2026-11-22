@@ -1,6 +1,4 @@
-"""Battery run: the one call that turns two stages of a run into the printed/written evaluation battery
-
-PURPOSE: Adapts the VAL and TEST stage (table, labels, anchors, last_close, codec state) to battery tables and runs
+"""PURPOSE: Adapts the VAL and TEST stage (table, labels, anchors, last_close, codec state) to battery tables and runs
     the full battery with the T-profit sections; battery_step does it for a finished Run and writes the reports.
 TAGS: battery run, stage inputs, t-profit, battery report, adapter entry point, battery step, profit json
 PITFALLS: VAL thresholds are applied to TEST (no leakage), so val and test must be different stages of ONE run;
@@ -27,6 +25,7 @@ import pandas as pd
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
 from nig_timenet_torch.eval.battery import full_battery, show
 from nig_timenet_torch.eval.battery_adapter import to_battery_table
+from nig_timenet_torch.eval.battery_lib import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.workflow import flat_run, run_common
 
 __all__ = ["StageInputs", "run_battery", "run_tables", "render", "battery_step", "battery_from_folder", "stage_inputs",
@@ -62,14 +61,14 @@ def table_path(folder, stage: str) -> Path:
     return Path(folder) / f"battery_table_{stage}.parquet"
 
 
-def run_battery(val: StageInputs, test: StageInputs, *, cost: float = 0.0008, n_variants: int = 1,
+def run_battery(val: StageInputs, test: StageInputs, *, cost: float = DEFAULT_COST_PER_SIDE, n_variants: int = 1,
                 out_dir=None) -> dict:
     """The full battery (14 sections, 3 T-profit sections, verdict) for one run; writes ``battery_report.txt``
     into ``out_dir`` when given. ``cost`` is charged per side of a trade."""
     return run_tables(val.battery_table(), test.battery_table(), cost=cost, n_variants=n_variants, out_dir=out_dir)
 
 
-def run_tables(val: pd.DataFrame, test: pd.DataFrame, *, cost: float = 0.0008, n_variants: int = 1,
+def run_tables(val: pd.DataFrame, test: pd.DataFrame, *, cost: float = DEFAULT_COST_PER_SIDE, n_variants: int = 1,
                out_dir=None) -> dict:
     """The same from two ready battery tables (``eval.battery_adapter.to_battery_table`` output)."""
     sections = full_battery(val, test, cost, n_variants)
@@ -121,7 +120,7 @@ def battery_step(run) -> dict:
     return sections
 
 
-def battery_from_folder(folder, *, cost: float = 0.0008, n_variants: int = 1, out_dir=None) -> dict:
+def battery_from_folder(folder, *, cost: float = DEFAULT_COST_PER_SIDE, n_variants: int = 1, out_dir=None) -> dict:
     """The battery of a FINISHED run folder: reads its two battery tables, no model and no artifact needed (any model
     that writes ``battery_table_{val,test}.parquet`` can use it). ``out_dir`` None = write nothing."""
     missing = [str(table_path(folder, st)) for st in ("val", "test") if not table_path(folder, st).is_file()]

@@ -11,7 +11,7 @@ Raw candles of many coins -> the dataset dict every other module reads (the same
 Two passes, like the reference pipeline: a light first pass resamples high/low/close of every coin so the
 cross-asset columns (breadth, momentum rank, orthogonal momentum) can see the whole universe; the second pass builds
 each coin's indicators, attaches the market and cross-asset columns and cuts windows (data.windows). Sealed coins
-(data.lock) are never loaded. A coin that is too short is recorded in ``skipped_assets`` with the reason.
+(data_io.lock) are never loaded. A coin that is too short is recorded in ``skipped_assets`` with the reason.
 """
 
 import os
@@ -23,6 +23,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.core.coins import norm_coin
 from nig_timenet_torch.core.prediction_schema import OUTPUT_PREFIX
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.data.align import HLC_AGG, is_closed_mode, keep_full_bars, resample_frames
@@ -39,10 +40,10 @@ from nig_timenet_torch.data.context import (
 )
 from nig_timenet_torch.data.fetch import fetch_all
 from nig_timenet_torch.data.indicators import add_indicators, base_feature_columns
-from nig_timenet_torch.data.lock import HoldoutLock, is_sealed, load_lock
 from nig_timenet_torch.data.settings import DataSettings
 from nig_timenet_torch.data.sources import make_loader, resolve_coins
 from nig_timenet_torch.data.windows import AssetWindows, head_names, prepare_asset
+from nig_timenet_torch.data_io.lock import HoldoutLock, is_sealed, load_lock
 
 __all__ = ["BuildContext", "feature_order", "build_dataset", "DATASET_MODE"]
 
@@ -78,10 +79,6 @@ class _Outcome:
     result: AssetWindows | None = None
     reason: str = ""
     extra: dict = field(default_factory=dict)
-
-
-def _norm(name: str) -> str:
-    return str(name).strip().upper()
 
 
 def _frames(raw: pd.DataFrame, settings: DataSettings) -> dict[str, pd.DataFrame]:
@@ -151,7 +148,7 @@ def _one_coin(name: str, loader, ctx: BuildContext, features: list[str], setting
     if len(raw) < min_len * 2:
         return _Outcome(name, reason=f"too short: {len(raw)} raw rows < {min_len * 2}")
     dfs = _frames(raw, settings)
-    dfs = add_market_context(dfs, ctx.market, _norm(name) == _norm(ctx.reference), f)
+    dfs = add_market_context(dfs, ctx.market, norm_coin(name) == norm_coin(ctx.reference), f)
     dfs = add_rank(dfs, (ctx.rank or {}).get(name), f)
     dfs = add_breadth(dfs, ctx.breadth, f)
     dfs = add_orth(dfs, (ctx.orth or {}).get(name), f)

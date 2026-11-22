@@ -1,4 +1,10 @@
-"""Section 1 of the notebook, second half (ROADMAP T3): check the device the run will use and record the whole setup.
+"""PURPOSE: Notebook section 1, second half: assert the device the run will use, check that the torch Colab ships sees
+    CUDA, and write setup.json (commits, device report, package versions) to the work dir and to Drive.
+TAGS: colab session, setup record, device check, setup json, package versions, drive copy
+PITFALLS: runs after ``bootstrap.py`` (nothing of this package exists on the VM before the clones); it never
+    reinstalls torch; the record goes to Drive when a folder is given, so the next session can read it.
+
+Section 1 of the notebook, second half (ROADMAP T3): check the device the run will use and record the whole setup.
 
 The clones and the install happen in ``bootstrap.py`` (nothing of this package exists on the VM before them). This
 module then asserts the expected device (rule E1), checks that the torch Colab ships can see CUDA without being

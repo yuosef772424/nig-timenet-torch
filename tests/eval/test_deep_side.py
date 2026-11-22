@@ -93,4 +93,4 @@ def test_the_step_writes_both_reports(tmp_path, monkeypatch):
     res = run_mod.deep_side_step(None, tmp_path)
     assert "VERDICT" in (tmp_path / run_mod.REPORT).read_text()
     assert json.loads((tmp_path / run_mod.JSON).read_text())["verdict"] == json.loads(json.dumps(
-        res["verdict"], default=run_mod._json))
+        res["verdict"], default=run_mod.run_common.json_default))

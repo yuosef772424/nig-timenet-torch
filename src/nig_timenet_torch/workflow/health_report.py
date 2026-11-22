@@ -1,6 +1,4 @@
-"""health_report(run): every T4 diagnostic of a run in one call
-
-PURPOSE:  T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer
+"""PURPOSE:  T4 health_report(run): one call writes every diagnostic of a run (targets, NIG floors, layer probe, trainer
           trace) as JSON and markdown next to the checkpoint.
 TAGS:     health report, diagnostics, t-sharp, probe, trainer trace, markdown report
 PITFALLS: ``last_close`` must be the last CLOSE price per row (not a head's own anchor). High/low AUC is information
@@ -13,7 +11,8 @@ Input contract (what T5r's job passes): the run folder ``Trainer.fit(run_dir=...
 history and the Kendall state, ``best.pt`` / ``best_meta.json``) plus the predictions of the model on VALIDATION:
 ``predictions`` (a PredictionTable from ``workflow.prediction_table.predict_table``), its ``labels`` / ``anchors``
 (aligned to the table rows) and the ``codec_state`` the labels were encoded with, and the ``model`` holding the weights
-that made the predictions (``fit`` restores the best epoch) with the validation inputs ``x`` in table order.
+that made the predictions (``fit`` restores the best epoch only when ``restored_best``) with the validation inputs
+``x`` in table order.
 
 Output: ``health_report.json`` (all numbers) and ``health_report.md`` (short, for reading) in the run folder.
 Sections: target_report (T-skill / T-conf / T-sharp / coverage), nig_floor (floor-hit shares), probe (per-layer ridge

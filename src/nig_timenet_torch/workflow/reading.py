@@ -19,9 +19,11 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS, TS_COL
+from nig_timenet_torch.data_io.asset_index import row_coins
 from nig_timenet_torch.eval import error_map as em
 from nig_timenet_torch.eval import strategy_diagnosis as sd
 from nig_timenet_torch.eval import vol_baseline as vb
+from nig_timenet_torch.eval.battery_lib import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.eval.strategy_book import book
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats.nig import nig_interval_halfwidth, nig_nll, nig_predictive_std
@@ -97,14 +99,6 @@ def c1_section(run, val: dict, test: dict) -> dict:
     return out
 
 
-def row_coins(dataset: dict, idx: np.ndarray) -> np.ndarray:
-    """Coin name of each artifact row ``idx`` (from ``asset_bounds``)."""
-    bounds = sorted(dataset["asset_bounds"], key=lambda b: b["start"])
-    starts = np.array([b["start"] for b in bounds])
-    names = np.array([b["name"] for b in bounds], dtype=object)
-    return names[np.searchsorted(starts, np.asarray(idx), side="right") - 1]
-
-
 def _coin_prior(dataset: dict, train_idx: np.ndarray, real_tr: np.ndarray) -> dict:
     """Coin -> mean realised (log) range over its TRAIN rows; ``__all__`` -> the train mean (coins unseen there)."""
     s = pd.Series(real_tr).groupby(row_coins(dataset, train_idx)).mean()
@@ -151,7 +145,7 @@ def error_frame(run, st: dict, har_w: dict | None, info: pd.DataFrame) -> pd.Dat
         f[f"std_{t}"], f[f"half_{t}"] = nig_predictive_std(nu, al, be), nig_interval_halfwidth(nu, al, be, 0.8)
         f[f"nll_{t}"] = nig_nll(y, mu, nu, al, be)
         if har_w is not None and t in har_w:
-            f[f"har_{t}"] = vb._ols_predict(st["ranges"], har_w[t], HAR)
+            f[f"har_{t}"] = vb.ols_predict(st["ranges"], har_w[t], HAR)
     f["market_day"] = f.groupby("day")["real_close"].transform("mean") if "real_close" in f else 0.0
     return f
 
@@ -195,8 +189,9 @@ def _book_lines(rows: list[dict]) -> list[str]:
     return lines
 
 
-def reading_step(run, out_dir, cost: float = 0.0008) -> dict:
-    """The whole reading of ``run`` (model holding the best weights) into ``out_dir``; returns the JSON dict."""
+def reading_step(run, out_dir, cost: float = DEFAULT_COST_PER_SIDE) -> dict:
+    """The whole reading of ``run`` (the model holds the weights ``restored_best`` says) into ``out_dir``; returns
+    the JSON dict."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     val, test = stage_data(run, "val"), stage_data(run, "test")
@@ -245,13 +240,5 @@ def reading_step(run, out_dir, cost: float = 0.0008) -> dict:
     (out / ERROR_REPORT).write_text(em.render(emap) + "\n", encoding="utf-8")
     res = {"cost_per_side": cost, "c1": c1, "book": [{k: v for k, v in r.items() if k != "trades"} for r in rows],
            "evidence": ev, "diagnosis": diag, "error_map": emap}
-    (out / JSON).write_text(json.dumps(res, indent=1, default=_json), encoding="utf-8")
+    (out / JSON).write_text(json.dumps(res, indent=1, default=run_common.json_default), encoding="utf-8")
     return res
-
-
-def _json(v):
-    if isinstance(v, (np.bool_, bool)):
-        return bool(v)
-    if isinstance(v, np.generic):
-        return v.item()
-    return str(v)

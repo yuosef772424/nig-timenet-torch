@@ -177,3 +177,34 @@ def test_versioned_renames_the_job_and_its_run_dir_segment_only():
     with pytest.raises(JobError, match="on_existing"):
         validate_job(_vjob(on_existing="overwrite"))
     assert validate_job(_vjob())["on_existing"] == "refuse"  # default: the behaviour before D-021
+
+
+def test_the_deadline_keeps_the_reserve_for_the_outputs():
+    """C-22: one formula for every entry: the budget less min(600 s, 20 %)."""
+    assert contract.deadline(170, 100.0) == pytest.approx(100.0 + 170 * 60 - 600.0)
+    assert contract.deadline(15, 0.0) == pytest.approx(15 * 60 * (1 - contract.RESERVE_SHARE))
+    assert contract.RESERVE_SECONDS == 600.0 and contract.RESERVE_SHARE == 0.2
+
+
+def test_every_training_entry_passes_the_deadline():
+    """C-07: an entry that binds ``--max-minutes`` and never reads it is SIGKILLed by the runner at the limit, with no
+    manifest. Every entry that trains computes ``contract.deadline`` (device_smoke runs seconds and trains nothing)."""
+    import importlib
+    import inspect
+    import pkgutil
+
+    from nig_timenet_torch import jobs
+    trains = []
+    for m in pkgutil.iter_modules(jobs.__path__):
+        src = inspect.getsource(importlib.import_module(f"nig_timenet_torch.jobs.{m.name}"))
+        if "contract.entry_args" in src and m.name != "device_smoke":
+            trains.append(m.name)
+            assert "contract.deadline(max_minutes" in src, f"jobs/{m.name}.py ignores --max-minutes"
+    assert {"baseline", "panel", "rolling", "staged", "gates"} <= set(trains)
+
+
+def test_code_sha_needs_the_checkout_and_says_so(monkeypatch):
+    """C-21: one reader of NIG_REPO_DIR for every entry; a missing variable is a clear error, not an empty sha."""
+    monkeypatch.delenv("NIG_REPO_DIR", raising=False)
+    with pytest.raises(RuntimeError, match="NIG_REPO_DIR is not set"):
+        contract.code_sha()

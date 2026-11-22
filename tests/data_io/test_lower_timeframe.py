@@ -1,4 +1,4 @@
-"""data_io/lower_timeframe.py (owner task 2026-11-18): the fine window of a row ends where its base bar closes, the
+"""data/lower_timeframe.py (owner task 2026-11-18): the fine window of a row ends where its base bar closes, the
 channels are the artifact's own, a gap invalidates a row (zeros, counted), the derived artifact keeps the source's
 rows / labels and loads as a contract artifact; the run steps read the two frames side by side only when asked."""
 
@@ -10,9 +10,9 @@ import pytest
 
 from nig_timenet_torch.core.config import updated
 from nig_timenet_torch.core.schema import TS_COL
-from nig_timenet_torch.data.artifact_writer import write_artifact
-from nig_timenet_torch.data_io import lower_timeframe as lt
+from nig_timenet_torch.data import lower_timeframe as lt
 from nig_timenet_torch.data_io.artifact import load_artifact
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.data_io.synthetic_panel import PanelSyntheticSettings, build_panel_synthetic
 from nig_timenet_torch.workflow import run as steps

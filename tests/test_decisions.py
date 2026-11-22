@@ -90,7 +90,7 @@ def test_guard_blocks_a_removed_default_and_flags_unpinned_ones(tmp_path):
 def test_a_real_default_change_is_detected(monkeypatch):
     """End to end on the real package: pretend one pinned default had another value."""
     pinned = dp.load_pin()
-    key = "nig_timenet_torch.core.seeds.set_determinism(seed)"
+    key = "nig_timenet_torch.trainer.trainer.compute_losses(training)"
     assert key in pinned
     tampered = {**pinned, key: "12345"}
     changed, _ = dp.compare(dp.collect_defaults(), dp.apply_decisions(tampered))

@@ -62,7 +62,7 @@ def row_losses(trainer, x, y, chunk: int) -> torch.Tensor:
 
     With row weights w (all 1) the objective is sum_t c_t sum_i w_i l_ti / sum_i w_i + K, so
     n * d(objective)/d(w_i) + objective = sum_t c_t l_ti + K: the loss of row i alone."""
-    model, dev = trainer.model, trainer._device()
+    model, dev = trainer.model, trainer.device
     was_training = model.training
     model.eval()
     out = []

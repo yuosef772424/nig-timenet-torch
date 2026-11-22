@@ -3,8 +3,9 @@
 PURPOSE: Four classic checks of the old TF project over the tidy table: integrity, persistence baseline, selective
     evaluation (VAL thresholds, TEST judgment), market-neutral portfolio.
 TAGS: battery classics, integrity, persistence baseline, selective evaluation, market neutral
-PITFALLS: cost is PER SIDE (a trade pays it twice, a neutral period twice on each leg); direction is p_dir, never
-    sign(mu); market_neutral needs >= 4 coins plus end_time and persistence needs last_ret (both skip otherwise).
+PITFALLS: cost is PER SIDE (a trade pays it twice, a neutral period twice on each leg); direction source is p_dir
+    via battery_lib.trade_side, never sign(mu) (market_neutral ranks by mu, no direction); market_neutral needs >= 4
+    coins plus end_time and persistence needs last_ret (both skip otherwise).
 SOURCE: ported from feat/ar-stream 7c9736b, f052cf6 (owner's work)
 
 Ported from the crypto-signal-prediction evaluation package; each re-derived as a pure function over the table,
@@ -16,14 +17,17 @@ from __future__ import annotations
 import numpy as np
 
 from nig_timenet_torch.eval.battery_lib import (
-    _HEADER,
-    _dir_pnl,
-    _fmt,
-    _scored,
-    _section,
-    _stats,
-    _top_abs,
+    HEADER,
+    MIN_TRADES,
+    direction_pnl,
+    format_row,
+    net_pnl,
     round_trip,
+    scored_rows,
+    section,
+    top_abs,
+    trade_side,
+    trade_stats,
 )
 from nig_timenet_torch.stats.metrics import spearman
 
@@ -43,7 +47,7 @@ def table_integrity(val, test) -> dict:
         late = int((val["end_time"].values >= test["end_time"].values.min()).sum())
         rows.append(f"  VAL windows ending at/after the first TEST end_time: {late:,}  "
                     f"(VAL max {val['end_time'].max()} / TEST min {test['end_time'].min()})")
-    return _section("TABLE INTEGRITY - the data first", rows,
+    return section("TABLE INTEGRITY - the data first", rows,
                     "A nonzero NaN/mismatch count or VAL/TEST overlap means leakage or a broken dump: "
                     "fix the run before reading on.")
 
@@ -53,9 +57,9 @@ def persistence_baseline(test, cost: float, pct: float = 0.10) -> dict:
     anything over candle shape; the floor here is momentum - trade sign(last candle's return) on the
     same rows the model trades. If the model cannot beat this line, the 32-candle history adds nothing."""
     if "last_ret" not in test:
-        return _section("PERSISTENCE BASELINE - SKIPPED", ["  (no last_ret column: pass prev_close to the adapter)"],
+        return section("PERSISTENCE BASELINE - SKIPPED", ["  (no last_ret column: pass prev_close to the adapter)"],
                         "The last-candle line needs the previous close.")
-    keep = _scored(test)
+    keep = scored_rows(test)
     y, mu, last = test["y_ret"].values, test["mu"].values, test["last_ret"].values
     p_up = test["p_dir"].values - 0.5
     rows = [f"  {'predictor':<28}{'dir_acc':>9}{'IC':>9}"]
@@ -63,12 +67,12 @@ def persistence_baseline(test, cost: float, pct: float = 0.10) -> dict:
         rows.append(f"  {name:<28}{float(((direction[keep] > 0) == (y[keep] > 0)).mean()):>9.4f}"
                     f"{spearman(rank[keep], y[keep]):>+9.4f}")
     rows.append("")
-    rows.append(_HEADER)
-    idx = _top_abs(test, "mu", pct, keep)
-    for name, sign in (("model direction (p_dir)", np.where(p_up[idx] > 0, 1.0, -1.0)),
+    rows.append(HEADER)
+    idx = top_abs(mu, pct, keep)
+    for name, sign in (("model direction (p_dir)", trade_side(test)[idx]),
                        ("momentum direction", np.where(last[idx] > 0, 1.0, -1.0))):
-        rows.append(_fmt(f"{name}, top{int(pct * 100)}% |mu| rows", _stats(sign * y[idx] - round_trip(cost))))
-    return _section("PERSISTENCE BASELINE (TEST) - the last candle alone", rows,
+        rows.append(format_row(f"{name}, top{int(pct * 100)}% |mu| rows", trade_stats(net_pnl(sign * y[idx], cost))))
+    return section("PERSISTENCE BASELINE (TEST) - the last candle alone", rows,
                     "Momentum is the cheapest possible edge; a model that only ties it learned the "
                     "previous candle, not the market.")
 
@@ -81,15 +85,15 @@ def selective_evaluation(val, test, cost: float, quantiles: tuple = (0.25, 0.50,
     for q in quantiles:
         thr = float(np.quantile((val["p_dir"] - 0.5).abs(), q))
         for name, df in (("VAL", val), ("TEST", test)):
-            m = ((df["p_dir"] - 0.5).abs() >= thr) & _scored(df)
-            if int(m.sum()) < 50:
-                rows.append(f"  confidence >= Q{int(q * 100)}(val)  {name:<5}(n<50)")
+            m = ((df["p_dir"] - 0.5).abs() >= thr) & scored_rows(df)
+            if int(m.sum()) < MIN_TRADES:
+                rows.append(f"  confidence >= Q{int(q * 100)}(val)  {name:<5}(n<{MIN_TRADES})")
                 continue
-            acc = float(((df["p_dir"].values[m] > 0.5) == (df["y_ret"].values[m] > 0)).mean())
-            pnl = _stats(_dir_pnl(df, np.where(m)[0], cost))
+            acc = float(((trade_side(df)[m] > 0) == (df["y_ret"].values[m] > 0)).mean())
+            pnl = trade_stats(direction_pnl(df, np.where(m)[0], cost))
             rows.append(f"  confidence >= Q{int(q * 100)}(val)  {name:<5} n={int(m.sum()):>7,}"
                         f"  dir_acc={acc:.4f}  sharpe={pnl['sharpe']:+.3f}  avg={pnl['avg'] * 100:+.4f}%")
-    return _section("SELECTIVE EVALUATION - VAL thresholds, TEST judgment", rows,
+    return section("SELECTIVE EVALUATION - VAL thresholds, TEST judgment", rows,
                     "Consistent only if the confident slice beats the overall accuracy on TEST too; "
                     "a VAL-only rise is the split flattering itself.")
 
@@ -97,12 +101,14 @@ def selective_evaluation(val, test, cost: float, quantiles: tuple = (0.25, 0.50,
 def market_neutral(val, test, cost: float, quantiles: tuple = (0.2, 0.3, 0.4)) -> dict:
     """Section 14: the old project's market-neutral portfolio - rank the coins by mu each period,
     long the top q against shorting the bottom q, so the market's whole move cancels and only the
-    model's relative ranking can pay. q is chosen on VAL only; TEST rows are shown for transparency."""
+    model's relative ranking can pay. q is chosen on VAL only; TEST rows are shown for transparency.
+    Normalisation: the FULL spread (mean top minus mean bottom, one unit per leg) pays 4 sides; the half-unit
+    convention of ``day_metrics.neutral_days`` (halved spread, 2 sides) is the same cost per unit of gross exposure."""
     if "coin" not in test or "end_time" not in test:
-        return _section("MARKET-NEUTRAL PORTFOLIO - SKIPPED", ["  (needs coin and end_time columns)"],
+        return section("MARKET-NEUTRAL PORTFOLIO - SKIPPED", ["  (needs coin and end_time columns)"],
                         "Single-coin runs cannot go neutral; run the panel notebook for this section.")
     if test["coin"].nunique() < 4:
-        return _section("MARKET-NEUTRAL PORTFOLIO - SKIPPED",
+        return section("MARKET-NEUTRAL PORTFOLIO - SKIPPED",
                         [f"  (only {test['coin'].nunique()} coins: a cross-section needs >= 4)"],
                         "Run the panel notebook over more coins to enable this section.")
 
@@ -114,15 +120,15 @@ def market_neutral(val, test, cost: float, quantiles: tuple = (0.2, 0.3, 0.4)) -
             k = max(1, int(len(g) * q))
             ranked = g.sort_values("mu")["y_ret"].values
             rets.append(ranked[-k:].mean() - ranked[:k].mean())
-        return np.asarray(rets) - 2 * round_trip(cost)
+        return np.asarray(rets) - 2 * round_trip(cost)  # two legs: each leg pays its own round trip
 
     best = max(quantiles, key=lambda q: float(_period_pnl(val, q).mean()))
-    rows = [_HEADER]
+    rows = [HEADER]
     for q in quantiles:
         mark = " (VAL choice)" if q == best else ""
-        rows.append(_fmt(f"long top{int(q * 100)}% / short bottom{int(q * 100)}%{mark}",
-                         _stats(_period_pnl(test, q))))
-    return _section("MARKET-NEUTRAL PORTFOLIO (TEST)", rows,
+        rows.append(format_row(f"long top{int(q * 100)}% / short bottom{int(q * 100)}%{mark}",
+                         trade_stats(_period_pnl(test, q))))
+    return section("MARKET-NEUTRAL PORTFOLIO (TEST)", rows,
                     "Each period pays the full round trip on BOTH legs (4 sides: 4x the per-side cost) - the "
                     "harshest cost assumption; the cross-section is ranked by mu (a ranking, not a direction); a "
                     "positive VAL-chosen q on TEST is real relative-ranking skill.")

@@ -187,3 +187,18 @@ def test_optimizer_must_be_an_optimizer_instance_and_is_required():
 
 def test_seed_mismatch_error_is_a_value_error():
     assert issubclass(SeedMismatchError, ValueError)
+
+
+def test_an_empty_run_context_keeps_the_identity_and_a_set_one_changes_it():
+    """D-042: a run on the defaults passes an empty context and keeps the identity it had before (B-091)."""
+    kw = dict(code_sha=SHA)
+    args = (FitSettings(epochs=5, seed=7), ModelSettings(), trainer_config(), make_optimizer(), FP)
+    plain = build_run_identity(*args, **kw)
+    assert build_run_identity(*args, **kw, run_context={}) == plain
+    assert build_run_identity(*args, **kw, run_context=None) == plain
+    split = build_run_identity(*args, **kw, run_context={"split": {"max_rows": 1000}})
+    assert split.settings_hash != plain.settings_hash
+    with pytest.raises(ResumeMismatchError, match="settings_hash"):
+        check_resume(plain, split)
+    with pytest.raises(TypeError, match="run_context must be plain JSON"):
+        build_run_identity(*args, **kw, run_context={"split": {"x": object()}})

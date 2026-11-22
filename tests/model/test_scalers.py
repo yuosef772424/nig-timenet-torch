@@ -18,15 +18,15 @@ from nig_timenet_torch.model.scalers import (
     fit_scalers,
     label_scale,
 )
-from nig_timenet_torch.workflow.settings import MODEL_FIRST_FIXES, RUN_DEFAULT_SWITCHES
 
 #: the audit's fitted NIG scale (``nig_scale="train_std"``); the run default uses D-023's ``nig_scale_fit`` (D-026)
 AUDIT_SCALE = {"nig_scale": FITTED_SCALE}
+FIRST_FIXES = {"bn_warmup": True, "order_detach_close": True, "input_scaler": "train_std"}  # the D-026 set
 
 
 def _fixed_model(seq=32, feat=3):
     seed_everything(0)
-    over = {**ANTI_MEMORIZATION_CONFIG, **MODEL_FIRST_FIXES, **AUDIT_SCALE}
+    over = {**ANTI_MEMORIZATION_CONFIG, **FIRST_FIXES, **AUDIT_SCALE}
     return build_model(ModelSettings("nig_timenet_v2", over), seq, feat)
 
 
@@ -152,7 +152,7 @@ def test_defaults_add_no_state_dict_keys():
     assert not [k for k in m.state_dict() if "input_scaler" in k or "fitted_scale" in k]
     h = NIGHead(4, 4)
     assert not [k for k in h.state_dict() if "fitted_scale" in k]
-    over = {**ANTI_MEMORIZATION_CONFIG, **MODEL_FIRST_FIXES, **AUDIT_SCALE}
+    over = {**ANTI_MEMORIZATION_CONFIG, **FIRST_FIXES, **AUDIT_SCALE}
     fixed = build_model(ModelSettings("nig_timenet_v2", over), 32, 3)
     assert {k for k in fixed.state_dict() if "input_scaler" in k or "fitted_scale" in k}
 
@@ -168,8 +168,12 @@ def test_default_model_settings_carry_the_model_first_fixes():
 
     ms = default_model_settings()
     assert ms.architecture == "nig_timenet_v2"
-    assert ms.overrides == {**ANTI_MEMORIZATION_CONFIG, **RUN_DEFAULT_SWITCHES, **MODEL_FIRST_FIXES}
-    assert MODEL_FIRST_FIXES["input_scaler"] == "train_std" and "nig_scale" not in ms.overrides  # D-026
+    # C-33: the merged dict is exactly what the two old dicts (D-023 switches, D-026 fixes) produced
+    assert ms.overrides == {**ANTI_MEMORIZATION_CONFIG, "bn_warmup": True, "order_detach_close": True,
+                            "nig_scale_fit": "train_std", "nig_trunk_grad": 0.3, "input_scaler": "train_std"}
+    assert list(ms.overrides)[-5:] == ["bn_warmup", "order_detach_close", "nig_scale_fit", "nig_trunk_grad",
+                                       "input_scaler"]
+    assert "nig_scale" not in ms.overrides  # D-026
     assert ms.overrides["nig_scale_fit"] == "train_std"   # D-023 wins the label scale; the two are exclusive
 
 

@@ -18,14 +18,14 @@ from tests.trainer.loss_helpers import (
 
 
 def check_losses(scenario):
-    _, sc, (total, raw, per_target, stats, constraints) = run(scenario)
+    _, sc, (total, raw, per_target, stats) = run(scenario)
     ol.assert_close(total, value(sc["total_loss"]), "loss", f"{scenario} total_loss")
     ol.assert_close(raw, value(sc["raw_loss"]), "loss", f"{scenario} raw_loss")
     for t, v in sc["task_losses_weighted"].items():
         ol.assert_close(per_target[t], value(v), "loss", f"{scenario} {t}")
     for k, v in sc["stats"].items():
         ol.assert_close(stats[k], value(v), "loss", f"{scenario} {k}")
-    assert constraints == {} and not sc["constraints"]
+    assert not sc["constraints"]
 
 
 def test_total_loss_matches_oracle_primary_scenario():

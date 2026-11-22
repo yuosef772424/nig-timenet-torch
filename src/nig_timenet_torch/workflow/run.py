@@ -3,8 +3,12 @@
 TAGS: run steps, single split, flat run, train step, health step, test report step, run summary, notebook steps
 PITFALLS: steps share one mutable Run (call them in order; a step that needs an earlier one raises); the test split is
     used only by test_step, never for training or selection; a rolling run is one Run per fold
-    (workflow/rolling_run.py), the panel run is parked; the training data stay on the CPU and move to the device
-    batch by batch (B-019). ``train_staged`` (ST1) shares the Run, the Trainer and the later steps with ``train``.
+    (workflow/rolling_run.py), a panel study is one Run per arm and seed (workflow/panel_study.py); the training data
+    stay on the CPU and move to the device batch by batch (B-019). ``train_staged`` (ST1) shares the Run, the Trainer
+    and the later steps with ``train``.
+    The steps live in run_state (Run), run_train, run_restore, run_eval and run_summary; this module keeps
+    prepare / build / run_all and re-exports every public step name, so ``from workflow import run as steps`` is the
+    one import of callers (C-25).
 SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run.py); changes: single split only, steps over one Run object,
     health report and test report (D-005) as steps, outputs written to an output folder, the code of
     jobs/baseline.py moved here; staged training (ST1) and per-fold runs (F2) added.
@@ -17,87 +21,39 @@ health_step -> test_step -> battery_step. Outputs in
 ``write_summary`` adds ``baseline_summary.json``. The run folder keeps the originals and the resume checkpoint.
 """
 
-import json
 import os
-import shutil
-import statistics
-from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
 import torch
 
-from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
 from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.data_io.loading import LoadedData
-from nig_timenet_torch.eval.target_report import target_report
-from nig_timenet_torch.model.architectures import ModelSettings
-from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.model.label_scale import fit_label_scale
 from nig_timenet_torch.model.scalers import fit_scalers
 from nig_timenet_torch.model.target_norm import fit_target_norm
-from nig_timenet_torch.trainer import checkpoint
-from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
-from nig_timenet_torch.trainer.groups import BATCH_ORDERS, group_batches, row_groups
-from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
-from nig_timenet_torch.trainer.staged import StagedResult, plan_stages, staged_fit
-from nig_timenet_torch.trainer.trainer import FitResult, FitSettings, Trainer
-from nig_timenet_torch.workflow import flat_run, run_common, staged_report
+from nig_timenet_torch.trainer.groups import BATCH_ORDERS
+from nig_timenet_torch.workflow import flat_run, run_common
 from nig_timenet_torch.workflow.battery_run import battery_step
-from nig_timenet_torch.workflow.health_report import REPORT_JSON, REPORT_MD, HealthRun, health_report
-from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
+from nig_timenet_torch.workflow.run_eval import TEST_REPORT, health_step, stage_report, test_step
+from nig_timenet_torch.workflow.run_restore import RESTORE_WEIGHTS, restore
+from nig_timenet_torch.workflow.run_state import Run, need
+from nig_timenet_torch.workflow.run_summary import SUMMARY, flat_scalars, test_lines, write_summary
+from nig_timenet_torch.workflow.run_train import (
+    DAY_WEIGHTS_CSV,
+    batches_per_epoch,
+    fit,
+    train,
+    train_staged,
+    training_finished,
+    weights_label,
+)
 from nig_timenet_torch.workflow.settings import RunSettings
 
-__all__ = ["Run", "prepare", "prepare_split", "build", "train", "train_staged", "restore", "health_step", "test_step",
-           "battery_step", "write_summary", "run_all", "test_lines", "SUMMARY", "TEST_REPORT"]
-
-RESTORE_WEIGHTS = ("best", "last")  # restore(weights=...): best-epoch weights (default) or the last finished epoch
-SUMMARY = "baseline_summary.json"
-TEST_REPORT = "test_report.json"
-
-
-@dataclass
-class Run:
-    settings: RunSettings
-    art: LoadedData
-    targets: tuple
-    idx: dict                          # {"train" | "val" | "test": row indices of the artifact}
-    bounds: tuple                      # (train_end, val_end)
-    device: torch.device
-    out: Path | None = None
-    fold: int = 0                      # the fold of a rolling study (0 = a single split); written into the tables
-    x: dict = field(default_factory=dict)       # {"train" | "val": inputs}
-    y: dict = field(default_factory=dict)       # {"train" | "val": {label key: tensor}}
-    ms: ModelSettings | None = None
-    trainer: Trainer | None = None
-    fit_settings: FitSettings | None = None
-    ident: RunIdentity | None = None
-    result: FitResult | None = None
-    staged: StagedResult | None = None   # ST1: what train_staged produced (the baselines read its steps and stages)
-    plan: list | None = None             # ST1: the StageSpec list train_staged ran
-    extra: dict = field(default_factory=dict)  # numbers later steps add to the summary
-
-    @property
-    def dataset(self) -> dict:
-        return self.art.dataset
-
-    def table(self, stage: str) -> pd.DataFrame:
-        """PredictionTable of ALL rows of ``stage`` (the model holds the best weights after fit)."""
-        _need(self, "result", "train")
-        if stage not in self.x:
-            self.x[stage], self.y[stage] = flat_run.flat_inputs(self.dataset, self.idx[stage],
-                                                                self.settings.split.cross_section,
-                                                                self.settings.split.coin_channel,
-                                                                self.settings.data.input_timeframes)
-        return flat_run.predict_stage(self.trainer, self.dataset, self.idx[stage], self.x[stage], self.ident,
-                                      self.device, stage=stage, train_end=self.bounds[0],
-                                      chunk=self.settings.evaluation.chunk, fold=self.fold)
-
-
-def _need(run: Run, what: str, step: str) -> None:
-    if getattr(run, what) is None:
-        raise RuntimeError(f"call {step}() before this step (Run.{what} is not set)")
+__all__ = ["Run", "prepare", "prepare_split", "build", "fit", "train", "train_staged", "training_finished",
+           "weights_label",
+           "need", "flat_scalars", "restore", "health_step", "test_step", "battery_step", "write_summary",
+           "run_all", "test_lines", "SUMMARY", "TEST_REPORT", "DAY_WEIGHTS_CSV", "stage_report", "batches_per_epoch",
+           "RESTORE_WEIGHTS"]
 
 
 def prepare(settings: RunSettings, out=None) -> Run:
@@ -163,273 +119,13 @@ def build(run: Run) -> Run:
     return run
 
 
-def _interrupted(run: Run, mode: str, err: KeyboardInterrupt) -> None:
-    """A stop (the Colab stop button) during training with ``on_interrupt`` = ``mode``: put the weights of the last
-    finished epoch (``"last"``) or of the best epoch so far (``"best"``) in the model through ``restore`` and set
-    ``run.result`` (stopped early), so the later steps run. No finished epoch (no checkpoint): the stop is re-raised."""
-    if checkpoint.load_checkpoint(Path(run.settings.run_dir)) is None:
-        raise KeyboardInterrupt("stopped before the first epoch finished: no epoch was saved, nothing to test") from err
-    restore(run, weights=mode)
-    res = run.result = replace(run.result, stopped_early=True)
-    print(f"STOPPED: {res.epochs_done} finished epoch(s) kept; the model holds the "
-          f"{'best-epoch' if mode == 'best' else 'last finished epoch'} weights (a cut epoch is not saved)",
-          flush=True)
-    _copy_best_weights(run)
-
-
-def _check_on_interrupt(on_interrupt) -> None:
-    if on_interrupt is not None and on_interrupt not in RESTORE_WEIGHTS:
-        raise ValueError(f"on_interrupt must be None or one of {RESTORE_WEIGHTS}, got {on_interrupt!r}")
-
-
-def train(run: Run, *, deadline: float | None = None, on_epoch=None, on_interrupt: str | None = None,
-          batch_monitor=None) -> Run:
-    """Fit (resumes a run folder that holds a checkpoint). ``deadline`` is a ``time.monotonic()`` value.
-    ``on_interrupt``: ``None`` (default) = a KeyboardInterrupt propagates; ``"last"`` / ``"best"`` = it is caught and
-    the model keeps the weights of the last finished epoch / the best epoch so far, ``run.result`` is set.
-    ``batch_monitor``: a ``trainer.batch_influence.BatchInfluence`` (log-only; None = none)."""
-    _need(run, "trainer", "build")
-    _check_on_interrupt(on_interrupt)
-    n = {k: int(len(v)) for k, v in run.idx.items()}
-    groups = flat_run.batch_groups(run.dataset, run.idx["train"], run.settings.train.batch_by)
-    days = (None if run.settings.train.day_weights is None
-            else flat_run.batch_groups(run.dataset, run.idx["train"], "day"))
-    n_batches = batches_per_epoch(run, groups)
-    print(f"data: {n['train']} train / {n['val']} val / {n['test']} test windows "
-          f"(max_rows {run.settings.split.max_rows}), split train_end {run.bounds[0]} val_end {run.bounds[1]}; "
-          f"{n_batches} batches per epoch (batch_by {run.settings.train.batch_by}) on {run.device}", flush=True)
-    trace_batches = (flat_run.batch_set(run.dataset, run.idx["train"], run.fit_settings.batch_size,
-                                        run.settings.train.seed)
-                     if run.settings.train.trace_representative else None)
-    try:
-        run.result = run.trainer.fit(run.x["train"], run.y["train"], run.x["val"], run.y["val"], run.fit_settings,
-                                     run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline,
-                                     on_epoch=on_epoch, trace_batches=trace_batches, batch_monitor=batch_monitor,
-                                     batch_groups=groups, day_groups=days)
-    except KeyboardInterrupt as err:
-        if on_interrupt is None:
-            raise
-        _interrupted(run, on_interrupt, err)
-        return run
-    _copy_best_weights(run)
-    _write_day_table(run)
-    return run
-
-
-#: per-day table of a run with ``train.day_weights`` (rows, measured loss, weight), written next to the checkpoint
-DAY_WEIGHTS_CSV = "day_weights.csv"
-
-
-def _write_day_table(run: Run) -> None:
-    """The day weighter's last table (``trainer.day_weights.DayWeighter.table``; the day as a UTC date) in
-    ``run_dir`` (D-039; read when looking for the training days the model fails on). No-op without day weights."""
-    weighter = run.trainer.day_weighter
-    if weighter is None:
-        return
-    table = pd.DataFrame(weighter.table())
-    table.insert(0, "date", pd.to_datetime(table["day"], unit="D", utc=True).dt.strftime("%Y-%m-%d"))
-    Path(run.settings.run_dir).mkdir(parents=True, exist_ok=True)
-    table.to_csv(Path(run.settings.run_dir) / DAY_WEIGHTS_CSV, index=False)
-
-
-def train_staged(run: Run, *, deadline: float | None = None, on_eval=None, stages=None,
-                 on_interrupt: str | None = None) -> Run:
-    """Staged training (ROADMAP ST1, card F) through the one Trainer: ``settings.train.staged`` says how the rows grow
-    and the lr falls (``trainer.staged``); resumes a run folder that holds a checkpoint. ``stages``: a ready plan
-    (the equal-step baselines of ``workflow.staged_study``) instead of the staged arm's. The per-stage table lands in
-    ``run.extra['stages']``; ``run.result`` is a FitResult over the evaluation points so the later steps read it as
-    before. The scalers were fitted once on the whole training split by ``build``. ``on_interrupt``: as in ``train``
-    (the state is saved at every evaluation point; a stop keeps the last saved one, ``run.staged`` stays None)."""
-    _need(run, "trainer", "build")
-    _check_on_interrupt(on_interrupt)
-    st = run.settings.train.staged
-    if st is None:
-        raise ValueError("train_staged needs settings.train.staged (a StageSettings)")
-    fs = run.fit_settings
-    plan = stages or plan_stages(st, staged_report.growth_context(run.dataset, run.idx["train"], fs.seed),
-                                 fs.batch_size, run.trainer.optimizer.param_groups[0]["lr"])
-    print(f"staged training: {len(plan)} stage(s), rows {[len(s.rows) for s in plan]}, lr "
-          f"{[round(s.lr, 8) for s in plan]}; {len(run.idx['val'])} val rows (at most {st.val_max_rows} used)",
-          flush=True)
-    try:
-        res = staged_fit(run.trainer, run.x["train"], run.y["train"], run.x["val"], run.y["val"], plan, st, fs,
-                         run_dir=run.settings.run_dir, identity=run.ident, deadline=deadline, on_eval=on_eval)
-    except KeyboardInterrupt as err:
-        if on_interrupt is None:
-            raise
-        _interrupted(run, on_interrupt, err)
-        return run
-    run.staged, run.plan = res, plan
-    _staged_outputs(run, res)
-    _copy_best_weights(run)
-    return run
-
-
-def _staged_outputs(run: Run, res: StagedResult) -> None:
-    """FitResult for the later steps, the stage table (with the rough independent-label counts) for the summary."""
-    run.result = FitResult(res.history, len(res.history), res.best_eval, res.best_value, res.finished,
-                           res.restored_best)
-    indep = staged_report.independent_labels(run.dataset, run.idx["train"], [r["rows"] for r in res.stages])
-    run.extra["stages"] = [{**r, "independent_labels": n} for r, n in zip(res.stages, indep, strict=True)]
-    run.extra["staged"] = {"total_steps": res.total_steps, "finished": res.finished, "val_rows_used": res.val_rows,
-                           "best_step": res.best_step}
-
-
-def restore(run: Run, *, weights: str = "best", allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:
-    """Instead of ``train``: read a FINISHED run folder (``settings.run_dir``) and put its weights in the model, so the
-    evaluation steps re-read a trained model without training (T5r). ``weights``: ``"best"`` (default) = the
-    best-epoch weights (``best.pt``); ``"last"`` = the weights after the last finished epoch (``checkpoint.pt``; the EMA
-    copy when the run trained with ``ema_decay``, exactly what ``fit`` leaves in the model without
-    ``restore_best_weights``). The saved RunIdentity must equal this run's except for ``allow_changes`` (default: the
-    commit; settings, seed and data must be the same)."""
-    if weights not in RESTORE_WEIGHTS:
-        raise ValueError(f"restore: weights must be one of {RESTORE_WEIGHTS}, got {weights!r}")
-    _need(run, "trainer", "build")
-    run_dir = Path(run.settings.run_dir)
-    ckpt = checkpoint.load_checkpoint(run_dir)
-    if ckpt is None:
-        raise FileNotFoundError(f"{run_dir} holds no {checkpoint.CHECKPOINT}: nothing to restore")
-    check_resume(RunIdentity.from_json(json.loads(ckpt["identity"])), run.ident,
-                 allow_changes=("epochs", *allow_changes))
-    tracker = ckpt["tracker"]
-    if weights == "best":
-        if tracker.get("best_epoch") is None:
-            raise ValueError(f"{run_dir}: the checkpoint records no best epoch")
-        run.trainer.model.load_state_dict(checkpoint.load_best(run_dir))
-    else:
-        run.trainer.model.load_state_dict(ckpt["ema"]["shadow"] if "ema" in ckpt else ckpt["model"])
-    history = list(ckpt["history"])
-    run.result = FitResult(history, int(ckpt["epochs_done"]), tracker["best_epoch"], tracker["best"],
-                           len(history) < run.fit_settings.epochs, weights == "best")
-    return run
-
-
-def _copy_best_weights(run: Run) -> None:
-    """``best.pt`` + ``best_meta.json`` of the run folder into ``out``, so a job publishes the weights with its
-    results (B-050); skipped without ``out`` or before any best epoch, never copied onto itself."""
-    if run.out is None:
-        return
-    for name in (BEST, BEST_META):
-        src, dst = Path(run.settings.run_dir) / name, run.out / name
-        if src.is_file() and not (dst.exists() and dst.samefile(src)):
-            shutil.copyfile(src, dst)
-
-
-def health_step(run: Run) -> Run:
-    """Health report on an evenly strided subsample of the validation rows (they must fit on the device); a
-    cross-section model gets whole timestamps (C-01 / C-02: a cut timestamp changes its outputs); written to the run
-    folder and copied to ``out``."""
-    _need(run, "result", "train")
-    ds, dev = run.dataset, run.device
-    val_idx, cap = run.idx["val"], run.settings.evaluation.health_max_rows
-    grouped = run.trainer.group_channel
-    pick = (run_common.stride_groups(row_groups(run.x["val"]).numpy(), cap) if grouped
-            else run_common.stride_rows(np.arange(len(val_idx)), cap))
-    idx = val_idx[pick]
-    xs = run.x["val"][torch.as_tensor(pick)].to(dev)
-    meta = table_meta(ds, idx, stage="val", fold=0, train_end=run.bounds[0])
-    table = predict_table(run.trainer.model, xs, meta, run.ident, groups=row_groups(xs).cpu() if grouped else None)
-    lc, codec = np.asarray(ds["last_candles"]), run_common.codec_state(ds)
-    probe_target = "close" if "close" in run.targets else run.targets[0]
-    labels = {k: v[torch.as_tensor(pick)].numpy() for k, v in run.y["val"].items()}
-    hr = HealthRun(run_dir=Path(run.settings.run_dir), model=run.trainer.model, x=xs, predictions=table,
-                   labels=labels, anchors=flat_run.anchors_by_name(lc, idx, run.targets, codec),
-                   last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]], codec_state=codec,
-                   probe_labels=tuple(head_spec(k, probe_target).label_key
-                                      for k in ("nig_regression", "binary_classification")))
-    health_report(hr)
-    run.extra["health_rows"] = int(len(idx))
-    if run.out is not None:
-        for name in (REPORT_JSON, REPORT_MD):
-            shutil.copyfile(Path(run.settings.run_dir) / name, run.out / name)
-    return run
-
-
-def stage_report(run: Run, stage: str, table: pd.DataFrame) -> dict:
-    lc, codec = np.asarray(run.dataset["last_candles"]), run_common.codec_state(run.dataset)
-    idx = run.idx[stage]
-    return target_report(table, {k: v.numpy() for k, v in run.y[stage].items()},
-                         anchors=flat_run.anchors_by_name(lc, idx, run.targets, codec),
-                         last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]], codec_state=codec)
-
-
-def test_step(run: Run) -> dict:
-    """target_report on ALL test rows (D-005); writes ``test_report.json`` to ``out``. The test split is never used
-    for training or selection. The test table is kept in ``run.extra['tables']`` for the battery."""
-    if not len(run.idx["test"]):
-        raise ValueError("the split has no test rows")
-    table = run.table("test")
-    run.extra.setdefault("tables", {})["test"] = table
-    rep = stage_report(run, "test", table)
-    if run.out is not None:
-        (run.out / TEST_REPORT).write_text(json.dumps(rep, indent=1, default=float), encoding="utf-8")
-    return rep
-
-
-def _flat(d, prefix=""):
-    for k, v in d.items():
-        if isinstance(v, dict):
-            yield from _flat(v, f"{prefix}{k}.")
-        elif isinstance(v, (int, float)) and not isinstance(v, bool):
-            yield f"{prefix}{k}", v
-
-
-def test_lines(report: dict) -> list[str]:
-    """Short printable summary of a test report: every scalar except the per-coin breakdowns."""
-    return [f"  {k}: {v:.4f}" if isinstance(v, float) else f"  {k}: {v}"
-            for k, v in _flat(report) if "per_coin" not in k and "deciles" not in k]
-
-
-def batches_per_epoch(run: Run, groups) -> int:
-    """How many optimizer steps one epoch takes, by the batching ``fit`` uses (C-13: the summary divided the epoch time
-    by ceil(rows / batch_size) also for grouped batches): one per group of ``batch_by`` (``groups``), whole-timestamp
-    batches of a cross-section run, the batches of a timestamp ``batch_order``, else ceil(rows / batch_size)."""
-    fs, tr, n = run.fit_settings, run.trainer, len(run.idx["train"])
-    if groups is not None:
-        return int(len(torch.unique(groups)))
-    if tr.group_channel:
-        return len(group_batches(row_groups(run.x["train"]), fs.batch_size, shuffle=False))
-    order = BATCH_ORDERS.entry(fs.batch_order)
-    if order.meta["needs_times"]:
-        return len(order.meta["fn"](n, fs.batch_size, tr.row_times, fs.time_block_bars))
-    return -(-n // fs.batch_size)
-
-
-def write_summary(run: Run, extra: dict | None = None) -> dict:
-    """``baseline_summary.json`` in ``out``; ``extra`` (device, gpu name, ...) is merged in by the caller."""
-    _need(run, "result", "train")
-    s, res, fs, ds = run.settings, run.result, run.fit_settings, run.dataset
-    secs = [r["trace_epoch_seconds"] for r in res.history if "trace_epoch_seconds" in r]  # epochs of earlier jobs too
-    n_batches = batches_per_epoch(run, flat_run.batch_groups(ds, run.idx["train"], s.train.batch_by))
-    summary = {"seed": s.train.seed, "epochs_requested": fs.epochs, "epochs_done": res.epochs_done,
-               "finished": res.epochs_done >= fs.epochs or res.stopped_early, "stopped_early": res.stopped_early,
-               "best_epoch": res.best_epoch, "best_value": res.best_value,
-               "step_seconds_per_batch": statistics.median(secs) / n_batches if secs else None,
-               "epoch_seconds_median": statistics.median(secs) if secs else None, "batch_size": fs.batch_size,
-               "n_windows": {k: int(len(v)) for k, v in run.idx.items()},
-               "split": {"train_end": str(run.bounds[0]), "val_end": str(run.bounds[1])},
-               "targets": list(run.targets), "label_smoothing": s.train.label_smoothing,
-               "reg_target_mode": ds["reg_target_mode"], "reg_target_scale": float(ds["reg_target_scale"]),
-               "input_key": "+".join(run_common.input_keys(ds, s.data.input_timeframes)),
-               "max_rows": s.split.max_rows, "model_overrides": run.ms.overrides,
-               "data_fingerprint": run.art.manifest.data_fingerprint, "identity_fingerprint": run.ident.fingerprint(),
-               "run_dir": str(s.run_dir), "history": res.history,
-               **{k: v for k, v in run.extra.items() if k != "tables"}, **(extra or {})}
-    if run.out is not None:
-        (run.out / SUMMARY).write_text(json.dumps(summary, indent=1, default=float), encoding="utf-8")
-    return summary
-
-
 def run_all(settings: RunSettings, out=None, *, deadline: float | None = None, on_epoch=None) -> Run:
     """prepare -> build -> train -> health report -> test report -> battery (when ``evaluation.battery.enabled``)."""
     r = build(prepare(settings, out))
-    if settings.train.staged is None:
-        train(r, deadline=deadline, on_epoch=on_epoch)
-    else:
-        train_staged(r, deadline=deadline, on_eval=on_epoch)
+    fit(r, deadline=deadline, on_epoch=on_epoch)
     health_step(r)
     rep = test_step(r)
-    print(f"test evaluation ({rep['n_rows']} rows, best-epoch weights):", flush=True)
+    print(f"test evaluation ({rep['n_rows']} rows, {weights_label(r)} weights):", flush=True)
     print("\n".join(test_lines(rep)), flush=True)
     battery_step(r)
     return r

@@ -18,7 +18,7 @@ import numpy as np
 
 from nig_timenet_torch.stats import metrics
 
-__all__ = ["window_ranges", "head_vs_baselines", "within_coin_spearman", "ols_fit", "har_table",
+__all__ = ["window_ranges", "head_vs_baselines", "within_coin_spearman", "ols_fit", "ols_predict", "har_table",
            "interval_vs_baseline", "Z80_LEVEL"]
 
 Z80_LEVEL = 0.8
@@ -69,7 +69,7 @@ def ols_fit(features: dict, y: np.ndarray, names) -> np.ndarray:
     return np.linalg.lstsq(a, np.asarray(y, dtype=np.float64), rcond=None)[0]
 
 
-def _ols_predict(features: dict, w: np.ndarray, names) -> np.ndarray:
+def ols_predict(features: dict, w: np.ndarray, names) -> np.ndarray:
     a = np.column_stack([np.ones(len(next(iter(features.values()))))] + [np.asarray(features[n]) for n in names])
     return a @ w
 
@@ -80,7 +80,7 @@ def har_table(feat_val: dict, y_val: np.ndarray, feat_test: dict, y_test: np.nda
     within-coin Spearman). Features and targets are passed already transformed (e.g. log ranges)."""
     out = {}
     for name, names in sets.items():
-        p = _ols_predict(feat_test, ols_fit(feat_val, y_val, names), names)
+        p = ols_predict(feat_test, ols_fit(feat_val, y_val, names), names)
         out[name] = {"r2": metrics.r2(y_test, p), "spearman": metrics.spearman(y_test, p),
                      "within_coin": within_coin_spearman(y_test, p, coins_test)}
     return out
@@ -101,10 +101,10 @@ def interval_vs_baseline(val: dict, test: dict, level: float = Z80_LEVEL) -> dic
     units. The baseline centre is OLS of y on the features, its scale OLS of |residual| on them (VAL fits)."""
     names = sorted(val["base"])
     w_c = ols_fit(val["base"], val["y"], names)
-    c_v, c_t = _ols_predict(val["base"], w_c, names), _ols_predict(test["base"], w_c, names)
+    c_v, c_t = ols_predict(val["base"], w_c, names), ols_predict(test["base"], w_c, names)
     w_s = ols_fit(val["base"], np.abs(val["y"] - c_v), names)
-    s_v = np.maximum(_ols_predict(val["base"], w_s, names), EPS)
-    s_t = np.maximum(_ols_predict(test["base"], w_s, names), EPS)
+    s_v = np.maximum(ols_predict(val["base"], w_s, names), EPS)
+    s_t = np.maximum(ols_predict(test["base"], w_s, names), EPS)
     model = _calibrated(val["pred"], val["std"], val["y"], test["pred"], test["std"], test["y"], level)
     base = _calibrated(c_v, s_v, val["y"], c_t, s_t, test["y"], level)
     model["share_std_below_move_test"] = metrics.width_below_share(test["std"], np.abs(test["pred"]))

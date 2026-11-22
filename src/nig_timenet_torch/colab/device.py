@@ -1,4 +1,10 @@
-"""The device a Colab job runs on: report it, assert it, record it (rule E1).
+"""PURPOSE: The device a Colab job runs on: report it, assert it, prove a tensor lands on it, record it (rule E1); a
+    GPU job on a CPU VM fails before the job starts.
+TAGS: device report, device assert, cuda cpu, smoke compute, rule e1, device json
+PITFALLS: nothing here installs or replaces torch (Colab ships a CUDA build): a build without CUDA is an error that
+    says so; the job's device and its config's device must be the same; ``torch_mod`` is injectable for tests.
+
+The device a Colab job runs on: report it, assert it, record it (rule E1).
 
 TF's "GPU" runs were CPU runs for months (a ``tensorflow-cpu`` pin). Here a job names the device it expects
 (``"cuda"`` or ``"cpu"``); ``assert_device`` fails BEFORE the job starts when the VM cannot give it, ``device_report``

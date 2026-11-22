@@ -2,7 +2,8 @@
     across time, is it sharp and calibrated, is the direction biased, does selecting by confidence win more days.
 TAGS: uncertainty use, sd ranks error, across coins, across time, t-sharp, calibration, direction bias, confidence
     selection, winning days, panel diagnostics
-PITFALLS: works on the day-metric frame (``eval.day_metrics.FRAME_COLUMNS``; one stage of one run); a confidence
+PITFALLS: direction here is sign(mu) (the panel frame has no p_dir); works on the day-metric frame
+(``eval.day_metrics.FRAME_COLUMNS``; one stage of one run); a confidence
     threshold is fitted on the VAL frame and applied to the scored frame, never fitted on it; "across time" is a
     correlation inside each coin over its timestamps (it needs >= ``MIN_GROUP`` rows per coin), "across coins" inside
     each timestamp. Every number is descriptive: no trade rule is chosen here. The kept-row rules print the
@@ -16,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
+from nig_timenet_torch.eval.battery_lib import DEFAULT_COST_PER_SIDE, bonferroni_level
 from nig_timenet_torch.eval.day_metrics import absolute_days, day_summary, neutral_days
 from nig_timenet_torch.stats import metrics
 
@@ -65,7 +67,7 @@ def direction_bias(frame: pd.DataFrame) -> dict:
             "hit_rate": float((np.sign(frame["mu"]) == np.sign(frame["y_ret"])).mean())}
 
 
-def confidence_selection(frame: pd.DataFrame, val: pd.DataFrame, keep: float = 0.2, cost: float = 0.0008,
+def confidence_selection(frame: pd.DataFrame, val: pd.DataFrame, keep: float = 0.2, cost: float = DEFAULT_COST_PER_SIDE,
                          top_share: float = 0.2) -> dict:
     """Winning days of metric 1 and 2 on (a) all rows, (b) the rows whose confidence |mu| / sd is at least the VAL
     quantile ``1 - keep``, (c) the rows whose sd is at most the VAL quantile ``keep``; (d) the rows whose |mu| is at
@@ -84,7 +86,7 @@ def confidence_selection(frame: pd.DataFrame, val: pd.DataFrame, keep: float = 0
     scores["ranked_by_mu_over_sd"] = conf(frame) * np.sign(frame["mu"].to_numpy(np.float64))
     # owner 2026-11-19: the kept-row rules were the only positive net numbers and had no CI; every rule tried here is
     # a variant (ROADMAP T-profit), so the net mean day also gets the CI at 1 - 0.05 / (number of rules)
-    adjusted = 1.0 - 0.05 / len(scores)
+    adjusted = bonferroni_level(len(scores))
     for name, score in scores.items():
         net = absolute_days(frame, score, cost=cost)
         out[name] = {"rows_share": float(np.isfinite(score).mean()),
@@ -95,7 +97,7 @@ def confidence_selection(frame: pd.DataFrame, val: pd.DataFrame, keep: float = 0
     return out
 
 
-def uncertainty_report(frame: pd.DataFrame, val: pd.DataFrame, *, cost: float = 0.0008) -> dict:
+def uncertainty_report(frame: pd.DataFrame, val: pd.DataFrame, *, cost: float = DEFAULT_COST_PER_SIDE) -> dict:
     """Everything above for the close head, plus ``sd_ranks_error`` and ``sharp_and_calibrated`` of the high / low
     heads when the frame carries them (``pred_<t>``, ``sigma_<t>``, ``fut_<t>``)."""
     heads = {"close": ("mu", "sigma", "y_ret")}

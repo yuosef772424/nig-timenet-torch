@@ -96,3 +96,27 @@ def test_gates_config_is_strict():
         GatesConfig(device="cpu", run_dir="x", e1={"no_such_field": 1})
     base = run_settings(GatesConfig(device="cpu", run_dir="x"))
     assert gate_run.baseline_arm(base), "the default gates job tests the baseline configuration"
+
+
+def test_a_gate_run_past_its_deadline_runs_nothing_and_does_not_pass(tmp_path):
+    """C-07: a gate run never resumes, so a cut run says so and can never pass a full training's gate check."""
+    import time
+    cfg = GatesConfig(device="cpu", run_dir=str(tmp_path / "work"), architecture="tiny_mlp", seeds=(0,), e1=TINY_E1,
+                      e1_epochs=1, e2_epochs=1, train={"batch_size": 128})
+    rep = gate_run.run_gates(run_settings(cfg, SHA), gate_settings(cfg), tmp_path / "out",
+                             deadline=time.monotonic() - 1.0)
+    assert rep["finished"] is False and rep["key"] is None and not rep["rows"]
+    assert not rep["summary"]["passed"] and "E1 seed 0: not run (deadline)" in rep["summary"]["failed"]
+    assert "NOT finished" in (tmp_path / "out" / gate_run.GATE_REPORT_MD).read_text()
+
+
+def test_a_configuration_that_needs_the_cross_section_is_refused_by_the_config_and_by_run_gates(tmp_path):
+    """C-24: gates run on flat batches; a cross-section loss, a coin channel or a whole-timestamp model is refused."""
+    with pytest.raises(ValueError, match="cross_section_loss"):
+        GatesConfig(device="cpu", run_dir="x", train={"cross_section_loss": "rank_ic"})
+    with pytest.raises(ValueError, match="cross_coin_layers"):
+        GatesConfig(device="cpu", run_dir="x", model_overrides={"cross_coin_layers": 1})
+    base = run_settings(GatesConfig(device="cpu", run_dir=str(tmp_path / "w")), SHA)
+    for split in (SplitSettings(cross_section=True), SplitSettings(cross_section=True, coin_channel=True)):
+        with pytest.raises(ValueError, match="split.cross_section"):
+            gate_run.run_gates(replace(base, split=split), gate_run.GateSettings(), tmp_path / "out")

@@ -14,8 +14,6 @@ fields; absent = the card defaults), ``baselines`` (default b1, b2, b3). Outputs
 folder per arm x seed with its summary and test report.
 """
 
-import os
-import subprocess
 import sys
 import time
 from dataclasses import dataclass, field, replace
@@ -69,19 +67,18 @@ def run_settings(cfg: StagedConfig, code_sha: str = "") -> RunSettings:
     return replace(s, train=replace(s.train, staged=from_dict(StageSettings, cfg.staged)))
 
 
-def _code_sha() -> str:
-    return subprocess.check_output(["git", "-C", os.environ["NIG_REPO_DIR"], "rev-parse", "HEAD"], text=True).strip()
-
-
 def main(argv: list[str] | None = None) -> int:
-    started = time.time()
-    config, out, _max_minutes, _rest = contract.entry_args(argv)
+    started, t_mono = time.time(), time.monotonic()
+    config, out, max_minutes, _rest = contract.entry_args(argv)
     cfg = from_dict(StagedConfig, config)
     contract.write_device_json(out, cfg.device)
-    study = staged_study.run_staged_study(run_settings(cfg, _code_sha()), cfg.seeds, out, baselines=cfg.baselines,
-                                          ckpt_root=cfg.run_dir, on_eval=lambda r: print(eval_line(r), flush=True))
+    settings = run_settings(cfg, contract.code_sha())
+    study = staged_study.run_staged_study(settings, cfg.seeds, out, baselines=cfg.baselines, ckpt_root=cfg.run_dir,
+                                          on_eval=lambda r: print(eval_line(r), flush=True),
+                                          deadline=contract.deadline(max_minutes, t_mono))
     contract.write_manifest(out, config, input_fingerprint=study["data_fingerprint"], started=started)
-    print(f"staged OK: {study['verdict']}")
+    print(f"staged {'OK' if study['finished'] else 'NOT FINISHED (run the job again to continue)'}: "
+          f"{study['verdict']}")
     return 0
 
 

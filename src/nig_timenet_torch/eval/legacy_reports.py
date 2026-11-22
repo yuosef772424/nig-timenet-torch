@@ -4,7 +4,9 @@ TAGS: legacy reports, tearsheet, equity curve, portfolio, drawdown, sortino, lag
     output conditioned, tf parity
 PITFALLS: pure functions of a battery table (``eval/battery_adapter.BATTERY_COLUMNS``: mu / y_ret in return units,
     p_dir, end_time naive UTC); the trade rule is the battery's (direction from p_dir on the top ``top_share`` |mu|
-    rows, cost per side, so a round trip pays 2 x cost); per-trade numbers are unannualised; the equity of the trades
+    rows, cost per side, so a round trip pays 2 x cost); direction source: p_dir (``trades``, ``calibration``,
+    ``move_over_sd``) but sign(mu) in the hit columns (``hit_mu_sign``: ``integrity``, ``conditioned``,
+    ``coin_ranking``); per-trade numbers are unannualised; the equity of the trades
     risks ``risk_per_trade`` of the capital per trade in time order (TF ``simulate_equity_curve``), the daily
     portfolio puts the whole capital equally on the day's trades. Exploratory (rule C5).
 
@@ -19,7 +21,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.eval.battery_lib import round_trip
+from nig_timenet_torch.eval.battery_lib import net_pnl, top_abs, trade_side
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["trades", "tearsheet", "equity_curve", "daily_portfolio", "lag_scan", "integrity", "calibration",
@@ -34,12 +36,11 @@ def trades(table: pd.DataFrame, cost: float, top_share: float = TOP_SHARE) -> pd
     the round trip (fractions, not %)."""
     if not 0 < top_share <= 1:
         raise ValueError(f"top_share must be in (0, 1], got {top_share}")
-    k = max(1, int(len(table) * top_share))
-    idx = np.argsort(-np.abs(table["mu"].to_numpy()), kind="stable")[:k]
+    idx = top_abs(table["mu"].to_numpy(), top_share)
     out = table.iloc[idx].copy()
-    out["side"] = np.where(out["p_dir"].to_numpy() > 0.5, 1.0, -1.0)
+    out["side"] = trade_side(out)
     out["gross"] = out["side"] * out["y_ret"]
-    out["net"] = out["gross"] - round_trip(cost)
+    out["net"] = net_pnl(out["gross"], cost)
     return out.sort_values("end_time", kind="stable").reset_index(drop=True)
 
 
@@ -120,7 +121,7 @@ def integrity(table: pd.DataFrame, max_lag: int = 3) -> dict:
     y, mu = table["y_ret"].to_numpy(), table["mu"].to_numpy()
     out = {"rows": int(len(table)), "mae_model": metrics.mae(y, mu), "mae_zero": metrics.mae(y, np.zeros_like(y)),
            "share_pred_up": float((mu > 0).mean()), "share_true_up": float((y > 0).mean()),
-           "hit_model": float((np.sign(mu) == np.sign(y))[y != 0].mean()) if (y != 0).any() else math.nan,
+           "hit_mu_sign": float((np.sign(mu) == np.sign(y))[y != 0].mean()) if (y != 0).any() else math.nan,
            "bias_mean_mu_minus_y": float(np.mean(mu - y))}
     if "last_ret" in table:
         last = table["last_ret"].to_numpy()
@@ -152,14 +153,15 @@ def _hit_rows(frame: pd.DataFrame, key) -> pd.DataFrame:
     for name, g in frame.groupby(key, observed=True):
         hit = int((np.sign(g["mu"]) == np.sign(g["y_ret"])).sum())
         lo, hi = metrics.wilson_interval(hit, len(g))
-        rows.append({"group": str(name), "rows": int(len(g)), "hit": hit / len(g), "ci_lo": lo, "ci_hi": hi,
+        rows.append({"group": str(name), "rows": int(len(g)), "hit_mu_sign": hit / len(g), "ci_lo": lo, "ci_hi": hi,
                      "mean_mu": float(g["mu"].mean()), "mean_y": float(g["y_ret"].mean()),
                      "mean_signed": float((np.sign(g["mu"]) * g["y_ret"]).mean())})
     return pd.DataFrame(rows)
 
 
 def conditioned(table: pd.DataFrame, n_buckets: int = 5, n_batches: int = 10) -> dict:
-    """TF output-conditioned analysis: the direction hit rate (Wilson CI) and the mean signed return by bucket of the
+    """TF output-conditioned analysis: the direction hit rate of sign(mu) (``hit_mu_sign``, Wilson CI) and the mean
+    signed return by bucket of the
     predicted move |mu|, by side, by bucket of the predicted sd (confidence) and by consecutive time batch."""
     t = table[table["y_ret"] != 0].copy()
     t["move"] = pd.qcut(np.abs(t["mu"]), n_buckets, labels=False, duplicates="drop")
@@ -173,7 +175,8 @@ def conditioned(table: pd.DataFrame, n_buckets: int = 5, n_batches: int = 10) ->
 
 
 def coin_ranking(table: pd.DataFrame, min_rows: int = 30) -> pd.DataFrame:
-    """Per coin (>= ``min_rows`` rows): rows, Pearson r and rank IC of mu with y_ret, hit rate and MAE, sorted from
+    """Per coin (>= ``min_rows`` rows): rows, Pearson r and rank IC of mu with y_ret, hit rate of sign(mu)
+    (``hit_mu_sign``) and MAE, sorted from
     the best (highest r) to the worst coin (TF integrity: the best / worst combinations that get charts)."""
     rows = []
     for coin, g in table.groupby("coin"):
@@ -181,9 +184,9 @@ def coin_ranking(table: pd.DataFrame, min_rows: int = 30) -> pd.DataFrame:
             continue
         y, mu = g["y_ret"].to_numpy(), g["mu"].to_numpy()
         rows.append({"coin": coin, "rows": int(len(g)), "r": metrics.pearson(y, mu), "rank_ic": metrics.spearman(y, mu),
-                     "hit": float((np.sign(mu) == np.sign(y))[y != 0].mean()) if (y != 0).any() else math.nan,
+                     "hit_mu_sign": float((np.sign(mu) == np.sign(y))[y != 0].mean()) if (y != 0).any() else math.nan,
                      "mae": metrics.mae(y, mu)})
-    out = pd.DataFrame(rows, columns=["coin", "rows", "r", "rank_ic", "hit", "mae"])
+    out = pd.DataFrame(rows, columns=["coin", "rows", "r", "rank_ic", "hit_mu_sign", "mae"])
     return out.sort_values("r", ascending=False, na_position="last").reset_index(drop=True)
 
 
@@ -202,7 +205,7 @@ def move_over_sd(table: pd.DataFrame, cost: float, ks: tuple = (0.25, 0.5, 1.0))
     rows = []
     for k in ks:
         keep = table[np.abs(table["mu"]) > k * table["sigma"]]
-        net = np.where(keep["p_dir"] > 0.5, 1.0, -1.0) * keep["y_ret"].to_numpy() - round_trip(cost)
+        net = net_pnl(trade_side(keep) * keep["y_ret"].to_numpy(), cost)
         ts = tearsheet(net)
         rows.append({"k": k, "kept_share": len(keep) / max(len(table), 1), "days": int(
             pd.to_datetime(keep["end_time"]).dt.floor("D").nunique()) if len(keep) else 0,

@@ -28,14 +28,14 @@ import pandas as pd
 
 from nig_timenet_torch.core.prediction_schema import OUTPUT_PREFIX
 from nig_timenet_torch.core.registry import Contract, Registry
-from nig_timenet_torch.core.schema import LAST_COLUMNS, LAST_DTYPE, TARGET_COLUMNS
+from nig_timenet_torch.core.schema import FUTURE_OF, LAST_COLUMNS, LAST_DTYPE, LAST_OF, TARGET_COLUMNS
 
 __all__ = ["TARGET_RAW", "ENTRY_CLOSE_REGS", "TargetInfo", "parse_mode", "target_arrays", "retarget", "decode_reg",
            "mode_names", "price_columns"]
 
 EPS = 1e-12
 ENTRY_CLOSE_REGS = ("abs_return", "range_pos")
-_FUTURE = {"high": "future_high_max", "low": "future_low_min", "close": "future_close"}
+_FUTURE = FUTURE_OF
 _DEFAULT_CLIP = 1.0
 _OWN_RULES = ("own",)
 _FIT_RULES = ("threshold",)   # class rules that need a statistic fitted on the training rows
@@ -62,7 +62,7 @@ def price_columns(last: np.ndarray, bases: np.ndarray | None) -> dict[str, np.nd
 
 
 def _own_last(P, price):
-    return P[f"last_{price}"]
+    return P[LAST_OF[price]]
 
 
 def _need_bases(P, mode):

@@ -19,8 +19,7 @@ summary.
 
 The bundle folder on Drive is ``<drive_runs>/<job_id>``, and a job's ``run_dir`` is ``<drive_runs>/<job_id>/train``
 (``docs/jobs``): the run folder lives INSIDE the bundle folder. A bundle therefore owns only the files it wrote, listed
-in ``publish.json`` (``files``): a rebuild removes exactly those, and the push sends only those. Until 2026-11-08 the
-rebuild removed the whole folder, which sent every run's checkpoints to the Drive trash at publish time (B-050).
+in ``publish.json`` (``files``): a rebuild removes exactly those, and the push sends only those (B-050).
 """
 
 import json

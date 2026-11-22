@@ -22,11 +22,11 @@ from pathlib import Path
 
 from nig_timenet_torch.data.build import feature_order
 from nig_timenet_torch.data.fetch import fetch_all
-from nig_timenet_torch.data.lock import is_sealed, load_lock
 from nig_timenet_torch.data.pipeline import build_artifact
 from nig_timenet_torch.data.presets import PRESETS, preset
 from nig_timenet_torch.data.settings import DataSettings
 from nig_timenet_torch.data.sources import resolve_coins
+from nig_timenet_torch.data_io.lock import is_sealed, load_lock
 
 __all__ = ["main", "settings_from_args"]
 

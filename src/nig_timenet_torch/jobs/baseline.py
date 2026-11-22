@@ -22,13 +22,11 @@ default: accept the artifact's), ``gate_report`` (path of a ``gate_report.json``
 default none). Stops cleanly before ``--max-minutes`` (the per-epoch checkpoint is the resume point).
 """
 
-import os
-import subprocess
 import sys
 import time
 from dataclasses import dataclass
 
-from nig_timenet_torch.colab import contract
+from nig_timenet_torch.colab import contract, paths
 from nig_timenet_torch.colab.device import EXPECTED as DEVICES
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.data_io.loading import LoaderSettings
@@ -40,7 +38,7 @@ from nig_timenet_torch.workflow.settings import EvalSettings, RunSettings, Split
 __all__ = ["BaselineConfig", "CONFIG", "DEFAULT_ARTIFACT", "DEFAULT_HEALTH_MAX_ROWS", "SUMMARY", "TEST_REPORT",
            "run_settings", "main"]
 
-DEFAULT_ARTIFACT = "/content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1"
+DEFAULT_ARTIFACT = paths.ARTIFACT_DRIVE
 DEFAULT_HEALTH_MAX_ROWS = 100_000
 SUMMARY, TEST_REPORT = steps.SUMMARY, steps.TEST_REPORT
 
@@ -87,24 +85,19 @@ def run_settings(cfg: BaselineConfig, code_sha: str = "") -> RunSettings:
         evaluation=EvalSettings(health_max_rows=cfg.health_max_rows))
 
 
-def _code_sha() -> str:
-    return subprocess.check_output(["git", "-C", os.environ["NIG_REPO_DIR"], "rev-parse", "HEAD"], text=True).strip()
-
-
 def main(argv: list[str] | None = None) -> int:
     started, t_mono = time.time(), time.monotonic()
     config, out, max_minutes, _rest = contract.entry_args(argv)
     cfg = from_dict(BaselineConfig, config)
     dev_rep = contract.write_device_json(out, cfg.device)
-    budget = max_minutes * 60
-    deadline = t_mono + budget - min(600.0, 0.2 * budget)  # the rest is for the health report and the outputs
-    r = steps.prepare(run_settings(cfg, _code_sha()), out)
+    deadline = contract.deadline(max_minutes, t_mono)  # the rest is for the health report and the outputs
+    r = steps.prepare(run_settings(cfg, contract.code_sha()), out)
     steps.build(r)
     print(f"gate check: {gate_run.gate_check(r, cfg.gate_report)['result']}", flush=True)
     steps.train(r, deadline=deadline, on_epoch=lambda row: print(epoch_line(row, cfg.epochs), flush=True))
     steps.health_step(r)
     rep = steps.test_step(r)
-    print(f"test evaluation ({rep['n_rows']} rows, best-epoch weights):", flush=True)
+    print(f"test evaluation ({rep['n_rows']} rows, {steps.weights_label(r)} weights):", flush=True)
     print("\n".join(steps.test_lines(rep)), flush=True)
     steps.write_summary(r, {"device": cfg.device, "gpu_name": dev_rep.get("gpu_name")})
     steps.battery_step(r)  # after the summary: a battery failure keeps every other output

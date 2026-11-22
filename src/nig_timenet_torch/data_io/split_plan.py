@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.core.label_time import label_bar_close
 from nig_timenet_torch.core.roles import Role
 from nig_timenet_torch.core.schema import TS_COL
 
@@ -62,7 +63,7 @@ def sample_times(dataset: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     bar = int(pd.Timedelta(dataset["base_tf"]).value)
     span = max(int(dataset["window_sizes"][tf]) * int(pd.Timedelta(tf).value) for tf in dataset["timeframes"])
     feature_start = ts - (span - bar)
-    label_end = ts + (int(dataset["forecast_horizon"]) + 1) * bar
+    label_end = label_bar_close(ts, dataset["forecast_horizon"], bar)
     return feature_start, ts + bar, label_end
 
 

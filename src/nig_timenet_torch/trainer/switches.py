@@ -17,8 +17,8 @@ from nig_timenet_torch.core.registry import Contract, Registry
 
 __all__ = ["INITS", "WEIGHT_DECAY_GROUPS", "apply_init", "param_groups", "EmaWeights"]
 
-INITS = Registry("init", Contract("init", required_meta=("fn",)))
-WEIGHT_DECAY_GROUPS = Registry("weight_decay_groups", Contract("weight_decay_groups", required_meta=("fn",)))
+INITS = Registry("init", Contract("init"))
+WEIGHT_DECAY_GROUPS = Registry("weight_decay_groups", Contract("weight_decay_groups"))
 
 
 def _torch_init(model: nn.Module) -> None:
@@ -43,13 +43,13 @@ def _keras_init(model: nn.Module) -> None:
                     nn.init.zeros_(p)
 
 
-INITS.register("torch", _torch_init, version=1, fn=_torch_init)
-INITS.register("keras", _keras_init, version=1, fn=_keras_init)
+INITS.register("torch", _torch_init, version=1)
+INITS.register("keras", _keras_init, version=1)
 
 
 def apply_init(name: str, model: nn.Module) -> None:
     """Re-initialise ``model`` in place with the registered init ``name`` (unknown names raise)."""
-    INITS.entry(name).meta["fn"](model)
+    INITS.get(name)(model)
 
 
 def _no_decay(name: str, p: torch.Tensor) -> bool:
@@ -67,14 +67,14 @@ def _exclude_norm_bias(model: nn.Module, params: list, weight_decay: float) -> l
     return [{"params": decay, "weight_decay": weight_decay}, {"params": keep, "weight_decay": 0.0}]
 
 
-WEIGHT_DECAY_GROUPS.register("all_params", _all_groups, version=1, fn=_all_groups)
-WEIGHT_DECAY_GROUPS.register("exclude_norm_bias", _exclude_norm_bias, version=1, fn=_exclude_norm_bias)
+WEIGHT_DECAY_GROUPS.register("all_params", _all_groups, version=1)
+WEIGHT_DECAY_GROUPS.register("exclude_norm_bias", _exclude_norm_bias, version=1)
 
 
 def param_groups(name: str, model: nn.Module, params, weight_decay: float) -> list[dict]:
     """Optimizer parameter groups of ``params`` (the trainer's parameters, model first) for the registered grouping
     ``name``; ``all_params`` is one group, i.e. exactly what passing the flat list did before D-021."""
-    return WEIGHT_DECAY_GROUPS.entry(name).meta["fn"](model, list(params), weight_decay)
+    return WEIGHT_DECAY_GROUPS.get(name)(model, list(params), weight_decay)
 
 
 class EmaWeights:

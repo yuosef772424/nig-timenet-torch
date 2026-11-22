@@ -1,14 +1,17 @@
 """PURPOSE: Steps every run shares: load the artifact, read its facts, split by time, pick the device, build the run
-    identity. Small functions of the settings so a notebook can call them one by one.
+    identity (with the run context of D-042). Small functions of the settings so a notebook can call them one by one.
 TAGS: run steps, load data, split plan, run identity, device, artifact facts, smoke mode
 PITFALLS: every data fact (price targets, codec, timeframe, split dates) is read from the artifact, never assumed; the
     split uses the artifact's split_dates unless the settings give both instants (the baseline's split_bounds);
-    check_decode refuses an artifact whose labels the codec does not decode to the real future prices (B-051).
+    check_decode refuses an artifact whose labels the codec does not decode to the real future prices (B-051); a new
+    RunSettings field that changes what is learned and reaches neither FitSettings, the trainer config nor the
+    optimizer belongs in IDENTITY_SELECTION / IDENTITY_CONFIGURATION (tests/workflow/test_run_identity_context.py).
 SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run_common.py); changes: strict split settings without
     retargeting, smoke stride (max_rows), artifact facts moved here, run identity from the manifest.
 """
 
-import difflib
+import dataclasses
+import json
 import subprocess
 from pathlib import Path
 
@@ -17,17 +20,21 @@ import pandas as pd
 import torch
 
 from nig_timenet_torch.colab.identity import identity_for_run
+from nig_timenet_torch.core.registry import unknown_names_text
 from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io.artifact import norm_coin
+from nig_timenet_torch.data_io.asset_index import asset_ids
 from nig_timenet_torch.data_io.loading import LoadedData, load_dataset
 from nig_timenet_torch.data_io.split_plan import purge_embargo_split, sample_times
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, codec_name
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings
+from nig_timenet_torch.workflow.settings_roles import RESUMABLE_TRAIN_FIELDS
 
 __all__ = ["load_data", "price_targets", "codec_state", "check_decode", "input_key", "split_bounds", "make_plan",
-           "stride_rows", "select_rows", "pick_device", "code_sha", "run_identity"]
+           "stride_rows", "select_rows", "pick_device", "code_sha", "run_identity", "identity_context",
+           "IDENTITY_SELECTION", "IDENTITY_CONFIGURATION", "RESUMABLE_TRAIN_FIELDS", "json_default", "write_json"]
 
 
 def load_data(settings: RunSettings) -> LoadedData:
@@ -130,24 +137,20 @@ def stride_groups(gid: np.ndarray, max_rows: int | None) -> np.ndarray:
     return pos[np.isin(gid, chosen)]
 
 
-def excluded_rows(dataset: dict, coins) -> np.ndarray:
-    """Boolean mask over ALL rows: True for the rows of the coins named in ``coins`` (``split.exclude_coins``). A name
+def excluded_ids(dataset: dict, coins) -> np.ndarray:
+    """The asset ids (positions in ``asset_bounds``) of the coins named in ``coins`` (``split.exclude_coins``). A name
     that is not a coin of the artifact raises (with a did-you-mean); excluding every coin raises."""
     if not coins:
-        return np.zeros(np.asarray(dataset["last_candles"]).shape[0], dtype=bool)
-    keys = {norm_coin(b["name"]): b for b in dataset["asset_bounds"]}
+        return np.zeros(0, dtype=np.int64)
+    keys = {norm_coin(b["name"]): i for i, b in enumerate(dataset["asset_bounds"])}
     wanted = {norm_coin(c): c for c in coins}
     unknown = sorted(c for k, c in wanted.items() if k not in keys)
     if unknown:
-        close = {c: difflib.get_close_matches(norm_coin(c), list(keys), n=1) for c in unknown}
         raise ValueError("split.exclude_coins: not coins of this artifact: "
-                         + ", ".join(f"{c!r}" + (f" (did you mean {m[0]!r}?)" if m else "") for c, m in close.items()))
+                         + unknown_names_text(unknown, keys, match=norm_coin))
     if len(wanted) >= len(keys):
         raise ValueError("split.exclude_coins removes every coin of the artifact")
-    mask = np.zeros(np.asarray(dataset["last_candles"]).shape[0], dtype=bool)
-    for k in wanted:
-        mask[keys[k]["start"]:keys[k]["end"]] = True
-    return mask
+    return np.array(sorted(keys[k] for k in wanted), dtype=np.int64)
 
 
 def make_plan(dataset: dict, split: SplitSettings) -> tuple[tuple[np.ndarray, np.ndarray, np.ndarray], tuple]:
@@ -164,8 +167,8 @@ def select_rows(dataset: dict, split: SplitSettings, parts: tuple) -> tuple:
     """The (train, val, test) rows a run uses out of the time split ``parts``: ``exclude_coins`` (after the time split,
     the cut dates do not move), ``top_coins`` (ranked on the TRAIN rows), then the smoke stride / cross-section order.
     A rolling fold (workflow/rolling_run.py) goes through the same function."""
-    drop = excluded_rows(dataset, split.exclude_coins)
-    parts = top_coin_rows(dataset, tuple(i[~drop[i]] for i in parts), split.top_coins)
+    drop = excluded_ids(dataset, split.exclude_coins)
+    parts = top_coin_rows(dataset, tuple(i[~np.isin(asset_ids(dataset, i), drop)] for i in parts), split.top_coins)
     pick = (lambda i: cross_section_rows(dataset, i, split.max_rows)) if split.cross_section else (
         lambda i: stride_rows(i, split.max_rows))
     return tuple(pick(i) for i in parts)
@@ -176,12 +179,9 @@ def top_coin_rows(dataset: dict, parts: tuple, top: int | None) -> tuple:
     The ranking reads the train rows only, so nothing of val / test chooses the universe."""
     if top is None:
         return parts
-    coin = np.empty(np.asarray(dataset["last_candles"]).shape[0], dtype=np.int64)
-    for i, b in enumerate(dataset["asset_bounds"]):
-        coin[b["start"]:b["end"]] = i
-    counts = np.bincount(coin[np.asarray(parts[0])], minlength=len(dataset["asset_bounds"]))
+    counts = np.bincount(asset_ids(dataset, parts[0]), minlength=len(dataset["asset_bounds"]))
     keep = np.argsort(-counts, kind="stable")[:top]
-    return tuple(np.asarray(p)[np.isin(coin[np.asarray(p)], keep)] for p in parts)
+    return tuple(np.asarray(p)[np.isin(asset_ids(dataset, p), keep)] for p in parts)
 
 
 def cross_section_rows(dataset: dict, idx: np.ndarray, max_rows: int | None) -> np.ndarray:
@@ -197,6 +197,21 @@ def cross_section_rows(dataset: dict, idx: np.ndarray, max_rows: int | None) -> 
     keep = max(1, int(round(len(uniq) * max_rows / len(idx))))
     chosen = uniq[np.unique(np.linspace(0, len(uniq) - 1, keep).astype(np.int64))]
     return idx[np.isin(times, chosen)]
+
+
+def write_json(path, obj) -> None:
+    """``obj`` as indented JSON (numpy numbers as Python ones through ``default=float``) in ``path``, UTF-8: the one
+    writer of the run, study and report json files (C-18)."""
+    Path(path).write_text(json.dumps(obj, indent=1, default=float), encoding="utf-8")
+
+
+def json_default(v):
+    """``json.dumps(default=...)`` for numpy scalars (a numpy bool or number becomes the Python one; else ``str``)."""
+    if isinstance(v, (np.bool_, bool)):
+        return bool(v)
+    if isinstance(v, np.generic):
+        return v.item()
+    return str(v)
 
 
 def pick_device(settings: RunSettings) -> torch.device:
@@ -215,7 +230,42 @@ def code_sha(settings: RunSettings) -> str:
         return "unknown"
 
 
+# RESUMABLE_TRAIN_FIELDS (TrainSettings fields a resume may change: neither the run identity nor a rolling study hash
+# holds them; tests/workflow/test_run_identity_context.py) comes from the one role table, workflow/settings_roles.py
+#: D-042 (HB2, audit 2026-11b C-03): the settings that choose WHICH rows and inputs a run sees (every split field, the
+#: input frames). Part of the run identity, not of the gate configuration key (gates run on their own synthetic data).
+IDENTITY_SELECTION = {"split": tuple(f.name for f in dataclasses.fields(SplitSettings)),
+                      "data": ("input_timeframes",)}
+#: D-042 (C-04, C-05): training settings that reach neither ``FitSettings`` nor the trainer config nor the optimizer:
+#: how the best epoch is chosen and the staged plan. Part of the identity AND of the gate configuration key.
+IDENTITY_CONFIGURATION = {"train": ("selection_metric", "staged")}
+
+
+def _plain(value):
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return dataclasses.asdict(value)
+    return list(value) if isinstance(value, tuple) else value
+
+
+def identity_context(settings: RunSettings, *, selection: bool = True) -> dict:
+    """The run context hashed into the run identity (``build_run_identity(run_context=...)``, D-042):
+    ``{section: {field: value}}`` of the ``IDENTITY_SELECTION`` (when ``selection``) and ``IDENTITY_CONFIGURATION``
+    fields that differ from their defaults; a field at its default and an empty section are left out, so a run on the
+    defaults keeps the identity it had before D-042 and its checkpoints resume (B-091)."""
+    parts = {**(IDENTITY_SELECTION if selection else {}), **IDENTITY_CONFIGURATION}
+    out = {}
+    for section, names in parts.items():
+        obj = getattr(settings, section)
+        default = type(obj)()
+        kept = {n: _plain(getattr(obj, n)) for n in names if getattr(obj, n) != getattr(default, n)}
+        if kept:
+            out[section] = kept
+    return out
+
+
 def run_identity(trainer, fit_settings, model_settings, art, settings: RunSettings) -> RunIdentity:
     """The identity of the run the built ``trainer`` is about to fit (colab/identity.py is the one builder); ``art`` is
-    the loaded artifact (its manifest gives the data fingerprint)."""
-    return identity_for_run(trainer, fit_settings, model_settings, art.manifest, code_sha(settings))
+    the loaded artifact (its manifest gives the data fingerprint), ``settings`` gives the run context
+    (``identity_context``: split, input frames, selection metric, staged plan where not at their defaults)."""
+    return identity_for_run(trainer, fit_settings, model_settings, art.manifest, code_sha(settings),
+                            run_context=identity_context(settings))

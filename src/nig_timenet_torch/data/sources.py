@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.registry import Contract, Registry
-from nig_timenet_torch.core.schema import OHLCV_COLUMNS
+from nig_timenet_torch.core.schema import OHLCV_AGG, OHLCV_COLUMNS, OPEN_TIME_COL
 from nig_timenet_torch.data.coins import coins_of
 from nig_timenet_torch.data.fetch import raw_path, read_registry
 from nig_timenet_torch.data.settings import SourceSettings
@@ -32,9 +32,7 @@ __all__ = ["SOURCES", "make_loader", "resolve_coins", "read_candles", "synthetic
 
 SOURCES = Registry("source", Contract("source", required_meta=("needs_path",)))
 _COLUMNS = list(OHLCV_COLUMNS)
-_TIME_COLUMNS = ("datetime_utc", "timestamp", "open_time", "time", "date")
-#: how base bars combine into a higher-timeframe bar (the old project's OHLCV_AGG, verbatim)
-OHLCV_AGG = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+_TIME_COLUMNS = ("datetime_utc", "timestamp", OPEN_TIME_COL, "time", "date")
 _TF_UNIT_FIX = {"d": "D", "w": "W"}
 
 

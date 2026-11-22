@@ -93,7 +93,7 @@ def test_defaults_come_from_the_registry_and_never_enter_the_config():
                                          "output_keys": {"logits": "y_close_class_logits"}, "loss_weight": 1.0,
                                          "flood_level": None, "binary": True, "label_smoothing": 0.0}
     loss = resolve_loss(cfg)
-    assert loss["use_uncertainty_weighting"] is False and loss["schedules"] == {} and loss["all_constraints"] == []
+    assert loss["use_uncertainty_weighting"] is False and loss["schedules"] == {}
     assert cfg == before, "resolution must not write defaults into the config (it is hashed into the RunIdentity)"
 
 
@@ -116,3 +116,13 @@ def test_direction_metrics_cannot_select_but_stay_registered(name):
     assert Trainer(build_model(16, 18), _cfg(), selection_metric="val_raw_loss").selection_metric == "val_raw_loss"
     Trainer(build_model(16, 18), _cfg(), selection_metric="val_auc_close_class")
 
+
+
+@pytest.mark.parametrize("where", ["top", "loss"])
+def test_non_empty_constraints_raise_and_an_empty_list_is_accepted(where):
+    cfg = _cfg()
+    (cfg if where == "top" else cfg["loss"])["constraints"] = []
+    validate_trainer_config(cfg)
+    (cfg if where == "top" else cfg["loss"])["constraints"] = [{"name": "x"}]
+    with pytest.raises(NotImplementedError, match="constraints"):
+        validate_trainer_config(cfg)

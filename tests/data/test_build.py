@@ -5,9 +5,9 @@ import pandas as pd
 import pytest
 
 from nig_timenet_torch.data.build import build_dataset, feature_order
-from nig_timenet_torch.data.lock import is_sealed, load_lock
 from nig_timenet_torch.data.sources import synthetic_market
 from nig_timenet_torch.data.windows import sample_filter_mask
+from nig_timenet_torch.data_io.lock import is_sealed, load_lock
 from tests.data.helpers import COINS, tiny_settings
 
 # rule E3: 8 s locally; the fast suite was over budget (runs in CI's slow step)

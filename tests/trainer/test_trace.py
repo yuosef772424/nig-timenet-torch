@@ -50,7 +50,7 @@ def test_gradient_share_known_answer():
 
     tr = Trainer.__new__(Trainer)
     tr.model, tr.uncertainty_layer, tr.kendall_task_names = Tiny(), None, []
-    tr.compute_losses = lambda x, y, **kw: (None, None, {"a": 3 * tr.model.w, "b": 1 * tr.model.w}, {}, {})
+    tr.compute_losses = lambda x, y, **kw: (None, None, {"a": 3 * tr.model.w, "b": 1 * tr.model.w}, {})
     share = head_gradient_share(tr, None, None)
     assert share == pytest.approx({"a": 0.75, "b": 0.25})
     assert math.isclose(sum(share.values()), 1.0)
