@@ -12,7 +12,8 @@ SOURCE: ported from feat/ar-stream 7c9736b, f052cf6 (owner's work)
 The evaluation battery: a many-angle judgment of one run, the way a trader would interrogate it before trusting
 money to it. Every section is a pure function over the tidy table, so the notebook stays a thin runner (rule E4/G6).
 Sections (names and print order: ``SECTION_ORDER``): sanity (IC + bias), confidence calibration, anti-cowardice,
-trading grids (market exit and take-profit at mu), an uncertainty filter, shock-regime splits, daily stability,
+trading grids (market exit, take-profit at mu and take-profit at multiples of the ATR), an uncertainty filter,
+shock-regime splits, daily stability,
 per-coin, the flip test, the classics ported from the old project (battery_classics), the T-profit and scorecard
 sections and a ranked verdict.
 """
@@ -39,6 +40,7 @@ from nig_timenet_torch.eval.battery_lib import (
     round_trip,
     scored_rows,
     section,
+    take_profit_at_atr,
     take_profit_at_mu,
     top_abs,
     trade_side,
@@ -49,7 +51,8 @@ from nig_timenet_torch.eval.battery_scorecard import scorecard_sections
 from nig_timenet_torch.stats.metrics import spearman
 
 #: the keys of ``full_battery`` in print order (the scorecard keys are absent when TEST has no ``end_time``)
-SECTION_ORDER = ("integrity", "sanity", "confidence", "cowardice", "trades", "take_profit_at_mu", "uncertainty",
+SECTION_ORDER = ("integrity", "sanity", "confidence", "cowardice", "trades", "take_profit_at_mu", "take_profit_at_atr",
+                 "uncertainty",
                  "shocks", "daily", "per_coin", "flip", "baseline", "selective", "neutral", "profit_close",
                  "profit_limit", "profit_sigma", "scorecard", "buckets", "asymmetry", "scorecard_verdict",
                  "verdict")
@@ -160,6 +163,41 @@ def take_profit_grid(test, cost: float, pcts: tuple = (0.05, 0.10, 0.20)) -> dic
                     f"Target reached on {reach}. tgt% = share of rows whose mu lies on the trade's side (the others "
                     "have no target and exit at the close). A high fill% with a positive avg means the model's "
                     "magnitude is honest; fills with a negative avg mean the target sits inside noise.")
+
+
+def take_profit_atr_grid(test, cost: float, pcts: tuple = (0.05, 0.10, 0.20),
+                         multiples: tuple = (0.5, 1.0, 1.5, 2.0)) -> dict:
+    """Section 5b: the take-profit grid of section 5 with the target at ``k`` x the row's ATR (the mean true range of
+    the last 14 input bars, per bar, log units; ``battery_lib.take_profit_at_atr``) instead of at mu: the same rows
+    (top share by |mu| on each side), the target from the coin's own recent volatility. ``mu/ATR`` = the median
+    |mu| / ATR of the rows (how many ATRs the model itself expects). A table without an ``atr`` column (one written
+    before the column existed, or inputs without a price-range source) is SKIPPED with the reason."""
+    rows = [f"{'strategy':<44}{'n':>8}{'fill%':>8}{'mu/ATR':>8}{'avg%':>10}{'Sharpe':>9}{'PF':>7}"]
+    if "atr" not in test.columns:
+        return section("TAKE-PROFIT AT k x ATR (TEST) - SKIPPED: the battery table has no atr column", rows,
+                       "A table saved before the column existed, or inputs with neither high / low channels nor "
+                       "NATR_14 (workflow/battery_run.stage_atr).")
+    path = True
+    for pct in pcts:
+        for side, sign in (("LONG", 1.0), ("SHORT", -1.0)):
+            mask = (trade_side(test) == sign) & scored_rows(test)
+            idx = top_abs(test["mu"].values, pct, mask)
+            atr = test["atr"].values[idx].astype(np.float64)
+            ratio = np.abs(test["mu"].values[idx]) / np.where(atr > 0, atr, np.nan)
+            ratio = float(np.median(ratio[np.isfinite(ratio)])) if np.isfinite(ratio).any() else float("nan")
+            for k in multiples:
+                r = take_profit_at_atr(test, idx, sign, k, cost)
+                path = r["path"]
+                s = trade_stats(r["pnl"])
+                if s:
+                    rows.append(f"{f'{side} top{int(pct * 100)}% (TP at {k:g} ATR)':<44}{s['n']:>8,}"
+                                f"{float(r['hit'].mean()) * 100:>7.1f}%{ratio:>8.2f}"
+                                f"{s['avg'] * 100:>+9.4f}%{s['sharpe']:>+9.3f}{s['pf']:>7.2f}")
+    reach = "the realised high / low" if path else "the CLOSE only (no fut_high / fut_low: fills are a lower bound)"
+    return section("TAKE-PROFIT AT k x ATR (TEST) - take-profit at k x ATR(14), else exit at the close", rows,
+                   f"Target reached on {reach}. The ATR is per input bar (log units) and the label spans the run's "
+                   "horizon, so k counts bars' ATR. Compare with the take-profit at mu: a fixed ATR multiple that "
+                   "beats mu says the model's magnitude adds nothing to the coin's own volatility.")
 
 
 def uncertainty_filter(val, test, cost: float, pct: float = 0.10, quantiles: tuple = (0.3, 0.5, 0.7)) -> dict:
@@ -275,6 +313,7 @@ def battery(val, test, cost: float = DEFAULT_COST_PER_SIDE) -> dict:
         "cowardice": cowardice(test),
         "trades": trade_grid(test, cost),
         "take_profit_at_mu": take_profit_grid(test, cost),
+        "take_profit_at_atr": take_profit_atr_grid(test, cost),
         "uncertainty": uncertainty_filter(val, test, cost),
         "shocks": shock_split(test, cost),
         "daily": daily_stability(test, cost),

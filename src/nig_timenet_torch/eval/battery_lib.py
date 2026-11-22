@@ -7,7 +7,8 @@ PITFALLS: cost is PER SIDE (round_trip = 2x; net_pnl pays it once per trade); th
     (trade_side), never sign(mu); trade_stats returns None below MIN_TRADES; Sharpe is per trade; top_abs ranks by
     |values| with a STABLE sort (ties keep row order), so the side comes from the mask; take_profit_at_mu sets a target
     only when sign(mu) == side and checks it on the realised extreme (fut_high / fut_low) when the table has it,
-    else on the close (a lower bound of the fill); limit_at_extreme fills only when the realised extreme reaches
+    else on the close (a lower bound of the fill); take_profit_at_atr puts the target k x the row's per-BAR ATR (log
+    units) away on the trade's side whatever mu says; limit_at_extreme fills only when the realised extreme reaches
     the order.
 SOURCE: ported from feat/ar-stream 7c9736b, f052cf6 (owner's work)
 
@@ -25,8 +26,9 @@ import numpy as np
 from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE  # re-exported: the one definition is in core
 
 __all__ = ["SIDES", "ALPHA", "MIN_TRADES", "TRADEABLE_SHARPE", "MARGINAL_SHARPE", "DEFAULT_COST_PER_SIDE",
-           "round_trip", "net_pnl", "bonferroni_level", "trade_side", "take_profit_at_mu", "limit_at_extreme",
-           "trade_stats", "scored_rows", "top_abs", "direction_pnl", "section", "format_row", "HEADER"]
+           "round_trip", "net_pnl", "bonferroni_level", "trade_side", "take_profit_at_mu", "take_profit_at_atr",
+           "limit_at_extreme", "trade_stats", "scored_rows", "top_abs", "direction_pnl", "section", "format_row",
+           "HEADER"]
 
 
 #: a round trip pays the cost on entry AND exit: ``cost`` everywhere in the battery is the cost PER SIDE
@@ -113,6 +115,29 @@ def take_profit_at_mu(df, idx: np.ndarray, side, cost: float) -> dict:
     hit = target & (side * reach >= side * mu)
     pnl = net_pnl(np.where(hit, side * mu, side * y), cost)
     return {"pnl": pnl, "hit": hit, "target": target, "path": path}
+
+
+def take_profit_at_atr(df, idx: np.ndarray, side, k: float, cost: float) -> dict:
+    """Market entry at the last close with a take-profit ``k`` times the row's ATR away on the trade's side, else exit
+    at the close (the twin of ``take_profit_at_mu`` with the target from the realised volatility, not the model).
+
+    ``df["atr"]`` is the mean true range of the last 14 input bars in LOG units per bar (``atr14`` of
+    ``eval.vol_baseline.window_ranges``); the target return is ``expm1(+k * atr)`` long and ``expm1(-k * atr)`` short,
+    so a long and a short target are the same log distance. The ATR is per BAR while the label spans the run's horizon
+    (several bars): the multiple ``k`` is in bars' ATR. The target is reached on the realised favourable extreme
+    (``fut_high`` / ``fut_low``), else the close stands in (a lower bound). Every row has a target (``atr > 0``; a row
+    with no ATR has none and exits at the close). Returns ``pnl`` (after the round trip), ``hit``, ``target``, ``path``
+    and ``level`` (the target return per row)."""
+    idx = np.asarray(idx)
+    side = np.broadcast_to(np.asarray(side, dtype=np.float64), (len(idx),))
+    atr, y = df["atr"].values[idx].astype(np.float64), df["y_ret"].values[idx]
+    path = {"fut_high", "fut_low"} <= set(df.columns)
+    reach = np.where(side > 0, df["fut_high"].values[idx], df["fut_low"].values[idx]) if path else y
+    target = np.isfinite(atr) & (atr > 0)
+    level = np.expm1(side * k * np.where(target, atr, 0.0))
+    hit = target & (side * reach >= side * level)
+    pnl = net_pnl(np.where(hit, side * level, side * y), cost)
+    return {"pnl": pnl, "hit": hit, "target": target, "path": path, "level": level}
 
 
 def limit_at_extreme(side: float, pred, fut_extreme, close_ret, cost: float):

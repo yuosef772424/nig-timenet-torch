@@ -4,7 +4,8 @@ PURPOSE: Per-window normalisation of the input features (window_scale and pct_ch
     column-name prefix.
 TAGS: scaling, normalisation, window scale, pct change, feature kinds, prefix
 PITFALLS: a column takes the kind of its longest matching prefix and unmatched columns are standardised per window;
-    the prefix table is generated from the TF pipeline.
+    the prefix table is generated from the TF pipeline; a percent feature is stored / PERCENT_SCALE (read it back
+    with the same constant).
 
 Per-window normalisation of the inputs (price_norm_mode "window_scale" and "pct_change").
 
@@ -155,12 +156,17 @@ def _pct_change_columns(raw: np.ndarray, axis: int) -> np.ndarray:
     return pct_change_encode(x, axis=axis)
 
 
+#: a "percent" feature (NATR, ROC, ...) is stored as its percent value divided by this (NATR 0.7 % -> 0.07); readers of
+#: such a channel (the battery's ATR from NATR_14, workflow/battery_run.stage_atr) multiply it back
+PERCENT_SCALE = 10.0
+
+
 def _kind_transform(kind: str, sub: np.ndarray, c: np.ndarray, s: np.ndarray, method: str, eps: float) -> np.ndarray:
     """One kind's columns, shape (N, T, k), -> normalised."""
     simple = {
         "price_level": lambda: (sub - c) / s,
         "price_scale": lambda: sub / s,
-        "percent": lambda: sub / 10.0,
+        "percent": lambda: sub / PERCENT_SCALE,
         "osc_0_100": lambda: (sub - 50.0) / 50.0,
         "osc_sym_100": lambda: sub / 100.0,
         "osc_willr": lambda: (sub + 50.0) / 50.0,

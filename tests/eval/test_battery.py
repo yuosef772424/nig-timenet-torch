@@ -131,10 +131,11 @@ def test_verdict_separates_an_edge_from_noise():
 def test_battery_sections_all_present():
     out = battery(_frame(good=True), _frame(good=True))
     assert set(out) == {"integrity", "sanity", "confidence", "cowardice", "trades",
-                        "take_profit_at_mu", "uncertainty", "shocks", "daily", "per_coin", "flip", "baseline",
-                        "selective", "neutral"}
+                        "take_profit_at_mu", "take_profit_at_atr", "uncertainty", "shocks", "daily", "per_coin",
+                        "flip", "baseline", "selective", "neutral"}
     for section in out.values():
         assert section["rows"], section["title"]
+    assert "SKIPPED" in out["take_profit_at_atr"]["title"]       # the frame has no atr column
 
 
 def test_section_order_names_every_full_battery_key_in_print_order():
@@ -262,3 +263,22 @@ def test_no_battery_section_takes_a_direction_from_the_sign_of_mu():
                     or re.search(r"\[\"mu\"\](\.values)?(\[[^\]]*\])?\s*[<>]=?\s*0(?![.\d])", line):
                 bad.append(f"{path.name}:{n}: {line.strip()}")
     assert not bad, "direction must come from p_dir (single source):\n" + "\n".join(bad)
+
+
+def test_take_profit_atr_grid_reports_every_side_and_multiple_and_says_when_it_cannot_run():
+    """Owner 2026-11-22: the take-profit grid with the target at k x ATR (a twin of the take-profit at mu)."""
+    from nig_timenet_torch.eval.battery import take_profit_atr_grid
+    test = _frame(seed=6)
+    missing = take_profit_atr_grid(test, 0.0008)
+    assert "SKIPPED" in missing["title"] and len(missing["rows"]) == 1     # the header row only
+    rng = np.random.default_rng(6)
+    test["atr"] = np.full(len(test), 0.006)
+    test["fut_high"] = np.maximum(test["y_ret"], 0) + rng.uniform(0, 0.01, len(test))
+    test["fut_low"] = np.minimum(test["y_ret"], 0) - rng.uniform(0, 0.01, len(test))
+    out = take_profit_atr_grid(test, 0.0008, pcts=(0.2,), multiples=(0.5, 2.0))
+    labels = [r[:44].strip() for r in out["rows"][1:]]
+    assert labels == ["LONG top20% (TP at 0.5 ATR)", "LONG top20% (TP at 2 ATR)", "SHORT top20% (TP at 0.5 ATR)",
+                      "SHORT top20% (TP at 2 ATR)"]
+    fill = [float(r[52:60].strip().rstrip("%")) for r in out["rows"][1:]]
+    assert fill[0] > fill[1] and fill[2] > fill[3]                     # a nearer target fills more often
+    assert "realised high / low" in out["note"]
