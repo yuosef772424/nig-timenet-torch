@@ -75,12 +75,15 @@ def main():
         print("## 1 learned (rank IC per day, t ~ with overlapping labels)")
         for a_, b_ in (("mu", "y_ret"), ("pred_high", "fut_high"), ("atr", "fut_high"), ("pred_low", "fut_low"),
                        ("atr", "fut_low")):
-            if a_ in test and b_ in test:
+            if a_ in test.columns and b_ in test.columns:
                 m, t = daily_ic(test, a_, b_)
                 print(f"  {a_:>9} vs {b_:<8} IC {m:+.4f} (t~{t:.1f})")
         test["abs_y"] = test["y_ret"].abs()
         m, t = daily_ic(test, "sigma", "abs_y")
-        print(f"  {'sigma':>9} vs |y_ret|  IC {m:+.4f} (t~{t:.1f})   atr vs |y_ret| IC {daily_ic(test, 'atr', 'abs_y')[0]:+.4f}")
+        atr_ic = f"{daily_ic(test, 'atr', 'abs_y')[0]:+.4f}" if "atr" in test.columns else "n/a (no atr column)"
+        print(f"  {'sigma':>9} vs |y_ret|  IC {m:+.4f} (t~{t:.1f})   atr vs |y_ret| IC {atr_ic}")
+        if "atr" not in test.columns:      # M3 tables: the coin's volatility group from sigma's within-day rank
+            test["atr"] = test["sigma"]
         regime = past_move(test)
         test["regime"] = pd.qcut(test["end_time"].map(regime), 3, labels=["down", "flat", "up"])
         test["sig_t"] = test.groupby("end_time")["sigma"].transform(lambda s: pd.qcut(s.rank(method="first"), 3,
