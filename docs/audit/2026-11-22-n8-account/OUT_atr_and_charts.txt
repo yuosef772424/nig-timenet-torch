@@ -1,0 +1,179 @@
+ATR lookup: 2,520,913 rows, 100.0% with an ATR
+
+== single-coin GRU s0: ATR matched on 100.0% of TEST rows; mean cross-coin IC +0.0196, 90-day IC > 0 on 90% of days; model folds > 0: 6/7
+  LONG  top10% TP 0.5 ATR                     n  34,871 fill  56.2% avg +0.0964% Sharpe +0.033 PF 1.10
+  LONG  top10% TP 0.5 ATR (random rows)       n  34,871 fill  53.2% avg -0.1070% Sharpe -0.050 PF 0.87
+  LONG  top10% TP 1 ATR                       n  34,871 fill  24.4% avg +0.2217% Sharpe +0.062 PF 1.19
+  LONG  top10% TP 1 ATR (random rows)         n  34,871 fill  23.0% avg -0.0882% Sharpe -0.035 PF 0.91
+  LONG  top10% TP 1.5 ATR                     n  34,871 fill  10.0% avg +0.2853% Sharpe +0.075 PF 1.23
+  LONG  top10% TP 1.5 ATR (random rows)       n  34,871 fill  10.1% avg -0.0848% Sharpe -0.032 PF 0.91
+  LONG  top10% TP 2 ATR                       n  34,871 fill   4.4% avg +0.3077% Sharpe +0.078 PF 1.25
+  LONG  top10% TP 2 ATR (random rows)         n  34,871 fill   4.8% avg -0.0811% Sharpe -0.029 PF 0.92
+  LONG  top10% TP at mu                       n  34,871 fill  86.3% avg -0.0497% Sharpe -0.028 PF 0.89
+  LONG  top10% close exit                     n  34,871 fill   nan% avg +0.3025% Sharpe +0.074 PF 1.25
+  SHORT top10% TP 0.5 ATR                     n  28,951 fill  57.1% avg +0.1072% Sharpe +0.030 PF 1.09
+  SHORT top10% TP 0.5 ATR (random rows)       n  28,951 fill  56.4% avg -0.0730% Sharpe -0.030 PF 0.91
+  SHORT top10% TP 1 ATR                       n  28,951 fill  26.3% avg +0.1124% Sharpe +0.026 PF 1.08
+  SHORT top10% TP 1 ATR (random rows)         n  28,951 fill  26.6% avg -0.0608% Sharpe -0.021 PF 0.94
+  SHORT top10% TP 1.5 ATR                     n  28,951 fill  11.4% avg +0.1045% Sharpe +0.023 PF 1.07
+  SHORT top10% TP 1.5 ATR (random rows)       n  28,951 fill  12.4% avg -0.0648% Sharpe -0.022 PF 0.94
+  SHORT top10% TP 2 ATR                       n  28,951 fill   5.4% avg +0.0914% Sharpe +0.020 PF 1.06
+  SHORT top10% TP 2 ATR (random rows)         n  28,951 fill   6.2% avg -0.0767% Sharpe -0.025 PF 0.92
+  SHORT top10% TP at mu                       n  28,951 fill  88.7% avg -0.0503% Sharpe -0.026 PF 0.87
+  SHORT top10% close exit                     n  28,951 fill   nan% avg +0.0388% Sharpe +0.008 PF 1.03
+
+== single-coin GRU s1: ATR matched on 100.0% of TEST rows; mean cross-coin IC +0.0174, 90-day IC > 0 on 77% of days; model folds > 0: 5/7
+  LONG  top10% TP 0.5 ATR                     n  33,506 fill  56.4% avg +0.0776% Sharpe +0.026 PF 1.07
+  LONG  top10% TP 0.5 ATR (random rows)       n  33,506 fill  52.7% avg -0.1335% Sharpe -0.061 PF 0.84
+  LONG  top10% TP 1 ATR                       n  33,506 fill  24.1% avg +0.1977% Sharpe +0.055 PF 1.16
+  LONG  top10% TP 1 ATR (random rows)         n  33,506 fill  22.9% avg -0.1097% Sharpe -0.042 PF 0.89
+  LONG  top10% TP 1.5 ATR                     n  33,506 fill   9.9% avg +0.2577% Sharpe +0.067 PF 1.21
+  LONG  top10% TP 1.5 ATR (random rows)       n  33,506 fill  10.1% avg -0.0954% Sharpe -0.035 PF 0.91
+  LONG  top10% TP 2 ATR                       n  33,506 fill   4.6% avg +0.2886% Sharpe +0.072 PF 1.23
+  LONG  top10% TP 2 ATR (random rows)         n  33,506 fill   4.7% avg -0.0942% Sharpe -0.034 PF 0.91
+  LONG  top10% TP at mu                       n  33,506 fill  87.5% avg -0.0600% Sharpe -0.034 PF 0.86
+  LONG  top10% close exit                     n  33,506 fill   nan% avg +0.2891% Sharpe +0.070 PF 1.23
+  SHORT top10% TP 0.5 ATR                     n  30,314 fill  55.7% avg +0.0338% Sharpe +0.009 PF 1.03
+  SHORT top10% TP 0.5 ATR (random rows)       n  30,314 fill  56.4% avg -0.0761% Sharpe -0.031 PF 0.91
+  SHORT top10% TP 1 ATR                       n  30,314 fill  25.5% avg +0.0274% Sharpe +0.006 PF 1.02
+  SHORT top10% TP 1 ATR (random rows)         n  30,314 fill  26.2% avg -0.0657% Sharpe -0.023 PF 0.93
+  SHORT top10% TP 1.5 ATR                     n  30,314 fill  11.0% avg +0.0072% Sharpe +0.002 PF 1.00
+  SHORT top10% TP 1.5 ATR (random rows)       n  30,314 fill  12.1% avg -0.0748% Sharpe -0.025 PF 0.92
+  SHORT top10% TP 2 ATR                       n  30,314 fill   5.0% avg -0.0206% Sharpe -0.005 PF 0.99
+  SHORT top10% TP 2 ATR (random rows)         n  30,314 fill   6.4% avg -0.0768% Sharpe -0.026 PF 0.92
+  SHORT top10% TP at mu                       n  30,314 fill  88.9% avg -0.0806% Sharpe -0.045 PF 0.79
+  SHORT top10% close exit                     n  30,314 fill   nan% avg -0.0629% Sharpe -0.014 PF 0.96
+
+== panel std s0: ATR matched on 100.0% of TEST rows; mean cross-coin IC +0.0855, 90-day IC > 0 on 100% of days; model folds > 0: 5/7
+  LONG  top10% TP 0.5 ATR                     n  27,476 fill  58.1% avg +0.1353% Sharpe +0.046 PF 1.14
+  LONG  top10% TP 0.5 ATR (random rows)       n  27,476 fill  54.3% avg -0.0733% Sharpe -0.034 PF 0.91
+  LONG  top10% TP 1 ATR                       n  27,476 fill  25.7% avg +0.3212% Sharpe +0.090 PF 1.28
+  LONG  top10% TP 1 ATR (random rows)         n  27,476 fill  23.4% avg -0.0517% Sharpe -0.020 PF 0.95
+  LONG  top10% TP 1.5 ATR                     n  27,476 fill  10.0% avg +0.4049% Sharpe +0.106 PF 1.35
+  LONG  top10% TP 1.5 ATR (random rows)       n  27,476 fill  10.4% avg -0.0223% Sharpe -0.008 PF 0.98
+  LONG  top10% TP 2 ATR                       n  27,476 fill   4.3% avg +0.4428% Sharpe +0.113 PF 1.38
+  LONG  top10% TP 2 ATR (random rows)         n  27,476 fill   4.9% avg -0.0109% Sharpe -0.004 PF 0.99
+  LONG  top10% TP at mu                       n  27,476 fill  86.7% avg -0.0164% Sharpe -0.009 PF 0.96
+  LONG  top10% close exit                     n  27,476 fill   nan% avg +0.4521% Sharpe +0.111 PF 1.39
+  SHORT top10% TP 0.5 ATR                     n  36,346 fill  58.1% avg +0.0764% Sharpe +0.019 PF 1.06
+  SHORT top10% TP 0.5 ATR (random rows)       n  36,346 fill  55.8% avg -0.0552% Sharpe -0.024 PF 0.93
+  SHORT top10% TP 1 ATR                       n  36,346 fill  25.4% avg +0.0761% Sharpe +0.016 PF 1.05
+  SHORT top10% TP 1 ATR (random rows)         n  36,346 fill  25.7% avg -0.0407% Sharpe -0.015 PF 0.96
+  SHORT top10% TP 1.5 ATR                     n  36,346 fill  10.4% avg +0.0576% Sharpe +0.012 PF 1.04
+  SHORT top10% TP 1.5 ATR (random rows)       n  36,346 fill  11.9% avg -0.0446% Sharpe -0.016 PF 0.95
+  SHORT top10% TP 2 ATR                       n  36,346 fill   4.6% avg +0.0524% Sharpe +0.011 PF 1.03
+  SHORT top10% TP 2 ATR (random rows)         n  36,346 fill   6.1% avg -0.0401% Sharpe -0.014 PF 0.96
+  SHORT top10% TP at mu                       n  36,346 fill  89.5% avg -0.0457% Sharpe -0.020 PF 0.90
+  SHORT top10% close exit                     n  36,346 fill   nan% avg +0.0099% Sharpe +0.002 PF 1.01
+
+== panel std s1: ATR matched on 100.0% of TEST rows; mean cross-coin IC +0.0862, 90-day IC > 0 on 100% of days; model folds > 0: 6/7
+  LONG  top10% TP 0.5 ATR                     n  29,708 fill  58.4% avg +0.0879% Sharpe +0.029 PF 1.09
+  LONG  top10% TP 0.5 ATR (random rows)       n  29,708 fill  53.1% avg -0.1259% Sharpe -0.058 PF 0.85
+  LONG  top10% TP 1 ATR                       n  29,708 fill  25.8% avg +0.2456% Sharpe +0.068 PF 1.20
+  LONG  top10% TP 1 ATR (random rows)         n  29,708 fill  22.8% avg -0.0999% Sharpe -0.039 PF 0.90
+  LONG  top10% TP 1.5 ATR                     n  29,708 fill  10.4% avg +0.3342% Sharpe +0.086 PF 1.28
+  LONG  top10% TP 1.5 ATR (random rows)       n  29,708 fill   9.8% avg -0.0777% Sharpe -0.029 PF 0.92
+  LONG  top10% TP 2 ATR                       n  29,708 fill   4.7% avg +0.3752% Sharpe +0.094 PF 1.31
+  LONG  top10% TP 2 ATR (random rows)         n  29,708 fill   4.6% avg -0.0700% Sharpe -0.025 PF 0.93
+  LONG  top10% TP at mu                       n  29,708 fill  84.3% avg -0.0763% Sharpe -0.038 PF 0.84
+  LONG  top10% close exit                     n  29,708 fill   nan% avg +0.3844% Sharpe +0.093 PF 1.32
+  SHORT top10% TP 0.5 ATR                     n  34,114 fill  58.2% avg +0.0273% Sharpe +0.007 PF 1.02
+  SHORT top10% TP 0.5 ATR (random rows)       n  34,114 fill  56.2% avg -0.0638% Sharpe -0.028 PF 0.92
+  SHORT top10% TP 1 ATR                       n  34,114 fill  25.9% avg +0.0336% Sharpe +0.007 PF 1.02
+  SHORT top10% TP 1 ATR (random rows)         n  34,114 fill  25.9% avg -0.0778% Sharpe -0.029 PF 0.92
+  SHORT top10% TP 1.5 ATR                     n  34,114 fill  10.9% avg +0.0257% Sharpe +0.005 PF 1.02
+  SHORT top10% TP 1.5 ATR (random rows)       n  34,114 fill  11.9% avg -0.0866% Sharpe -0.030 PF 0.91
+  SHORT top10% TP 2 ATR                       n  34,114 fill   4.9% avg +0.0191% Sharpe +0.004 PF 1.01
+  SHORT top10% TP 2 ATR (random rows)         n  34,114 fill   5.8% avg -0.0958% Sharpe -0.033 PF 0.90
+  SHORT top10% TP at mu                       n  34,114 fill  88.8% avg -0.0675% Sharpe -0.030 PF 0.86
+  SHORT top10% close exit                     n  34,114 fill   nan% avg -0.0235% Sharpe -0.005 PF 0.99
+
+== panel ls s0: ATR matched on 100.0% of TEST rows; mean cross-coin IC +0.0857, 90-day IC > 0 on 100% of days; model folds > 0: 6/7
+  LONG  top10% TP 0.5 ATR                     n  27,151 fill  58.6% avg +0.1049% Sharpe +0.034 PF 1.10
+  LONG  top10% TP 0.5 ATR (random rows)       n  27,151 fill  53.5% avg -0.1025% Sharpe -0.047 PF 0.87
+  LONG  top10% TP 1 ATR                       n  27,151 fill  26.0% avg +0.2807% Sharpe +0.076 PF 1.23
+  LONG  top10% TP 1 ATR (random rows)         n  27,151 fill  23.3% avg -0.0813% Sharpe -0.031 PF 0.92
+  LONG  top10% TP 1.5 ATR                     n  27,151 fill  10.3% avg +0.3693% Sharpe +0.094 PF 1.30
+  LONG  top10% TP 1.5 ATR (random rows)       n  27,151 fill   9.9% avg -0.0557% Sharpe -0.020 PF 0.94
+  LONG  top10% TP 2 ATR                       n  27,151 fill   4.4% avg +0.4040% Sharpe +0.100 PF 1.33
+  LONG  top10% TP 2 ATR (random rows)         n  27,151 fill   4.5% avg -0.0520% Sharpe -0.018 PF 0.95
+  LONG  top10% TP at mu                       n  27,151 fill  88.6% avg -0.0403% Sharpe -0.023 PF 0.90
+  LONG  top10% close exit                     n  27,151 fill   nan% avg +0.4111% Sharpe +0.099 PF 1.34
+  SHORT top10% TP 0.5 ATR                     n  36,670 fill  58.1% avg +0.0467% Sharpe +0.011 PF 1.04
+  SHORT top10% TP 0.5 ATR (random rows)       n  36,670 fill  56.2% avg -0.0581% Sharpe -0.025 PF 0.93
+  SHORT top10% TP 1 ATR                       n  36,670 fill  25.7% avg +0.0591% Sharpe +0.012 PF 1.04
+  SHORT top10% TP 1 ATR (random rows)         n  36,670 fill  25.8% avg -0.0605% Sharpe -0.022 PF 0.94
+  SHORT top10% TP 1.5 ATR                     n  36,670 fill  10.9% avg +0.0496% Sharpe +0.010 PF 1.03
+  SHORT top10% TP 1.5 ATR (random rows)       n  36,670 fill  11.9% avg -0.0677% Sharpe -0.023 PF 0.93
+  SHORT top10% TP 2 ATR                       n  36,670 fill   4.8% avg +0.0384% Sharpe +0.007 PF 1.02
+  SHORT top10% TP 2 ATR (random rows)         n  36,670 fill   5.9% avg -0.0739% Sharpe -0.025 PF 0.93
+  SHORT top10% TP at mu                       n  36,670 fill  89.6% avg -0.0572% Sharpe -0.024 PF 0.88
+  SHORT top10% close exit                     n  36,670 fill   nan% avg +0.0051% Sharpe +0.001 PF 1.00
+
+== panel ls s1: ATR matched on 100.0% of TEST rows; mean cross-coin IC +0.0867, 90-day IC > 0 on 100% of days; model folds > 0: 5/7
+  LONG  top10% TP 0.5 ATR                     n  27,065 fill  58.8% avg +0.1248% Sharpe +0.042 PF 1.13
+  LONG  top10% TP 0.5 ATR (random rows)       n  27,065 fill  53.7% avg -0.1177% Sharpe -0.053 PF 0.86
+  LONG  top10% TP 1 ATR                       n  27,065 fill  25.4% avg +0.2714% Sharpe +0.076 PF 1.23
+  LONG  top10% TP 1 ATR (random rows)         n  27,065 fill  23.1% avg -0.0934% Sharpe -0.036 PF 0.90
+  LONG  top10% TP 1.5 ATR                     n  27,065 fill   9.7% avg +0.3449% Sharpe +0.091 PF 1.29
+  LONG  top10% TP 1.5 ATR (random rows)       n  27,065 fill  10.1% avg -0.0697% Sharpe -0.025 PF 0.93
+  LONG  top10% TP 2 ATR                       n  27,065 fill   4.3% avg +0.3798% Sharpe +0.097 PF 1.32
+  LONG  top10% TP 2 ATR (random rows)         n  27,065 fill   4.7% avg -0.0677% Sharpe -0.024 PF 0.93
+  LONG  top10% TP at mu                       n  27,065 fill  87.0% avg -0.0686% Sharpe -0.039 PF 0.83
+  LONG  top10% close exit                     n  27,065 fill   nan% avg +0.3999% Sharpe +0.099 PF 1.34
+  SHORT top10% TP 0.5 ATR                     n  36,757 fill  58.1% avg +0.0483% Sharpe +0.011 PF 1.04
+  SHORT top10% TP 0.5 ATR (random rows)       n  36,757 fill  55.9% avg -0.0773% Sharpe -0.033 PF 0.90
+  SHORT top10% TP 1 ATR                       n  36,757 fill  25.7% avg +0.0528% Sharpe +0.011 PF 1.03
+  SHORT top10% TP 1 ATR (random rows)         n  36,757 fill  25.7% avg -0.0797% Sharpe -0.029 PF 0.92
+  SHORT top10% TP 1.5 ATR                     n  36,757 fill  10.7% avg +0.0390% Sharpe +0.008 PF 1.02
+  SHORT top10% TP 1.5 ATR (random rows)       n  36,757 fill  11.6% avg -0.0935% Sharpe -0.032 PF 0.91
+  SHORT top10% TP 2 ATR                       n  36,757 fill   4.7% avg +0.0260% Sharpe +0.005 PF 1.02
+  SHORT top10% TP 2 ATR (random rows)         n  36,757 fill   5.8% avg -0.0961% Sharpe -0.033 PF 0.90
+  SHORT top10% TP at mu                       n  36,757 fill  90.0% avg -0.0518% Sharpe -0.023 PF 0.89
+  SHORT top10% close exit                     n  36,757 fill   nan% avg -0.0120% Sharpe -0.002 PF 0.99
+
+== snapshot base s0: ATR matched on 100.0% of TEST rows; mean cross-coin IC +0.0876, 90-day IC > 0 on 100% of days; model folds > 0: 6/7
+  LONG  top10% TP 0.5 ATR                     n  22,156 fill  58.1% avg +0.0984% Sharpe +0.033 PF 1.10
+  LONG  top10% TP 0.5 ATR (random rows)       n  22,156 fill  54.4% avg -0.0942% Sharpe -0.041 PF 0.89
+  LONG  top10% TP 1 ATR                       n  22,156 fill  26.6% avg +0.3046% Sharpe +0.083 PF 1.26
+  LONG  top10% TP 1 ATR (random rows)         n  22,156 fill  23.5% avg -0.0574% Sharpe -0.022 PF 0.94
+  LONG  top10% TP 1.5 ATR                     n  22,156 fill  10.5% avg +0.4079% Sharpe +0.104 PF 1.34
+  LONG  top10% TP 1.5 ATR (random rows)       n  22,156 fill  10.1% avg -0.0306% Sharpe -0.011 PF 0.97
+  LONG  top10% TP 2 ATR                       n  22,156 fill   4.5% avg +0.4489% Sharpe +0.111 PF 1.37
+  LONG  top10% TP 2 ATR (random rows)         n  22,156 fill   4.5% avg -0.0280% Sharpe -0.010 PF 0.97
+  LONG  top10% TP at mu                       n  22,156 fill  89.1% avg -0.0699% Sharpe -0.041 PF 0.81
+  LONG  top10% close exit                     n  22,156 fill   nan% avg +0.4530% Sharpe +0.109 PF 1.38
+  SHORT top10% TP 0.5 ATR                     n  41,666 fill  57.7% avg +0.0404% Sharpe +0.010 PF 1.03
+  SHORT top10% TP 0.5 ATR (random rows)       n  41,666 fill  55.9% avg -0.0818% Sharpe -0.035 PF 0.90
+  SHORT top10% TP 1 ATR                       n  41,666 fill  25.4% avg +0.0400% Sharpe +0.008 PF 1.03
+  SHORT top10% TP 1 ATR (random rows)         n  41,666 fill  25.8% avg -0.0825% Sharpe -0.030 PF 0.91
+  SHORT top10% TP 1.5 ATR                     n  41,666 fill  10.7% avg +0.0268% Sharpe +0.005 PF 1.02
+  SHORT top10% TP 1.5 ATR (random rows)       n  41,666 fill  11.9% avg -0.0940% Sharpe -0.032 PF 0.91
+  SHORT top10% TP 2 ATR                       n  41,666 fill   4.8% avg +0.0145% Sharpe +0.003 PF 1.01
+  SHORT top10% TP 2 ATR (random rows)         n  41,666 fill   6.1% avg -0.0955% Sharpe -0.032 PF 0.90
+  SHORT top10% TP at mu                       n  41,666 fill  91.4% avg -0.0720% Sharpe -0.035 PF 0.82
+  SHORT top10% close exit                     n  41,666 fill   nan% avg -0.0207% Sharpe -0.004 PF 0.99
+
+== snapshot base s1: ATR matched on 100.0% of TEST rows; mean cross-coin IC +0.0868, 90-day IC > 0 on 100% of days; model folds > 0: 5/7
+  LONG  top10% TP 0.5 ATR                     n  31,166 fill  57.4% avg +0.0463% Sharpe +0.016 PF 1.05
+  LONG  top10% TP 0.5 ATR (random rows)       n  31,166 fill  53.8% avg -0.0884% Sharpe -0.042 PF 0.89
+  LONG  top10% TP 1 ATR                       n  31,166 fill  25.3% avg +0.1865% Sharpe +0.054 PF 1.16
+  LONG  top10% TP 1 ATR (random rows)         n  31,166 fill  23.9% avg -0.0578% Sharpe -0.023 PF 0.94
+  LONG  top10% TP 1.5 ATR                     n  31,166 fill  10.1% avg +0.2673% Sharpe +0.073 PF 1.23
+  LONG  top10% TP 1.5 ATR (random rows)       n  31,166 fill  10.3% avg -0.0436% Sharpe -0.016 PF 0.95
+  LONG  top10% TP 2 ATR                       n  31,166 fill   4.4% avg +0.3014% Sharpe +0.080 PF 1.25
+  LONG  top10% TP 2 ATR (random rows)         n  31,166 fill   4.9% avg -0.0346% Sharpe -0.013 PF 0.96
+  LONG  top10% TP at mu                       n  31,166 fill  87.6% avg -0.0715% Sharpe -0.046 PF 0.79
+  LONG  top10% close exit                     n  31,166 fill   nan% avg +0.3073% Sharpe +0.079 PF 1.26
+  SHORT top10% TP 0.5 ATR                     n  32,654 fill  58.2% avg +0.0686% Sharpe +0.016 PF 1.05
+  SHORT top10% TP 0.5 ATR (random rows)       n  32,654 fill  55.8% avg -0.0783% Sharpe -0.032 PF 0.91
+  SHORT top10% TP 1 ATR                       n  32,654 fill  25.5% avg +0.0612% Sharpe +0.012 PF 1.04
+  SHORT top10% TP 1 ATR (random rows)         n  32,654 fill  26.0% avg -0.0856% Sharpe -0.030 PF 0.91
+  SHORT top10% TP 1.5 ATR                     n  32,654 fill  10.7% avg +0.0445% Sharpe +0.008 PF 1.03
+  SHORT top10% TP 1.5 ATR (random rows)       n  32,654 fill  11.9% avg -0.0952% Sharpe -0.032 PF 0.91
+  SHORT top10% TP 2 ATR                       n  32,654 fill   4.7% avg +0.0315% Sharpe +0.006 PF 1.02
+  SHORT top10% TP 2 ATR (random rows)         n  32,654 fill   6.0% avg -0.0989% Sharpe -0.032 PF 0.90
+  SHORT top10% TP at mu                       n  32,654 fill  91.8% avg -0.0645% Sharpe -0.030 PF 0.85
+  SHORT top10% close exit                     n  32,654 fill   nan% avg -0.0054% Sharpe -0.001 PF 1.00
+
+charts in /content/drive/MyDrive/nig_timenet_runs/_n8_account_scan/charts

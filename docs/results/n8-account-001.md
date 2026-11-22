@@ -87,7 +87,43 @@ its mean (0.10), cost 0.08 % per side:
   +28.5 = +29.2 - 0.7 and +29.5 = +29.5 + 0.0 points (no coin choice); panel std +38.1 = +35.4 + 2.7 and
   +33.9 = +31.1 + 2.8, ls +2.4 / +2.9, snapshot base +3.3 / +3.0 points (a small, real coin choice).
 
-## 5. What it means for the next steps
+## 5. Take-profit at k x ATR (AT1, `take_profit_at_atr`) on the saved tables (`atr_and_charts.py`)
+
+No saved table has the `atr` column (all 490 predate AT1), so the ATR was rebuilt from the contract artifact with
+`workflow.battery_run.stage_atr` (its window has no high / low channels: the last NATR_14, as AT1 does on these
+runs) and joined on (coin, prediction time): 100 % of TEST rows matched. The battery's rows (top 10 % by |mu| on each
+side, side from p_dir, flat rows dropped), every fold, pooled; mean NET per trade (0.16 % round trip):
+
+| run | LONG: close / TP mu / TP 0.5 / 1 / 2 ATR | LONG random rows, TP 0.5 / 2 ATR | SHORT: close / TP mu / TP 0.5 / 1 / 2 ATR |
+|---|---|---|---|
+| single-coin s0 | +0.302 / -0.050 / +0.096 / +0.222 / +0.308 % | -0.107 / -0.081 % | +0.039 / -0.050 / +0.107 / +0.112 / +0.091 % |
+| single-coin s1 | +0.289 / -0.060 / +0.078 / +0.198 / +0.289 % | -0.134 / -0.094 % | -0.063 / -0.081 / +0.034 / +0.027 / -0.021 % |
+| panel std s0 | +0.452 / -0.016 / +0.135 / +0.321 / +0.443 % | -0.073 / -0.011 % | +0.010 / -0.046 / +0.076 / +0.076 / +0.052 % |
+| panel std s1 | +0.384 / -0.076 / +0.088 / +0.246 / +0.375 % | -0.126 / -0.070 % | -0.024 / -0.068 / +0.027 / +0.034 / +0.019 % |
+| panel ls s0 / s1 | +0.411 / +0.400 close; TP 2 ATR +0.404 / +0.380 % | -0.102 / -0.052, -0.118 / -0.068 % | TP 1 ATR +0.059 / +0.053 % (close +0.005 / -0.012) |
+| snapshot base s0 / s1 | +0.453 / +0.307 close; TP 2 ATR +0.449 / +0.301 % | -0.094 / -0.028, -0.088 / -0.035 % | TP 1 ATR +0.040 / +0.061 % (close -0.021 / -0.005) |
+
+- LONG: every take-profit loses to holding to the close, on every run and seed, and the nearer the target the worse
+  (0.5 ATR keeps 15-32 % of the close's net). The long's payoff is right-skewed: a target cuts its winners.
+- The take-profit AT mu loses money on every run (it fills on about 87-90 % of the rows): mu is far smaller than the move, so the
+  target sits inside the noise (the AT1 decision's question is answered: a fixed ATR multiple beats mu everywhere).
+- SHORT: a target of 0.5-1 ATR turns the short from about zero to a small positive net on all 8 groups (+0.03 ..
+  +0.11 % per trade): it banks the short's bounded gain before the price comes back. Small, before slippage.
+- The same rule on random rows of the same side loses on every run: the gain is the model's selection, not the exit.
+
+## 6. Consistency charts (Drive: `nig_timenet_runs/_n8_account_scan/charts/`, README there)
+
+Per run x seed: equity curves (model, timing, BTC, always long, the random-coin band), CAGR per fold, 90-day rolling
+coin-ranking IC and timing correlation, mu-decile calibration per fold, the take-profit comparison; plus one overview
+of every 7-fold run. Four of them are in `docs/audit/2026-11-22-n8-account/charts/`. What they show:
+
+- The coin-ranking IC of the panel models: its 90-day mean is positive on 100 % of the days for all 6 panel groups
+  (between +0.04 and +0.13 on panel std s0; mean +0.086 .. +0.088 per group); the single-coin model's is +0.018 and positive on 77-90 % of the days.
+- The timing correlation swings: positive most of the time, negative in late 2023 and August-October 2025, near zero
+  in mid 2026: the timing is the less steady of the two signals.
+- Model folds with a positive return: 5-6 of 7 on every group.
+
+## 7. What it means for the next steps
 
 - N8 is confirmed on real tables: the account section, run on any finished fold folders
   (`python -m nig_timenet_torch.workflow.battery_run <folders>`), gives the audit's numbers.
