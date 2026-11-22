@@ -23,8 +23,8 @@ ABSENT_ON_PURPOSE = {
 }
 
 
-#: open PRs that may wait beyond the interval of rule F3 (RULES F3 states only "every 5 merged PRs"; the value was 7 = 5 + 2
-#: in the old test, kept)
+#: open PRs that may wait beyond the interval of rule F3 (F3 states only "every 5 merged PRs"; the old test used
+#: 7 = 5 + 2, kept)
 OPEN_PR_ALLOWANCE = 2
 
 

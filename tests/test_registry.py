@@ -14,6 +14,7 @@ from nig_timenet_torch.core.registry import (
     RegistryError,
     UnknownNameError,
 )
+from tests import scan
 
 
 def f(x):
@@ -118,8 +119,5 @@ def test_registry_is_stdlib_only():
     path = Path(__file__).resolve().parent.parent / "src" / "nig_timenet_torch" / "core" / "registry.py"
     mods = set()
     for node in ast.parse(path.read_text()).body:
-        if isinstance(node, ast.Import):
-            mods |= {a.name.split(".")[0] for a in node.names}
-        elif isinstance(node, ast.ImportFrom):
-            mods.add(node.module.split(".")[0])
+        mods |= {m.split(".")[0] for m in scan.imported_modules(node)}
     assert mods == {"difflib", "dataclasses", "typing"}

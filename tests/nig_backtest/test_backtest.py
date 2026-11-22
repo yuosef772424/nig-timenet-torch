@@ -14,6 +14,7 @@ import pytest
 import nig_backtest as bt
 from nig_backtest.__main__ import main
 from nig_backtest._base import UnknownNameError
+from tests import scan
 
 T0 = pd.Timestamp("2026-01-01")
 H4 = pd.Timedelta(hours=4)
@@ -221,10 +222,7 @@ def _imports(path, top_level_only: bool):
     nodes = tree.body if top_level_only else list(ast.walk(tree))
     out = set()
     for n in nodes:
-        if isinstance(n, ast.ImportFrom) and n.module and n.level == 0:
-            out.add(n.module.split(".")[0])
-        elif isinstance(n, ast.Import):
-            out |= {a.name.split(".")[0] for a in n.names}
+        out |= {m.split(".")[0] for m in scan.imported_modules(n) if not m.startswith(".")}
     return out
 
 

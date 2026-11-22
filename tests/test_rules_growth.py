@@ -12,15 +12,36 @@ from tests import scan
 from tests.ratchet import COUNTS, RATCHETS
 from tests.ratchet import ratchet as _ratchet
 
+#: placeholder ids ("B-NEW-1") of a count whose bottleneck row the lead still has to add to docs/bottlenecks.csv (HB8
+#: could not edit it); the lead replaces each by the real id and this escape then has nothing to excuse
+PENDING_ROW = "B-NEW-"
 MODULE_LINES, FUNCTION_LINES = 1000, 80  # module budget 400 -> 1000: owner 2026-11-15 (D-028)
 
 
 def test_every_pinned_count_has_a_test():
     """The ratchet file and this module stay in step: a count nobody checks is a dead pin."""
-    source = "".join((scan.ROOT / "tests" / f).read_text(encoding="utf-8")
-                     for f in ("test_rules_growth.py", "test_hardcoded_guards.py"))
+    source = "".join(p.read_text(encoding="utf-8") for p in sorted((scan.ROOT / "tests").rglob("*.py")))
     for name in COUNTS:
         assert f'_ratchet("{name}"' in source, f"{name} is pinned in ratchets.json but no test checks it"
+
+
+def test_every_nonzero_ratchet_names_a_bottleneck():
+    """E-26: a count above zero is a known bottleneck: ratchets.json `_bottlenecks` maps it to an id (or a list of
+    ids) that exists in docs/bottlenecks.csv; a ratchet at zero needs none."""
+    import csv
+
+    text = (scan.ROOT / "docs" / "bottlenecks.csv").read_text(encoding="utf-8")
+    ids = {r["id"] for r in csv.DictReader(text.splitlines())}
+    named = RATCHETS["_bottlenecks"]
+    assert set(named) <= set(COUNTS), f"_bottlenecks names ratchets that do not exist: {set(named) - set(COUNTS)}"
+    for name, count in COUNTS.items():
+        if count:
+            assert name in named, f"{name} is {count} but has no bottleneck id in ratchets.json `_bottlenecks`"
+    for name, value in named.items():
+        for bid in [value] if isinstance(value, str) else value:
+            if bid.startswith(PENDING_ROW):
+                continue
+            assert bid in ids, f"{name}: bottleneck {bid!r} is not in docs/bottlenecks.csv"
 
 
 def test_g1_output_names_are_defined_once():
@@ -57,9 +78,21 @@ def test_g3_size_budget():
         assert set(exc) == {"max_lines", "why"} and exc["why"], f"{mod}: an exception is {{max_lines, why}}"
         assert lines[mod] <= exc["max_lines"], (f"{mod} has {lines[mod]} lines, its G3 exception allows "
                                                 f"{exc['max_lines']}: split it or justify a new cap in ratchets.json")
-    _ratchet("G3_modules_over_400_lines", over_modules)
     over_functions = sorted(f"{f}: {n} lines" for f, n in scan.function_lengths().items() if n > FUNCTION_LINES)
     _ratchet("G3_functions_over_80_lines", over_functions)
+
+
+def test_g3_c2_g7_also_cover_the_backtest_package_and_the_tools():
+    """E-16: nig_backtest and tools/ are code too: module / function size, the direction of imports between the
+    trees and the metric copies are ratcheted like src/nig_timenet_torch."""
+    other = scan.other_sources()
+    assert any(k.startswith("nig_backtest/") for k in other) and any(k.startswith("tools/") for k in other)
+    _ratchet("G3_modules_over_1000_lines_backtest_tools",
+             sorted(m for m, n in scan.module_lines(other).items() if n > MODULE_LINES))
+    _ratchet("G3_functions_over_80_lines_backtest_tools",
+             sorted(f"{f}: {n} lines" for f, n in scan.function_lengths(other).items() if n > FUNCTION_LINES))
+    _ratchet("G7_layer_import_violations_backtest_tools", scan.other_layer_violations())
+    _ratchet("C2_metric_definitions_outside_stats_backtest_tools", scan.metric_definitions_outside_stats(other))
 
 
 def test_g4_no_dead_settings():
@@ -93,9 +126,8 @@ def test_g6_notebooks_are_runners():
     for path in sorted(studies.glob("*.py")) if studies.is_dir() else []:
         others = {p.stem for p in studies.glob("*.py")} - {path.stem}
         for n in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            mods = ([n.module] if isinstance(n, ast.ImportFrom) and n.module else
-                    [a.name for a in n.names] if isinstance(n, ast.Import) else [])
-            cross += [f"{path.name} imports study {m}" for m in mods if m.split(".")[-1] in others]
+            cross += [f"{path.name} imports study {m}" for m in scan.imported_modules(n)
+                      if m.split(".")[-1] in others]
     assert not cross, "a study never imports another study (G6); lift shared code into the package:\n  " + (
         "\n  ".join(cross))
 
@@ -191,8 +223,6 @@ def test_no_test_module_imports_another_test_module():
     offenders = []
     for path in sorted((scan.ROOT / "tests").rglob("*.py")):
         for n in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            mods = ([n.module] if isinstance(n, ast.ImportFrom) and n.module else
-                    [a.name for a in n.names] if isinstance(n, ast.Import) else [])
-            offenders += [f"{path.relative_to(scan.ROOT)}:{n.lineno}: {m}" for m in mods
+            offenders += [f"{path.relative_to(scan.ROOT)}:{n.lineno}: {m}" for m in scan.imported_modules(n)
                           if m.startswith("tests.") and m.rsplit(".", 1)[-1].startswith("test_")]
     assert not offenders, "import from a helpers.py / conftest.py, not from a test module:\n  " + "\n  ".join(offenders)
