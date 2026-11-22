@@ -12,6 +12,7 @@ from nig_timenet_torch.core.config import from_dict, updated
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.workflow import run as steps
+from nig_timenet_torch.workflow import run_common
 from nig_timenet_torch.workflow.settings import RunSettings
 
 # rule E3: 11 s locally; the fast suite was over budget (runs in CI's slow step)
@@ -52,6 +53,18 @@ def test_run_all_writes_the_reports_and_smoke_mode_limits_rows(art, tmp_path):  
         assert (out / name).is_file()
     summary = steps.write_summary(r)
     assert summary["max_rows"] == 60 and summary["epochs_done"] == 1 and (out / steps.SUMMARY).is_file()
+    # owner 2026-11-22: the saved battery table carries the ATR of each row (the take-profit-at-ATR section reads it);
+    # the fixture's windows have no high / low channels, so it is the last bar's NATR_14 (stored / PERCENT_SCALE)
+    import pandas as pd
+
+    from nig_timenet_torch.data.scaling import PERCENT_SCALE
+    from nig_timenet_torch.workflow.battery_run import NATR_FEATURE, table_path
+    table = pd.read_parquet(table_path(out, "test"))
+    ds = r.dataset
+    fo = list(ds["feature_order"])
+    natr = np.asarray(ds[run_common.input_key(ds)])[r.idx["test"], -1, fo.index(NATR_FEATURE)] * PERCENT_SCALE / 100
+    assert np.allclose(table["atr"].to_numpy(), np.log1p(natr)) and (table["atr"] > 0).all()
+    assert "TAKE-PROFIT AT k x ATR" in (out / "battery_report.txt").read_text()
     assert json.loads((out / "test_report.json").read_text())["n_rows"] == len(r.idx["test"])
 
 

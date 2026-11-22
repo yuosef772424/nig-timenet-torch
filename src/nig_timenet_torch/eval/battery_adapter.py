@@ -13,7 +13,8 @@ with std = nig_predictive_std(nu, alpha, beta); p_dir = the close class head out
 model/heads.py) or the Gaussian fallback; y_ret = decoded close label return; dir_true = sign(y_ret); last_ret =
 last_close / prev_close - 1 (only when ``prev_close`` is given); coin = asset; end_time = prediction_made_at;
 last_close = the price the returns are over (price = last_close * (1 + return); the TF price-level
-plots need it, older tables lack it).
+plots need it, older tables lack it); atr = the mean true range of the last 14 input bars (log units per bar), only
+when the caller passes it (``workflow.battery_run.stage_inputs`` does).
 When the high / low heads are in the table: pred_high / pred_low (decoded mu return), fut_high / fut_low (decoded
 label return = the realised extreme over the horizon), sigma_high / sigma_low.
 When the LS1 auxiliary close heads are in the table (model ``aux_heads``): pay_long / pay_short (each side's predicted
@@ -75,11 +76,13 @@ def _gaussian_p_up(mu: np.ndarray, sigma: np.ndarray) -> np.ndarray:
 
 
 def to_battery_table(table: pd.DataFrame, labels: dict, *, anchors: dict, last_close, codec_state: dict,
-                     prev_close=None) -> pd.DataFrame:
+                     prev_close=None, atr=None) -> pd.DataFrame:
     """The battery table of one stage. ``table`` is validated; ``labels`` (label key -> encoded array aligned to
     the rows), ``anchors`` (target -> own last price per row), ``last_close`` (per row, finite > 0) and
     ``codec_state`` are the same inputs ``eval.target_report.target_report`` takes. The close head is required;
-    high / low are used when present. ``prev_close`` (the close before ``last_close``) adds ``last_ret``."""
+    high / low are used when present. ``prev_close`` (the close before ``last_close``) adds ``last_ret``; ``atr`` (per
+    row, the mean true range of the last input bars in log units, ``eval.vol_baseline.window_ranges``) adds ``atr``
+    for the take-profit-at-ATR section."""
     validate_table(table)
     n = len(table)
     if n == 0:
@@ -103,6 +106,11 @@ def to_battery_table(table: pd.DataFrame, labels: dict, *, anchors: dict, last_c
         if prev.shape[0] != n or not np.isfinite(prev).all() or (prev <= 0).any():
             raise ValueError("prev_close must be finite, > 0 and aligned to the rows")
         out["last_ret"] = last_close / prev - 1.0
+    if atr is not None:
+        a = np.asarray(atr, dtype=np.float64).reshape(-1)
+        if a.shape[0] != n:
+            raise ValueError(f"atr has {a.shape[0]} rows, the table has {n}")
+        out["atr"] = a
     out["coin"] = table["asset"].astype(str).to_numpy()
     out["end_time"] = table["prediction_made_at"].dt.tz_convert("UTC").dt.tz_localize(None).to_numpy()
     out["last_close"] = last_close

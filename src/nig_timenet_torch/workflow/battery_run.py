@@ -2,7 +2,9 @@
     the full battery with the T-profit sections; battery_step does it for a finished Run and writes the reports.
 TAGS: battery run, stage inputs, t-profit, battery report, adapter entry point, battery step, profit json
 PITFALLS: VAL thresholds are applied to TEST (no leakage), so val and test must be different stages of ONE run;
-    n_variants is the number of variants tried so far and widens the CI, state it in the result file.
+    n_variants is the number of variants tried so far and widens the CI, state it in the result file; stage_atr
+    reads only bars closed by the prediction time (window high / low, else the last NATR_14), battery tables saved
+    before 2026-11-22 have no atr column (the take-profit-at-ATR section is skipped on them).
 
 With ``evaluation.battery.day_metrics`` (D-032, off by default) ``battery_step`` also writes the day metrics of a
 multi-coin run (``workflow.panel_report.panel_step``: ``panel_report.json`` / ``.md`` and the two frames).
@@ -23,12 +25,15 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
+from nig_timenet_torch.data.scaling import PERCENT_SCALE
 from nig_timenet_torch.eval.battery import full_battery, show
 from nig_timenet_torch.eval.battery_adapter import to_battery_table
 from nig_timenet_torch.eval.battery_lib import DEFAULT_COST_PER_SIDE
+from nig_timenet_torch.eval.vol_baseline import window_ranges
 from nig_timenet_torch.workflow import flat_run, run_common
 
 __all__ = ["StageInputs", "run_battery", "run_tables", "render", "battery_step", "battery_from_folder", "stage_inputs",
+           "stage_atr", "NATR_FEATURE",
            "profit_json", "table_path", "REPORT_TXT", "PROFIT_JSON"]
 
 REPORT_TXT = "battery_report.txt"
@@ -43,10 +48,11 @@ class StageInputs:
     last_close: np.ndarray
     codec_state: dict
     prev_close: np.ndarray | None = None
+    atr: np.ndarray | None = None              # mean true range of the last 14 input bars (log units per bar)
 
     def battery_table(self) -> pd.DataFrame:
         return to_battery_table(self.table, self.labels, anchors=self.anchors, last_close=self.last_close,
-                                codec_state=self.codec_state, prev_close=self.prev_close)
+                                codec_state=self.codec_state, prev_close=self.prev_close, atr=self.atr)
 
 
 def render(sections: dict) -> str:
@@ -79,6 +85,28 @@ def run_tables(val: pd.DataFrame, test: pd.DataFrame, *, cost: float = DEFAULT_C
     return sections
 
 
+#: the input channel the ATR falls back to when the window has no high / low channels: pandas_ta's NATR (Wilder ATR /
+#: close, in percent), stored / ``data.scaling.PERCENT_SCALE``
+NATR_FEATURE = "NATR_14"
+
+
+def stage_atr(dataset: dict, idx, timeframes=()) -> np.ndarray | None:
+    """The ATR of each row in log units per bar, from bars closed by the row's prediction time only: the mean true
+    range of the last 14 bars of its input window when the window has high / low price channels
+    (``eval.vol_baseline.window_ranges``), else the window's last ``NATR_14`` (Wilder's ATR over the close, the TF
+    feature set the artifacts carry), else None (the take-profit-at-ATR section then says it cannot run)."""
+    key = run_common.input_keys(dataset, timeframes)[0]
+    fo, rows = list(dataset["feature_order"]), np.asarray(idx)
+    try:
+        return window_ranges(np.asarray(dataset[key])[rows], fo)["atr14"]
+    except ValueError:          # no high / low channel, or the channels are not log(price / prev close)
+        pass
+    if NATR_FEATURE in fo:
+        natr = np.asarray(dataset[key])[rows, -1, fo.index(NATR_FEATURE)].astype(np.float64) * PERCENT_SCALE / 100.0
+        return np.log1p(np.clip(natr, 0.0, None))
+    return None
+
+
 def stage_inputs(run, stage: str) -> StageInputs:
     """The battery's inputs for ONE stage of a finished ``workflow.run.Run`` (the table is predicted once and kept)."""
     tables = run.extra.setdefault("tables", {})
@@ -88,7 +116,8 @@ def stage_inputs(run, stage: str) -> StageInputs:
     idx = run.idx[stage]
     return StageInputs(tables[stage], {k: v.numpy() for k, v in run.y[stage].items()},
                        flat_run.anchors_by_name(lc, idx, run.targets, run_common.codec_state(run.dataset)),
-                       lc[idx, LAST_COLUMN_INDEX["last_close"]], run_common.codec_state(run.dataset))
+                       lc[idx, LAST_COLUMN_INDEX["last_close"]], run_common.codec_state(run.dataset),
+                       atr=stage_atr(run.dataset, idx, run.settings.data.input_timeframes))
 
 
 def profit_json(sections: dict) -> dict:

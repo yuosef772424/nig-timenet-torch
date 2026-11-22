@@ -89,3 +89,21 @@ def test_the_multiple_testing_level_and_day_constants_are_defined_once():
             found += [f"{rel}:{n.lineno}: {t.id}" for t in targets
                       if isinstance(t, ast.Name) and homes.get(t.id, rel) != rel]
     assert not found, found
+
+
+def test_take_profit_at_atr_targets_k_atr_on_the_trade_side_and_falls_back_to_the_close():
+    """Owner 2026-11-22: a take-profit at k x ATR (log units per bar) on the trade's side, else exit at the close."""
+    import pandas as pd
+    atr = np.array([0.01, 0.01, 0.02, np.nan])
+    df = pd.DataFrame({"atr": atr, "y_ret": [0.001, -0.004, 0.002, 0.003],
+                       "fut_high": [0.0102, 0.004, 0.015, 0.01], "fut_low": [-0.001, -0.0105, -0.015, -0.01]})
+    idx = np.arange(4)
+    lo = bl.take_profit_at_atr(df, idx, 1.0, 1.0, 0.0)
+    assert lo["path"] and lo["level"][0] == pytest.approx(np.expm1(0.01))
+    assert lo["hit"].tolist() == [True, False, False, False]            # row 3 has no ATR: no target
+    assert lo["pnl"].tolist() == pytest.approx([np.expm1(0.01), -0.004, 0.002, 0.003])
+    sh = bl.take_profit_at_atr(df, idx, -1.0, 1.0, 0.0008)
+    assert sh["hit"].tolist() == [False, True, False, False] and sh["target"].tolist() == [True, True, True, False]
+    assert sh["pnl"][1] == pytest.approx(-np.expm1(-0.01) - 2 * 0.0008)   # the short's gain at its target
+    close_only = bl.take_profit_at_atr(df.drop(columns=["fut_high", "fut_low"]), idx, 1.0, 0.5, 0.0)
+    assert not close_only["path"] and not close_only["hit"].any()          # no close reaches half an ATR here
