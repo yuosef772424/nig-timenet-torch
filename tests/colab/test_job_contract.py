@@ -201,3 +201,10 @@ def test_every_training_entry_passes_the_deadline():
             trains.append(m.name)
             assert "contract.deadline(max_minutes" in src, f"jobs/{m.name}.py ignores --max-minutes"
     assert {"baseline", "panel", "rolling", "staged", "gates"} <= set(trains)
+
+
+def test_code_sha_needs_the_checkout_and_says_so(monkeypatch):
+    """C-21: one reader of NIG_REPO_DIR for every entry; a missing variable is a clear error, not an empty sha."""
+    monkeypatch.delenv("NIG_REPO_DIR", raising=False)
+    with pytest.raises(RuntimeError, match="NIG_REPO_DIR is not set"):
+        contract.code_sha()

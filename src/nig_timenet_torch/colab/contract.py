@@ -77,11 +77,20 @@ def write_device_json(out_dir, expected: str, torch_mod=None) -> dict:
     return rep
 
 
+def code_sha() -> str:
+    """The commit of the checkout the runner points at (``NIG_REPO_DIR``): the one reader of it for the job entries
+    and ``write_manifest``. A missing variable is an error that says so (the runner always sets it)."""
+    repo_dir = os.environ.get("NIG_REPO_DIR")
+    if not repo_dir:
+        raise RuntimeError("NIG_REPO_DIR is not set: the job entries need the checkout (the runner sets it) to read "
+                           "the commit that the run identity and the manifest record")
+    return subprocess.check_output(["git", "-C", repo_dir, "rev-parse", "HEAD"], text=True).strip()
+
+
 def write_manifest(out_dir, config: dict, input_fingerprint: str, started: float | None = None) -> dict:
     """Hash every output file and write ``manifest.json`` (last: it is the completion marker). The commit is read
     from the checkout the runner points at (``NIG_REPO_DIR``), not from an argument."""
-    repo_dir = os.environ["NIG_REPO_DIR"]
-    sha = subprocess.check_output(["git", "-C", repo_dir, "rev-parse", "HEAD"], text=True).strip()
+    sha = code_sha()
     root = Path(out_dir)
     dev = json.loads((root / "device.json").read_text(encoding="utf-8"))
     man = {"git_sha": sha, "config": config, "input_fingerprint": input_fingerprint,

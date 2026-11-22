@@ -16,8 +16,6 @@ evaluation battery per arm, default on), ``model_overrides`` (every arm), ``trai
 arm), ``split`` (other SplitSettings fields). Outputs: ``study.json``, ``study.md``, one folder per arm x seed.
 """
 
-import os
-import subprocess
 import sys
 import time
 from dataclasses import dataclass, field, replace
@@ -97,10 +95,6 @@ def run_settings(cfg: PanelConfig, code_sha: str = "") -> RunSettings:
                                                                       n_variants=len(arms_of(cfg)))))
 
 
-def _code_sha() -> str:
-    return subprocess.check_output(["git", "-C", os.environ["NIG_REPO_DIR"], "rev-parse", "HEAD"], text=True).strip()
-
-
 def main(argv: list[str] | None = None) -> int:
     started, t_mono = time.time(), time.monotonic()
     config, out, max_minutes, _rest = contract.entry_args(argv)
@@ -108,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     contract.write_device_json(out, cfg.device)
     deadline = contract.deadline(max_minutes, t_mono)          # the rest is for the reports and the publish
     study = panel_study.run_panel_study(
-        run_settings(cfg, _code_sha()), arms_of(cfg), cfg.seeds, out, ckpt_root=cfg.run_dir, deadline=deadline,
+        run_settings(cfg, contract.code_sha()), arms_of(cfg), cfg.seeds, out, ckpt_root=cfg.run_dir, deadline=deadline,
         on_epoch=lambda row: print(epoch_line(row, cfg.epochs), flush=True))
     contract.write_manifest(out, config, input_fingerprint=study["data_fingerprint"], started=started)
     print(f"panel {'OK' if study['finished'] else 'NOT FINISHED (run the job again to continue)'}: "

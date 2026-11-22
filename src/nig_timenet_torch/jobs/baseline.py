@@ -22,8 +22,6 @@ default: accept the artifact's), ``gate_report`` (path of a ``gate_report.json``
 default none). Stops cleanly before ``--max-minutes`` (the per-epoch checkpoint is the resume point).
 """
 
-import os
-import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -87,17 +85,13 @@ def run_settings(cfg: BaselineConfig, code_sha: str = "") -> RunSettings:
         evaluation=EvalSettings(health_max_rows=cfg.health_max_rows))
 
 
-def _code_sha() -> str:
-    return subprocess.check_output(["git", "-C", os.environ["NIG_REPO_DIR"], "rev-parse", "HEAD"], text=True).strip()
-
-
 def main(argv: list[str] | None = None) -> int:
     started, t_mono = time.time(), time.monotonic()
     config, out, max_minutes, _rest = contract.entry_args(argv)
     cfg = from_dict(BaselineConfig, config)
     dev_rep = contract.write_device_json(out, cfg.device)
     deadline = contract.deadline(max_minutes, t_mono)  # the rest is for the health report and the outputs
-    r = steps.prepare(run_settings(cfg, _code_sha()), out)
+    r = steps.prepare(run_settings(cfg, contract.code_sha()), out)
     steps.build(r)
     print(f"gate check: {gate_run.gate_check(r, cfg.gate_report)['result']}", flush=True)
     steps.train(r, deadline=deadline, on_epoch=lambda row: print(epoch_line(row, cfg.epochs), flush=True))

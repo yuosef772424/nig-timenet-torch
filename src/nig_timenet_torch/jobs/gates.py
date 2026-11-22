@@ -11,8 +11,6 @@ envs and the short runs), ``architecture``, ``model_overrides``, ``train``, and 
 ``e3_train_end``, ``e3_n_coins``, ``e3_months``, ``e3_epochs``). Outputs: ``gate_report.json``, ``gate_report.md``.
 """
 
-import os
-import subprocess
 import sys
 import time
 from dataclasses import dataclass, field, fields
@@ -78,9 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     config, out, max_minutes, _rest = contract.entry_args(argv)
     cfg = from_dict(GatesConfig, config)
     contract.write_device_json(out, cfg.device)
-    sha = (subprocess.check_output(["git", "-C", os.environ["NIG_REPO_DIR"], "rev-parse", "HEAD"], text=True).strip()
-           if "NIG_REPO_DIR" in os.environ else "")
-    report = gate_run.run_gates(run_settings(cfg, sha), gate_settings(cfg), out,
+    report = gate_run.run_gates(run_settings(cfg, contract.code_sha()), gate_settings(cfg), out,
                                 deadline=contract.deadline(max_minutes, t_mono))
     s = report["summary"]
     print(f"gates {str(report['key'])[:16]}{'' if report['finished'] else ' NOT FINISHED (deadline)'}: passed "
