@@ -27,17 +27,22 @@ from pathlib import Path
 
 import pandas as pd
 
-from nig_timenet_torch.core.schema import OHLCV_COLUMNS
+from nig_timenet_torch.core.schema import OHLCV_COLUMNS, QUOTE_VOLUME_COL
+from nig_timenet_torch.core.timeframe import tf_timedelta
 from nig_timenet_torch.data.settings import SourceSettings
-from nig_timenet_torch.data.timeframe import tf_timedelta
 
-__all__ = ["CSV_HEADER", "Http", "kline_row", "fmt_dt", "raw_path", "fetch_symbol", "fetch_all", "update_registry",
-           "file_stats", "read_registry", "vision_klines"]
+__all__ = ["CSV_HEADER", "Http", "VISION_MONTHLY", "archive_tag", "monthly_url", "daily_url", "unzip_first",
+           "kline_row", "fmt_dt", "raw_path", "fetch_symbol", "fetch_all", "update_registry", "file_stats",
+           "read_registry", "vision_klines"]
 
-CSV_HEADER = ["timestamp", "datetime_utc", *OHLCV_COLUMNS, "quote_volume", "trades",
+CSV_HEADER = ["timestamp", "datetime_utc", *OHLCV_COLUMNS, QUOTE_VOLUME_COL, "trades",
               "taker_buy_volume", "taker_buy_quote_volume"]
 FAPI = "https://fapi.binance.com"
 VISION = "https://data.binance.vision"
+#: the USD-M futures kline archive (monthly zips, daily zips for the open month): the ONE downloader in the package
+#: (``data.vision_slice`` uses these helpers too; ``nig_backtest`` keeps its own copy on purpose)
+VISION_MONTHLY = f"{VISION}/data/futures/um/monthly/klines"
+VISION_DAILY = f"{VISION}/data/futures/um/daily/klines"
 PAGE = 1500
 REGISTRY_COLUMNS = ["name", "status", "onboard_date_utc", "first_candle_utc", "last_candle_utc", "interval",
                     "n_candles", "n_gaps", "missing_candles", "max_gap_hours", "zero_volume_candles",
@@ -122,24 +127,41 @@ def _futures_rows(http: Http, symbol: str, interval: str, lo: int, hi: int) -> l
     return rows
 
 
+def archive_tag(symbol: str, interval: str, month: pd.Period) -> str:
+    """File stem of an archive object: ``BTCUSDT-4h-2024-01``."""
+    return f"{symbol}-{interval}-{month.year:04d}-{month.month:02d}"
+
+
+def monthly_url(symbol: str, interval: str, month: pd.Period) -> str:
+    return f"{VISION_MONTHLY}/{symbol}/{interval}/{archive_tag(symbol, interval, month)}.zip"
+
+
+def daily_url(symbol: str, interval: str, month: pd.Period, day: int) -> str:
+    return f"{VISION_DAILY}/{symbol}/{interval}/{archive_tag(symbol, interval, month)}-{day:02d}.zip"
+
+
+def unzip_first(blob: bytes) -> bytes:
+    """The first member of a zip archive."""
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        return z.read(z.namelist()[0])
+
+
 def _zip_rows(blob: bytes | None) -> list[list]:
     if blob is None:
         return []
-    with zipfile.ZipFile(io.BytesIO(blob)) as z:
-        text = z.read(z.namelist()[0]).decode("utf-8")
+    text = unzip_first(blob).decode("utf-8")
     return [kline_row(r) for r in csv.reader(io.StringIO(text)) if r and r[0].isdigit()]
 
 
 def _vision_rows(http: Http, symbol: str, interval: str, lo: int, hi: int) -> list[list]:
     rows = []
     for month in pd.period_range(pd.Timestamp(lo, unit="ms"), pd.Timestamp(hi - 1, unit="ms"), freq="M"):
-        tag = f"{symbol}-{interval}-{month.year:04d}-{month.month:02d}"
-        blob = http.get_bytes(f"{VISION}/data/futures/um/monthly/klines/{symbol}/{interval}/{tag}.zip")
+        blob = http.get_bytes(monthly_url(symbol, interval, month))
         if blob is not None:
             rows.extend(_zip_rows(blob))
             continue
         for day in pd.date_range(month.start_time, month.end_time.normalize(), freq="D"):
-            blob = http.get_bytes(f"{VISION}/data/futures/um/daily/klines/{symbol}/{interval}/{tag}-{day.day:02d}.zip")
+            blob = http.get_bytes(daily_url(symbol, interval, month, day.day))
             rows.extend(_zip_rows(blob))
     return rows
 
@@ -155,7 +177,7 @@ def vision_klines(symbol: str, interval: str, start, end, http: Http | None = No
     rows = _vision_rows(http or Http(), symbol, interval, lo, hi)
     frame = pd.DataFrame(rows, columns=CSV_HEADER).drop_duplicates("timestamp").sort_values("timestamp")
     frame = frame[(frame["timestamp"] >= lo) & (frame["timestamp"] < hi)]
-    out = frame[[*OHLCV_COLUMNS, "quote_volume", "trades"]].astype(float)
+    out = frame[[*OHLCV_COLUMNS, QUOTE_VOLUME_COL, "trades"]].astype(float)
     out.index = pd.to_datetime(frame["timestamp"].astype("int64"), unit="ms", utc=True)
     return out
 

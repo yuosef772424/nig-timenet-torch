@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 from nig_timenet_torch.core.schema import LAST_COLUMNS
-from nig_timenet_torch.data.artifact_writer import write_artifact
 from nig_timenet_torch.data_io import npy_dir
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 from nig_timenet_torch.data_io.environments import (
     input_keys,
     label_keys,

@@ -21,18 +21,16 @@ import sys
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import LAST_COLUMNS, TS_COL
+from nig_timenet_torch.core.schema import LAST_COLUMNS, TS_COL, class_label_key, reg_label_key
 from nig_timenet_torch.data_io.split_plan import sample_times
 from nig_timenet_torch.data_io.synthetic import ORACLE_PREFIX
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, codec_name, future_column
-from nig_timenet_torch.model.heads import head_spec
 
 __all__ = ["label_keys", "input_keys", "permute_labels", "real_slice", "panel_slice", "main"]
 
 def label_keys(dataset: dict) -> list[str]:
-    """The regression and class label keys of the dataset's price targets (from the head registry)."""
-    return [head_spec(kind, t).label_key for t in dataset["price_targets"]
-            for kind in ("nig_regression", "binary_classification")]
+    """The regression and class label keys of the dataset's price targets (core.schema)."""
+    return [key(t) for t in dataset["price_targets"] for key in (reg_label_key, class_label_key)]
 
 
 def input_keys(dataset: dict) -> list[str]:
@@ -58,7 +56,7 @@ def permute_labels(dataset: dict, *, seed: int = 0) -> dict:
     last = np.array(dataset["last_candles"], dtype=np.float64, copy=True)
     for t in dataset["price_targets"]:
         anchor = anchor_and_future(last, t, state)[:, 0]
-        y = np.asarray(out[head_spec("nig_regression", t).label_key], np.float64)
+        y = np.asarray(out[reg_label_key(t)], np.float64)
         last[:, LAST_COLUMNS.index(future_column(t))] = codec.decode(y, state, anchor)
     out["last_candles"] = last
     out["environment"] = {"name": "E2", "seed": int(seed), "permuted": label_keys(dataset),
@@ -178,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
     the train end of E3 / E3p defaults to the full run's, ``run_common.split_bounds`` with the default
     SplitSettings; E4 = ``data_io.synthetic_panel``, its settings are PanelSyntheticSettings fields)."""
     from nig_timenet_torch.core.config import from_dict
-    from nig_timenet_torch.data.artifact_writer import write_artifact
+    from nig_timenet_torch.data_io.artifact_writer import write_artifact
     from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
     from nig_timenet_torch.data_io.synthetic import SyntheticSettings, write_synthetic
     from nig_timenet_torch.data_io.synthetic_panel import PanelSyntheticSettings, write_panel_synthetic

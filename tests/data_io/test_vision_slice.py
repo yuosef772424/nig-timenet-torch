@@ -8,9 +8,9 @@ import pandas as pd
 import pytest
 
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TS_COL
-from nig_timenet_torch.data.artifact_writer import write_artifact
+from nig_timenet_torch.data.vision_slice import build_logret_dataset, fetch_coin, fetch_month, load_frames
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
-from nig_timenet_torch.data_io.vision_slice import build_logret_dataset, fetch_coin, fetch_month, load_frames
 from nig_timenet_torch.doctor.data_checks import alignment
 
 BAR = int(pd.Timedelta("4h").value)

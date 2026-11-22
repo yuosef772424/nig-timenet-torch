@@ -57,7 +57,7 @@ while pgrep -f "nig_timenet_torch.jobs.(rolling|panel)" > /dev/null; do sleep 60
 
 say "3. the 4h + 1h artifact"
 if [ ! -f $ART_DRIVE/manifest.json ]; then
-  python -u -m nig_timenet_torch.data_io.lower_timeframe $ART4 $ART2 --tf 1h --window 32 --cache $CACHE \
+  python -u -m nig_timenet_torch.data.lower_timeframe $ART4 $ART2 --tf 1h --window 32 --cache $CACHE \
     --workers 16 --overwrite || { say "artifact build failed"; exit 1; }
   rm -rf $ART_DRIVE.tmp && cp -r $ART2 $ART_DRIVE.tmp && mv $ART_DRIVE.tmp $ART_DRIVE
 elif [ ! -f $ART2/manifest.json ]; then

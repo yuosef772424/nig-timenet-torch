@@ -51,7 +51,7 @@ class Bars:
 
 def hour_features_meaningful(tf_order: tuple[str, ...]) -> bool:
     """Hour-of-day only carries information when some frame is shorter than a day (otherwise it is constant)."""
-    from nig_timenet_torch.data.timeframe import normalize_tf
+    from nig_timenet_torch.core.timeframe import normalize_tf
     try:
         smallest = min(pd.Timedelta(normalize_tf(tf)) for tf in tf_order)
     except (ValueError, TypeError):

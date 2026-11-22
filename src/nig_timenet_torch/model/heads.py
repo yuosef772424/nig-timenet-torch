@@ -22,6 +22,7 @@ import torch
 from torch import nn
 
 from nig_timenet_torch.core.registry import Contract, Registry
+from nig_timenet_torch.core.schema import CLASS_LABEL_KEY, REG_LABEL_KEY
 
 __all__ = ["HeadSpec", "HEAD_REGISTRY", "head_spec", "classification_head_forward", "multiclass_head_forward",
            "kinds_with_task", "class_head_kind", "head_width", "nig_outputs", "class_outputs", "AUX_TASK_TYPES",
@@ -135,28 +136,28 @@ HEAD_REGISTRY.register(
     "nig_regression", None, version=1, head_name="{target}_reg",
     output_keys={"mu": "y_{target}", "nu": "y_{target}_nu", "alpha": "y_{target}_alpha", "beta": "y_{target}_beta",
                  "confidence": "y_{target}_confidence"},
-    label_key="y_{target}_reg", task_type="evidential", label_encoding="continuous", default_weight=1.0,
+    label_key=REG_LABEL_KEY, task_type="evidential", label_encoding="continuous", default_weight=1.0,
     eval_role="price",
     # model outputs of this head kind that no loss reads (so not in output_keys); used by model.contract (P31)
     extra_output_keys={"epistemic": "y_{target}_epistemic", "aleatoric": "y_{target}_aleatoric"})
 HEAD_REGISTRY.register(
     "binary_classification", classification_head_forward, version=1, head_name="{target}_class",
-    output_keys={"logits": "y_{target}_class_logits"}, label_key="y_{target}_class", task_type="classification",
+    output_keys={"logits": "y_{target}_class_logits"}, label_key=CLASS_LABEL_KEY, task_type="classification",
     label_encoding="binary", default_weight=1.0, eval_role="direction", output_width=1)
 HEAD_REGISTRY.register(
     "multiclass_classification", multiclass_head_forward, version=1, head_name="{target}_class",
-    output_keys={"logits": "y_{target}_class_logits"}, label_key="y_{target}_class", task_type="classification",
+    output_keys={"logits": "y_{target}_class_logits"}, label_key=CLASS_LABEL_KEY, task_type="classification",
     label_encoding="multiclass", default_weight=1.0, eval_role="direction", output_width=None)
 # owner 2026-11-19 (LS1): one head per trade side, each regressed on what that side is PAID after cost (long
 # e^y - 1 - c, short 1 - e^y - c, y = the log-return label): the short's exp() cost stays inside its own head
 HEAD_REGISTRY.register(
     "side_payoff", aux_head_forward, version=1, head_name="{target}_side",
     output_keys={"long": "y_{target}_long_payoff", "short": "y_{target}_short_payoff"},
-    label_key="y_{target}_reg", task_type="side_payoff", label_encoding="continuous", default_weight=1.0,
+    label_key=REG_LABEL_KEY, task_type="side_payoff", label_encoding="continuous", default_weight=1.0,
     eval_role="side", output_width=2)
 # owner 2026-11-19 (LS1): an upper quantile of the log-return label (pinball loss), for a "no short into a likely
 # squeeze" rule; a quantile of log(1 + r) is the same quantile of r, so no exp() correction is needed
 HEAD_REGISTRY.register(
     "upper_quantile", aux_head_forward, version=1, head_name="{target}_upq",
-    output_keys={"q": "y_{target}_upper_q"}, label_key="y_{target}_reg", task_type="pinball",
+    output_keys={"q": "y_{target}_upper_q"}, label_key=REG_LABEL_KEY, task_type="pinball",
     label_encoding="continuous", default_weight=1.0, eval_role="tail", output_width=1)

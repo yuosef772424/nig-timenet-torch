@@ -16,12 +16,10 @@ beta_k x market move of bar k; ``res_rsi_14``, ``res_stoch_k_14_3``, ``res_stoch
 (exp of the cumulative residual close move; stochastic on its closes); ``volume_rel_30``; ``mkt_close`` (the market's
 log move) and ``mkt_rsi_14``; ``beta`` (the coin's beta at bar k).
 
-    python -m nig_timenet_torch.data_io.market_residual SRC DST (--cache DIR | --raw VISION_RAW_DIR)
+    python -m nig_timenet_torch.data.market_residual SRC DST (--cache DIR | --raw VISION_RAW_DIR)
         [--label NAME] [--beta-bars N]
 """
 
-import argparse
-import json
 import sys
 import time
 from pathlib import Path
@@ -30,11 +28,37 @@ from statistics import NormalDist
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS, TS_COL
+from nig_timenet_torch.core.schema import (
+    LAST_COLUMN_INDEX,
+    OPEN_TIME_COL,
+    QUOTE_VOLUME_COL,
+    TARGET_COLUMNS,
+    TS_COL,
+    class_label_key,
+    reg_label_key,
+)
+from nig_timenet_torch.data import vision_slice
+from nig_timenet_torch.data.channel_math import (
+    VOL_LEN,
+    WARMUP_BARS,
+    rsi_scaled,
+    stoch_slow,
+    to_grid,
+    to_ns_utc,
+    volume_rel,
+    window_take,
+)
+from nig_timenet_torch.data.derive import (
+    cache_dir,
+    coin_candles,
+    load_source,
+    make_parser,
+    print_record,
+    require_one_frame,
+    write_derived,
+)
+from nig_timenet_torch.data.fetch import vision_klines
 from nig_timenet_torch.data_io import npy_dir
-from nig_timenet_torch.data_io.artifact import read_manifest
-from nig_timenet_torch.data_io.btc_relative import rsi, stoch_close
-from nig_timenet_torch.data_io.indicator_channels import VOL_CLIP, VOL_LEN, WARMUP_BARS, _coin_candles
 
 __all__ = ["CHANNELS", "CLOSE_LABELS", "market_panel", "rolling_beta", "rank_gauss_label", "add_market_residual",
            "DERIVATION_JSON", "main"]
@@ -51,15 +75,12 @@ MARKET_MIN = 5
 def market_panel(closes: dict[str, pd.Series], step: int) -> tuple[int, np.ndarray, dict[str, np.ndarray]]:
     """(first open ns, market log move per grid bar (NaN with fewer than MARKET_MIN coins), {coin: its close log move
     per grid bar}) on one regular grid of ``step`` ns over all coins."""
-    first = min(int(pd.DatetimeIndex(s.index).as_unit("ns").asi8.min()) for s in closes.values())
-    last = max(int(pd.DatetimeIndex(s.index).as_unit("ns").asi8.max()) for s in closes.values())
+    first = min(int(to_ns_utc(s.index).min()) for s in closes.values())
+    last = max(int(to_ns_utc(s.index).max()) for s in closes.values())
     size = (last - first) // step + 1
     moves, total, count = {}, np.zeros(size), np.zeros(size)
     for name, s in closes.items():
-        ns = pd.DatetimeIndex(s.index).as_unit("ns").asi8
-        on = (ns - first) % step == 0
-        c = np.full(size, np.nan)
-        c[(ns[on] - first) // step] = s.to_numpy(np.float64)[on]
+        c = to_grid(s.to_frame("close"), step, first=first, size=size)[1]["close"].to_numpy()
         with np.errstate(divide="ignore", invalid="ignore"):
             m = np.log(c / np.concatenate([[np.nan], c[:-1]]))
         moves[name] = m
@@ -104,11 +125,10 @@ def _coin_series(g_r: np.ndarray, mkt: np.ndarray, vol: np.ndarray,
     beta = np.where(known, b, 1.0)
     res = g_r - beta * mkt
     path = pd.Series(np.exp(np.nancumsum(np.where(np.isfinite(res), res, 0.0))))
-    k, d = stoch_close(path)
-    v = pd.Series(np.nan_to_num(vol, nan=0.0)).clip(lower=0.0)
-    vr = (np.log1p(v) - np.log1p(v.rolling(VOL_LEN).mean().shift(1))).clip(-VOL_CLIP, VOL_CLIP).to_numpy()
+    k, d = stoch_slow(path)
+    vr = volume_rel(pd.Series(np.nan_to_num(vol, nan=0.0))).to_numpy()
     mkt_path = pd.Series(np.exp(np.nancumsum(np.nan_to_num(mkt))))
-    ch = np.column_stack([rsi(path), k, d, vr, mkt, rsi(mkt_path), beta])
+    ch = np.column_stack([rsi_scaled(path), k, d, vr, mkt, rsi_scaled(mkt_path), beta])
     valid = np.isfinite(g_r) & np.isfinite(mkt) & np.isfinite(ch).all(axis=1)
     valid &= np.arange(len(g_r)) >= max(VOL_LEN + 1, 14)
     return ch, beta, valid
@@ -120,16 +140,13 @@ def _fill_coin(b, f, coin_moves, mkt, cum_mkt, first, step, ts, x, h, window, y,
     record and the count of its label rows whose beta was unknown (1 used)."""
     size = len(mkt)
     s, e = int(b["start"]), int(b["end"])
-    ns = pd.DatetimeIndex(f.index).as_unit("ns").asi8
-    on = (ns - first) % step == 0
-    vol = np.full(size, np.nan)
-    vcol = "quote_volume" if "quote_volume" in f.columns else "volume"
-    vol[(ns[on] - first) // step] = f[vcol].to_numpy(np.float64)[on]
+    vcol = QUOTE_VOLUME_COL if QUOTE_VOLUME_COL in f.columns else "volume"
+    vol = to_grid(f, step, [vcol], first=first, size=size)[1][vcol].to_numpy()
     ch, beta, ok_bar = _coin_series(coin_moves, mkt, vol, beta_bars)
     pos = (ts[s:e] - first) // step
     good = ((ts[s:e] - first) % step == 0) & (pos - window + 1 >= 0) & (pos + h < size)
     rows = np.flatnonzero(good)
-    take = pos[rows][:, None] + np.arange(-window + 1, 1)[None, :]
+    take = window_take(pos[rows], window)
     okw = ok_bar[take].all(axis=1)
     r = rows[okw]
     bt = beta[take[okw]]                                                             # (m, window)
@@ -148,29 +165,23 @@ def add_market_residual(src, dst, *, candles=None, cache=None, fetch=None, overw
     (``label``: a ``CLOSE_LABELS`` name; unknown names raise; ``beta_bars``: the beta window, >= 2).
     ``candles(name, start, end)`` returns a coin's base-frame candles (high / low / close / volume or quote_volume,
     indexed by bar open time); default: the archive through ``_coin_candles`` (``cache`` / ``fetch``)."""
-    from nig_timenet_torch.data.artifact_writer import write_artifact
-    from nig_timenet_torch.data.fetch import vision_klines
-    from nig_timenet_torch.model.heads import head_spec
-
     if label not in CLOSE_LABELS:
         raise ValueError(f"label must be one of {sorted(CLOSE_LABELS)}, not {label!r}")
     if isinstance(beta_bars, bool) or not isinstance(beta_bars, int) or beta_bars < 2:
         raise ValueError(f"beta_bars must be an integer >= 2, got {beta_bars!r}")
     src, dst = Path(src), Path(dst)
-    man = read_manifest(src)
-    ds = npy_dir.load(src, mmap=False)
-    if len(ds["timeframes"]) != 1 or list(ds["feature_order"])[:3] != list(TARGET_COLUMNS):
+    man, ds = load_source(src)
+    require_one_frame(ds, src, f"needs one frame whose first channels are {TARGET_COLUMNS}")
+    if list(ds["feature_order"])[:3] != list(TARGET_COLUMNS):
         raise ValueError(f"{src}: needs one frame whose first channels are {TARGET_COLUMNS}")
     base_tf, h = ds["base_tf"], int(ds["forecast_horizon"])
     step, bar = pd.Timedelta(base_tf).value, pd.Timedelta(base_tf)
     if candles is None:
         fetch = fetch or vision_klines
-        cache = None if cache is None else Path(cache)
-        if cache is not None:
-            cache.mkdir(parents=True, exist_ok=True)
+        cache = cache_dir(cache)
 
         def candles(name, start, end):
-            return _coin_candles(name, base_tf, start, end, cache, fetch)
+            return coin_candles(name, base_tf, start, end, cache, fetch)
 
     x = np.asarray(ds[f"X_{base_tf}"])[..., :3]
     window = x.shape[1]
@@ -185,8 +196,8 @@ def add_market_residual(src, dst, *, candles=None, cache=None, fetch=None, overw
     first, mkt, moves = market_panel({k: f["close"] for k, f in frames.items()}, step)
     cum_mkt = np.concatenate([[0.0], np.cumsum(np.nan_to_num(mkt))])       # cum_mkt[j] = sum of mkt[:j]
     new = np.zeros((len(ts), window, len(CHANNELS)), dtype=np.float32)
-    reg_key = head_spec("nig_regression", "close").label_key
-    cls_key = head_spec("binary_classification", "close").label_key
+    reg_key = reg_label_key("close")
+    cls_key = class_label_key("close")
     y = np.asarray(ds[reg_key], dtype=np.float64)
     y_new = y.copy()
     scale = float(ds.get("reg_target_scale", 1.0))
@@ -201,44 +212,35 @@ def add_market_residual(src, dst, *, candles=None, cache=None, fetch=None, overw
     ds = {**ds, f"X_{base_tf}": new, "feature_order": list(CHANNELS), "last_candles": lc,
           reg_key: y_new.astype(np.asarray(ds[reg_key]).dtype),
           cls_key: (y_new > 0).astype(np.asarray(ds[cls_key]).dtype)}
-    manifest = write_artifact(ds, dst, source_commit=man.source_commit, overwrite=overwrite,
-                              producer=f"nig_timenet_torch.data_io.market_residual (on {man.data_fingerprint})")
     written = sum(v["written"] for v in per_coin.values())
     lab = sum(v["label_rows"] for v in per_coin.values())
-    record = {"source_artifact": str(src), "source_fingerprint": man.data_fingerprint,
-              "fingerprint": manifest["export"]["data_sha256"], "channels": list(CHANNELS),
-              "close_label": label, "beta_bars": beta_bars, "beta_min": min(BETA_MIN, beta_bars // 2),
-              "market": "equal-weight close log move of the artifact's coins", "rows": int(len(ts)),
-              "rows_with_channels": int(written),
-              "rows_with_residual_label": int(lab), "label_rows_with_beta_1": n_unknown_beta,
-              "label_var_own": float(np.var(y)), "label_var_residual": float(np.var(y_new)),
-              "seconds": time.monotonic() - t0, "per_coin": per_coin}
-    (dst / DERIVATION_JSON).write_text(json.dumps(record, indent=1), encoding="utf-8")
-    return record
+    return write_derived(
+        src, dst, man, ds, overwrite=overwrite, derivation_json=DERIVATION_JSON,
+        producer=f"nig_timenet_torch.data_io.market_residual (on {man.data_fingerprint})",
+        record={"channels": list(CHANNELS),
+                "close_label": label, "beta_bars": beta_bars, "beta_min": min(BETA_MIN, beta_bars // 2),
+                "market": "equal-weight close log move of the artifact's coins", "rows": int(len(ts)),
+                "rows_with_channels": int(written),
+                "rows_with_residual_label": int(lab), "label_rows_with_beta_1": n_unknown_beta,
+                "label_var_own": float(np.var(y)), "label_var_residual": float(np.var(y_new)),
+                "seconds": time.monotonic() - t0, "per_coin": per_coin})
 
 
 def _vision_raw_candles(raw: Path, base_tf: str):
-    from nig_timenet_torch.data_io.vision_slice import load_frames
-
     cache: dict = {}
 
     def get(name, start, end):
         if name not in cache:
-            f = load_frames(raw, [name], base_tf)[name]
-            cache[name] = f.set_index(pd.to_datetime(f["open_time"], utc=True))[[*TARGET_COLUMNS, "volume"]]
+            f = vision_slice.load_frames(raw, [name], base_tf)[name]
+            cache[name] = f.set_index(pd.to_datetime(f[OPEN_TIME_COL], utc=True))[[*TARGET_COLUMNS, "volume"]]
         return cache[name]
 
     return get
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m nig_timenet_torch.data_io.market_residual", description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("src")
-    ap.add_argument("dst")
-    ap.add_argument("--cache", default=None, help="candle cache folder (archive fetch)")
+    ap = make_parser("python -m nig_timenet_torch.data.market_residual", __doc__, workers=False)
     ap.add_argument("--raw", default=None, help="a vision_slice raw folder instead of the archive")
-    ap.add_argument("--overwrite", action="store_true")
     ap.add_argument("--label", default="residual", choices=sorted(CLOSE_LABELS), help="the close label (CLOSE_LABELS)")
     ap.add_argument("--beta-bars", type=int, default=BETA_BARS, help="beta window in bars (default BETA_BARS)")
     a = ap.parse_args(argv)
@@ -247,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
         candles = _vision_raw_candles(Path(a.raw), npy_dir.load(a.src, mmap=True)["base_tf"])
     r = add_market_residual(a.src, a.dst, candles=candles, cache=a.cache, overwrite=a.overwrite, label=a.label,
                             beta_bars=a.beta_bars)
-    print(json.dumps({k: v for k, v in r.items() if k != "per_coin"}, indent=1))
+    print_record(r)
     return 0
 
 

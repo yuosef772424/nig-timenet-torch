@@ -248,7 +248,7 @@ ALLOWED_IMPORTS: dict[str, set[str] | None] = {
     "core": set(),
     "stats": {"core"},
     "data": {"core", "data_io"},
-    "data_io": None,
+    "data_io": {"core", "stats", "workflow"},   # workflow: only environments.main (the nig-envs script), lazily
     "eval": None,
     "model": None,
     "trainer": None,

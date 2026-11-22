@@ -167,9 +167,8 @@ def test_unknown_job_config_key_raises(tmp_path, art, monkeypatch):  # noqa: F81
 
 
 def test_unknown_codec_mode_or_missing_scale_or_bad_targets_raise(tmp_path, monkeypatch):
-    from nig_timenet_torch.core.registry import UnknownNameError
     from tests.data_io.variants import tf_shaped_artifact
-    with pytest.raises(UnknownNameError):
+    with pytest.raises(ValueError, match="volnorm.*supported modes.*logret_close"):   # HB5 D-08: was a KeyError
         run_cfg(tmp_path, "m", tf_shaped_artifact(tmp_path / "m.dataset", reg_target_mode="volnorm"), monkeypatch)
     with pytest.raises(ValueError, match="reg_target_scale"):
         run_cfg(tmp_path, "s", tf_shaped_artifact(tmp_path / "s.dataset", reg_target_scale=...), monkeypatch)

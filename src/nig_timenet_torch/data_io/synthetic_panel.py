@@ -28,7 +28,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import LAST_COLUMNS
+from nig_timenet_torch.core.schema import LAST_COLUMNS, reg_label_key
 from nig_timenet_torch.data_io.synthetic import (
     LABEL_CODECS,
     ORACLE_PREFIX,
@@ -37,7 +37,6 @@ from nig_timenet_torch.data_io.synthetic import (
     oracle_keys,
     sim_rows,
 )
-from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["PanelSyntheticSettings", "build_panel_synthetic", "write_panel_synthetic", "panel_summary",
@@ -137,7 +136,7 @@ def panel_summary(ds: dict) -> dict:
     mean), the POOLED Pearson correlation with the close label and with the label relative to the timestamp mean
     (what a loss summed over all rows learns from: here the three differ)."""
     s = ds["synthetic"]["settings"]
-    y = np.asarray(ds[head_spec("nig_regression", "close").label_key], np.float64)
+    y = np.asarray(ds[reg_label_key("close")], np.float64)
     ts = np.asarray(ds["last_candles"])[:, LAST_COLUMNS.index("timestamp")].astype(np.int64)
     beta, market = np.asarray(ds[f"{ORACLE_PREFIX}beta"]), np.asarray(ds[f"{ORACLE_PREFIX}market"])
     z, spec_sd = np.asarray(ds[f"{ORACLE_PREFIX}signal"]), np.asarray(ds[f"{ORACLE_PREFIX}specific_sd"])
@@ -181,7 +180,7 @@ def write_panel_synthetic(out_dir, settings: PanelSyntheticSettings | None = Non
                           overwrite: bool = False) -> dict:
     """Build E4 and write it as a contract artifact (rule D1) that ``data_io.load_dataset`` reads; returns the
     manifest. ``source_commit`` "" = the git HEAD of this package."""
-    from nig_timenet_torch.data.artifact_writer import write_artifact
+    from nig_timenet_torch.data_io.artifact_writer import write_artifact
 
     return write_artifact(build_panel_synthetic(settings), out_dir, source_commit=source_commit, overwrite=overwrite,
                           producer="nig_timenet_torch.data_io.synthetic_panel")

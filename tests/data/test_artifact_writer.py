@@ -6,11 +6,11 @@ import subprocess
 import numpy as np
 import pytest
 
-from nig_timenet_torch.data.artifact_writer import git_head, restrict_to_time_seal, write_artifact
 from nig_timenet_torch.data.build import build_dataset
-from nig_timenet_torch.data.lock import load_lock
 from nig_timenet_torch.data.pipeline import build_artifact
 from nig_timenet_torch.data_io.artifact import ArtifactError, load_artifact, verify_hashes
+from nig_timenet_torch.data_io.artifact_writer import git_head, restrict_to_time_seal, write_artifact
+from nig_timenet_torch.data_io.lock import load_lock
 from tests.data.helpers import tiny_settings
 
 SHA = "ab" * 20

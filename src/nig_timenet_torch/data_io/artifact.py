@@ -29,11 +29,17 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.core.coins import norm_coin
+from nig_timenet_torch.core.label_time import label_bar_open
 from nig_timenet_torch.core.schema import TS_COL
 from nig_timenet_torch.data_io import npy_dir
+from nig_timenet_torch.data_io.npy_dir import sha256_file
+
+_sha256_file = sha256_file   # old private name, still read by colab/prepare.py
 
 __all__ = ["ArtifactError", "ArtifactManifest", "Artifact", "SCHEMA", "TIME_SEAL", "EXPECTED_SEALED_COUNT",
-           "EXPECTED_LOCK_SHA256", "norm_coin", "read_manifest", "load_artifact", "verify_hashes"]
+           "EXPECTED_LOCK_SHA256", "norm_coin", "sha256_file", "SHA1_RE", "read_manifest", "load_artifact",
+           "verify_hashes"]
 
 SCHEMA = "torch_artifact/1"
 #: The time seal of the TF holdout lock (docs/DATA_ARTIFACT_CONTRACT.md): no bar, and no label, at or after it.
@@ -46,7 +52,7 @@ EXPECTED_SEALED_COUNT = 183
 EXPECTED_LOCK_SHA256 = "70322ba699d5068e4fbe7f8b014f85492aeebf15d3c743551fbf1062cd889b2c"
 REQUIRED = ("schema", "source_commit", "coins", "sealed_excluded", "lock_sha256", "time_seal", "max_bar_time",
             "data_sha256")
-_SHA1 = re.compile(r"^[0-9a-f]{40}$")
+SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -81,16 +87,6 @@ class Artifact:
     path: Path
 
 
-def _norm(symbol: str) -> str:
-    """Name as the TF guard compares it: upper case, with or without the trailing USDT."""
-    n = str(symbol).strip().upper()
-    return n[:-4] if n.endswith("USDT") and len(n) > 4 else n
-
-
-#: public name of the comparison key (used by ``split.exclude_coins``)
-norm_coin = _norm
-
-
 def _timestamp(value, field: str) -> pd.Timestamp:
     try:
         t = pd.Timestamp(value)
@@ -105,7 +101,7 @@ def _name_list(block: dict, field: str) -> tuple[str, ...]:
     v = block[field]
     if not isinstance(v, list) or not v or not all(isinstance(c, str) and c.strip() for c in v):
         raise ArtifactError(f"export.{field}: must be a non-empty list of coin names, got {v!r:.80}")
-    if len({_norm(c) for c in v}) != len(v):
+    if len({norm_coin(c) for c in v}) != len(v):
         raise ArtifactError(f"export.{field}: duplicate names")
     return tuple(v)
 
@@ -124,7 +120,7 @@ def read_manifest(path: str | Path) -> ArtifactManifest:
         raise ArtifactError(f"{path}: export block lacks required fields {missing} (rule D1)")
     if block["schema"] != SCHEMA:
         raise ArtifactError(f"{path}: export.schema {block['schema']!r} is not {SCHEMA!r}")
-    if not isinstance(block["source_commit"], str) or not _SHA1.match(block["source_commit"]):
+    if not isinstance(block["source_commit"], str) or not SHA1_RE.match(block["source_commit"]):
         raise ArtifactError(f"{path}: export.source_commit must be a 40-hex git commit, got {block['source_commit']!r}")
     if not isinstance(block["data_sha256"], str) or not _SHA256.match(block["data_sha256"]):
         raise ArtifactError(f"{path}: export.data_sha256 must be a 64-hex sha256")
@@ -136,8 +132,8 @@ def read_manifest(path: str | Path) -> ArtifactManifest:
     if block["lock_sha256"] != EXPECTED_LOCK_SHA256:
         raise ArtifactError(f"{path}: export.lock_sha256 {block['lock_sha256']!r} is not the pinned TF lock "
                             f"{EXPECTED_LOCK_SHA256} (exported against another lock)")
-    sealed_names = {_norm(s) for s in sealed}
-    leaked = [c for c in coins if _norm(c) in sealed_names]
+    sealed_names = {norm_coin(s) for s in sealed}
+    leaked = [c for c in coins if norm_coin(c) in sealed_names]
     if leaked:
         raise ArtifactError(f"{path}: coins {leaked[:5]} are on the sealed list (export.sealed_excluded): a sealed "
                             f"coin must never be in a training artifact")
@@ -186,7 +182,8 @@ def load_artifact(path: str | Path, *, mmap: bool = False) -> Artifact:
                             f"{list(manifest.timeframes)} but the data holds {dataset['base_tf']!r} / "
                             f"{list(dataset['timeframes'])} (the manifest does not describe this data)")
     ts = np.asarray(dataset["last_candles"])[:, TS_COL].astype("int64")
-    latest = pd.Timestamp(int(ts.max()) + int(dataset["forecast_horizon"]) * _bar_ns(dataset["base_tf"]), tz="UTC")
+    latest = pd.Timestamp(int(label_bar_open(ts.max(), dataset["forecast_horizon"], _bar_ns(dataset["base_tf"]))),
+                          tz="UTC")
     if latest >= TIME_SEAL:
         raise ArtifactError(f"{path}: a window's label bar ({latest.isoformat()}) is at or after the time seal "
                             f"{TIME_SEAL.isoformat()}")
@@ -194,14 +191,6 @@ def load_artifact(path: str | Path, *, mmap: bool = False) -> Artifact:
         raise ArtifactError(f"{path}: the data reaches {latest.isoformat()}, later than export.max_bar_time "
                             f"{manifest.max_bar_time.isoformat()}")
     return Artifact(dataset=dataset, manifest=manifest, path=Path(path))
-
-
-def _sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 22), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def verify_hashes(path: str | Path) -> None:
@@ -214,7 +203,7 @@ def verify_hashes(path: str | Path) -> None:
         f = Path(path) / name
         if not f.is_file():
             raise ArtifactError(f"{path}: {name} is listed in export.files but missing")
-        if _sha256_file(f) != want:
+        if sha256_file(f) != want:
             raise ArtifactError(f"{path}: {name} does not match its sha256 in export.files")
     combined = hashlib.sha256(json.dumps(manifest.files, sort_keys=True).encode()).hexdigest()
     if combined != manifest.data_fingerprint:

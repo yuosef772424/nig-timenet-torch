@@ -24,12 +24,12 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import LAST_COLUMNS, LAST_DTYPE, TARGET_COLUMNS
+from nig_timenet_torch.core.schema import LAST_COLUMNS, LAST_DTYPE, TARGET_COLUMNS, head_names
+from nig_timenet_torch.core.timeframe import normalize_tf
 from nig_timenet_torch.data.align import align_windows, is_closed_mode
 from nig_timenet_torch.data.scaling import process_windows, window_scale_params
 from nig_timenet_torch.data.settings import DataSettings
 from nig_timenet_torch.data.targets import target_arrays
-from nig_timenet_torch.data.timeframe import normalize_tf
 
 __all__ = ["AssetWindows", "prepare_asset", "head_names", "sample_filter_mask", "FILTER_OPS"]
 
@@ -49,11 +49,6 @@ class AssetWindows:
     @property
     def n(self) -> int:
         return int(self.bases.shape[0])
-
-
-def head_names(targets) -> list[str]:
-    """Target heads in dataset order: high -> high_class, high_reg, low_class, ..."""
-    return [f"{t}_{kind}" for t in targets for kind in ("class", "reg")]
 
 
 def _empty(settings: DataSettings, n_feat: int) -> AssetWindows:
