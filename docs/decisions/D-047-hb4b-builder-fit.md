@@ -1,0 +1,162 @@
+# D-047 — Hardening 2026-11b, package HB4b: one builder option list, the builder and forward split, shared fit machinery (owner 2026-11-21)
+
+Date: 2026-11-22
+Owner decision: owner message 2026-11-21: "apply the improvement suggestions, fix the unclear places and launch a hardening campaign for the project; the goal is better structure and more clarity" (plan: `docs/hardening/PLAN-2026-11b.md`, package HB4); owner message 2026-11-22: "continue the work, preferably with Sonnet agents for each task"
+Why: the audit `docs/hardening/audit-2026-11b/A_model_trainer_stats_core.md` rows A-02, A-03, A-25 (a 129-line `NigTimeNetV2.__init__`, a 55-line `forward`, the 45-keyword option list written three times) and A-07, A-20 (`staged._Loop` re-implementing `Trainer.fit`'s resume / checkpoint / best-weights machinery; a 79-line `fit`).
+
+## What changes behaviour
+- Numbers: none. A harness over 18 model configurations (parameter names, shapes, order, initial values, eval and
+  seeded train forward), 2-epoch / EMA + clip / resumed fits, staged fits and resumes from checkpoints written by the
+  unchanged code found no difference (`torch.equal`); the trainer-config / identity and model-assembly pins are
+  byte-unchanged.
+- API: the builder's options live once in `model.builder.BuilderOptions` (same names and defaults);
+  `build_nig_timenet_v2(seq_len, n_features, **options)` fills it (unknown names still raise TypeError) and
+  `NigTimeNetV2(seq_len, n_features, options)` reads it, so the per-keyword defaults below move to `BuilderOptions`.
+- `trainer/fit_state.py` holds the machinery `Trainer.fit` and the staged loop share (checkpoint keys unchanged);
+  `Trainer.fit` takes one time measurement per epoch for both the trace and the deadline estimate; the staged
+  loop's seed-mismatch message is the longer one of `Trainer.fit`. G3 functions over 80 lines 5 -> 4.
+
+- `nig_timenet_torch.model.builder.BuilderOptions(alpha_min)`: `<new>` -> `2.0`
+- `nig_timenet_torch.model.builder.BuilderOptions(attn_dropout)`: `<new>` -> `0.0`
+- `nig_timenet_torch.model.builder.BuilderOptions(aux_heads)`: `<new>` -> `()`
+- `nig_timenet_torch.model.builder.BuilderOptions(aux_trunk_grad)`: `<new>` -> `1.0`
+- `nig_timenet_torch.model.builder.BuilderOptions(beta_min)`: `<new>` -> `0.01`
+- `nig_timenet_torch.model.builder.BuilderOptions(bn_warmup)`: `<new>` -> `False`
+- `nig_timenet_torch.model.builder.BuilderOptions(causal)`: `<new>` -> `False`
+- `nig_timenet_torch.model.builder.BuilderOptions(class_head_hidden)`: `<new>` -> `64`
+- `nig_timenet_torch.model.builder.BuilderOptions(cross_center)`: `<new>` -> `False`
+- `nig_timenet_torch.model.builder.BuilderOptions(cross_coin_heads)`: `<new>` -> `4`
+- `nig_timenet_torch.model.builder.BuilderOptions(cross_coin_kind)`: `<new>` -> `'attention'`
+- `nig_timenet_torch.model.builder.BuilderOptions(cross_coin_layers)`: `<new>` -> `0`
+- `nig_timenet_torch.model.builder.BuilderOptions(cross_coin_peer_dropout)`: `<new>` -> `0.0`
+- `nig_timenet_torch.model.builder.BuilderOptions(cross_input)`: `<new>` -> `'none'`
+- `nig_timenet_torch.model.builder.BuilderOptions(d_model)`: `<new>` -> `128`
+- `nig_timenet_torch.model.builder.BuilderOptions(dropout)`: `<new>` -> `0.1`
+- `nig_timenet_torch.model.builder.BuilderOptions(encoder)`: `<new>` -> `'transformer'`
+- `nig_timenet_torch.model.builder.BuilderOptions(enforce_order)`: `<new>` -> `True`
+- `nig_timenet_torch.model.builder.BuilderOptions(feature_dropout)`: `<new>` -> `0.0`
+- `nig_timenet_torch.model.builder.BuilderOptions(ffn)`: `<new>` -> `'swiglu'`
+- `nig_timenet_torch.model.builder.BuilderOptions(ffn_dim)`: `<new>` -> `None`
+- `nig_timenet_torch.model.builder.BuilderOptions(har_range)`: `<new>` -> `None`
+- `nig_timenet_torch.model.builder.BuilderOptions(head_hidden)`: `<new>` -> `128`
+- `nig_timenet_torch.model.builder.BuilderOptions(head_types)`: `<new>` -> `None`
+- `nig_timenet_torch.model.builder.BuilderOptions(input_clip)`: `<new>` -> `None`
+- `nig_timenet_torch.model.builder.BuilderOptions(input_noise_std)`: `<new>` -> `0.0`
+- `nig_timenet_torch.model.builder.BuilderOptions(input_scaler)`: `<new>` -> `'none'`
+- `nig_timenet_torch.model.builder.BuilderOptions(input_skip)`: `<new>` -> `'none'`
+- `nig_timenet_torch.model.builder.BuilderOptions(kernel_sizes)`: `<new>` -> `(3, 5, 9, 17)`
+- `nig_timenet_torch.model.builder.BuilderOptions(level_norm)`: `<new>` -> `None`
+- `nig_timenet_torch.model.builder.BuilderOptions(level_passthrough)`: `<new>` -> `False`
+- `nig_timenet_torch.model.builder.BuilderOptions(linear_path_l2)`: `<new>` -> `0.0001`
+- `nig_timenet_torch.model.builder.BuilderOptions(max_rel_pos)`: `<new>` -> `16`
+- `nig_timenet_torch.model.builder.BuilderOptions(n_classes)`: `<new>` -> `3`
+- `nig_timenet_torch.model.builder.BuilderOptions(nig_head)`: `<new>` -> `'dense'`
+- `nig_timenet_torch.model.builder.BuilderOptions(nig_head_dropout)`: `<new>` -> `0.0`
+- `nig_timenet_torch.model.builder.BuilderOptions(nig_scale)`: `<new>` -> `None`
+- `nig_timenet_torch.model.builder.BuilderOptions(nig_scale_fit)`: `<new>` -> `'fixed'`
+- `nig_timenet_torch.model.builder.BuilderOptions(nig_trunk_grad)`: `<new>` -> `1.0`
+- `nig_timenet_torch.model.builder.BuilderOptions(norm_eps)`: `<new>` -> `0.0001`
+- `nig_timenet_torch.model.builder.BuilderOptions(nu_min)`: `<new>` -> `0.1`
+- `nig_timenet_torch.model.builder.BuilderOptions(num_heads)`: `<new>` -> `4`
+- `nig_timenet_torch.model.builder.BuilderOptions(num_kv_heads)`: `<new>` -> `2`
+- `nig_timenet_torch.model.builder.BuilderOptions(num_layers)`: `<new>` -> `4`
+- `nig_timenet_torch.model.builder.BuilderOptions(order_detach_close)`: `<new>` -> `False`
+- `nig_timenet_torch.model.builder.BuilderOptions(order_in_label_units)`: `<new>` -> `False`
+- `nig_timenet_torch.model.builder.BuilderOptions(patch_len)`: `<new>` -> `4`
+- `nig_timenet_torch.model.builder.BuilderOptions(price_targets)`: `<new>` -> `('high', 'low', 'close')`
+- `nig_timenet_torch.model.builder.BuilderOptions(readout_dropout)`: `<new>` -> `None`
+- `nig_timenet_torch.model.builder.BuilderOptions(stats_mode)`: `<new>` -> `'full'`
+- `nig_timenet_torch.model.builder.BuilderOptions(stride)`: `<new>` -> `2`
+- `nig_timenet_torch.model.builder.BuilderOptions(target_norm)`: `<new>` -> `'none'`
+- `nig_timenet_torch.model.builder.BuilderOptions(unc_max)`: `<new>` -> `20.0`
+- `nig_timenet_torch.model.builder.BuilderOptions(use_instance_norm)`: `<new>` -> `True`
+- `nig_timenet_torch.model.builder.BuilderOptions(window)`: `<new>` -> `None`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(aux_heads)`: `()` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(aux_trunk_grad)`: `1.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(bn_warmup)`: `False` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(cross_center)`: `False` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(cross_coin_heads)`: `4` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(cross_coin_kind)`: `'attention'` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(cross_coin_layers)`: `0` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(cross_coin_peer_dropout)`: `0.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(cross_input)`: `'none'` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(encoder)`: `'transformer'` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(feature_dropout)`: `0.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(ffn)`: `'swiglu'` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(ffn_dim)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(har_range)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(input_clip)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(input_noise_std)`: `0.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(input_scaler)`: `'none'` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(input_skip)`: `'none'` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(level_norm)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(level_passthrough)`: `False` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(n_classes)`: `3` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(nig_head)`: `'dense'` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(nig_head_dropout)`: `0.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(nig_scale)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(nig_scale_fit)`: `'fixed'` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(nig_trunk_grad)`: `1.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(order_detach_close)`: `False` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(order_in_label_units)`: `False` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(readout_dropout)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(stats_mode)`: `'full'` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(target_norm)`: `'none'` -> `<removed>`
+- `nig_timenet_torch.model.builder.NigTimeNetV2(use_instance_norm)`: `True` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(alpha_min)`: `2.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(attn_dropout)`: `0.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(aux_heads)`: `()` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(aux_trunk_grad)`: `1.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(beta_min)`: `0.01` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(bn_warmup)`: `False` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(causal)`: `False` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(class_head_hidden)`: `64` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_center)`: `False` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_coin_heads)`: `4` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_coin_kind)`: `'attention'` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_coin_layers)`: `0` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_coin_peer_dropout)`: `0.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(cross_input)`: `'none'` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(d_model)`: `128` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(dropout)`: `0.1` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(encoder)`: `'transformer'` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(enforce_order)`: `True` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(feature_dropout)`: `0.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(ffn)`: `'swiglu'` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(ffn_dim)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(har_range)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(head_hidden)`: `128` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(head_types)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(input_clip)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(input_noise_std)`: `0.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(input_scaler)`: `'none'` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(input_skip)`: `'none'` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(kernel_sizes)`: `(3, 5, 9, 17)` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(level_norm)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(level_passthrough)`: `False` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(linear_path_l2)`: `0.0001` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(max_rel_pos)`: `16` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(n_classes)`: `3` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(nig_head)`: `'dense'` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(nig_head_dropout)`: `0.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(nig_scale)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(nig_scale_fit)`: `'fixed'` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(nig_trunk_grad)`: `1.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(norm_eps)`: `0.0001` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(nu_min)`: `0.1` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(num_heads)`: `4` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(num_kv_heads)`: `2` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(num_layers)`: `4` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(order_detach_close)`: `False` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(order_in_label_units)`: `False` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(patch_len)`: `4` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(price_targets)`: `('high', 'low', 'close')` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(readout_dropout)`: `None` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(stats_mode)`: `'full'` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(stride)`: `2` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(target_norm)`: `'none'` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(unc_max)`: `20.0` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(use_instance_norm)`: `True` -> `<removed>`
+- `nig_timenet_torch.model.builder.build_nig_timenet_v2(window)`: `None` -> `<removed>`
+- `nig_timenet_torch.trainer.fit_state.base_state(staged)`: `<new>` -> `None`
+- `nig_timenet_torch.trainer.fit_state.finish_weights(ema)`: `<new>` -> `None`
