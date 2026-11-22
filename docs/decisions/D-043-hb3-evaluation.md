@@ -14,10 +14,23 @@ Why: the audit `docs/hardening/audit-2026-11b/B_eval_doctor.md` (rows B-04..B-11
   `limit_at_extreme`, `MIN_TRADES`, `eval/day_blocks.py` (`calendar_day`, `day_blocks`, `DAY_BLOCK_DAYS`), and the cost
   default `core/costs.py::DEFAULT_COST_PER_SIDE` (0.0008, read by the trainer's side-payoff loss, the run settings,
   the battery and the reports; a scan test refuses a typed 0.0008 elsewhere).
+- HB3b (names, no number changes; an equal-output harness found 0 value differences): `weekly_stability` ->
+  `daily_stability` (the "week" was a calendar day; section "DAILY STABILITY", battery key `weekly` -> `daily`);
+  `limit_at_mu` -> `take_profit_at_mu`, `limit_execution` -> `take_profit_grid`, `strategy_book.limit_at_mu_trades`
+  -> `take_profit_at_mu_trades` (section "TAKE-PROFIT AT mu", key `limit` -> `take_profit_at_mu`; neither old key
+  was written to saved JSON); `verdict` names `TRADEABLE_SHARPE` / `MARGINAL_SHARPE` and says its best is chosen ON
+  TEST (best of N, optimistic), the scorecard verdict is the VAL-chosen one; the verdict note says "scorecard skipped:
+  no end_time" when it is; `legacy_reports` hit columns from sign(mu) are `hit_mu_sign`; `battery.SECTION_ORDER`.
 - Removed (dead): the `sides` parameters of `battery_profit` and `DEFAULT_SIDES` (no caller passed them; the value 2
   is `battery_lib.SIDES`).
 
 - `nig_timenet_torch.core.costs.DEFAULT_COST_PER_SIDE`: `<new>` -> `0.0008`
+- `nig_timenet_torch.eval.battery.daily_stability(min_n)`: `<new>` -> `50`
+- `nig_timenet_torch.eval.battery.daily_stability(pct)`: `<new>` -> `0.1`
+- `nig_timenet_torch.eval.battery.limit_execution(pcts)`: `(0.05, 0.1, 0.2)` -> `<removed>`
+- `nig_timenet_torch.eval.battery.take_profit_grid(pcts)`: `<new>` -> `(0.05, 0.1, 0.2)`
+- `nig_timenet_torch.eval.battery.weekly_stability(min_n)`: `50` -> `<removed>`
+- `nig_timenet_torch.eval.battery.weekly_stability(pct)`: `0.1` -> `<removed>`
 - `nig_timenet_torch.eval.battery_lib.bonferroni_level(alpha)`: `<new>` -> `0.05`
 - `nig_timenet_torch.eval.battery_lib.section(note)`: `<new>` -> `''`
 - `nig_timenet_torch.eval.battery_lib.top_abs(mask)`: `<new>` -> `None`

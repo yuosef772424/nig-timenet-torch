@@ -46,8 +46,8 @@ def test_the_battery_definitions_are_reproduced():
     side = np.where(d["p_dir"] > 0.5, 1.0, -1.0)
     m = (d["dir_true"].values != 0) & (side == 1.0)
     idx = battery_lib.top_abs(d["mu"].values, 0.20, m)
-    mine = sb.limit_at_mu_trades(d, idx, 1.0, COST)["pnl"].mean()
-    row = [r for r in battery.limit_execution(d, COST)["rows"] if r.startswith("LONG top20%")][0]
+    mine = sb.take_profit_at_mu_trades(d, idx, 1.0, COST)["pnl"].mean()
+    row = [r for r in battery.take_profit_grid(d, COST)["rows"] if r.startswith("LONG top20%")][0]
     assert f"{mine * 100:+.4f}%" in row
     pnl, _, _ = battery_lib.limit_at_extreme(1.0, d["pred_low"].values, d["fut_low"].values, d["y_ret"].values, COST)
     assert sb.limit_extreme_trades(d, np.ones(len(d), bool), 1.0, COST)["pnl"].mean() == pytest.approx(pnl.mean())
@@ -87,11 +87,11 @@ def test_take_profit_at_mu_pays_no_target_against_the_side_and_reads_the_extreme
                                                        [0.01, 0.002, 0.008, -0.01],    # long, target missed
                                                        [-0.01, 0.004, 0.02, -0.012]]  # short, low touched mu
     side = np.array([1.0, 1.0, 1.0, -1.0])
-    tr = sb.limit_at_mu_trades(d, np.arange(4), side, COST)
+    tr = sb.take_profit_at_mu_trades(d, np.arange(4), side, COST)
     rt = 2 * COST
     assert tr["pnl"].tolist() == pytest.approx([-0.01 - rt, 0.01 - rt, 0.002 - rt, 0.01 - rt])
     assert np.isnan(tr["hit"].values[0]) and tr["hit"].values[1:].tolist() == [1.0, 0.0, 1.0]
     close_only = d.drop(columns=["fut_high", "fut_low"])   # without the extremes the close stands in (lower bound)
-    r2 = battery_lib.limit_at_mu(close_only, np.arange(4), side, COST)
+    r2 = battery_lib.take_profit_at_mu(close_only, np.arange(4), side, COST)
     assert not r2["path"] and r2["pnl"].tolist() == pytest.approx([-0.01 - rt, -0.005 - rt, 0.002 - rt, -0.004 - rt])
     assert (r2["pnl"] <= tr["pnl"].values + 1e-12).all()

@@ -4,7 +4,8 @@ PURPOSE: Battery sections judging a use of the outputs by its DAYS (mean day wit
     CVaR, drawdown) per side and selection (top |mu|, confidence, low sigma); uncertainty buckets; the short exp payoff.
 TAGS: scorecard, day distribution, cvar, drawdown, loss concentration, confidence, uncertainty, top k, long short,
     short squeeze, convexity, log return, battery
-PITFALLS: y_ret and mu are SIMPLE returns (the adapter decodes the log label with exp); a short pays -y_ret, so its
+PITFALLS: direction source is p_dir via battery_lib.trade_side; y_ret and mu are SIMPLE returns (the adapter decodes
+the log label with exp); a short pays -y_ret, so its
     loss grows like exp(log move) while its gain is bounded (asymmetry section). Thresholds come from VAL (never TEST);
     the CI level is Bonferroni over the section's rows x n_variants. A day is the calendar day of end_time; a day's
     P&L is the equal-weight mean of the trades of that day.
@@ -279,7 +280,9 @@ def scorecard_verdict(card: dict) -> dict:
 
 
 def scorecard_sections(val, test, cost: float, n_variants: int = 1) -> dict:
-    """The four sections in the order the battery prints them (skipped when TEST has no end_time)."""
+    """The scorecard sections (``scorecard``, ``buckets``, ``asymmetry``, ``scorecard_verdict``: see
+    ``battery.SECTION_ORDER``). Returns ``{}`` when TEST has no end_time: ``battery.verdict`` then states "scorecard
+    skipped: no end_time"."""
     if "end_time" not in test:
         return {}
     card = scorecard(val, test, cost, n_variants)

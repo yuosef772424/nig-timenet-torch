@@ -104,7 +104,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Decisions
 
-42 decisions (format: `docs/decisions/README.md`).
+43 decisions (format: `docs/decisions/README.md`).
 
 - `docs/decisions/D-001-trainer-fit-defaults.md`: D-001 — trainer fit: schedule, early-stopping and fit defaults (ROADMAP T1)
 - `docs/decisions/D-002-colab-runner-defaults.md`: D-002 — Colab runner and notebook support: new defaults (ROADMAP T3)
@@ -148,6 +148,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/decisions/D-041-hb1-correctness.md`: D-041 — Hardening 2026-11b, package HB1: correctness fixes found by the structure audit (owner 2026-11-21)
 - `docs/decisions/D-042-hb2-run-identity.md`: D-042 — Hardening 2026-11b, package HB2: run identity and resume safety (owner 2026-11-21)
 - `docs/decisions/D-043-hb3-evaluation.md`: D-043 — Hardening 2026-11b, package HB3: evaluation, one implementation per trading rule and helper (owner 2026-11-21)
+- `docs/decisions/D-044-hb4-model-trainer.md`: D-044 — Hardening 2026-11b, package HB4a: model and trainer clean-ups (owner 2026-11-21)
 
 ## Job files
 

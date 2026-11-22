@@ -1,9 +1,11 @@
 """PURPOSE: Every use of the model outputs as a trade rule over a battery table (direction, top-|mu| grid, TP at mu,
     limit at the predicted extreme, take-profit), each with trivial controls, on VAL and TEST with a day-block CI.
 TAGS: t-profit, strategy book, trade rules, trivial controls, volatility baseline, day block bootstrap, val and test
-PITFALLS: cost is PER SIDE (2x per round trip, battery_lib.SIDES); every threshold (aleatoric, volatility, top-k)
-    comes from VAL and is applied unchanged to TEST; high / low enter only as price levels, the side of a
-    direction trade comes from the close head (rule D); TP rules use the 2-bar realised extreme, no path order.
+PITFALLS: cost is PER SIDE (2x per round trip, battery_lib.SIDES); the top-k share of the |mu| (and vol) grid is
+    taken from EACH split's own rows (VAL and TEST rank separately); only the aleatoric / volatility quantiles and the
+    volatility-level scale come from VAL and are applied unchanged to TEST; direction source: p_dir via
+    battery_lib.trade_side for the direction rules (high / low enter only as price levels); TP rules use the 2-bar
+    realised extreme, no path order.
 
 A trade frame has one row per trade: ``pnl`` (after cost), ``hit`` (target reached / order filled; NaN when the rule
 has no target), ``side`` (+1 long, -1 short), ``coin``, ``day``, ``mae`` (adverse excursion >= 0 from the entry),
@@ -20,15 +22,15 @@ import pandas as pd
 from nig_timenet_torch.eval.battery_lib import (
     DEFAULT_COST_PER_SIDE,
     limit_at_extreme,
-    limit_at_mu,
     net_pnl,
+    take_profit_at_mu,
     top_abs,
     trade_side,
 )
 from nig_timenet_torch.eval.day_blocks import calendar_day
 from nig_timenet_torch.stats.metrics import block_bootstrap_ci
 
-__all__ = ["direction_trades", "limit_at_mu_trades", "limit_extreme_trades", "tp_trades", "summarize", "book",
+__all__ = ["direction_trades", "take_profit_at_mu_trades", "limit_extreme_trades", "tp_trades", "summarize", "book",
            "FILTER_QUANTILES", "TOP_PCTS", "TP_SHARE"]
 
 FILTER_QUANTILES = (None, 0.5, 0.8, 0.9)
@@ -55,14 +57,14 @@ def direction_trades(df, idx, side, cost: float) -> pd.DataFrame:
                   np.abs(df["mu"].values[idx]), side * y)
 
 
-def limit_at_mu_trades(df, idx, side, cost: float) -> pd.DataFrame:
-    """The battery's 'REALISTIC EXECUTION - take-profit at mu' rule (eval/battery.py::limit_execution), exactly: market
+def take_profit_at_mu_trades(df, idx, side, cost: float) -> pd.DataFrame:
+    """The battery's 'TAKE-PROFIT AT mu' rule (eval/battery.py::take_profit_grid), exactly: market
     entry at the last close; a target at mu only on the trade's side, reached on the realised extreme (or the close
     without the extreme columns); a hit is paid |mu|, a miss or a row without a target the close return; cost per
-    side x2 (one implementation: battery_lib.limit_at_mu)."""
+    side x2 (one implementation: battery_lib.take_profit_at_mu)."""
     idx = np.asarray(idx)
     side = np.broadcast_to(np.asarray(side, dtype=np.float64), (len(idx),))
-    r = limit_at_mu(df, idx, side, cost)
+    r = take_profit_at_mu(df, idx, side, cost)
     mu, y = df["mu"].values[idx], df["y_ret"].values[idx]
     hit = np.where(r["target"], r["hit"].astype(float), np.nan)
     return _frame(df, idx, r["pnl"], side, hit, _adverse_market(df, idx, side), np.abs(mu), side * y)
@@ -140,7 +142,7 @@ def _direction_uses(d, cost, rng):
             yield use, "volatility selection", direction_trades(d, top_abs(d["vol"].values, pct, m), sg, cost)
             yield use, "random selection", direction_trades(d, rng.choice(np.where(m)[0], len(idx), replace=False), sg,
                                                             cost)
-            yield f"{name} top{int(pct * 100)}% (TP at mu)", "model", limit_at_mu_trades(d, idx, sg, cost)
+            yield f"{name} top{int(pct * 100)}% (TP at mu)", "model", take_profit_at_mu_trades(d, idx, sg, cost)
 
 
 def _level_uses(d, cost, thr, vol_scale, rng):
@@ -177,7 +179,8 @@ def _level_uses(d, cost, thr, vol_scale, rng):
 
 def book(val: pd.DataFrame, test: pd.DataFrame, cost: float = DEFAULT_COST_PER_SIDE, seed: int = 0) -> list[dict]:
     """Every (use, control) on VAL and TEST: one dict per (use, control, split) with ``summarize`` stats and the
-    trade frame (key ``trades``). Thresholds (aleatoric / volatility quantiles) and the volatility-level scale (median
+    trade frame (key ``trades``). The top-k share is each split's own; thresholds (aleatoric / volatility quantiles)
+    and the volatility-level scale (median
     pred / median vol) come from VAL."""
     thr = {(c, q): float(np.quantile(val[c].values, q)) for c in ("ale_high", "ale_low", "vol")
            for q in FILTER_QUANTILES if q is not None}

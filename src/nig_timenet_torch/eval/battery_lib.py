@@ -1,19 +1,20 @@
 """Shared helpers: cost, direction, top-k, trade stats, section shaping of the battery
 
 PURPOSE: Shared helpers of the battery: ONE implementation of cost, direction, top-|x| selection, trade stats,
-    market and limit-order PnL, the multiple-testing level and section shaping.
+    market, take-profit and limit-order PnL, the multiple-testing level and section shaping.
 TAGS: battery helpers, trade stats, sharpe, profit factor, section, cost, round trip, bonferroni
 PITFALLS: cost is PER SIDE (round_trip = 2x; net_pnl pays it once per trade); the direction of a trade is p_dir
     (trade_side), never sign(mu); trade_stats returns None below MIN_TRADES; Sharpe is per trade; top_abs ranks by
-    |values| with a STABLE sort (ties keep row order), so the side comes from the mask; limit_at_mu sets a target
+    |values| with a STABLE sort (ties keep row order), so the side comes from the mask; take_profit_at_mu sets a target
     only when sign(mu) == side and checks it on the realised extreme (fut_high / fut_low) when the table has it,
     else on the close (a lower bound of the fill); limit_at_extreme fills only when the realised extreme reaches
     the order.
 SOURCE: ported from feat/ar-stream 7c9736b, f052cf6 (owner's work)
 
 Split out of battery.py so the core and the classic sections share ONE implementation (rule C2). The constants here
-(``SIDES``, ``ALPHA``, ``MIN_TRADES``; ``DEFAULT_COST_PER_SIDE`` re-exported from ``core.costs``) are the only
-definition of sides per trade, the significance level and the minimum trade count: eval, workflow and the notebooks
+(``SIDES``, ``ALPHA``, ``MIN_TRADES``, ``TRADEABLE_SHARPE``, ``MARGINAL_SHARPE``; ``DEFAULT_COST_PER_SIDE``
+re-exported from ``core.costs``) are the only definition of sides per trade, the significance level, the minimum trade
+count and the two verdict Sharpe thresholds: eval, workflow and the notebooks
 read them, nothing re-types them.
 """
 
@@ -23,9 +24,9 @@ import numpy as np
 
 from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE  # re-exported: the one definition is in core
 
-__all__ = ["SIDES", "ALPHA", "MIN_TRADES", "DEFAULT_COST_PER_SIDE", "round_trip", "net_pnl", "bonferroni_level",
-           "trade_side", "limit_at_mu", "limit_at_extreme", "trade_stats", "scored_rows", "top_abs", "direction_pnl",
-           "section", "format_row", "HEADER"]
+__all__ = ["SIDES", "ALPHA", "MIN_TRADES", "TRADEABLE_SHARPE", "MARGINAL_SHARPE", "DEFAULT_COST_PER_SIDE",
+           "round_trip", "net_pnl", "bonferroni_level", "trade_side", "take_profit_at_mu", "limit_at_extreme",
+           "trade_stats", "scored_rows", "top_abs", "direction_pnl", "section", "format_row", "HEADER"]
 
 
 #: a round trip pays the cost on entry AND exit: ``cost`` everywhere in the battery is the cost PER SIDE
@@ -34,6 +35,10 @@ SIDES = 2
 ALPHA = 0.05
 #: a row with fewer trades than this is not scored (``trade_stats`` returns None, the row prints n<MIN_TRADES)
 MIN_TRADES = 50
+#: the per-trade Sharpe above which ``battery.verdict`` calls the best market-exit strategy tradeable (in theory)
+TRADEABLE_SHARPE = 0.10
+#: the per-trade Sharpe above which it is marginal (needs checking)
+MARGINAL_SHARPE = 0.05
 
 
 def round_trip(cost: float) -> float:
@@ -90,7 +95,7 @@ def direction_pnl(df, idx: np.ndarray, cost: float) -> np.ndarray:
     return net_pnl(trade_side(df)[idx] * df["y_ret"].values[idx], cost)
 
 
-def limit_at_mu(df, idx: np.ndarray, side, cost: float) -> dict:
+def take_profit_at_mu(df, idx: np.ndarray, side, cost: float) -> dict:
     """Market entry at the last close with a take-profit AT the predicted close move ``mu``, else exit at the close.
 
     The target exists only on the trade's side (``sign(mu) == side``). A row whose mu points against the side

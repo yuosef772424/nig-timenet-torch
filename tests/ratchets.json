@@ -29,7 +29,7 @@
     "G8_orphan_modules_in_registry_folders": "B-016",
     "C2_metric_definitions_outside_stats": "B-069",
     "G1_price_target_literals_outside_schema": "B-045",
-    "G3_functions_over_80_lines_backtest_tools": "B-NEW-1",
-    "E2_rmtree_calls_in_colab": "B-NEW-2"
+    "G3_functions_over_80_lines_backtest_tools": "B-092",
+    "E2_rmtree_calls_in_colab": "B-093"
   }
 }
