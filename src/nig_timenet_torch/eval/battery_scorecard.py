@@ -20,22 +20,26 @@ shape plus ``"stats"``.
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 
-from nig_timenet_torch.eval.battery_lib import _scored, _section, round_trip
+from nig_timenet_torch.eval.battery_lib import (
+    MIN_TRADES,
+    bonferroni_level,
+    net_pnl,
+    round_trip,
+    scored_rows,
+    section,
+    trade_side,
+)
+from nig_timenet_torch.eval.day_blocks import DAY_BLOCK_DAYS, calendar_day
 from nig_timenet_torch.stats.metrics import block_bootstrap_ci
 
 __all__ = ["scorecard_sections", "scorecard", "uncertainty_buckets", "payoff_asymmetry", "scorecard_verdict",
-           "day_profile", "selections", "TOP_SHARES", "TAIL_SHARE", "DAY_BLOCK", "MIN_TRADES", "N_BUCKETS"]
+           "day_profile", "selections", "TOP_SHARES", "TAIL_SHARE", "MIN_TRADES", "N_BUCKETS"]
 
 #: the "top" shares of the selections (of the VAL rows, by |mu|)
 TOP_SHARES = (0.05, 0.10, 0.20)
 #: the tail of the days / trades read as "the worst" (CVaR, loss concentration)
 TAIL_SHARE = 0.05
-#: days per bootstrap block (neighbouring days move together)
-DAY_BLOCK = 5
-#: a selection x side row with fewer trades is not scored
-MIN_TRADES = 50
 #: buckets of the uncertainty and confidence sections (VAL quantile edges)
 N_BUCKETS = 5
 
@@ -45,11 +49,7 @@ _SIDES = (("LONG", 1.0), ("SHORT", -1.0), ("BOTH", 0.0))
 def _days(df) -> np.ndarray:
     if "end_time" not in df:
         raise ValueError("the scorecard needs end_time (a day is the unit of judgment)")
-    return pd.to_datetime(df["end_time"]).to_numpy().astype("datetime64[D]")
-
-
-def _side(df) -> np.ndarray:
-    return np.where(df["p_dir"].to_numpy() > 0.5, 1.0, -1.0)
+    return calendar_day(df["end_time"])
 
 
 def _conf(df) -> np.ndarray:
@@ -64,7 +64,7 @@ def _snr(df) -> np.ndarray:
 
 def day_profile(pnl: np.ndarray, days: np.ndarray, level: float, seed: int = 0) -> dict:
     """The day distribution of a book: every trade's ``pnl`` (net, simple return) is averaged within its day (an
-    equal-weight book), then: days, share of winning days, mean day with a ``DAY_BLOCK``-day block CI, median day,
+    equal-weight book), then: days, share of winning days, mean day with a ``DAY_BLOCK_DAYS``-day block CI, median day,
     worst day, CVaR (mean of the worst ``TAIL_SHARE`` of days), the share of all losing-day P&L held by those worst
     days, the max drawdown of the summed day P&L, the mean day without the best ``TAIL_SHARE`` of days, and the mean
     day of the BUSY days (at least the median number of trades): an equal-weight day mean gives a day with one trade
@@ -76,7 +76,7 @@ def day_profile(pnl: np.ndarray, days: np.ndarray, level: float, seed: int = 0) 
     n = day.shape[0]
     k = max(1, int(np.ceil(n * TAIL_SHARE)))
     order = np.sort(day)
-    mean, lo, hi = block_bootstrap_ci(day, np.arange(n) // DAY_BLOCK, level=level, seed=seed)
+    mean, lo, hi = block_bootstrap_ci(day, np.arange(n) // DAY_BLOCK_DAYS, level=level, seed=seed)
     losing = day[day < 0].sum()
     curve = np.cumsum(day)
     return {"days": int(n), "win_days": float((day > 0).mean()), "mean_day": float(mean), "ci_lo": lo, "ci_hi": hi,
@@ -94,7 +94,7 @@ def selections(val, test) -> dict[str, np.ndarray]:
     def q(arr, share):
         return float(np.quantile(arr, share))
 
-    keep = _scored(test)
+    keep = scored_rows(test)
     amu_v, amu_t = np.abs(val["mu"].to_numpy()), np.abs(test["mu"].to_numpy())
     sig_v, sig_t = val["sigma"].to_numpy(), test["sigma"].to_numpy()
     low_sig = sig_t <= q(sig_v, 0.5)
@@ -112,12 +112,12 @@ def selections(val, test) -> dict[str, np.ndarray]:
 def _level(n_rows: int, n_variants: int) -> float:
     if n_variants < 1:
         raise ValueError("n_variants must be >= 1")
-    return 1.0 - 0.05 / (max(n_rows, 1) * n_variants)
+    return bonferroni_level(max(n_rows, 1) * n_variants)
 
 
 def scorecard(val, test, cost: float, n_variants: int = 1) -> dict:
     """Every selection x side (LONG / SHORT / BOTH), net of the round trip, judged by its trades AND its days."""
-    side, y, days, rt = _side(test), test["y_ret"].to_numpy(), _days(test), round_trip(cost)
+    side, y, days, rt = trade_side(test), test["y_ret"].to_numpy(), _days(test), round_trip(cost)
     masks = selections(val, test)
     level = _level(len(masks) * len(_SIDES), n_variants)
     head = (f"  {'selection':<30}{'side':<6}{'n':>8}{'days':>6}{'win%':>7}{'avg%':>9}{'win d%':>8}"
@@ -129,7 +129,7 @@ def scorecard(val, test, cost: float, n_variants: int = 1) -> dict:
             if len(idx) < MIN_TRADES:
                 rows.append(f"  {name:<30}{label:<6}(n<{MIN_TRADES})")
                 continue
-            pnl = side[idx] * y[idx] - rt
+            pnl = net_pnl(side[idx] * y[idx], cost)
             p = day_profile(pnl, days[idx], level)
             p.update(n=int(len(idx)), win=float((pnl > 0).mean()), avg=float(pnl.mean()))
             stats[f"{name} | {label}"] = p
@@ -138,10 +138,11 @@ def scorecard(val, test, cost: float, n_variants: int = 1) -> dict:
                         f"{p['mean_day'] * 100:>+9.3f} [{p['ci_lo'] * 100:+.3f}, {p['ci_hi'] * 100:+.3f}]"
                         f"{p['worst_day'] * 100:>+10.2f}{p['cvar'] * 100:>+8.2f}{p['tail_loss_share'] * 100:>6.0f}%"
                         f"{p['max_dd'] * 100:>8.1f}{p['mean_wo_best'] * 100:>+10.3f}{p['mean_busy'] * 100:>+9.3f}")
-    out = _section(
+    out = section(
         "SCORECARD (TEST) - selection x side, judged by DAYS (thresholds from VAL)", rows,
         f"net of {rt:.4%} per trade; a day = equal-weight mean of that day's trades; CI {level * 100:.2f}% from "
-        f"{DAY_BLOCK}-day blocks (Bonferroni over {len(masks) * len(_SIDES)} rows x n_variants={n_variants}); CVaR = "
+        f"{DAY_BLOCK_DAYS}-day blocks (Bonferroni over {len(masks) * len(_SIDES)} rows x n_variants={n_variants}); "
+        "CVaR = "
         f"mean of the worst {TAIL_SHARE:.0%} days; tail% = their share of all losing-day P&L; maxDD on the summed "
         f"day P&L; w/o best = mean day without the best {TAIL_SHARE:.0%} days; busy = mean day of the days with at "
         "least the median number of trades (where most trades are). A use is real only if its mean day CI "
@@ -158,8 +159,8 @@ def _bucket_edges(val_values: np.ndarray) -> np.ndarray:
 def uncertainty_buckets(val, test, cost: float) -> dict:
     """TEST rows cut by VAL quantiles of the predicted sigma and of the direction confidence: per bucket the hit
     rate, the mean |realised move|, the net per trade of the LONG and the SHORT rows, and the short's exp() cost."""
-    side, y, rt = _side(test), test["y_ret"].to_numpy(), round_trip(cost)
-    keep = _scored(test)
+    side, y = trade_side(test), test["y_ret"].to_numpy()
+    keep = scored_rows(test)
     rows, stats = [], {}
     for name, v_val, v_test in (("sigma", val["sigma"].to_numpy(), test["sigma"].to_numpy()),
                                 ("confidence", _conf(val), _conf(test))):
@@ -174,14 +175,14 @@ def uncertainty_buckets(val, test, cost: float) -> dict:
                 continue
             lm, sm = m & (side > 0), m & (side < 0)
             hit = float((side[m] * y[m] > 0).mean())
-            long_avg = float((y[lm] - rt).mean()) if lm.any() else float("nan")
-            short_avg = float((-y[sm] - rt).mean()) if sm.any() else float("nan")
+            long_avg = float(net_pnl(y[lm], cost).mean()) if lm.any() else float("nan")
+            short_avg = float(net_pnl(-y[sm], cost).mean()) if sm.any() else float("nan")
             exp_cost = float((-y[sm] + np.log1p(y[sm])).mean()) if sm.any() else float("nan")
             stats[f"{name} q{i + 1}"] = {"n": int(m.sum()), "hit": hit, "long_avg": long_avg, "short_avg": short_avg,
                                          "short_exp_cost": exp_cost}
             rows.append(f"    q{i + 1:<7}{int(m.sum()):>8,}{hit:>7.3f}{np.abs(y[m]).mean() * 100:>10.3f}"
                         f"{long_avg * 100:>+11.3f}{short_avg * 100:>+12.3f}{exp_cost * 100:>+17.3f}")
-    out = _section("UNCERTAINTY AND CONFIDENCE BUCKETS (TEST, edges from VAL)", rows,
+    out = section("UNCERTAINTY AND CONFIDENCE BUCKETS (TEST, edges from VAL)", rows,
                    "A model that knows when it does not know has its hit rate and net rising toward low sigma / high "
                    "confidence. 'SHORT exp cost' = mean of log(1 + y) - y on the short rows: what the short pays "
                    "because a price rise costs more than an equal log fall gains (it grows with sigma).")
@@ -189,9 +190,9 @@ def uncertainty_buckets(val, test, cost: float) -> dict:
     return out
 
 
-def _asym_line(label: str, sg: float, y: np.ndarray, sigma: np.ndarray, mu: np.ndarray, rt: float) -> tuple:
+def _asym_line(label: str, sg: float, y: np.ndarray, sigma: np.ndarray, mu: np.ndarray, cost: float) -> tuple:
     gross = sg * y
-    net = gross - rt
+    net = net_pnl(gross, cost)
     log_part = sg * np.log1p(y)
     s_log = np.log1p(sigma / (1.0 + mu))
     win, loss = net[net > 0], net[net < 0]
@@ -214,9 +215,9 @@ def payoff_asymmetry(val, test, cost: float) -> dict:
     symmetric LOG forecast is paid (side x log(1 + y)) and the exp() part (side x (y - log(1 + y)): >= 0 for a long,
     <= 0 for a short), next to the exp() part the model's own sigma predicts (side x s^2 / 2, s the log-space sd).
     The last rows are the mean-corrected rule: trade only when the predicted LOG move beats the exp() part plus cost."""
-    side, y, rt = _side(test), test["y_ret"].to_numpy(), round_trip(cost)
+    side, y, rt = trade_side(test), test["y_ret"].to_numpy(), round_trip(cost)
     mu, sigma = test["mu"].to_numpy(), test["sigma"].to_numpy()
-    keep = _scored(test)
+    keep = scored_rows(test)
     head = (f"  {'selection':<32}{'n':>7}{'win%':>7}{'avgW%':>8}{'avgL%':>8}{'L/W':>6}{'log%':>9}{'exp%':>9}"
             f"{'pred exp%':>10}{'net%':>9}{'sd%':>7}{'worst1%':>8}")
     rows, stats = [head], {}
@@ -229,7 +230,7 @@ def payoff_asymmetry(val, test, cost: float) -> dict:
             if len(idx) < MIN_TRADES:
                 rows.append(f"  {name:<32}(n<{MIN_TRADES})")
                 continue
-            line, stats[name] = _asym_line(name, sg, y[idx], sigma[idx], mu[idx], rt)
+            line, stats[name] = _asym_line(name, sg, y[idx], sigma[idx], mu[idx], cost)
             rows.append(line)
     m_log = np.log1p(mu)
     drag = 0.5 * np.log1p(sigma / (1.0 + mu)) ** 2
@@ -239,9 +240,9 @@ def payoff_asymmetry(val, test, cost: float) -> dict:
         if len(idx) < MIN_TRADES:
             rows.append(f"  {label:<32}(n<{MIN_TRADES})")
             continue
-        line, stats[label] = _asym_line(label, sg, y[idx], sigma[idx], mu[idx], rt)
+        line, stats[label] = _asym_line(label, sg, y[idx], sigma[idx], mu[idx], cost)
         rows.append(line)
-    out = _section(
+    out = section(
         "LONG vs SHORT PAYOFF - the exp() of a log forecast (TEST)", rows,
         "log% + exp% = gross; net = gross - round trip. The model is trained on log(future / close), a loss symmetric "
         "in up and down, but a trade is paid in price: a long earns e^l - 1 >= l, a short earns 1 - e^l <= -l. So a "
@@ -259,7 +260,7 @@ def scorecard_verdict(card: dict) -> dict:
     its busy days (an edge that lives on thin days is not tradeable at size)."""
     stats = card.get("stats", {})
     if not stats:
-        out = _section("SCORECARD VERDICT", ["  no selection x side reached the minimum trades"], "pass=False")
+        out = section("SCORECARD VERDICT", ["  no selection x side reached the minimum trades"], "pass=False")
         out.update(best=None, passed=False)
         return out
     name, best = max(stats.items(), key=lambda kv: (kv[1]["ci_lo"] if kv[1]["ci_lo"] == kv[1]["ci_lo"] else -1e9))
@@ -272,7 +273,7 @@ def scorecard_verdict(card: dict) -> dict:
             f"busy days {best['mean_busy'] * 100:+.3f}%",
             f"  rows with a positive mean day: {n_pos} of {len(stats)} (a share near half is what noise gives)",
             f"  pass: {passed}"]
-    out = _section("SCORECARD VERDICT", rows, f"pass={passed} (judged by days, Bonferroni CI)")
+    out = section("SCORECARD VERDICT", rows, f"pass={passed} (judged by days, Bonferroni CI)")
     out.update(best=name, passed=passed)
     return out
 

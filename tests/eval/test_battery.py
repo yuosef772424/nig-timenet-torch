@@ -23,7 +23,7 @@ from nig_timenet_torch.eval.battery import (
     verdict,
     weekly_stability,
 )
-from nig_timenet_torch.eval.battery_lib import _dir_pnl
+from nig_timenet_torch.eval.battery_lib import direction_pnl
 
 
 def _frame(n: int = 2400, seed: int = 0, good: bool = True, coins=("AAA", "BBB")) -> pd.DataFrame:
@@ -218,7 +218,7 @@ def test_every_section_charges_the_cost_per_side():
     zero, one = trade_grid(test, 0.0)["rows"][-1], trade_grid(test, 0.001)["rows"][-1]
     assert abs(_avg(zero) - gross) < 1e-6 and abs(_avg(one) - (gross - round_trip(0.001))) < 1e-6
     assert round_trip(0.001) == 0.002
-    pnl0, pnl1 = (_dir_pnl(test, np.arange(len(test)), c) for c in (0.0, 0.001))
+    pnl0, pnl1 = (direction_pnl(test, np.arange(len(test)), c) for c in (0.0, 0.001))
     assert np.allclose(pnl0 - pnl1, 0.002)
     f0, f1 = (flip_test(test, c)["rows"][1] for c in (0.0, 0.001))
     assert "AGAINST" in f0 and f0 != f1

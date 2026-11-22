@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
+from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES
@@ -208,7 +209,7 @@ class TrainSettings:
 class BatterySettings:
     """The evaluation battery (eval/battery.py) on the val and test stage of the run (owner goal: profit)."""
     enabled: bool = True
-    cost_per_side: float = 0.0008        # charged on EVERY side of a trade: a round trip pays twice this
+    cost_per_side: float = DEFAULT_COST_PER_SIDE   # charged on EVERY side of a trade: a round trip pays twice this
     n_variants: int = 1                  # variants tried so far (widens the confidence intervals)
     # D-032: also write the day metrics of a multi-coin run (winning days of the sign portfolio and of the top /
     # bottom book against their baselines, uncertainty use): workflow/panel_report.py; read even when ``enabled`` is

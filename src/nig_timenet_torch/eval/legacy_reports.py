@@ -19,7 +19,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.eval.battery_lib import round_trip
+from nig_timenet_torch.eval.battery_lib import net_pnl, top_abs, trade_side
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["trades", "tearsheet", "equity_curve", "daily_portfolio", "lag_scan", "integrity", "calibration",
@@ -34,12 +34,11 @@ def trades(table: pd.DataFrame, cost: float, top_share: float = TOP_SHARE) -> pd
     the round trip (fractions, not %)."""
     if not 0 < top_share <= 1:
         raise ValueError(f"top_share must be in (0, 1], got {top_share}")
-    k = max(1, int(len(table) * top_share))
-    idx = np.argsort(-np.abs(table["mu"].to_numpy()), kind="stable")[:k]
+    idx = top_abs(table["mu"].to_numpy(), top_share)
     out = table.iloc[idx].copy()
-    out["side"] = np.where(out["p_dir"].to_numpy() > 0.5, 1.0, -1.0)
+    out["side"] = trade_side(out)
     out["gross"] = out["side"] * out["y_ret"]
-    out["net"] = out["gross"] - round_trip(cost)
+    out["net"] = net_pnl(out["gross"], cost)
     return out.sort_values("end_time", kind="stable").reset_index(drop=True)
 
 
@@ -202,7 +201,7 @@ def move_over_sd(table: pd.DataFrame, cost: float, ks: tuple = (0.25, 0.5, 1.0))
     rows = []
     for k in ks:
         keep = table[np.abs(table["mu"]) > k * table["sigma"]]
-        net = np.where(keep["p_dir"] > 0.5, 1.0, -1.0) * keep["y_ret"].to_numpy() - round_trip(cost)
+        net = net_pnl(trade_side(keep) * keep["y_ret"].to_numpy(), cost)
         ts = tearsheet(net)
         rows.append({"k": k, "kept_share": len(keep) / max(len(table), 1), "days": int(
             pd.to_datetime(keep["end_time"]).dt.floor("D").nunique()) if len(keep) else 0,

@@ -19,6 +19,7 @@ import pandas as pd
 
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS
+from nig_timenet_torch.eval.day_blocks import calendar_day
 from nig_timenet_torch.eval.target_report import NON_BLOCKING_HEADS
 from nig_timenet_torch.eval.vol_baseline import head_vs_baselines
 from nig_timenet_torch.model.heads import head_spec
@@ -47,7 +48,6 @@ INFO_SHARP_HEADS = NON_BLOCKING_HEADS     # O-1: close-head T-sharp is informati
 #: the running-max / running-min heads: their symmetric coverage on E2 / E3 is information until B-056 is decided
 INFO_COVERAGE_HEADS = tuple(t for t in TARGET_COLUMNS if t not in NON_BLOCKING_HEADS)
 DIRECTION_HEAD = "close"                 # rule D: direction is judged on this head only
-_DAY_NS = 86_400 * 10 ** 9
 
 
 @dataclass
@@ -121,7 +121,7 @@ def _head(stage: GateStage, t: str) -> dict:
 def _ctx(stage: GateStage) -> dict:
     ts = stage.table["timestamp"]
     ns = ts.astype("int64").to_numpy() if not np.issubdtype(np.asarray(ts).dtype, np.integer) else np.asarray(ts)
-    return {"assets": stage.table["asset"].to_numpy(dtype=object), "ts": ns, "days": ns // _DAY_NS}
+    return {"assets": stage.table["asset"].to_numpy(dtype=object), "ts": ns, "days": calendar_day(ns).astype(np.int64)}
 
 
 def _oracle_scores(stage: GateStage, t: str, h: dict, c: dict) -> dict:

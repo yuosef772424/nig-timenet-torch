@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import torch
 
+from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io.target_codec import anchor_column
 from nig_timenet_torch.model.architectures import ModelSettings, build_model
@@ -124,7 +125,7 @@ def model_settings(base: ModelSettings, targets: tuple[str, ...]) -> ModelSettin
 
 
 def trainer_config(targets, label_smoothing: float, train: TrainSettings | None = None, *,
-                   aux_kinds: dict | None = None, cost_per_side: float = 0.0008) -> dict:
+                   aux_kinds: dict | None = None, cost_per_side: float = DEFAULT_COST_PER_SIDE) -> dict:
     """The oracle's trainer config (reference/data_default/config.json) with the run's label smoothing; the per-target
     part comes from ``trainer.targets.targets_config`` (HeadSpec), only the options are the run's. ``train`` carries
     the D-021 loss switches; a switch at its default leaves the config byte-equal to the baseline's (pinned).

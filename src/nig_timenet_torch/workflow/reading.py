@@ -22,6 +22,7 @@ from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS, TS_
 from nig_timenet_torch.eval import error_map as em
 from nig_timenet_torch.eval import strategy_diagnosis as sd
 from nig_timenet_torch.eval import vol_baseline as vb
+from nig_timenet_torch.eval.battery_lib import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.eval.strategy_book import book
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats.nig import nig_interval_halfwidth, nig_nll, nig_predictive_std
@@ -195,7 +196,7 @@ def _book_lines(rows: list[dict]) -> list[str]:
     return lines
 
 
-def reading_step(run, out_dir, cost: float = 0.0008) -> dict:
+def reading_step(run, out_dir, cost: float = DEFAULT_COST_PER_SIDE) -> dict:
     """The whole reading of ``run`` (model holding the best weights) into ``out_dir``; returns the JSON dict."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
