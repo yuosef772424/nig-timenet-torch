@@ -1,7 +1,8 @@
 """End-of-step bookkeeping in one run: MAP and pins, decision record, STATUS row, the PR's B1 section.
 
 PURPOSE:  Regenerate MAP and stale pins, draft or update the PR's decision record, set the step's STATUS row and
-  write the B1 PR section; --merge leaves decisions alone; --check changes nothing and fails on anything stale.
+  write the B1 PR section; --merge leaves decisions alone; --check changes nothing and fails on anything stale;
+  --archive moves closed STATUS rows to docs/status_archive.md.
 TAGS:     tools, close, step, bookkeeping, map, pins, decisions, status, pr, description, check
 PITFALLS: Run from the repo root on the PR branch with origin/main fetched. Pin files are regenerated only when their
   test fails (so float noise never rewrites them). A TODO in a drafted decision fails pin_diff and --check. A merge
@@ -29,6 +30,7 @@ from tools._git import ToolError, git, merge_base
 ROOT = Path(__file__).resolve().parent.parent
 MAP_REL = "docs/MAP.md"
 STATUS_REL = "docs/STATUS.md"
+ARCHIVE_REL = "docs/status_archive.md"
 OUT_REL = ".close_step/behaviour_changes.md"
 PINS_DIR = "tests/pins"
 #: pin files that are the output of a test: (file, test file that checks it, env var that makes the test rewrite it)
@@ -218,6 +220,17 @@ def _write_record(root: Path, target: Path | None, lines: list[dd.Line], args: a
     return target
 
 
+def archive_status(root: Path) -> list[str]:
+    """Move the closed rows of docs/STATUS.md to the end of the table in docs/status_archive.md; returns their ids."""
+    status_path, archive_path = root / STATUS_REL, root / ARCHIVE_REL
+    status, archive, moved = status_row.archive_closed(status_path.read_text(encoding="utf-8"),
+                                                       archive_path.read_text(encoding="utf-8"))
+    if moved:
+        status_path.write_text(status, encoding="utf-8")
+        archive_path.write_text(archive, encoding="utf-8")
+    return moved
+
+
 # ------------------------------------------------------------------------------------------------------ check
 def check(root: Path, base: str, hooks: Hooks, *, step: str | None = None, skip_pin_tests: bool = False) -> list[str]:
     """Everything ``close`` would change or the PR still owes, as a list of problems (empty = clean). Writes nothing."""
@@ -249,6 +262,8 @@ def check(root: Path, base: str, hooks: Hooks, *, step: str | None = None, skip_
     status = (root / STATUS_REL).read_text(encoding="utf-8")
     if len(status.splitlines()) >= status_row.STATUS_MAX:
         problems.append(f"{STATUS_REL} has {len(status.splitlines())} lines, the limit is < {status_row.STATUS_MAX}")
+    problems += [f"{STATUS_REL}: the row of {sid} is closed: run `python -m tools.close_step --archive`"
+                 for sid in status_row.closed_rows(status)]
     if step and not status_row.find_rows(status.split("\n"), step):
         problems.append(f"{STATUS_REL} has no row for step {step!r}")
     return problems
@@ -274,6 +289,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--number", type=int, help="number of a new decision (default: the next free local number)")
     p.add_argument("--repo", help="repository URL for PR links (default: from git remote origin)")
     p.add_argument("--no-pin-tests", action="store_true", help="do not run or regenerate the pytest-made pin files")
+    p.add_argument("--archive", action="store_true",
+                   help="move the STATUS rows whose state is merged / closed / skipped to docs/status_archive.md")
     p.add_argument("--check", action="store_true", help="change nothing; exit 1 on anything stale or unfinished")
     p.add_argument("--skip-pin-tests", action="store_true", help="with --check: skip the pin tests (CI runs them)")
     return p
@@ -291,6 +308,10 @@ def main(argv: list[str] | None = None, root: Path = ROOT, hooks: Hooks | None =
                 print(f"WARNING: {w}", file=sys.stderr)
             print("close_step --check: " + (f"{len(problems)} problem(s)" if problems else "clean"))
             return 1 if problems else 0
+        if args.archive:
+            moved = archive_status(root)
+            print(f"archived {len(moved)} row(s) to {ARCHIVE_REL}: {', '.join(moved) or 'none'}")
+            return 0
         if not args.step:
             raise ToolError("--step <id> is required (the id of your row in docs/STATUS.md)")
         rep = close(root, args, hooks)

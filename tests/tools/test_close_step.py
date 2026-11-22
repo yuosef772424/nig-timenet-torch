@@ -281,10 +281,11 @@ def test_new_row_from_title_goes_before_the_first_todo_row():
 
 
 def test_status_sixty_line_guard_and_state_names():
-    long = STATUS + "\n".join(f"line {i}" for i in range(52)) + "\n"  # 7 + 52 = 59 lines
-    assert len(long.splitlines()) == 59
+    limit = status_row.STATUS_MAX
+    long = STATUS + "\n".join(f"line {i}" for i in range(limit - 8)) + "\n"  # one line below the limit
+    assert len(long.splitlines()) == limit - 1
     status_row.update_status(long, "ST1", branch=None, state="PR open")  # same length: fine
-    with pytest.raises(status_row.ToolError, match="limit is < 60"):
+    with pytest.raises(status_row.ToolError, match=f"limit is < {status_row.STATUS_MAX}"):
         status_row.update_status(long, "TL1", branch=None, title="x")  # a new row makes 60
     with pytest.raises(status_row.ToolError, match="unknown state"):
         status_row.update_status(STATUS, "ST1", branch=None, state="done")
@@ -355,8 +356,8 @@ def test_check_fails_while_a_todo_is_left_then_passes(repo, fake):
 
 
 def test_check_fails_on_a_status_file_that_is_too_long(repo, fake):
-    (repo / "docs" / "STATUS.md").write_text(STATUS + "x\n" * 60, encoding="utf-8")
-    assert any("limit is < 60" in p for p in check(repo, fake))
+    (repo / "docs" / "STATUS.md").write_text(STATUS + "x\n" * status_row.STATUS_MAX, encoding="utf-8")
+    assert any(f"limit is < {status_row.STATUS_MAX}" in p for p in check(repo, fake))
 
 
 def test_pin_diff_fails_on_a_todo_in_a_decision_the_pr_adds(repo, monkeypatch, capsys):

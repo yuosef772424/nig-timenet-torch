@@ -23,6 +23,11 @@ ABSENT_ON_PURPOSE = {
 }
 
 
+#: open PRs that may wait beyond the interval of rule F3 (RULES F3 states only "every 5 merged PRs"; the value was 7 = 5 + 2
+#: in the old test, kept)
+OPEN_PR_ALLOWANCE = 2
+
+
 def _read(rel: str) -> str:
     return (ROOT / rel).read_text(encoding="utf-8")
 
@@ -53,25 +58,47 @@ def test_status_is_short():
 def test_status_states_are_the_documented_ones():
     """Every row of every STATUS table (step ids are free text: PN1, MG4, ...; E-11 of the 2026-11b audit: the old
     id pattern skipped most rows), checked with the one state definition (tools.status_row.valid_state)."""
-    from tools.status_row import STATES, valid_state
+    from tools.status_row import STATES, status_rows, valid_state
 
     text = _read("docs/STATUS.md")
     listed = " / ".join(f"`{s}`" for s in STATES)
     assert f"States: {listed} / `skipped (reason)`." in text
-    rows = 0
-    for line in text.splitlines():
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if not line.startswith("|") or len(cells) < 5 or cells[0] in ("Step", "") or set(cells[0]) <= set("-"):
-            continue
-        rows += 1
+    rows = status_rows(text)
+    assert len(rows) >= 5, f"only {len(rows)} STATUS rows were checked: did the table layout change?"
+    for _, cells in rows:
         assert valid_state(cells[2]), f"{cells[0]}: unknown state {cells[2]!r}"
-    assert rows >= 10, f"only {rows} STATUS rows were checked: did the table layout change?"
 
 
-def test_review_is_not_overdue():
-    """suggestions.csv row 10: the R-REVIEW counter in STATUS may not pass the interval of the review rule."""
-    n = int(re.search(r"PRs since last R-REVIEW: (\d+)", _read("docs/STATUS.md")).group(1))
-    assert n <= 7, f"{n} PRs since the last R-REVIEW (docs/reviews.md): run it before more merges"
+def test_status_holds_open_rows_only():
+    """HB7: STATUS keeps open rows (todo / in progress / PR open); a merged / closed / skipped row moves to
+    docs/status_archive.md (`python -m tools.close_step --archive`)."""
+    from tools.status_row import OPEN_STATES, status_rows
+
+    for _, cells in status_rows(_read("docs/STATUS.md")):
+        assert cells[2] in OPEN_STATES, (f"{cells[0]}: state {cells[2]!r} is closed: run "
+                                         "`python -m tools.close_step --archive`")
+
+
+def test_review_counter_is_derived_from_the_merge_history():
+    """E-13: the 'PRs since last R-REVIEW' line of STATUS equals the number of PRs merged (first-parent history of
+    HEAD) after the last PR the newest section of docs/reviews.md covers, and stays within the review interval of
+    rule F3 plus the open PRs allowed to wait."""
+    import pytest
+
+    from tools import review_counter as rc
+
+    stated = int(re.search(r"PRs since last R-REVIEW: (\d+)", _read("docs/STATUS.md")).group(1))
+    interval = int(re.search(r"R-REVIEW every (\d+) merged PRs", _read("docs/RULES.md")).group(1))
+    assert stated <= interval + OPEN_PR_ALLOWANCE, (f"{stated} PRs since the last R-REVIEW (docs/reviews.md): run it "
+                                                    "before more merges")
+    covered = rc.last_covered(_read("docs/reviews.md"))
+    prs = rc.merged_prs(ROOT)
+    if not rc.history_reaches(prs, covered):
+        pytest.skip(f"the git history does not reach back past PR #{covered} (shallow clone): CI checks out "
+                    "fetch-depth 0")
+    derived = len({n for n in prs if n > covered})
+    assert stated == derived, (f"STATUS says {stated} PRs since the last R-REVIEW, git history says {derived}: run "
+                               "`python -m tools.review_counter --write`")
 
 
 def test_register_ids_are_unique():
