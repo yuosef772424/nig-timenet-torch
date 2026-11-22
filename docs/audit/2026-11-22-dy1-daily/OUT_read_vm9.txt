@@ -1,0 +1,198 @@
+pa-def/s0 folds 7 IC +0.0539 (t~5.8) | CAGR +15.5% (present days +18.9%) Sharpe 1.28 DD -8% expo 0.09 | always long -16.9% placebo p95 +15.3% BTC +nan% | accept True | period CI [-0.10, +10.31] bp | long-short CAGR +37.5% DD -9% CI [+2.05, +16.43] bp
+   MODEL long book, 77 slots, fee on turnover         x  1.62  CAGR   +15.5%  Sharpe  1.28  maxDD   -7.7%  expo 0.09  years +7% +33% +19% -4%
+   MODEL long book, a round trip every period (battery) x  1.61  CAGR   +15.2%  Sharpe  1.26  maxDD   -7.8%  expo 0.09  years +7% +32% +19% -4%
+   MODEL long book, all capital on the picks (equal share) x  2.11  CAGR   +24.9%  Sharpe  0.88  maxDD  -63.0%  expo 0.31  years +13% +155% +65% -56%
+   MODEL long book, fee 0.02% per side                x  1.70  CAGR   +17.2%  Sharpe  1.40  maxDD   -7.1%  expo 0.09  years +8% +35% +20% -3%
+   MODEL long book, fee 0.05% per side                x  1.66  CAGR   +16.4%  Sharpe  1.34  maxDD   -7.4%  expo 0.09  years +8% +34% +19% -4%
+   MODEL long book, fee 0.10% per side                x  1.60  CAGR   +15.0%  Sharpe  1.24  maxDD   -7.9%  expo 0.09  years +6% +32% +18% -4%
+   MODEL long book, fee 0.15% per side                x  1.54  CAGR   +13.6%  Sharpe  1.13  maxDD   -8.3%  expo 0.09  years +5% +30% +17% -4%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  1.60  CAGR   +15.0%  Sharpe  1.26  maxDD   -7.5%  expo 0.10  years +7% +29% +19% -3%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean +14.3% p95 +15.3%  Sharpe mean 1.25 p95 1.33  the book beats 95% of draws
+pa-def/s1 folds 7 IC +0.0539 (t~6.2) | CAGR +7.9% (present days +9.6%) Sharpe 0.73 DD -10% expo 0.10 | always long -16.9% placebo p95 +8.1% BTC +nan% | accept False | period CI [-2.34, +7.62] bp | long-short CAGR +23.9% DD -14% CI [-0.26, +12.59] bp
+   MODEL long book, 77 slots, fee on turnover         x  1.29  CAGR    +7.9%  Sharpe  0.73  maxDD   -9.7%  expo 0.10  years +9% +19% +6% -6%
+   MODEL long book, a round trip every period (battery) x  1.28  CAGR    +7.5%  Sharpe  0.70  maxDD   -9.9%  expo 0.10  years +8% +19% +6% -6%
+   MODEL long book, all capital on the picks (equal share) x  0.91  CAGR    -2.8%  Sharpe  0.06  maxDD  -67.9%  expo 0.34  years +6% +101% -22% -46%
+   MODEL long book, fee 0.02% per side                x  1.36  CAGR    +9.5%  Sharpe  0.87  maxDD   -8.9%  expo 0.10  years +11% +21% +7% -5%
+   MODEL long book, fee 0.05% per side                x  1.32  CAGR    +8.7%  Sharpe  0.80  maxDD   -9.3%  expo 0.10  years +10% +20% +6% -6%
+   MODEL long book, fee 0.10% per side                x  1.27  CAGR    +7.4%  Sharpe  0.68  maxDD   -9.9%  expo 0.10  years +8% +18% +6% -6%
+   MODEL long book, fee 0.15% per side                x  1.22  CAGR    +6.1%  Sharpe  0.57  maxDD  -10.6%  expo 0.10  years +7% +17% +5% -7%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  1.26  CAGR    +7.3%  Sharpe  0.67  maxDD  -12.6%  expo 0.10  years +7% +16% +8% -5%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean +7.1% p95 +8.1%  Sharpe mean 0.69 p95 0.77  the book beats 90% of draws
+pa-mres/own/s0 folds 7 IC +0.0822 (t~8.9) | CAGR -0.8% (present days -1.0%) Sharpe -0.11 DD -13% expo 0.10 | always long -16.9% placebo p95 -1.4% BTC +nan% | accept False | period CI [-3.03, +2.41] bp | long-short CAGR -7.7% DD -32% CI [-6.63, +2.15] bp
+   MODEL long book, 77 slots, fee on turnover         x  0.97  CAGR    -0.8%  Sharpe -0.11  maxDD  -13.2%  expo 0.10  years +3% -7% +6% -3%
+   MODEL long book, a round trip every period (battery) x  0.94  CAGR    -1.9%  Sharpe -0.31  maxDD  -14.0%  expo 0.10  years +2% -8% +4% -4%
+   MODEL long book, all capital on the picks (equal share) x  0.52  CAGR   -17.7%  Sharpe -0.51  maxDD  -53.6%  expo 0.80  years -8% -18% -21% -13%
+   MODEL long book, fee 0.02% per side                x  1.01  CAGR    +0.2%  Sharpe  0.07  maxDD  -12.5%  expo 0.10  years +4% -6% +7% -3%
+   MODEL long book, fee 0.05% per side                x  0.99  CAGR    -0.3%  Sharpe -0.02  maxDD  -12.9%  expo 0.10  years +3% -7% +6% -3%
+   MODEL long book, fee 0.10% per side                x  0.96  CAGR    -1.2%  Sharpe -0.18  maxDD  -13.5%  expo 0.10  years +2% -7% +5% -4%
+   MODEL long book, fee 0.15% per side                x  0.93  CAGR    -2.0%  Sharpe -0.33  maxDD  -14.1%  expo 0.10  years +1% -8% +4% -4%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  0.93  CAGR    -2.0%  Sharpe -0.26  maxDD  -18.7%  expo 0.11  years +2% -8% +5% -6%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean -2.6% p95 -1.4%  Sharpe mean -0.36 p95 -0.17  the book beats 100% of draws
+pa-mres/s0 folds 7 IC +0.0937 (t~14.3) | CAGR +0.3% (present days +0.4%) Sharpe 0.37 DD -1% expo 0.10 | always long +15.4% placebo p95 +0.2% BTC +nan% | accept False | period CI [-0.37, +0.58] bp | long-short CAGR -1.3% DD -8% CI [-1.72, +0.99] bp
+   MODEL long book, 77 slots, fee on turnover         x  1.01  CAGR    +0.3%  Sharpe  0.37  maxDD   -1.4%  expo 0.10  years +0% +1% -0% -0%
+   MODEL long book, a round trip every period (battery) x  0.97  CAGR    -0.8%  Sharpe -0.79  maxDD   -3.1%  expo 0.10  years -1% +0% -1% -1%
+   MODEL long book, all capital on the picks (equal share) x  1.29  CAGR    +7.8%  Sharpe  0.65  maxDD  -13.8%  expo 0.80  years +15% -1% +7% +6%
+   MODEL long book, fee 0.02% per side                x  1.05  CAGR    +1.4%  Sharpe  1.50  maxDD   -1.1%  expo 0.10  years +1% +2% +1% +0%
+   MODEL long book, fee 0.05% per side                x  1.03  CAGR    +0.9%  Sharpe  0.94  maxDD   -1.2%  expo 0.10  years +1% +2% +0% +0%
+   MODEL long book, fee 0.10% per side                x  1.00  CAGR    -0.0%  Sharpe -0.01  maxDD   -1.7%  expo 0.10  years -0% +1% -0% -0%
+   MODEL long book, fee 0.15% per side                x  0.97  CAGR    -0.9%  Sharpe -0.94  maxDD   -3.4%  expo 0.10  years -1% +0% -1% -1%
+   always long, 77 slots                              x  1.62  CAGR   +15.4%  Sharpe 18.45  maxDD   -0.1%  expo 0.95  years +14% +17% +13% +8%
+   basket (equal weight) x the book's breadth (timing only) x  1.01  CAGR    +0.2%  Sharpe  1.56  maxDD   -0.4%  expo 0.11  years -0% +0% +0% +0%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean -0.7% p95 +0.2%  Sharpe mean -0.68 p95 0.23  the book beats 95% of draws
+pa-mres/own/s1 folds 7 IC +0.0817 (t~8.6) | CAGR -5.4% (present days -6.4%) Sharpe -0.89 DD -19% expo 0.09 | always long -16.9% placebo p95 -5.0% BTC +nan% | accept False | period CI [-4.98, +1.13] bp | long-short CAGR -7.7% DD -27% CI [-6.99, +3.13] bp
+   MODEL long book, 77 slots, fee on turnover         x  0.83  CAGR    -5.4%  Sharpe -0.89  maxDD  -18.6%  expo 0.09  years -2% -11% -2% -3%
+   MODEL long book, a round trip every period (battery) x  0.80  CAGR    -6.4%  Sharpe -1.07  maxDD  -21.1%  expo 0.09  years -3% -12% -4% -3%
+   MODEL long book, all capital on the picks (equal share) x  0.29  CAGR   -30.6%  Sharpe -1.30  maxDD  -73.9%  expo 0.73  years -10% -35% -45% -8%
+   MODEL long book, fee 0.02% per side                x  0.86  CAGR    -4.5%  Sharpe -0.74  maxDD  -17.2%  expo 0.09  years -1% -10% -1% -2%
+   MODEL long book, fee 0.05% per side                x  0.84  CAGR    -4.9%  Sharpe -0.81  maxDD  -17.7%  expo 0.09  years -1% -10% -2% -3%
+   MODEL long book, fee 0.10% per side                x  0.82  CAGR    -5.7%  Sharpe -0.95  maxDD  -19.3%  expo 0.09  years -2% -11% -3% -3%
+   MODEL long book, fee 0.15% per side                x  0.80  CAGR    -6.4%  Sharpe -1.08  maxDD  -21.1%  expo 0.09  years -3% -12% -3% -3%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  0.83  CAGR    -5.4%  Sharpe -0.72  maxDD  -20.0%  expo 0.10  years -1% -8% -4% -5%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean -6.0% p95 -5.0%  Sharpe mean -0.83 p95 -0.70  the book beats 80% of draws
+pa-mres/s1 folds 7 IC +0.0916 (t~14.5) | CAGR -1.1% (present days -1.3%) Sharpe -1.54 DD -4% expo 0.09 | always long +15.4% placebo p95 -0.0% BTC +nan% | accept False | period CI [-0.75, -0.01] bp | long-short CAGR -1.6% DD -8% CI [-1.94, +0.87] bp
+   MODEL long book, 77 slots, fee on turnover         x  0.96  CAGR    -1.1%  Sharpe -1.54  maxDD   -3.8%  expo 0.09  years -0% -1% -2% -1%
+   MODEL long book, a round trip every period (battery) x  0.93  CAGR    -2.1%  Sharpe -2.91  maxDD   -7.0%  expo 0.09  years -1% -2% -3% -1%
+   MODEL long book, all capital on the picks (equal share) x  0.71  CAGR    -9.6%  Sharpe -0.78  maxDD  -34.6%  expo 0.73  years -7% -1% -27% +6%
+   MODEL long book, fee 0.02% per side                x  0.99  CAGR    -0.2%  Sharpe -0.24  maxDD   -1.9%  expo 0.09  years +1% -0% -1% -0%
+   MODEL long book, fee 0.05% per side                x  0.98  CAGR    -0.6%  Sharpe -0.89  maxDD   -2.4%  expo 0.09  years +0% -1% -1% -0%
+   MODEL long book, fee 0.10% per side                x  0.95  CAGR    -1.4%  Sharpe -1.97  maxDD   -4.8%  expo 0.09  years -1% -1% -2% -1%
+   MODEL long book, fee 0.15% per side                x  0.93  CAGR    -2.2%  Sharpe -3.01  maxDD   -7.2%  expo 0.09  years -2% -2% -3% -1%
+   always long, 77 slots                              x  1.62  CAGR   +15.4%  Sharpe 18.45  maxDD   -0.1%  expo 0.95  years +14% +17% +13% +8%
+   basket (equal weight) x the book's breadth (timing only) x  1.01  CAGR    +0.2%  Sharpe  1.45  maxDD   -0.3%  expo 0.10  years -0% +0% +0% +0%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean -0.9% p95 -0.0%  Sharpe mean -0.88 p95 -0.02  the book beats 40% of draws
+pa-std/s0 folds 7 IC +0.0598 (t~6.3) | CAGR +13.0% (present days +15.8%) Sharpe 1.46 DD -7% expo 0.10 | always long -16.9% placebo p95 +13.0% BTC +nan% | accept True | period CI [+0.63, +7.98] bp | long-short CAGR +26.9% DD -11% CI [+1.07, +12.84] bp
+   MODEL long book, 77 slots, fee on turnover         x  1.51  CAGR   +13.0%  Sharpe  1.46  maxDD   -7.5%  expo 0.10  years +11% +30% +4% +1%
+   MODEL long book, a round trip every period (battery) x  1.47  CAGR   +12.2%  Sharpe  1.39  maxDD   -7.6%  expo 0.10  years +11% +28% +3% +1%
+   MODEL long book, all capital on the picks (equal share) x  1.22  CAGR    +6.2%  Sharpe  0.37  maxDD  -47.9%  expo 0.64  years -9% +110% -20% -19%
+   MODEL long book, fee 0.02% per side                x  1.57  CAGR   +14.4%  Sharpe  1.61  maxDD   -7.2%  expo 0.10  years +13% +32% +4% +1%
+   MODEL long book, fee 0.05% per side                x  1.54  CAGR   +13.7%  Sharpe  1.54  maxDD   -7.3%  expo 0.10  years +12% +31% +4% +1%
+   MODEL long book, fee 0.10% per side                x  1.48  CAGR   +12.5%  Sharpe  1.41  maxDD   -7.6%  expo 0.10  years +11% +29% +3% +1%
+   MODEL long book, fee 0.15% per side                x  1.43  CAGR   +11.3%  Sharpe  1.29  maxDD   -7.8%  expo 0.10  years +10% +27% +3% +0%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  1.49  CAGR   +12.7%  Sharpe  1.34  maxDD   -8.4%  expo 0.10  years +11% +33% -0% +1%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean +12.0% p95 +13.0%  Sharpe mean 1.32 p95 1.41  the book beats 95% of draws
+pa-std/s1 folds 7 IC +0.0515 (t~5.9) | CAGR +7.9% (present days +9.6%) Sharpe 0.71 DD -13% expo 0.10 | always long -16.9% placebo p95 +8.2% BTC +nan% | accept False | period CI [-2.17, +7.52] bp | long-short CAGR +9.3% DD -14% CI [-3.29, +8.66] bp
+   MODEL long book, 77 slots, fee on turnover         x  1.29  CAGR    +7.9%  Sharpe  0.71  maxDD  -12.8%  expo 0.10  years +11% +22% +6% -10%
+   MODEL long book, a round trip every period (battery) x  1.27  CAGR    +7.5%  Sharpe  0.67  maxDD  -13.0%  expo 0.10  years +11% +21% +6% -11%
+   MODEL long book, all capital on the picks (equal share) x  0.97  CAGR    -0.8%  Sharpe  0.18  maxDD  -55.1%  expo 0.45  years +4% +49% +14% -45%
+   MODEL long book, fee 0.02% per side                x  1.36  CAGR    +9.6%  Sharpe  0.84  maxDD  -12.4%  expo 0.10  years +12% +24% +8% -10%
+   MODEL long book, fee 0.05% per side                x  1.32  CAGR    +8.7%  Sharpe  0.77  maxDD  -12.6%  expo 0.10  years +12% +23% +7% -10%
+   MODEL long book, fee 0.10% per side                x  1.27  CAGR    +7.4%  Sharpe  0.66  maxDD  -13.0%  expo 0.10  years +10% +21% +6% -11%
+   MODEL long book, fee 0.15% per side                x  1.22  CAGR    +6.0%  Sharpe  0.55  maxDD  -13.4%  expo 0.10  years +9% +20% +5% -11%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  1.28  CAGR    +7.7%  Sharpe  0.70  maxDD  -12.4%  expo 0.10  years +11% +20% +7% -10%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean +7.5% p95 +8.2%  Sharpe mean 0.71 p95 0.78  the book beats 75% of draws
+p-def/s0 folds 7 IC +0.0773 (t~8.7) | CAGR +12.4% (present days +15.1%) Sharpe 1.30 DD -10% expo 0.09 | always long -16.9% placebo p95 +13.1% BTC +nan% | accept False | period CI [-0.15, +8.22] bp | long-short CAGR +25.1% DD -9% CI [+1.22, +11.67] bp
+   MODEL long book, 77 slots, fee on turnover         x  1.48  CAGR   +12.4%  Sharpe  1.30  maxDD   -9.9%  expo 0.09  years +6% +29% +17% -8%
+   MODEL long book, a round trip every period (battery) x  1.46  CAGR   +11.9%  Sharpe  1.26  maxDD  -10.0%  expo 0.09  years +6% +28% +17% -8%
+   MODEL long book, all capital on the picks (equal share) x  0.85  CAGR    -4.6%  Sharpe  0.04  maxDD  -65.3%  expo 0.47  years -2% +88% -4% -52%
+   MODEL long book, fee 0.02% per side                x  1.55  CAGR   +13.9%  Sharpe  1.44  maxDD   -9.5%  expo 0.09  years +7% +31% +18% -7%
+   MODEL long book, fee 0.05% per side                x  1.51  CAGR   +13.1%  Sharpe  1.37  maxDD   -9.7%  expo 0.09  years +7% +30% +18% -7%
+   MODEL long book, fee 0.10% per side                x  1.46  CAGR   +11.9%  Sharpe  1.26  maxDD  -10.0%  expo 0.09  years +6% +29% +17% -8%
+   MODEL long book, fee 0.15% per side                x  1.41  CAGR   +10.8%  Sharpe  1.14  maxDD  -10.3%  expo 0.09  years +4% +27% +16% -8%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  1.50  CAGR   +13.0%  Sharpe  1.34  maxDD   -8.7%  expo 
+... [truncated 10405 bytes; full log: /content/.colab_bridge/procs/x-211506-88cf75/stdout.log] ...
+ BTC +nan% | accept False | period CI [-0.95, +6.80] bp | long-short CAGR +23.2% DD -7% CI [+1.44, +10.24] bp
+   MODEL long book, 77 slots, fee on turnover         x  1.35  CAGR    +9.3%  Sharpe  1.09  maxDD  -10.1%  expo 0.09  years +5% +34% +4% -8%
+   MODEL long book, a round trip every period (battery) x  1.33  CAGR    +8.9%  Sharpe  1.04  maxDD  -10.3%  expo 0.09  years +4% +34% +4% -8%
+   MODEL long book, all capital on the picks (equal share) x  1.17  CAGR    +4.9%  Sharpe  0.34  maxDD  -60.2%  expo 0.66  years -3% +146% -10% -45%
+   MODEL long book, fee 0.02% per side                x  1.41  CAGR   +10.9%  Sharpe  1.25  maxDD   -9.3%  expo 0.09  years +6% +36% +5% -8%
+   MODEL long book, fee 0.05% per side                x  1.38  CAGR   +10.1%  Sharpe  1.17  maxDD   -9.7%  expo 0.09  years +6% +35% +5% -8%
+   MODEL long book, fee 0.10% per side                x  1.33  CAGR    +8.8%  Sharpe  1.03  maxDD  -10.3%  expo 0.09  years +4% +34% +4% -8%
+   MODEL long book, fee 0.15% per side                x  1.28  CAGR    +7.5%  Sharpe  0.89  maxDD  -11.0%  expo 0.09  years +3% +32% +3% -9%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  1.36  CAGR    +9.6%  Sharpe  1.13  maxDD   -9.2%  expo 0.10  years +7% +30% +5% -7%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean +9.2% p95 +10.5%  Sharpe mean 1.12 p95 1.25  the book beats 65% of draws
+s-def/s0 folds 7 IC +0.0055 (t~0.7) | CAGR +11.3% (present days +13.7%) Sharpe 1.16 DD -8% expo 0.09 | always long -16.9% placebo p95 +10.7% BTC +nan% | accept True | period CI [-0.25, +7.42] bp | long-short CAGR +14.6% DD -15% CI [-1.77, +9.67] bp
+   MODEL long book, 77 slots, fee on turnover         x  1.43  CAGR   +11.3%  Sharpe  1.16  maxDD   -7.7%  expo 0.09  years +4% +25% +9% +1%
+   MODEL long book, a round trip every period (battery) x  1.42  CAGR   +10.9%  Sharpe  1.13  maxDD   -7.7%  expo 0.09  years +3% +24% +9% +1%
+   MODEL long book, all capital on the picks (equal share) x  0.57  CAGR   -15.5%  Sharpe -0.05  maxDD  -73.8%  expo 0.65  years -16% +31% -51% +6%
+   MODEL long book, fee 0.02% per side                x  1.50  CAGR   +12.9%  Sharpe  1.31  maxDD   -7.0%  expo 0.09  years +5% +27% +11% +2%
+   MODEL long book, fee 0.05% per side                x  1.47  CAGR   +12.1%  Sharpe  1.23  maxDD   -7.3%  expo 0.09  years +4% +26% +10% +1%
+   MODEL long book, fee 0.10% per side                x  1.41  CAGR   +10.8%  Sharpe  1.11  maxDD   -7.9%  expo 0.09  years +3% +24% +9% +1%
+   MODEL long book, fee 0.15% per side                x  1.35  CAGR    +9.5%  Sharpe  0.98  maxDD   -8.7%  expo 0.09  years +2% +23% +8% +0%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  1.41  CAGR   +10.7%  Sharpe  1.15  maxDD   -7.4%  expo 0.10  years +4% +23% +9% +1%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean +10.0% p95 +10.7%  Sharpe mean 1.12 p95 1.20  the book beats 95% of draws
+s-def/s1 folds 7 IC +0.0130 (t~1.6) | CAGR +6.9% (present days +8.3%) Sharpe 0.77 DD -12% expo 0.09 | always long -16.9% placebo p95 +7.5% BTC +nan% | accept False | period CI [-1.74, +6.08] bp | long-short CAGR +14.0% DD -17% CI [-1.40, +8.87] bp
+   MODEL long book, 77 slots, fee on turnover         x  1.25  CAGR    +6.9%  Sharpe  0.77  maxDD  -11.9%  expo 0.09  years -3% +40% +0% -8%
+   MODEL long book, a round trip every period (battery) x  1.24  CAGR    +6.6%  Sharpe  0.74  maxDD  -12.0%  expo 0.09  years -3% +40% +0% -8%
+   MODEL long book, all capital on the picks (equal share) x  0.60  CAGR   -14.2%  Sharpe -0.09  maxDD  -78.2%  expo 0.64  years -12% +124% -44% -45%
+   MODEL long book, fee 0.02% per side                x  1.31  CAGR    +8.4%  Sharpe  0.94  maxDD  -11.1%  expo 0.09  years -2% +43% +1% -8%
+   MODEL long book, fee 0.05% per side                x  1.28  CAGR    +7.7%  Sharpe  0.86  maxDD  -11.5%  expo 0.09  years -3% +42% +1% -8%
+   MODEL long book, fee 0.10% per side                x  1.23  CAGR    +6.4%  Sharpe  0.72  maxDD  -12.1%  expo 0.09  years -4% +39% +0% -8%
+   MODEL long book, fee 0.15% per side                x  1.18  CAGR    +5.1%  Sharpe  0.58  maxDD  -12.8%  expo 0.09  years -5% +37% -1% -9%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  1.24  CAGR    +6.6%  Sharpe  0.77  maxDD  -10.6%  expo 0.10  years -3% +34% +2% -7%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean +6.3% p95 +7.5%  Sharpe mean 0.76 p95 0.89  the book beats 85% of draws
+s-mres/own/s0 folds 7 IC +0.0858 (t~9.7) | CAGR -2.5% (present days -3.0%) Sharpe -0.42 DD -15% expo 0.11 | always long -16.9% placebo p95 -5.2% BTC +nan% | accept False | period CI [-3.34, +1.59] bp | long-short CAGR -4.8% DD -32% CI [-5.87, +3.34] bp
+   MODEL long book, 77 slots, fee on turnover         x  0.92  CAGR    -2.5%  Sharpe -0.42  maxDD  -14.7%  expo 0.11  years +2% -10% +1% -1%
+   MODEL long book, a round trip every period (battery) x  0.88  CAGR    -3.7%  Sharpe -0.65  maxDD  -15.8%  expo 0.11  years +2% -10% -1% -2%
+   MODEL long book, all capital on the picks (equal share) x  0.36  CAGR   -26.3%  Sharpe -1.28  maxDD  -65.7%  expo 0.80  years -36% -34% -5% -11%
+   MODEL long book, fee 0.02% per side                x  0.95  CAGR    -1.5%  Sharpe -0.24  maxDD  -13.7%  expo 0.11  years +4% -9% +1% -1%
+   MODEL long book, fee 0.05% per side                x  0.94  CAGR    -2.0%  Sharpe -0.33  maxDD  -14.2%  expo 0.11  years +3% -9% +1% -1%
+   MODEL long book, fee 0.10% per side                x  0.91  CAGR    -2.8%  Sharpe -0.48  maxDD  -15.0%  expo 0.11  years +2% -10% +0% -1%
+   MODEL long book, fee 0.15% per side                x  0.88  CAGR    -3.6%  Sharpe -0.64  maxDD  -15.8%  expo 0.11  years +1% -11% -0% -1%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  0.83  CAGR    -5.5%  Sharpe -0.80  maxDD  -21.7%  expo 0.11  years +3% -11% -6% -5%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean -6.1% p95 -5.2%  Sharpe mean -0.93 p95 -0.77  the book beats 100% of draws
+s-mres/s0 folds 7 IC +0.0971 (t~14.8) | CAGR -0.5% (present days -0.6%) Sharpe -0.71 DD -2% expo 0.11 | always long +15.4% placebo p95 +0.1% BTC +nan% | accept False | period CI [-0.55, +0.20] bp | long-short CAGR -0.5% DD -8% CI [-1.53, +1.16] bp
+   MODEL long book, 77 slots, fee on turnover         x  0.98  CAGR    -0.5%  Sharpe -0.71  maxDD   -2.4%  expo 0.11  years -2% +1% -1% -0%
+   MODEL long book, a round trip every period (battery) x  0.94  CAGR    -1.8%  Sharpe -2.32  maxDD   -5.9%  expo 0.11  years -3% +1% -3% -1%
+   MODEL long book, all capital on the picks (equal share) x  0.66  CAGR   -11.5%  Sharpe -1.15  maxDD  -33.8%  expo 0.80  years -27% +2% -7% -5%
+   MODEL long book, fee 0.02% per side                x  1.02  CAGR    +0.5%  Sharpe  0.63  maxDD   -1.5%  expo 0.11  years -1% +2% -0% +0%
+   MODEL long book, fee 0.05% per side                x  1.00  CAGR    -0.0%  Sharpe -0.04  maxDD   -1.7%  expo 0.11  years -1% +2% -1% +0%
+   MODEL long book, fee 0.10% per side                x  0.97  CAGR    -0.9%  Sharpe -1.15  maxDD   -3.2%  expo 0.11  years -2% +1% -2% -0%
+   MODEL long book, fee 0.15% per side                x  0.94  CAGR    -1.7%  Sharpe -2.24  maxDD   -5.7%  expo 0.11  years -3% +0% -2% -0%
+   always long, 77 slots                              x  1.62  CAGR   +15.4%  Sharpe 18.45  maxDD   -0.1%  expo 0.95  years +14% +17% +13% +8%
+   basket (equal weight) x the book's breadth (timing only) x  1.01  CAGR    +0.2%  Sharpe  1.53  maxDD   -0.6%  expo 0.11  years -1% +0% +1% +1%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean -0.9% p95 +0.1%  Sharpe mean -0.86 p95 0.10  the book beats 65% of draws
+s-mres/own/s1 folds 7 IC +0.0858 (t~9.7) | CAGR -1.5% (present days -1.8%) Sharpe -0.21 DD -11% expo 0.10 | always long -16.9% placebo p95 -3.7% BTC +nan% | accept False | period CI [-3.48, +2.36] bp | long-short CAGR -4.7% DD -25% CI [-5.94, +3.75] bp
+   MODEL long book, 77 slots, fee on turnover         x  0.95  CAGR    -1.5%  Sharpe -0.21  maxDD  -11.2%  expo 0.10  years +5% -3% -2% -4%
+   MODEL long book, a round trip every period (battery) x  0.91  CAGR    -2.7%  Sharpe -0.41  maxDD  -14.0%  expo 0.10  years +4% -4% -4% -4%
+   MODEL long book, all capital on the picks (equal share) x  0.41  CAGR   -23.1%  Sharpe -1.07  maxDD  -62.6%  expo 0.79  years -23% -20% -23% -13%
+   MODEL long book, fee 0.02% per side                x  0.98  CAGR    -0.5%  Sharpe -0.05  maxDD  -10.4%  expo 0.10  years +6% -3% -2% -3%
+   MODEL long book, fee 0.05% per side                x  0.97  CAGR    -1.0%  Sharpe -0.13  maxDD  -10.5%  expo 0.10  years +5% -3% -2% -3%
+   MODEL long book, fee 0.10% per side                x  0.94  CAGR    -1.8%  Sharpe -0.26  maxDD  -11.8%  expo 0.10  years +4% -4% -3% -4%
+   MODEL long book, fee 0.15% per side                x  0.91  CAGR    -2.6%  Sharpe -0.39  maxDD  -13.9%  expo 0.10  years +3% -5% -4% -4%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  0.87  CAGR    -4.0%  Sharpe -0.48  maxDD  -20.0%  expo 0.11  years +7% -3% -9% -8%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean -4.6% p95 -3.7%  Sharpe mean -0.60 p95 -0.48  the book beats 100% of draws
+s-mres/s1 folds 7 IC +0.0968 (t~14.6) | CAGR -0.6% (present days -0.7%) Sharpe -0.75 DD -3% expo 0.10 | always long +15.4% placebo p95 -0.1% BTC +nan% | accept False | period CI [-0.60, +0.19] bp | long-short CAGR -1.4% DD -9% CI [-1.88, +1.08] bp
+   MODEL long book, 77 slots, fee on turnover         x  0.98  CAGR    -0.6%  Sharpe -0.75  maxDD   -3.2%  expo 0.10  years -1% +0% -1% +1%
+   MODEL long book, a round trip every period (battery) x  0.94  CAGR    -1.8%  Sharpe -2.33  maxDD   -6.3%  expo 0.10  years -2% -1% -3% -0%
+   MODEL long book, all capital on the picks (equal share) x  0.97  CAGR    -1.0%  Sharpe -0.08  maxDD  -23.3%  expo 0.79  years +4% -2% -10% +5%
+   MODEL long book, fee 0.02% per side                x  1.01  CAGR    +0.4%  Sharpe  0.52  maxDD   -1.5%  expo 0.10  years -0% +1% -0% +1%
+   MODEL long book, fee 0.05% per side                x  1.00  CAGR    -0.1%  Sharpe -0.11  maxDD   -2.0%  expo 0.10  years -1% +1% -1% +1%
+   MODEL long book, fee 0.10% per side                x  0.97  CAGR    -0.9%  Sharpe -1.17  maxDD   -4.0%  expo 0.10  years -2% -0% -2% +1%
+   MODEL long book, fee 0.15% per side                x  0.94  CAGR    -1.7%  Sharpe -2.21  maxDD   -6.2%  expo 0.10  years -3% -1% -2% +0%
+   always long, 77 slots                              x  1.62  CAGR   +15.4%  Sharpe 18.45  maxDD   -0.1%  expo 0.95  years +14% +17% +13% +8%
+   basket (equal weight) x the book's breadth (timing only) x  1.01  CAGR    +0.2%  Sharpe  1.35  maxDD   -0.6%  expo 0.11  years -0% -0% +1% +0%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean -0.9% p95 -0.1%  Sharpe mean -0.84 p95 -0.08  the book beats 70% of draws
+s-std/s0 folds 7 IC +0.0117 (t~1.4) | CAGR +16.0% (present days +19.5%) Sharpe 1.55 DD -6% expo 0.10 | always long -16.9% placebo p95 +15.5% BTC +nan% | accept True | period CI [+0.81, +8.93] bp | long-short CAGR +24.1% DD -10% CI [+0.33, +11.91] bp
+   MODEL long book, 77 slots, fee on turnover         x  1.65  CAGR   +16.0%  Sharpe  1.55  maxDD   -6.2%  expo 0.10  years +4% +44% +9% +2%
+   MODEL long book, a round trip every period (battery) x  1.63  CAGR   +15.6%  Sharpe  1.52  maxDD   -6.3%  expo 0.10  years +3% +43% +8% +2%
+   MODEL long book, all capital on the picks (equal share) x  0.34  CAGR   -27.6%  Sharpe -0.38  maxDD  -80.6%  expo 0.65  years -43% +44% -54% -10%
+   MODEL long book, fee 0.02% per side                x  1.73  CAGR   +17.8%  Sharpe  1.70  maxDD   -5.6%  expo 0.10  years +5% +46% +10% +3%
+   MODEL long book, fee 0.05% per side                x  1.69  CAGR   +16.9%  Sharpe  1.62  maxDD   -5.9%  expo 0.10  years +4% +45% +9% +2%
+   MODEL long book, fee 0.10% per side                x  1.62  CAGR   +15.4%  Sharpe  1.50  maxDD   -6.4%  expo 0.10  years +3% +43% +8% +2%
+   MODEL long book, fee 0.15% per side                x  1.55  CAGR   +14.0%  Sharpe  1.37  maxDD   -7.0%  expo 0.10  years +2% +41% +7% +1%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  1.62  CAGR   +15.5%  Sharpe  1.58  maxDD   -6.0%  expo 0.10  years +5% +37% +9% +3%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean +14.7% p95 +15.5%  Sharpe mean 1.55 p95 1.63  the book beats 95% of draws
+s-std/s1 folds 7 IC +0.0094 (t~1.2) | CAGR +9.7% (present days +11.8%) Sharpe 1.00 DD -9% expo 0.10 | always long -16.9% placebo p95 +10.5% BTC +nan% | accept False | period CI [-1.15, +7.32] bp | long-short CAGR +16.3% DD -14% CI [-0.97, +9.63] bp
+   MODEL long book, 77 slots, fee on turnover         x  1.37  CAGR    +9.7%  Sharpe  1.00  maxDD   -9.3%  expo 0.10  years +2% +40% +2% -7%
+   MODEL long book, a round trip every period (battery) x  1.35  CAGR    +9.4%  Sharpe  0.97  maxDD   -9.5%  expo 0.10  years +2% +40% +2% -7%
+   MODEL long book, all capital on the picks (equal share) x  0.40  CAGR   -23.8%  Sharpe -0.34  maxDD  -79.7%  expo 0.68  years -23% +67% -42% -46%
+   MODEL long book, fee 0.02% per side                x  1.44  CAGR   +11.4%  Sharpe  1.16  maxDD   -8.7%  expo 0.10  years +4% +43% +3% -6%
+   MODEL long book, fee 0.05% per side                x  1.40  CAGR   +10.6%  Sharpe  1.08  maxDD   -9.0%  expo 0.10  years +3% +42% +3% -7%
+   MODEL long book, fee 0.10% per side                x  1.34  CAGR    +9.2%  Sharpe  0.94  maxDD   -9.5%  expo 0.10  years +2% +40% +2% -7%
+   MODEL long book, fee 0.15% per side                x  1.29  CAGR    +7.8%  Sharpe  0.81  maxDD  -10.2%  expo 0.10  years +1% +37% +1% -8%
+   always long, 77 slots                              x  0.54  CAGR   -16.9%  Sharpe -0.25  maxDD  -82.6%  expo 0.95  years +36% +56% -64% -29%
+   basket (equal weight) x the book's breadth (timing only) x  1.36  CAGR    +9.7%  Sharpe  1.04  maxDD   -8.1%  expo 0.10  years +4% +34% +4% -5%
+   placebo: random coins, same timestamps and counts  20 draws  CAGR mean +9.3% p95 +10.5%  Sharpe mean 1.02 p95 1.15  the book beats 75% of draws

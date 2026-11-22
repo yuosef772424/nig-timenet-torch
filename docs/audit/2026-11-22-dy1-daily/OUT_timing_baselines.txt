@@ -1,0 +1,9 @@
+reversal 1d    CAGR   -0.9% Sharpe -0.38 DD  -5.9% expo 0.032 years +2% -1% -2% -1%
+momentum 1d    CAGR   -0.5% Sharpe -0.26 DD  -6.9% expo 0.020 years -0% +5% -5% -0%
+reversal 3d    CAGR   -0.5% Sharpe -0.21 DD  -4.4% expo 0.031 years +1% -1% -0% -1%
+momentum 3d    CAGR   -0.6% Sharpe -0.33 DD  -7.8% expo 0.020 years +1% +4% -6% -1%
+reversal 7d    CAGR   -0.8% Sharpe -0.35 DD  -4.3% expo 0.032 years -1% +1% -1% -2%
+momentum 7d    CAGR   +0.7% Sharpe  0.44 DD  -5.0% expo 0.017 years +1% +5% -3% -1%
+reversal 14d   CAGR   -0.8% Sharpe -0.32 DD  -6.2% expo 0.030 years +2% -2% +0% -2%
+momentum 14d   CAGR   +1.4% Sharpe  0.82 DD  -3.4% expo 0.016 years -0% +8% -2% -1%
+always on      CAGR   -1.2% Sharpe -0.27 DD -14.8% expo 0.090 years +4% +5% -9% -3%
