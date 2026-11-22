@@ -16,8 +16,8 @@ import pandas as pd
 import torch
 
 from nig_timenet_torch.colab.identity import identity_for_run
+from nig_timenet_torch.core.registry import unknown_names_text
 from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
-from nig_timenet_torch.core.suggest import unknown_names_text
 from nig_timenet_torch.data_io.artifact import norm_coin
 from nig_timenet_torch.data_io.loading import LoadedData, load_dataset
 from nig_timenet_torch.data_io.split_plan import purge_embargo_split, sample_times

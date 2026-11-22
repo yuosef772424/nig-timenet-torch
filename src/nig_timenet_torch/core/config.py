@@ -19,7 +19,7 @@ import typing
 from collections.abc import Mapping
 from typing import Any
 
-from nig_timenet_torch.core.suggest import did_you_mean, unknown_names_text
+from nig_timenet_torch.core.registry import did_you_mean, unknown_names_text
 
 __all__ = ["from_dict", "to_dict", "updated"]
 
@@ -37,7 +37,7 @@ def _dataclass_type(hint: Any) -> type | None:
 
 def from_dict(cls: type, d: Mapping[str, Any], *, strict: bool = True):
     """Build a frozen dataclass `cls` from `d`. strict=True (default): a key in `d` not in `cls`'s fields raises
-    ValueError naming the unknown key + a did-you-mean (core.suggest). Nested dataclass
+    ValueError naming the unknown key + a did-you-mean (core.registry.did_you_mean). Nested dataclass
     fields are built recursively. Missing keys use the dataclass field default (no second default source)."""
     if not (isinstance(cls, type) and dataclasses.is_dataclass(cls)):
         raise TypeError(f"from_dict: {cls!r} is not a dataclass type")

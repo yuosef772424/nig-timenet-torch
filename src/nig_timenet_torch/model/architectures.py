@@ -1,7 +1,8 @@
 """P32/P33/P33b: the ARCHITECTURES registry — pluggable models behind one boundary contract (model.contract).
 
-PURPOSE:  The ARCHITECTURES registry (build_fn + default_config per architecture), ModelSettings / build_model, the
-          anti-memorization preset and the TinyMLP plug-in proof; every architecture exposes the health-report hooks.
+PURPOSE:  The ARCHITECTURES registry (build function + default_config per architecture), ModelSettings /
+          build_model, the anti-memorization preset and the TinyMLP plug-in proof; every architecture exposes the
+          health-report hooks.
 TAGS:     architectures, registry, model settings, default config, tiny mlp, plugin, health report, probe points
 PITFALLS: THE default of nig_timenet_v2 is NIG_TIMENET_V2_DEFAULT_CONFIG (d_model 16, 2 layers, NIG + binary heads);
           build_nig_timenet_v2's own signature keeps the TF core defaults and differs (HF-08). An architecture's
@@ -9,8 +10,9 @@ PITFALLS: THE default of nig_timenet_v2 is NIG_TIMENET_V2_DEFAULT_CONFIG (d_mode
           health_report; optional ``activation_points`` (pre-activation Linear names) for gate A7. TinyMLP is a
           plug-in proof (tests, trainer_checks), not a candidate model.
 
-Each entry: ``build_fn(seq_len, n_features, **config) -> nn.Module`` whose forward returns the HEAD_REGISTRY-named
-output dict, plus a ``default_config`` (constructor kwargs without seq_len / n_features). ``nig_timenet_v2`` is the
+Each entry: the registered object is ``build_fn(seq_len, n_features, **config) -> nn.Module`` whose forward returns
+the HEAD_REGISTRY-named output dict, plus a ``default_config`` (constructor kwargs without seq_len / n_features).
+``nig_timenet_v2`` is the
 first and default entry; its default_config is the first oracle's constructor_kwargs (reference/data/config.json).
 """
 
@@ -40,7 +42,7 @@ from nig_timenet_torch.model.snapshot import SNAPSHOT_DEFAULT_CONFIG, build_snap
 __all__ = ["ARCHITECTURES", "DEFAULT_ARCHITECTURE", "ModelSettings", "build_model", "NIG_TIMENET_V2_DEFAULT_CONFIG",
            "TinyMLP", "build_tiny_mlp", "ANTI_MEMORIZATION_CONFIG", "architecture_contract"]
 
-ARCHITECTURES = Registry("architecture", Contract("architecture", required_meta=("build_fn", "default_config")))
+ARCHITECTURES = Registry("architecture", Contract("architecture", required_meta=("default_config",)))
 DEFAULT_ARCHITECTURE = "nig_timenet_v2"
 
 _HEADS = {t: ["nig_regression", "binary_classification"] for t in TARGET_COLUMNS}
@@ -76,7 +78,8 @@ class ModelSettings:
 
 def build_model(settings: ModelSettings, seq_len: int, n_features: int) -> nn.Module:
     meta = ARCHITECTURES.entry(settings.architecture).meta
-    return meta["build_fn"](seq_len, n_features, **{**meta["default_config"], **settings.overrides})
+    return ARCHITECTURES.get(settings.architecture)(seq_len, n_features,
+                                                    **{**meta["default_config"], **settings.overrides})
 
 
 def architecture_contract(settings: ModelSettings, seq_len: int, n_features: int) -> ModelContract:
@@ -85,7 +88,7 @@ def architecture_contract(settings: ModelSettings, seq_len: int, n_features: int
     return contract_of(build_model(settings, seq_len, n_features), torch.zeros(1, seq_len, n_features))
 
 
-ARCHITECTURES.register("nig_timenet_v2", build_nig_timenet_v2, version=1, build_fn=build_nig_timenet_v2,
+ARCHITECTURES.register("nig_timenet_v2", build_nig_timenet_v2, version=1,
                        default_config=NIG_TIMENET_V2_DEFAULT_CONFIG,
                        anti_memorization_config=ANTI_MEMORIZATION_CONFIG)
 
@@ -152,10 +155,10 @@ def build_tiny_mlp(seq_len: int, n_features: int, **config) -> TinyMLP:
     return TinyMLP(int(seq_len), int(n_features), **config)
 
 
-ARCHITECTURES.register("tiny_mlp", build_tiny_mlp, version=1, build_fn=build_tiny_mlp,
+ARCHITECTURES.register("tiny_mlp", build_tiny_mlp, version=1,
                        default_config={"price_targets": list(TARGET_COLUMNS), "hidden": 32})
 
 # owner 2026-11-18 ("100 x 3"): the whole moment as one input, per-coin input / output weights (model/snapshot.py);
 # needs split.cross_section and split.coin_channel
-ARCHITECTURES.register("snapshot_panel", build_snapshot_panel, version=1, build_fn=build_snapshot_panel,
+ARCHITECTURES.register("snapshot_panel", build_snapshot_panel, version=1,
                        default_config=SNAPSHOT_DEFAULT_CONFIG)

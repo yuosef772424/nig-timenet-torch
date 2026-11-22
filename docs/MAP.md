@@ -43,7 +43,6 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `core/roles.py` | The ``Role`` enum: what a data split may be used for (fit, calibration, selection, report, sealed). | role, data role, split, calibration, selection, sealed, learned state |
 | `core/schema.py` | The last_candles column schema, price target columns, target modes and raw OHLCV column names, defined once so no package copies them. | schema, constants, last candles, price targets, target modes, ohlcv columns |
 | `core/seeds.py` | ONE seeding entry point (``seed_everything``) and the named per-epoch / per-stage reseeding formulas that ``Trainer.fit`` and the staged loop share, so a resumed run reseeds exactly as an uninterrupted one. | seeds, determinism, seed everything, epoch seed, reseed, resume, reproducibility |
-| `core/suggest.py` | The ONE "did you mean" helper: the closest known name to a mistyped one, and the text "'a' (did you mean 'b'?), 'c'" every strict config / registry / coin-list error uses. | did you mean, suggestion, difflib, unknown key, strict config, error message, typo |
 
 ### data
 
@@ -149,7 +148,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
-| `model/architectures.py` | The ARCHITECTURES registry (build_fn + default_config per architecture), ModelSettings / build_model, the anti-memorization preset and the TinyMLP plug-in proof; every architecture exposes the health-report hooks. | architectures, registry, model settings, default config, tiny mlp, plugin, health report, probe points |
+| `model/architectures.py` | The ARCHITECTURES registry (build function + default_config per architecture), ModelSettings / build_model, the anti-memorization preset and the TinyMLP plug-in proof; every architecture exposes the health-report hooks. | architectures, registry, model settings, default config, tiny mlp, plugin, health report, probe points |
 | `model/attn_heads.py` | Experimental NIG output head without a Dense readout: ScalarOutputAttention (one learned query per output attends over the head sequence) and ScalarNIGHead (mu, nu, alpha, beta from it); selected by ``nig_head``. | attention head, scalar output attention, nig head, joint attention, factorized attention, head sequence, dense readout, experiment |
 | `model/builder.py` | NigTimeNetV2 (the fused model: input path, one encoder branch per timeframe, trunk, heads) and build_nig_timenet_v2; encoders come from model.encoders.ENCODERS, head kinds from HEAD_REGISTRY. | builder, nig timenet v2, model assembly, encoder dispatch, head dispatch, oracle weights, state dict |
 | `model/contract.py` | The boundary contract of a model (input and output names, shapes, dtypes, head kind), read from any built model by one forward pass and checked with a field-level diff; architectures plug in through it. | model contract, boundary, architecture, plugin, head kind, check_contract |

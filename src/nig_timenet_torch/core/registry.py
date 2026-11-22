@@ -24,12 +24,30 @@ Usage:
     TASKS.register("nig", nig_loss, version=1, stat_keys=("mae", "nll"))
     TASKS.get("nig")             # the object; TASKS.get("nigg") raises UnknownNameError (known names + "did you mean 'nig'")
 """
+import difflib
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Iterator, Mapping, Optional, Tuple
 
-from nig_timenet_torch.core.suggest import did_you_mean
+__all__ = ["Registry", "Contract", "Entry", "RegistryError", "DuplicateNameError", "UnknownNameError", "ContractError",
+           "did_you_mean", "unknown_names_text"]
 
-__all__ = ["Registry", "Contract", "Entry", "RegistryError", "DuplicateNameError", "UnknownNameError", "ContractError"]
+
+def did_you_mean(name: Any, known: Iterable) -> Optional[str]:
+    """The ONE "did you mean" lookup (registry, strict config, trainer config, coin lists): the known name closest to
+    ``name`` (difflib, cutoff 0.6), or None when none is close or ``known`` is empty."""
+    close = difflib.get_close_matches(str(name), [str(k) for k in known], n=1)
+    return close[0] if close else None
+
+
+def unknown_names_text(names: Iterable, known: Iterable, *, match: Callable[[str], str] = str) -> str:
+    """``'x' (did you mean 'y'?), 'z'`` for the unknown ``names``; ``match`` maps a name to what is compared with
+    ``known`` (e.g. a coin-name normaliser), the name itself is printed as given."""
+    known = list(known)
+    parts = []
+    for name in names:
+        close = did_you_mean(match(str(name)), known)
+        parts.append(f"{name!r}" + (f" (did you mean {close!r}?)" if close else ""))
+    return ", ".join(parts)
 
 
 class RegistryError(Exception):

@@ -21,7 +21,7 @@ two-sided targets it reads, D-032). Every lambda variable
 a target names (``lambda_reg_var``, ``lambda_calib_var``) must be a scheduled variable.
 """
 
-from nig_timenet_torch.core.suggest import unknown_names_text
+from nig_timenet_torch.core.registry import unknown_names_text
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer.tasks import TASK_REGISTRY, with_defaults
 
