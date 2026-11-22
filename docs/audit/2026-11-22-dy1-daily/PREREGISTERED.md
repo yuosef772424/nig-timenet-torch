@@ -98,3 +98,13 @@ single-coin model gets the rank term in `dy1-vm-sr-def`, `dy1-vm-sr-std`, `dy1-v
 with `split.cross_section` true (the rank term ranks the rows of one timestamp: it needs whole-timestamp batches; the
 inputs stay the coin's own, `cross_input` none), `cross_section_loss` rank_ic and selection val_rank_ic_reg (as every
 rank arm). Seeds 0, 1, commit 594b0c0, the same runtime. Candidates: 14 arms, CI level 1 - 0.05 / 14.
+
+## Amendment 4 (owner 2026-11-22: "each loss on its own"; written before any arm table was read)
+The owner's grid is 3 normalisations x 2 model kinds x 2 losses, each tried on its own: the absolute (per-row NIG)
+loss alone and the rank loss alone. Absolute alone = s-* (single) and pa-* (panel). Rank alone (new switch
+`TrainSettings.base_loss_weight` 0, D-051: the per-row loss is switched off, the rank_ic term alone trains the
+means; sigma and the class heads get no gradient, so only mu is read): `dy1-vm-sk-{def,std,mres}` (single, own
+inputs, whole-timestamp batches) and `dy1-vm-pk-{def,std,mres}` (panel, relative inputs). The combined arms (p-*,
+and sr-* restarted at the owner's request) stay as a third column. These arms run on the commit that holds D-051
+(not 594b0c0); the code path of the earlier arms is unchanged by it (default 1.0, tested). Candidates: 20 arms, CI
+level 1 - 0.05 / 20.
