@@ -83,3 +83,11 @@ away from coins that move little (BTC).
 - An M3 table's y_ret is the residual return (coin minus beta x market): its account is the P&L of a long position
   hedged with beta x the basket (hedge cost not charged). It is ALSO read on the coins' own returns (the picks joined
   to `art_vm`'s y_ret), and only that own-return account counts for the accept rule of the M3 arms.
+
+## Amendment 2 (owner 2026-11-22, written before any arm table was read)
+Owner: add arms with, beside the rank loss, the absolute loss of each coin on its own. The p arms already train the
+per-row NIG loss of every coin PLUS the rank_ic term (`trainer/trainer.py`: the term is added with
+`cross_section_weight` 1.0), so the new arms drop the rank term and keep the per-row loss alone: `dy1-vm-pa-def`,
+`dy1-vm-pa-std`, `dy1-vm-pa-mres` (= p-def / p-std / p-mres with `cross_section_loss` none; selection metric
+unchanged, val_rank_ic_reg), seeds 0, 1, started on the same commit (594b0c0) and runtime as the six others.
+Candidates are now 11 arms: the CI level becomes 1 - 0.05 / 11.
