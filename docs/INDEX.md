@@ -100,7 +100,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/handoff/2026-11-20-br1-m3-running.md`: Status: closed (AI2 #72; `docs/results/br1-001.md`, `docs/results/m3-full-001.md`)
 - `docs/handoff/2026-11-20-dw1-running.md`: Status: closed (DW1 #73; `docs/results/dw1-001.md`)
 - `docs/handoff/2026-11-20-start-here.md`: Status: closed (AI1 #71 and AI2 #72 merged in MG4 #74; `docs/results/br1-001.md`, `docs/results/m3-full-001.md`)
-- `docs/handoff/2026-11-21-hardening-2026-11b.md`: Status: open (every package is in PR #75; close this note when #75 merges)
+- `docs/handoff/2026-11-21-hardening-2026-11b.md`: Status: closed (PR #75 merged 2026-11-22 as 2d0404c; the items under "Left" stay open in the plan and STATUS)
 
 ## Decisions
 
