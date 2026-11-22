@@ -29,6 +29,15 @@ def valid_state(state: str) -> bool:
     return state in STATES or (state.startswith("skipped (") and state.endswith(")")) or bool(MERGED_VIA.match(state))
 
 
+#: the states of a row that is still being worked on; every other valid state is closed and belongs in
+#: docs/status_archive.md (``python -m tools.close_step --archive``)
+OPEN_STATES = ("todo", "in progress", "PR open")
+
+
+def is_open(state: str) -> bool:
+    return state in OPEN_STATES
+
+
 def _cells(line: str) -> list[str]:
     return [c.strip() for c in line.strip().strip("|").split("|")]
 
@@ -103,3 +112,45 @@ def update_status(text: str, step: str, *, branch: str | None, pr: int | None = 
         raise ToolError(f"docs/STATUS.md would have {n} lines, the limit is < {STATUS_MAX} (rule B6 test): "
                         "move detail out of the file first, then run again")
     return out
+
+
+# ---------------------------------------------------------------------------------------------- archive of closed rows
+def status_rows(text: str) -> list[tuple[int, list[str]]]:
+    """``(line index, cells)`` of every data row of every table with five or more cells (header and rule lines
+    excluded); the one reader of the STATUS table (the docs tests, ``--check`` and ``--archive`` all use it)."""
+    out = []
+    for i, line in enumerate(text.split("\n")):
+        if not line.startswith("|"):
+            continue
+        cells = _cells(line)
+        if len(cells) < 5 or cells[0] in ("Step", "") or set(cells[0]) <= set("-"):
+            continue
+        out.append((i, cells))
+    return out
+
+
+def closed_rows(text: str) -> list[str]:
+    """Step ids of the STATUS rows whose state is not open (they should be archived)."""
+    return [cells[0] for _, cells in status_rows(text) if not is_open(cells[2])]
+
+
+def archive_closed(status: str, archive: str) -> tuple[str, str, list[str]]:
+    """Move every closed row of ``status`` verbatim to the end of the last ``Step | Title | State`` table of
+    ``archive``; returns ``(new status, new archive, moved step ids)``. Raises ToolError when the archive has no such
+    table."""
+    lines = status.split("\n")
+    moved_idx = [i for i, cells in status_rows(status) if not is_open(cells[2])]
+    if not moved_idx:
+        return status, archive, []
+    ids = [_cells(lines[i])[0] for i in moved_idx]
+    rows = [lines[i] for i in moved_idx]
+    keep = [ln for i, ln in enumerate(lines) if i not in set(moved_idx)]
+    alines = archive.split("\n")
+    heads = [i for i, ln in enumerate(alines) if ln.startswith("|") and _cells(ln)[:3] == ["Step", "Title", "State"]]
+    if not heads:
+        raise ToolError("the archive has no table with the header `| Step | Title | State |` to append to")
+    end = heads[-1] + 1
+    while end < len(alines) and alines[end].startswith("|"):
+        end += 1
+    alines[end:end] = rows
+    return "\n".join(keep), "\n".join(alines), ids

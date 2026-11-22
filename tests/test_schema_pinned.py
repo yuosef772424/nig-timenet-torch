@@ -4,6 +4,7 @@ import ast
 from pathlib import Path
 
 from nig_timenet_torch.core import constants, schema
+from tests import scan
 
 CORE = Path(__file__).resolve().parent.parent / "src" / "nig_timenet_torch" / "core"
 
@@ -30,8 +31,5 @@ def test_modules_have_no_dependencies():
     for name, allowed in (("schema.py", {"types"}), ("constants.py", set())):
         mods = set()
         for node in ast.parse((CORE / name).read_text()).body:
-            if isinstance(node, ast.Import):
-                mods |= {a.name for a in node.names}
-            elif isinstance(node, ast.ImportFrom):
-                mods.add(node.module)
+            mods |= set(scan.imported_modules(node))
         assert mods == allowed, name

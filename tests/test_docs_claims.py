@@ -11,8 +11,25 @@ import re
 
 from tests.scan import ROOT
 
-LIVE_DOCS = ("CLAUDE.md", "docs/STATUS.md", "docs/RULES.md", "docs/ROADMAP.md", "NOTES.md", "notebooks/README.md")
-PATH_IN_BACKTICKS = re.compile(r"`((?:docs|tests|src|reference|notebooks|\.github)/[^`\s]*)`")
+#: docs that quote paths as history, not as a claim about today's tree: results notes, audits (also the hardening
+#: audits) and handoffs describe a past session's files, some since moved or deleted
+#: Also historical records, excluded one by one: the port record (quotes the TF project's tree and files renamed since),
+#: the owner decision records (immutable: a record is never edited after the merge), the append-only review log and
+#: the files of the finished hardening campaign 2026-11 (its audit, plan and branch notes).
+HISTORICAL_DIRS = ("docs/results/", "docs/audit/", "docs/handoff/", "docs/hardening/audit-", "docs/decisions/",
+                   "docs/BUILD_PLAN.md", "docs/reviews.md", "docs/hardening/AUDIT-2026-11.md",
+                   "docs/hardening/PLAN.md", "docs/hardening/BRANCH_AR_STREAM.md")
+EXTRA_DOCS = ("CLAUDE.md", "NOTES.md", "notebooks/README.md")
+
+
+def _live_docs() -> tuple[str, ...]:
+    """Every doc under docs/ except the historical folders, plus the root docs (E-23: a hand-kept list of six)."""
+    found = {p.relative_to(ROOT).as_posix() for p in (ROOT / "docs").rglob("*.md")}
+    return tuple(sorted(rel for rel in found if not rel.startswith(HISTORICAL_DIRS)) + list(EXTRA_DOCS))
+
+
+LIVE_DOCS = _live_docs()
+PATH_IN_BACKTICKS = re.compile(r"`((?:docs|tests|tools|src|reference|notebooks|\.github)/[^`\s]*)`")
 
 #: quoted paths that are legitimately absent today -> the reason (remove the entry the day the file exists; the
 #: test below fails on a stale entry)
@@ -20,7 +37,19 @@ ABSENT_ON_PURPOSE = {
     "reference/README": "RULES.md V1 incident: that is the TF project's file, quoted as history",
     "docs/research/failure_registry.csv": "lives in the TF project (ROADMAP: Using the TF project for follow-up)",
     "docs/research/hardening/bottlenecks.csv": "lives in the TF project (ROADMAP: Using the TF project for follow-up)",
+    "tools/recovered/": "deleted by HB8 (E-29); PLAN-2026-11b names it in the HB8 row (remove this entry when that "
+                        "plan moves to the archive)",
+    "docs/research/plan/lock/holdout.json": "the TF project's sealed-coin lock, quoted by the data contract",
+    "docs/research/templates/": "the TF project's results templates, quoted by MODEL_DEV_PROTOCOL as the model",
+    "tools/export_torch_artifact.py": "the TF project's export tool (the only change there, PLANNER_HANDOFF)",
+    "tools/holdout_guard.py": "the TF project's holdout guard, quoted by the data contract and RULES D1",
+    "tools/check_patterns.py": "the TF project's pattern check, quoted by RULES as the origin of a rule",
 }
+
+
+#: open PRs that may wait beyond the interval of rule F3 (F3 states only "every 5 merged PRs"; the old test used
+#: 7 = 5 + 2, kept)
+OPEN_PR_ALLOWANCE = 2
 
 
 def _read(rel: str) -> str:
@@ -30,7 +59,7 @@ def _read(rel: str) -> str:
 def _quoted_paths(text: str) -> set[str]:
     out = set()
     for m in PATH_IN_BACKTICKS.finditer(text):
-        path = m.group(1).rstrip(".,:;)").split("::")[0]
+        path = re.sub(r":\d+(-\d+)?$", "", m.group(1).rstrip(".,:;)").split("::")[0])
         if not any(c in path for c in "<*{") and not path.endswith("D-nnn"):  # placeholders / patterns
             out.add(path)
     return out
@@ -53,25 +82,47 @@ def test_status_is_short():
 def test_status_states_are_the_documented_ones():
     """Every row of every STATUS table (step ids are free text: PN1, MG4, ...; E-11 of the 2026-11b audit: the old
     id pattern skipped most rows), checked with the one state definition (tools.status_row.valid_state)."""
-    from tools.status_row import STATES, valid_state
+    from tools.status_row import STATES, status_rows, valid_state
 
     text = _read("docs/STATUS.md")
     listed = " / ".join(f"`{s}`" for s in STATES)
     assert f"States: {listed} / `skipped (reason)`." in text
-    rows = 0
-    for line in text.splitlines():
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if not line.startswith("|") or len(cells) < 5 or cells[0] in ("Step", "") or set(cells[0]) <= set("-"):
-            continue
-        rows += 1
+    rows = status_rows(text)
+    assert len(rows) >= 5, f"only {len(rows)} STATUS rows were checked: did the table layout change?"
+    for _, cells in rows:
         assert valid_state(cells[2]), f"{cells[0]}: unknown state {cells[2]!r}"
-    assert rows >= 10, f"only {rows} STATUS rows were checked: did the table layout change?"
 
 
-def test_review_is_not_overdue():
-    """suggestions.csv row 10: the R-REVIEW counter in STATUS may not pass the interval of the review rule."""
-    n = int(re.search(r"PRs since last R-REVIEW: (\d+)", _read("docs/STATUS.md")).group(1))
-    assert n <= 7, f"{n} PRs since the last R-REVIEW (docs/reviews.md): run it before more merges"
+def test_status_holds_open_rows_only():
+    """HB7: STATUS keeps open rows (todo / in progress / PR open); a merged / closed / skipped row moves to
+    docs/status_archive.md (`python -m tools.close_step --archive`)."""
+    from tools.status_row import OPEN_STATES, status_rows
+
+    for _, cells in status_rows(_read("docs/STATUS.md")):
+        assert cells[2] in OPEN_STATES, (f"{cells[0]}: state {cells[2]!r} is closed: run "
+                                         "`python -m tools.close_step --archive`")
+
+
+def test_review_counter_is_derived_from_the_merge_history():
+    """E-13: the 'PRs since last R-REVIEW' line of STATUS equals the number of PRs merged (first-parent history of
+    HEAD) after the last PR the newest section of docs/reviews.md covers, and stays within the review interval of
+    rule F3 plus the open PRs allowed to wait."""
+    import pytest
+
+    from tools import review_counter as rc
+
+    stated = int(re.search(r"PRs since last R-REVIEW: (\d+)", _read("docs/STATUS.md")).group(1))
+    interval = int(re.search(r"R-REVIEW every (\d+) merged PRs", _read("docs/RULES.md")).group(1))
+    assert stated <= interval + OPEN_PR_ALLOWANCE, (f"{stated} PRs since the last R-REVIEW (docs/reviews.md): run it "
+                                                    "before more merges")
+    covered = rc.last_covered(_read("docs/reviews.md"))
+    prs = rc.merged_prs(ROOT)
+    if not rc.history_reaches(prs, covered):
+        pytest.skip(f"the git history does not reach back past PR #{covered} (shallow clone): CI checks out "
+                    "fetch-depth 0")
+    derived = len({n for n in prs if n > covered})
+    assert stated == derived, (f"STATUS says {stated} PRs since the last R-REVIEW, git history says {derived}: run "
+                               "`python -m tools.review_counter --write`")
 
 
 def test_register_ids_are_unique():
@@ -137,6 +188,7 @@ FAILURE_READING = ("## What the model learned", "## Where it is right and where 
 BEFORE_C7 = {"baseline-001.md", "deep-side-001.md", "e1-fixes-001.md", "gates-fixes-001.md",
              "nig-scale-default-001.md", "panel-001.md", "rolling-cpu-smoke-001.md", "staged-cpu-smoke-001.md"}
 NOT_APPLICABLE = "Failure reading: not applicable ("
+MIN_REASON_WORDS = 3
 
 
 def test_results_notes_hold_the_failure_reading():
@@ -148,9 +200,19 @@ def test_results_notes_hold_the_failure_reading():
     for heading in FAILURE_READING:
         assert f"`{heading}`" in philosophy, f"docs/PHILOSOPHY.md section 3 lost the heading {heading!r}"
     for name, text in sorted(notes.items()):
-        if name in BEFORE_C7 or NOT_APPLICABLE in text:
+        if name in BEFORE_C7:
+            continue
+        if NOT_APPLICABLE in text:
+            reason = text.split(NOT_APPLICABLE, 1)[1].split(")", 1)[0]
+            assert len(reason.split()) >= MIN_REASON_WORDS, (
+                f"docs/results/{name}: '{NOT_APPLICABLE}<reason>)' needs a reason of at least {MIN_REASON_WORDS} "
+                f"words, got {reason!r}")
             continue
         at = [text.find("\n" + h + "\n") for h in FAILURE_READING]
         assert min(at) >= 0 and at == sorted(at), (
             f"docs/results/{name}: the failure reading (rule C7) needs these headings in order: {FAILURE_READING}; "
             f"or the line '{NOT_APPLICABLE}<reason>)'")
+        for heading, start in zip(FAILURE_READING, at, strict=True):
+            body = text[start + len(heading) + 2:].split("\n## ", 1)[0]
+            assert any(ln.strip() for ln in body.splitlines()), (
+                f"docs/results/{name}: the section {heading!r} is empty: write at least one line (rule C7)")

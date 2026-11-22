@@ -25,6 +25,3 @@ def pytest_terminal_summary(terminalreporter):
         for line in problems:
             terminalreporter.line(line, red=True)
 
-
-# fixture shared by data_io, jobs, workflow, trainer, notebooks, colab
-from tests.data_io.helpers import art  # noqa: E402,F401

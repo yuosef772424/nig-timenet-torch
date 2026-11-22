@@ -10,6 +10,7 @@ from scipy import stats as sps
 from sklearn.metrics import roc_auc_score
 
 from nig_timenet_torch.stats import metrics as m
+from tests import scan
 
 RNG = np.random.default_rng(0)
 
@@ -74,9 +75,8 @@ def test_ece_bins_sum_to_total_count():
 
 def test_every_function_documents_its_policy_and_no_torch_import():
     src = Path(m.__file__).read_text()
-    imports = [n for n in ast.walk(ast.parse(src)) if isinstance(n, (ast.Import, ast.ImportFrom))]
-    names = {a.name for n in imports for a in n.names} | {n.module for n in imports if isinstance(n, ast.ImportFrom)}
-    assert not {x for x in names if x and x.split(".")[0] in ("torch", "nig_timenet_torch")}
+    names = {m for n in ast.walk(ast.parse(src)) for m in scan.imported_modules(n)}
+    assert not {x for x in names if x.split(".")[0] in ("torch", "nig_timenet_torch")}
     for name in m.__all__:
         doc = getattr(m, name).__doc__ or ""
         assert "NaN" in doc or "nan" in doc, f"{name} docstring must state its NaN policy"
