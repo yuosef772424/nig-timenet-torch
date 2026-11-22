@@ -1,5 +1,7 @@
 # Handoff 2026-11-19: architecture / size, indicator channels, rank loss, lr 1e-5 (owner task)
 
+Status: closed (AI1 #71; `docs/results/i1-001.md`, `docs/results/b1-btc-timing-001.md`)
+
 ## What was asked (owner, 2026-11-19)
 Choose the best architecture and number of units; train with several losses (the rank loss and the others); add RSI
 and the stochastic (and volume, owner follow-up "reload the data and add volume if useful"); learning rate 1e-5;

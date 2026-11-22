@@ -1,5 +1,7 @@
 # Handoff 2026-11-19: LS1, a loss per trade side (side-payoff and upper-quantile heads)
 
+Status: closed (LS1 #70; `docs/results/ls1-side-heads-001.md`)
+
 ## What was asked (owner, 2026-11-19)
 Test improving the loss function, from the proposals of the previous session: keep mu on the symmetric log loss;
 (a) the closed form e^(mu + s^2/2) - 1 (H1a, no training); (b) one head per side trained on the real payoff (long

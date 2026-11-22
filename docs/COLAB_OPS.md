@@ -16,8 +16,22 @@ export COLAB_BRIDGE_TOKEN=<BRIDGE_TOKEN of the cell>
 | a second branch's code only | `colab_ops setup <branch> --dest /content/nig_uhub --no-artifact --no-install` |
 | small-sample encoder x lr arms (+ battery) | `colab_ops arms /content/out --arms gru:3e-4,transformer:1e-4 --rows 20000 --epochs 6` |
 | doctor on a finished run's best weights | `colab_ops doctor <run_dir>/ckpt /content/doc --encoder gru --lr 3e-4` |
-| single-model runs of `claude/sequential-gradient-model-uhub56` | `colab_ops runs itransformer,conv1d_net --rows 320000` |
+| run one command and wait (default timeout 120 s) | `colab_ops exec '<command>' [--timeout N]` |
+| start a background process, get its pid | `colab_ops start '<command>' <name>` |
 | follow a started process | `colab_ops wait <pid> --limit 400` / `colab_ops out <pid>` |
+| copy a small file to the runtime | `colab_ops put <local> <remote>` |
+
+(`colab_ops runs` also exists, for single-model runs of the `claude/sequential-gradient-model-uhub56` branch, which is
+not on main: it needs `setup` of that branch and is not part of the steps of a session.)
+
+## Queue route (the owner presses Run all; summary of `docs/PLANNER_HANDOFF.md` "How to queue a Colab job")
+
+The alternative to the bridge: a job file `docs/jobs/<job_id>.json` (`repo_ref` there is 40 zeros) is copied to
+`job.json` at the root of branch `colab-queue` with `repo_ref` replaced by the 40-hex merge commit to run (`rerun: true`
+only to repeat an existing `job_id`) and checked first with `python -m nig_timenet_torch.colab check-job job.json`; the
+owner runs `notebooks/colab_nig_timenet_torch.ipynb`; results appear on branch `colab-results` under `runs/<job_id>/`
+(`bundle_summary.md` first); a failed publish is retried with `python -m nig_timenet_torch.colab republish <bundle_dir>`.
+Smoke job first (rule E5); a code change means a new `run_dir` and `job_id`. Full steps: `docs/PLANNER_HANDOFF.md`.
 
 ## The environment cache (nobody installs per conversation)
 

@@ -1,5 +1,7 @@
 # Handoff 2026-11-19: SS1 (short side + day scorecard) and the job rolling-single-002
 
+Status: closed (SS1 #68; `docs/results/rolling-single-002.md`, `docs/results/short-side-001.md`)
+
 ## What was asked (owner, 2026-11-19)
 1. Read the past experiment reports and what was learned: `docs/audit/2026-11-19-lessons/LESSONS.md`.
 2. Make the evaluation weigh confidence, the distribution of losses over days, the size of the uncertainty and the

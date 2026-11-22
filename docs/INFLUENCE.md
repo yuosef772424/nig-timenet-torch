@@ -1,5 +1,7 @@
 # INFLUENCE — the effect of each training batch and of each input feature (owner task 2026-11-17)
 
+Status (2026-11-22): done: the code, the known-answer tests and the first look on E1 (IF1, merged #63 via MG3 #69); the `batch_by` walk-forward comparison against `rows` was run in `docs/results/batch-by-wf-001.md` and `batch-by-wf-002.md`. Open, no ROADMAP step and no results note: influence diagnostics on the real artifact on the GPU (smoke job first, rule E5) and the drop-column confirmation of the top features (end of section 4).
+
 Owner's request (Arabic, 2026-11-17): see the effect of each batch of data on the model during training (find the
 best methods, pick the best and most efficient), then measure the effect of each feature on the model, with results
 that are reliable when tested. This page records the candidates, the choice and why, how to run it, and what the

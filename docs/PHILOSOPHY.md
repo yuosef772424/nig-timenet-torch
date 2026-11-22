@@ -13,10 +13,9 @@ disagreement is reported under `## Suggestions` of the PR.
   is pushed. The owner opens model work (anything that changes or trains the model, or reads a result to decide the
   next experiment) on the strongest model. Builder work (tools, tests, docs, a job the owner named exactly) can run
   on any model.
-- **Subagents on a cheaper model (Sonnet)** take the work that is mostly reading or mechanical, so the lead's context
-  stays free for decisions: reading a past session's transcript and writing its handoff, turning many Drive run
-  folders into one table, collecting numbers from report files, searching the TF project, a repetitive edit whose
-  test defines "done". They do NOT decide what to try, judge a result, design a model or trainer change, or push.
+- **Subagents** take the reading and the mechanical work on a cheaper model, so the lead's context stays free for
+  decisions (owner, 2026-11-16). What they take and what they never do (decide what to try, judge a result, design a
+  model or trainer change, push) is rule A4 in `docs/RULES.md`, the one place the rule is written.
 - **A brief for a subagent** states the goal and what it is for, what "done" looks like, the exact paths and ids, what
   to return (short, verified facts apart from guesses) and what it must not touch. The agent works in its own
   `git worktree`, commits locally and never pushes. The lead reads the diff and spot-checks the numbers against

@@ -1,5 +1,7 @@
 # Handoff: panel model with std normalisation, walk-forward (owner task 2026-11-18)
 
+Status: closed (PS1 #67; `docs/results/panel-rolling-std-001.md`)
+
 Asked (Arabic, owner 2026-11-18): test the panel model with std normalisation of the batch data, with the rolling
 (walk-forward) training. Read as the panel arm `relative_rank_loss_logret_std` (D-033): train-standardised inputs
 (already the default) plus per-head train-standardised labels (`target_norm: logret_std`), relative inputs and the

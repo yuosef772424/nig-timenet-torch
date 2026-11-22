@@ -28,8 +28,8 @@ piecewise; keep it as `archive/feat-ar-stream` when closed).
   raise), registries for encoders / heads / tasks, run steps in `workflow/run.py` (`jobs/baseline.py` is a 107-line entry),
   the evaluation battery in every run (profit per use of the outputs, cost 0.0008 per side, p_dir as the single
   direction), a native data pipeline (`data/`, parity with TF), cards + a generated `docs/MAP.md` (rule B7), smoke job
-  before long jobs (rule E5), `tests.pin_diff` in CI (pin loophole closed), ratchets G1 0, G2 5 (honest, B-046), G3 0, G4 0,
-  G7 0, C2 0, G8 1 (`model/panel.py`).
+  before long jobs (rule E5), `tests.pin_diff` in CI (pin loophole closed), ratchets (the counts are in `tests/ratchets.json`; the numbers
+  written here at the time went stale).
 - Data: artifact `MyDrive/crypto_model/torch_artifacts/preprocessing_output_1` (TF main data, 4h): 2,520,913 windows, 535
   coins, sealed 183/183 removed, max_bar_time 2026-09-26T20:00Z, fingerprint `c572b1b36960`. `split_dates = None`: the job
   splits 80/10/10 by time quantiles. All 183 sealed coins were inside the TF main data, so TF results are not a clean
