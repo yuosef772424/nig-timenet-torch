@@ -3,7 +3,7 @@
   "counts": {
     "G1_output_name_literals_outside_heads": 3,
     "G2_mode_name_comparisons": 8,
-    "G3_functions_over_80_lines": 5,
+    "G3_functions_over_80_lines": 4,
     "G4_dead_settings_fields": 0,
     "G5_optimizer_calls_outside_trainer": 0,
     "G6_notebook_defs": 0,

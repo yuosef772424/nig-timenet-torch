@@ -15,7 +15,6 @@ L2 kernel regularisation: torch has no per-layer kernel_regularizer, so the mode
 total and raw loss, as the TF trainer adds ``model.losses``.
 """
 
-import json
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -24,12 +23,12 @@ import torch
 
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.core.seeds import epoch_seed, seed_everything
-from nig_timenet_torch.trainer import checkpoint
+from nig_timenet_torch.trainer import checkpoint, fit_state
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES, cross_section_loss
 from nig_timenet_torch.trainer.day_weights import DayWeightSettings, make_day_weighter
 from nig_timenet_torch.trainer.direction_balance import direction_balance_loss
 from nig_timenet_torch.trainer.groups import BATCH_ORDERS, group_batches, group_chunks, row_groups
-from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
+from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.trainer.log_groups import GroupedLogs, tensor_logs
 from nig_timenet_torch.trainer.loss_balance import make_balancer
 from nig_timenet_torch.trainer.schedules import LrSettings, ParamSchedule, apply_schedules, lr_at
@@ -393,12 +392,7 @@ class Trainer:
 
     def _state(self, epochs_done: int, tracker: BestTracker, history: list[dict], identity: RunIdentity,
                ema: EmaWeights | None = None) -> dict:
-        state = {"epochs_done": epochs_done, "model": self.model.state_dict(), "tracker": tracker.get_state(),
-                 "optimizer": self.optimizer.state_dict(), "history": history,
-                 "kendall": None if self.uncertainty_layer is None else self.uncertainty_layer.state_dict(),
-                 "identity": json.dumps(identity.to_json(), sort_keys=True)}
-        if self.balancer.needs_shared:  # FX2 balancer state; a default checkpoint keeps its keys
-            state["balance"] = self.balancer.state_dict()
+        state = fit_state.base_state(self, epochs_done, tracker, history, identity)
         if ema is not None:  # only with the switch on: a default checkpoint keeps its keys
             state["ema"] = ema.state_dict()
         if self.day_weighter is not None:
@@ -407,19 +401,13 @@ class Trainer:
 
     def _restore(self, ckpt: dict, tracker: BestTracker, identity: RunIdentity, ema: EmaWeights | None = None
                  ) -> list[dict]:
-        check_resume(RunIdentity.from_json(json.loads(ckpt["identity"])), identity)
-        self.model.load_state_dict(ckpt["model"])
+        fit_state.check_checkpoint_identity(ckpt, identity)
+        history = fit_state.restore_base(self, ckpt, tracker)
         if ema is not None:
             ema.load_state_dict(ckpt["ema"])
-        if self.uncertainty_layer is not None:
-            self.uncertainty_layer.load_state_dict(ckpt["kendall"])
-        self.optimizer.load_state_dict(ckpt["optimizer"])
-        if self.balancer.needs_shared:
-            self.balancer.load_state_dict(ckpt["balance"])
         if self.day_weighter is not None:
             self.day_weighter.load_state_dict(ckpt["day_weights"])
-        tracker.load_state(ckpt["tracker"])
-        return list(ckpt["history"])
+        return history
 
     def _trace(self, x, y, batch_size: int, batches) -> dict[str, float]:
         """The trace row of the epoch: on the first ``batch_size`` training rows, or the mean over ``batches``."""
@@ -433,7 +421,7 @@ class Trainer:
         """``evaluate`` with ``weights`` loaded for the pass (the live weights are put back after); None = live."""
         if weights is None:
             return self.evaluate(x, y, batch_size, groups)
-        live = {k: v.detach().clone() for k, v in self.model.state_dict().items()}
+        live = fit_state.clone_state(self.model)
         self.model.load_state_dict(weights)
         try:
             return self.evaluate(x, y, batch_size, groups)
@@ -442,13 +430,8 @@ class Trainer:
 
     def _check_fit(self, settings: FitSettings, run_dir, identity, x_train, batch_groups) -> torch.Tensor | None:
         """Refuse a fit that cannot run as asked (before anything runs); returns the checked ``batch_groups``."""
-        if self.optimizer is None:
-            raise RuntimeError("Trainer has no optimizer")
-        if run_dir is not None and identity is None:
-            raise ValueError("run_dir needs an identity (RunIdentity) so that a resume can be checked")
-        if identity is not None and identity.seed != settings.seed:
-            raise SeedMismatchError(f"identity.seed ({identity.seed}) != settings.seed ({settings.seed}): the identity "
-                                    f"would describe a different run than the one that is trained")
+        fit_state.require_optimizer(self)
+        fit_state.check_run_args(run_dir, identity, settings.seed)
         return self._batch_groups(settings, x_train, batch_groups)
 
     def _batch_groups(self, settings: FitSettings, x_train, batch_groups) -> torch.Tensor | None:
@@ -493,21 +476,9 @@ class Trainer:
         self.day_weighter = make_day_weighter(settings.day_weights, day_groups, len(x_train), grouped_batches=(
             groups is not None or self.group_channel or BATCH_ORDERS.entry(settings.batch_order).meta["needs_times"]))
         seed_everything(settings.seed)
-        ema = None
-        higher = SELECTION_METRICS.entry(self.selection_metric).meta["higher_is_better"]
-        tracker = BestTracker(settings.early_stop, higher)
-        history: list[dict] = []
-        best_weights = None
-        ckpt = None if run_dir is None else checkpoint.load_checkpoint(run_dir)
-        if ckpt is not None:
-            if not resume:
-                raise FileExistsError(f"{run_dir} already holds a checkpoint; resume=False refuses to overwrite it")
-            ema = None if settings.ema_decay is None else EmaWeights(self.model, settings.ema_decay)
-            history = self._restore(ckpt, tracker, identity, ema)
-            best_weights = None if tracker.best is None else checkpoint.load_best(run_dir)
-        else:
-            apply_init(settings.init, self.model)       # "torch" (default) changes nothing
-            ema = None if settings.ema_decay is None else EmaWeights(self.model, settings.ema_decay)
+        tracker = BestTracker(settings.early_stop, SELECTION_METRICS.entry(self.selection_metric).meta[
+            "higher_is_better"])
+        ema, history, best_weights = self._start_or_resume(settings, run_dir, identity, resume, tracker)
         longest = 0.0
         if batch_monitor is not None:
             batch_monitor.start(self)
@@ -517,33 +488,45 @@ class Trainer:
             if deadline is not None and longest and time.monotonic() + longest > deadline:
                 break
             t0 = time.monotonic()
-            lr = self._begin_epoch(epoch, settings, self.schedules)
-            row = {"epoch": epoch + 1, "lr": lr}
-            train_logs = self._train_epoch(x_train, y_train, settings, ema, batch_monitor, epoch, groups)
-            row.update({f"train_{k}": v for k, v in train_logs.items()})
-            val = self._evaluate_with(None if ema is None else ema.shadow, x_val, y_val, settings.batch_size,
-                                      self.val_times)
-            row.update({f"val_{k}": v for k, v in val.items()})
+            row = self._run_epoch(epoch, x_train, y_train, x_val, y_val, settings, ema, batch_monitor, groups,
+                                  trace_batches)
+            seconds = time.monotonic() - t0     # one measurement: the deadline estimate and the trace column
+            longest = max(longest, seconds)
             if settings.trace:
-                row.update(self._trace(x_train, y_train, settings.batch_size, trace_batches))
-            longest = max(longest, time.monotonic() - t0)
-            if settings.trace:
-                row["trace_epoch_seconds"] = time.monotonic() - t0
+                row["trace_epoch_seconds"] = seconds
             history.append(row)
             if on_epoch is not None:  # progress display only (e.g. a print); it cannot change training
                 on_epoch(dict(row))
-            if tracker.update(epoch + 1, val["selection_metric"]):
-                best_weights = ({k: v.detach().clone() for k, v in self.model.state_dict().items()} if ema is None
-                                else ema.weights())
-                if run_dir is not None:
-                    checkpoint.save_best(run_dir, best_weights, {"best": tracker.best, "best_epoch": tracker.best_epoch,
-                                                                 "metric": self.selection_metric})
+            if tracker.update(epoch + 1, row["val_selection_metric"]):
+                best_weights = fit_state.clone_state(self.model) if ema is None else ema.weights()
+                fit_state.save_best_weights(run_dir, best_weights, tracker, self.selection_metric)
             if run_dir is not None:
                 checkpoint.save_checkpoint(run_dir, self._state(epoch + 1, tracker, history, identity, ema))
-        restored = settings.early_stop.restore_best_weights and best_weights is not None
-        if restored:
-            self.model.load_state_dict(best_weights)
-        elif ema is not None:
-            self.model.load_state_dict(ema.weights())
+        restored = fit_state.finish_weights(self.model, best_weights, settings.early_stop.restore_best_weights, ema)
         return FitResult(history, len(history), tracker.best_epoch, tracker.best, tracker.should_stop(), restored,
                          tracker.should_stop() or len(history) >= settings.epochs)
+
+    def _start_or_resume(self, settings: FitSettings, run_dir, identity, resume: bool, tracker: BestTracker):
+        """(ema, history, best_weights): from the run folder's checkpoint, or a fresh start (``settings.init``)."""
+        ckpt = fit_state.load_resume_checkpoint(run_dir, resume)
+        ema = None
+        if ckpt is not None:
+            ema = None if settings.ema_decay is None else EmaWeights(self.model, settings.ema_decay)
+            history = self._restore(ckpt, tracker, identity, ema)
+            return ema, history, None if tracker.best is None else checkpoint.load_best(run_dir)
+        apply_init(settings.init, self.model)       # "torch" (default) changes nothing
+        ema = None if settings.ema_decay is None else EmaWeights(self.model, settings.ema_decay)
+        return ema, [], None
+
+    def _run_epoch(self, epoch: int, x_train, y_train, x_val, y_val, settings: FitSettings, ema, batch_monitor,
+                   groups, trace_batches) -> dict:
+        """One epoch: schedules, the training pass, validation (the EMA copy when there is one) and the trace."""
+        row = {"epoch": epoch + 1, "lr": self._begin_epoch(epoch, settings, self.schedules)}
+        train_logs = self._train_epoch(x_train, y_train, settings, ema, batch_monitor, epoch, groups)
+        row.update({f"train_{k}": v for k, v in train_logs.items()})
+        val = self._evaluate_with(None if ema is None else ema.shadow, x_val, y_val, settings.batch_size,
+                                  self.val_times)
+        row.update({f"val_{k}": v for k, v in val.items()})
+        if settings.trace:
+            row.update(self._trace(x_train, y_train, settings.batch_size, trace_batches))
+        return row

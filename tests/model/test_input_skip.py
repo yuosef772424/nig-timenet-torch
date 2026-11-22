@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from nig_timenet_torch.core.registry import UnknownNameError
-from nig_timenet_torch.model.builder import build_nig_timenet_v2
+from nig_timenet_torch.model.builder import BuilderOptions, build_nig_timenet_v2
 from nig_timenet_torch.model.parts import INPUT_SKIP_VARIANTS, LATE_RAW_K
 from tests.oracle import oracle_loader as ol
 
@@ -19,7 +19,7 @@ def kwargs(**over):
 
 def test_registered_variants_and_default():
     assert set(INPUT_SKIP_VARIANTS.names()) == {"none", *VARIANTS}
-    assert build_nig_timenet_v2.__kwdefaults__["input_skip"] == "none"
+    assert BuilderOptions().input_skip == "none"
     with pytest.raises(UnknownNameError):
         build_nig_timenet_v2(32, 6, input_skip="concat_every_block")
 
