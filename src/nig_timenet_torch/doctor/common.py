@@ -26,7 +26,7 @@ from nig_timenet_torch.model.scalers import fit_scalers
 from nig_timenet_torch.model.target_norm import fit_target_norm
 from nig_timenet_torch.stats.metrics import spearman
 from nig_timenet_torch.workflow import flat_run, run
-from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, default_model_settings
+from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, model_for
 
 __all__ = ["Check", "VERDICTS", "worst", "render_table", "write_report", "DoctorContext", "make_context",
            "fresh_trainer", "stride", "time_folds", "ridge_oof", "probe_scores", "simple_features", "reg_key",
@@ -175,10 +175,7 @@ def make_context(artifact: str, out, *, run_dir: str | None = None, model: dict 
     out.mkdir(parents=True, exist_ok=True)
     if run_dir is None and not trained:           # the doctor's own short run: always trained afresh, never resumed
         shutil.rmtree(out / "run", ignore_errors=True)
-    base = default_model_settings()
-    arch = architecture or base.architecture
-    keep = arch == base.architecture and not no_preset
-    ms = ModelSettings(arch, {**(base.overrides if keep else {}), **(model or {})})
+    ms = model_for(architecture or None, model, preset=not no_preset)
     tr = replace(TrainSettings(**{"device": "cpu", "batch_size": batch_size, "epochs": epochs, **(train or {})}),
                  seed=seed)
     settings = RunSettings(run_dir=str(run_dir or out / "run"), model=ms, train=tr,

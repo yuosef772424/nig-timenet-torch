@@ -18,9 +18,8 @@ from dataclasses import dataclass, field, fields
 from nig_timenet_torch.colab import contract
 from nig_timenet_torch.colab.device import EXPECTED as DEVICES
 from nig_timenet_torch.core.config import from_dict
-from nig_timenet_torch.model.architectures import ModelSettings
 from nig_timenet_torch.workflow import gate_run
-from nig_timenet_torch.workflow.settings import RunSettings, TrainSettings, default_model_settings
+from nig_timenet_torch.workflow.settings import RunSettings, TrainSettings, model_for
 
 __all__ = ["GatesConfig", "CONFIG", "run_settings", "gate_settings", "main"]
 
@@ -60,9 +59,7 @@ CONFIG = GatesConfig
 
 def run_settings(cfg: GatesConfig, code_sha: str = "") -> RunSettings:
     """The configuration under test as RunSettings (the default model's overrides, then ``model_overrides``)."""
-    base = default_model_settings()
-    model = (ModelSettings(cfg.architecture, {**base.overrides, **cfg.model_overrides})
-             if cfg.architecture == base.architecture else ModelSettings(cfg.architecture, dict(cfg.model_overrides)))
+    model = model_for(cfg.architecture, cfg.model_overrides)
     train = from_dict(TrainSettings, {**cfg.train, "device": cfg.device})
     return RunSettings(run_dir=cfg.run_dir, code_sha=code_sha, model=model, train=train)
 
