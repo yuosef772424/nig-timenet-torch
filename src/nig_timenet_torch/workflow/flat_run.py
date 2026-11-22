@@ -16,6 +16,7 @@ import torch
 
 from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS, TS_COL
+from nig_timenet_torch.data_io.asset_index import asset_ids, row_coins
 from nig_timenet_torch.data_io.target_codec import anchor_column
 from nig_timenet_torch.model.architectures import ModelSettings, build_model
 from nig_timenet_torch.model.heads import AUX_TASK_TYPES, head_spec
@@ -49,14 +50,6 @@ def anchors_by_name(last_candles: np.ndarray, idx: np.ndarray, targets,
     return {t: lc[idx, LAST_COLUMN_INDEX[col(t)]] for t in targets}
 
 
-def row_coins(dataset: dict, idx: np.ndarray) -> np.ndarray:
-    """The coin name of each row ``idx`` (from ``asset_bounds``)."""
-    names = np.empty(np.asarray(dataset["last_candles"]).shape[0], dtype=object)
-    for b in dataset["asset_bounds"]:
-        names[b["start"]:b["end"]] = b["name"]
-    return names[np.asarray(idx)]
-
-
 def batch_set(dataset: dict, idx: np.ndarray, batch_size: int, seed: int) -> list[np.ndarray]:
     """The representative batch set (MODEL_DEV_PROTOCOL section 1) of the rows ``idx``, as positions into them."""
     times = np.asarray(dataset["last_candles"])[np.asarray(idx), TS_COL].astype(np.int64)
@@ -84,14 +77,6 @@ def batch_groups(dataset: dict, idx: np.ndarray, batch_by: str) -> torch.Tensor 
         return None
     ts = np.asarray(dataset["last_candles"])[np.asarray(idx), TS_COL].astype(np.int64)
     return torch.as_tensor(BATCH_KEYS[batch_by](ts), dtype=torch.int64)
-
-
-def asset_ids(dataset: dict, idx: np.ndarray) -> np.ndarray:
-    """The asset index of each row ``idx`` (its position in ``asset_bounds``): the coin id of ``coin_channel``."""
-    ids = np.full(np.asarray(dataset["last_candles"]).shape[0], -1, dtype=np.int64)
-    for i, b in enumerate(dataset["asset_bounds"]):
-        ids[b["start"]:b["end"]] = i
-    return ids[np.asarray(idx)]
 
 
 def flat_inputs(dataset: dict, idx: np.ndarray, time_channel: bool = False, coin_channel: bool = False,
@@ -207,8 +192,9 @@ def predict_stage(trainer: Trainer, dataset: dict, idx: np.ndarray, x: torch.Ten
     parts = []
     cuts = (group_chunks(row_groups(x), chunk) if trainer.group_channel
             else [slice(s, s + chunk) for s in range(0, len(idx), chunk)])
+    full = table_meta(dataset, idx, stage=stage, fold=fold, train_end=train_end)   # once; each chunk slices it
     for c in cuts:
-        meta = table_meta(dataset, idx[c], stage=stage, fold=fold, train_end=train_end)
+        meta = {k: v[c] if isinstance(v, np.ndarray) else v for k, v in full.items()}
         groups = row_groups(x[c]) if trainer.group_channel else None   # whole timestamps per batch (C-01)
         parts.append(predict_table(trainer.model, x[c].to(device), meta, ident, groups=groups))
     return pd.concat(parts, ignore_index=True)

@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS, TS_COL
+from nig_timenet_torch.data_io.asset_index import row_coins
 from nig_timenet_torch.eval import error_map as em
 from nig_timenet_torch.eval import strategy_diagnosis as sd
 from nig_timenet_torch.eval import vol_baseline as vb
@@ -96,14 +97,6 @@ def c1_section(run, val: dict, test: dict) -> dict:
             "model + HAR + coin prior": ["model", *har, "coin prior"]}
     out["har"] = vb.har_table(*feats["VAL"], *feats["TEST"], test["battery"]["coin"].values, sets)
     return out
-
-
-def row_coins(dataset: dict, idx: np.ndarray) -> np.ndarray:
-    """Coin name of each artifact row ``idx`` (from ``asset_bounds``)."""
-    bounds = sorted(dataset["asset_bounds"], key=lambda b: b["start"])
-    starts = np.array([b["start"] for b in bounds])
-    names = np.array([b["name"] for b in bounds], dtype=object)
-    return names[np.searchsorted(starts, np.asarray(idx), side="right") - 1]
 
 
 def _coin_prior(dataset: dict, train_idx: np.ndarray, real_tr: np.ndarray) -> dict:

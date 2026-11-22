@@ -21,6 +21,7 @@ import torch
 
 from nig_timenet_torch.core.prediction_schema import SCHEMA_VERSION, validate_table
 from nig_timenet_torch.core.schema import TS_COL
+from nig_timenet_torch.data_io.asset_index import row_coins
 from nig_timenet_torch.data_io.split_plan import sample_times
 from nig_timenet_torch.trainer.groups import group_chunks
 from nig_timenet_torch.trainer.identity import RunIdentity
@@ -39,12 +40,9 @@ def table_meta(dataset: dict, idx: np.ndarray, *, stage: str, fold: int, train_e
     """meta for rows ``idx`` of a dataset: asset from asset_bounds, times from split_plan.sample_times."""
     idx = np.asarray(idx)
     _, feature_end, label_end = sample_times(dataset)
-    ts = np.asarray(dataset["last_candles"])[:, TS_COL].astype(np.int64)
-    asset = np.empty(ts.shape[0], dtype=object)
-    for b in dataset["asset_bounds"]:
-        asset[b["start"]:b["end"]] = b["name"]
+    ts = np.asarray(dataset["last_candles"])[idx, TS_COL].astype(np.int64)
     bar = int(pd.Timedelta(dataset["base_tf"]).value)
-    return {"timestamp": ts[idx], "asset": asset[idx], "prediction_made_at": feature_end[idx],
+    return {"timestamp": ts, "asset": row_coins(dataset, idx), "prediction_made_at": feature_end[idx],
             "label_available_at": label_end[idx], "horizon_ns": int(dataset["forecast_horizon"]) * bar,
             "stage": stage, "fold": int(fold), "train_end": train_end}
 
