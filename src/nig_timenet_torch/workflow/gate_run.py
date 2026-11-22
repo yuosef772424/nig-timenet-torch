@@ -74,9 +74,10 @@ def _identity_parts(r: run.Run) -> tuple:
 
 
 def configuration_key(r: run.Run) -> str:
-    """The configuration hash of a built run (``trainer.identity.configuration_hash``)."""
+    """The configuration hash of a built run (``trainer.identity.configuration_hash``) with the configuration part of
+    the run context (selection metric, staged plan; D-042), not the data selection (the gates use their own data)."""
     run._need(r, "trainer", "build")
-    return configuration_hash(*_identity_parts(r))
+    return configuration_hash(*_identity_parts(r), run_common.identity_context(r.settings, selection=False))
 
 
 def baseline_arm(settings: RunSettings) -> bool:

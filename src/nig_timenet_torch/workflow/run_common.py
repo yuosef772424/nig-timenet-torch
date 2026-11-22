@@ -1,13 +1,16 @@
 """PURPOSE: Steps every run shares: load the artifact, read its facts, split by time, pick the device, build the run
-    identity. Small functions of the settings so a notebook can call them one by one.
+    identity (with the run context of D-042). Small functions of the settings so a notebook can call them one by one.
 TAGS: run steps, load data, split plan, run identity, device, artifact facts, smoke mode
 PITFALLS: every data fact (price targets, codec, timeframe, split dates) is read from the artifact, never assumed; the
     split uses the artifact's split_dates unless the settings give both instants (the baseline's split_bounds);
-    check_decode refuses an artifact whose labels the codec does not decode to the real future prices (B-051).
+    check_decode refuses an artifact whose labels the codec does not decode to the real future prices (B-051); a new
+    RunSettings field that changes what is learned and reaches neither FitSettings, the trainer config nor the
+    optimizer belongs in IDENTITY_SELECTION / IDENTITY_CONFIGURATION (tests/workflow/test_run_identity_context.py).
 SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run_common.py); changes: strict split settings without
     retargeting, smoke stride (max_rows), artifact facts moved here, run identity from the manifest.
 """
 
+import dataclasses
 import difflib
 import subprocess
 from pathlib import Path
@@ -27,7 +30,8 @@ from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings
 
 __all__ = ["load_data", "price_targets", "codec_state", "check_decode", "input_key", "split_bounds", "make_plan",
-           "stride_rows", "select_rows", "pick_device", "code_sha", "run_identity"]
+           "stride_rows", "select_rows", "pick_device", "code_sha", "run_identity", "identity_context",
+           "IDENTITY_SELECTION", "IDENTITY_CONFIGURATION"]
 
 
 def load_data(settings: RunSettings) -> LoadedData:
@@ -215,7 +219,40 @@ def code_sha(settings: RunSettings) -> str:
         return "unknown"
 
 
+#: D-042 (HB2, audit 2026-11b C-03): the settings that choose WHICH rows and inputs a run sees (every split field, the
+#: input frames). Part of the run identity, not of the gate configuration key (gates run on their own synthetic data).
+IDENTITY_SELECTION = {"split": tuple(f.name for f in dataclasses.fields(SplitSettings)),
+                      "data": ("input_timeframes",)}
+#: D-042 (C-04, C-05): training settings that reach neither ``FitSettings`` nor the trainer config nor the optimizer:
+#: how the best epoch is chosen and the staged plan. Part of the identity AND of the gate configuration key.
+IDENTITY_CONFIGURATION = {"train": ("selection_metric", "staged")}
+
+
+def _plain(value):
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return dataclasses.asdict(value)
+    return list(value) if isinstance(value, tuple) else value
+
+
+def identity_context(settings: RunSettings, *, selection: bool = True) -> dict:
+    """The run context hashed into the run identity (``build_run_identity(run_context=...)``, D-042):
+    ``{section: {field: value}}`` of the ``IDENTITY_SELECTION`` (when ``selection``) and ``IDENTITY_CONFIGURATION``
+    fields that differ from their defaults; a field at its default and an empty section are left out, so a run on the
+    defaults keeps the identity it had before D-042 and its checkpoints resume (B-091)."""
+    parts = {**(IDENTITY_SELECTION if selection else {}), **IDENTITY_CONFIGURATION}
+    out = {}
+    for section, names in parts.items():
+        obj = getattr(settings, section)
+        default = type(obj)()
+        kept = {n: _plain(getattr(obj, n)) for n in names if getattr(obj, n) != getattr(default, n)}
+        if kept:
+            out[section] = kept
+    return out
+
+
 def run_identity(trainer, fit_settings, model_settings, art, settings: RunSettings) -> RunIdentity:
     """The identity of the run the built ``trainer`` is about to fit (colab/identity.py is the one builder); ``art`` is
-    the loaded artifact (its manifest gives the data fingerprint)."""
-    return identity_for_run(trainer, fit_settings, model_settings, art.manifest, code_sha(settings))
+    the loaded artifact (its manifest gives the data fingerprint), ``settings`` gives the run context
+    (``identity_context``: split, input frames, selection metric, staged plan where not at their defaults)."""
+    return identity_for_run(trainer, fit_settings, model_settings, art.manifest, code_sha(settings),
+                            run_context=identity_context(settings))

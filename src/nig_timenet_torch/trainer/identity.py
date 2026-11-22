@@ -2,7 +2,9 @@
     seed, data fingerprint, code sha); ``check_resume`` refuses a resume whose identity changed.
 TAGS: run identity, fingerprint, resume, settings hash, checkpoint, ResumeMismatchError
 PITFALLS: the trainer config is hashed AS GIVEN: a default added to it (or a key renamed) changes every identity and
-    orphans existing runs; tests/trainer/test_trainer_config_pins.py pins the baseline fingerprint.
+    orphans existing runs; tests/trainer/test_trainer_config_pins.py pins the baseline fingerprint; ``run_context``
+    (HB2, D-042: split, input frames, selection metric, staged plan) is hashed only when non-empty, so its caller
+    leaves every key at its default out (workflow/run_common.identity_context).
 
 RunIdentity: a persisted, immutable run fingerprint so resume-with-a-changed-objective fails loudly (C3;
 BUILD_PLAN.md P23). Field names follow crypto-signal-prediction docs/research/hardening/audit_2026-10-31.md C3;
@@ -111,7 +113,7 @@ def optimizer_settings(optimizer) -> dict:
 
 
 def build_run_identity(fit_settings, model_settings, trainer_config, optimizer, data_fingerprint: str, *,
-                       code_sha: str) -> RunIdentity:
+                       code_sha: str, run_context: Mapping | None = None) -> RunIdentity:
     """The one place a RunIdentity is built for a real run (ROADMAP T2).
 
     ``fit_settings``: a ``FitSettings``; its ``epochs`` and ``trace`` are left out of the hash (a resumed run may get
@@ -123,9 +125,12 @@ def build_run_identity(fit_settings, model_settings, trainer_config, optimizer, 
     be hashed through ``repr`` is refused. ``optimizer``: the ``torch.optim.Optimizer`` (see ``optimizer_settings``).
     ``data_fingerprint``: ``ArtifactManifest.data_fingerprint`` of the artifact the run trains on.
     ``code_sha``: the git commit of this repository.
+    ``run_context``: the run settings that change what is learned but reach none of the above (which rows, which input
+    frames, how the best epoch is chosen, the staged plan; D-042), plain JSON data with every key at its default left
+    out by the caller; empty or None = not hashed (the identity of a run before D-042).
     All of these are required: a run whose objective or optimizer changed must not resume as the same run.
     """
-    payload = _payload(fit_settings, model_settings, trainer_config, optimizer)
+    payload = _payload(fit_settings, model_settings, trainer_config, optimizer, run_context)
     if not isinstance(data_fingerprint, str) or not data_fingerprint:
         raise ValueError("data_fingerprint must be the non-empty fingerprint string from the artifact manifest")
     if not isinstance(code_sha, str) or not code_sha:
@@ -140,8 +145,16 @@ FIT_SWITCH_DEFAULTS = {"grad_clip_norm": None, "ema_decay": None, "init": "torch
                        "batch_order": "rows", "time_block_bars": 1, "day_weights": None}
 
 
-def _payload(fit_settings, model_settings, trainer_config, optimizer) -> dict:
-    """What ``settings_hash`` covers: fit settings without epochs / trace, model, trainer config, optimizer."""
+def _plain_json(data: dict, what: str) -> None:
+    try:
+        json.dumps(data, sort_keys=True)
+    except (TypeError, ValueError) as e:
+        raise TypeError(f"{what} must be plain JSON data (it is hashed into the run identity): {e}") from e
+
+
+def _payload(fit_settings, model_settings, trainer_config, optimizer, run_context: Mapping | None = None) -> dict:
+    """What ``settings_hash`` covers: fit settings without epochs / trace, model, trainer config, optimizer and, when
+    non-empty, the run context (key ``"run"``; absent before D-042, so older identities keep their hash)."""
     fit = _as_dict(fit_settings, "fit_settings")
     fit.pop("epochs", None)
     fit.pop("trace", None)  # log-only (T4): switching the trace on must not change a run's identity
@@ -151,17 +164,21 @@ def _payload(fit_settings, model_settings, trainer_config, optimizer) -> dict:
             del fit[key]
     model = _as_dict(model_settings, "model_settings")
     trainer = _as_dict(trainer_config, "trainer_config")
-    try:
-        json.dumps(trainer, sort_keys=True)
-    except (TypeError, ValueError) as e:
-        raise TypeError(f"trainer_config must be plain JSON data (it is hashed into the run identity): {e}") from e
-    return {"fit": fit, "model": model, "trainer": trainer, "optimizer": optimizer_settings(optimizer)}
+    _plain_json(trainer, "trainer_config")
+    payload = {"fit": fit, "model": model, "trainer": trainer, "optimizer": optimizer_settings(optimizer)}
+    if run_context:
+        context = _as_dict(run_context, "run_context")
+        _plain_json(context, "run_context")
+        payload["run"] = context
+    return payload
 
 
-def configuration_hash(fit_settings, model_settings, trainer_config, optimizer) -> str:
+def configuration_hash(fit_settings, model_settings, trainer_config, optimizer,
+                       run_context: Mapping | None = None) -> str:
     """The CONFIGURATION a gate report is keyed by (MODEL_DEV_PROTOCOL section 1): the run identity's settings hash
     without the seed (gates run every seed of one configuration) and without data or commit; arguments as
-    ``build_run_identity``. A changed switch, loss weight, learning rate or batch size is a new configuration."""
-    payload = _payload(fit_settings, model_settings, trainer_config, optimizer)
+    ``build_run_identity`` (``run_context``: only the part that is configuration, not the data selection; the caller
+    decides). A changed switch, loss weight, learning rate, batch size or selection metric is a new configuration."""
+    payload = _payload(fit_settings, model_settings, trainer_config, optimizer, run_context)
     payload["fit"].pop("seed", None)
     return settings_hash(payload)
