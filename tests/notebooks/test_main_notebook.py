@@ -117,7 +117,9 @@ def test_the_no_equivalent_table_names_real_roadmap_steps(nb):
     md = _text(nb, "markdown")
     table = md[md.index("ما ليس هنا") if "ما ليس هنا" in md else md.index("## ١٤"):]
     roadmap = (ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
-    headings = set(re.findall(r"^### ([A-Za-z0-9-]+)", roadmap, flags=re.M))
+    # a done step's spec moved to the archive (HB7, 2026-11-22) is still a real ROADMAP step
+    archive = (ROOT / "docs" / "roadmap_archive.md").read_text(encoding="utf-8")
+    headings = set(re.findall(r"^### ([A-Za-z0-9-]+)", roadmap + "\n" + archive, flags=re.M))
     steps = set(re.findall(r"\*\*(T\d\w*|G\dr?|M\dr?|TR\d|D\d|F\d)\b", table))
     assert steps, "the table must cite ROADMAP steps in bold"
     assert steps <= headings, f"not ROADMAP steps: {sorted(steps - headings)}"
