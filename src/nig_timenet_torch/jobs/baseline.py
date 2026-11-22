@@ -103,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     steps.train(r, deadline=deadline, on_epoch=lambda row: print(epoch_line(row, cfg.epochs), flush=True))
     steps.health_step(r)
     rep = steps.test_step(r)
-    print(f"test evaluation ({rep['n_rows']} rows, best-epoch weights):", flush=True)
+    print(f"test evaluation ({rep['n_rows']} rows, {steps.weights_label(r)} weights):", flush=True)
     print("\n".join(steps.test_lines(rep)), flush=True)
     steps.write_summary(r, {"device": cfg.device, "gpu_name": dev_rep.get("gpu_name")})
     steps.battery_step(r)  # after the summary: a battery failure keeps every other output

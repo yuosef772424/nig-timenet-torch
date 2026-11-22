@@ -109,8 +109,9 @@ class FitResult:
     epochs_done: int
     best_epoch: int | None
     best_value: float | None       # the smoothed selection metric at best_epoch
-    stopped_early: bool
+    stopped_early: bool            # early-stop patience ran out (and nothing else)
     restored_best: bool            # the model now holds the weights of best_epoch
+    finished: bool                 # every epoch ran or early stopping ended it; False = cut by a deadline or a stop
 
 
 def weight_for_target(sample_weight, target_name: str, tcfg: dict):
@@ -544,4 +545,6 @@ class Trainer:
             self.model.load_state_dict(best_weights)
         elif ema is not None:
             self.model.load_state_dict(ema.weights())
-        return FitResult(history, len(history), tracker.best_epoch, tracker.best, tracker.should_stop(), restored)
+        stopped = tracker.should_stop()
+        return FitResult(history, len(history), tracker.best_epoch, tracker.best, stopped, restored,
+                         stopped or len(history) >= settings.epochs)

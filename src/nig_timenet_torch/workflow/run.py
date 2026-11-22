@@ -49,7 +49,8 @@ from nig_timenet_torch.workflow.health_report import REPORT_JSON, REPORT_MD, Hea
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
 from nig_timenet_torch.workflow.settings import RunSettings
 
-__all__ = ["Run", "prepare", "prepare_split", "build", "train", "train_staged", "training_finished", "restore",
+__all__ = ["Run", "prepare", "prepare_split", "build", "train", "train_staged", "training_finished", "weights_label",
+           "restore",
            "health_step", "test_step", "battery_step", "write_summary", "run_all", "test_lines", "SUMMARY",
            "TEST_REPORT"]
 
@@ -84,7 +85,7 @@ class Run:
         return self.art.dataset
 
     def table(self, stage: str) -> pd.DataFrame:
-        """PredictionTable of ALL rows of ``stage`` (the model holds the best weights after fit)."""
+        """PredictionTable of ALL rows of ``stage`` (the model holds the weights ``weights_label`` names)."""
         _need(self, "result", "train")
         if stage not in self.x:
             self.x[stage], self.y[stage] = flat_run.flat_inputs(self.dataset, self.idx[stage],
@@ -171,7 +172,7 @@ def _interrupted(run: Run, mode: str, err: KeyboardInterrupt) -> None:
     if checkpoint.load_checkpoint(Path(run.settings.run_dir)) is None:
         raise KeyboardInterrupt("stopped before the first epoch finished: no epoch was saved, nothing to test") from err
     restore(run, weights=mode)
-    res = run.result = replace(run.result, stopped_early=True)
+    res = run.result = replace(run.result, finished=False)
     print(f"STOPPED: {res.epochs_done} finished epoch(s) kept; the model holds the "
           f"{'best-epoch' if mode == 'best' else 'last finished epoch'} weights (a cut epoch is not saved)",
           flush=True)
@@ -268,21 +269,26 @@ def train_staged(run: Run, *, deadline: float | None = None, on_eval=None, stage
 
 def _staged_outputs(run: Run, res: StagedResult) -> None:
     """FitResult for the later steps, the stage table (with the rough independent-label counts) for the summary."""
-    run.result = FitResult(res.history, len(res.history), res.best_eval, res.best_value, res.finished,
-                           res.restored_best)
+    run.result = FitResult(res.history, len(res.history), res.best_eval, res.best_value, False, res.restored_best,
+                           res.finished)
     indep = staged_report.independent_labels(run.dataset, run.idx["train"], [r["rows"] for r in res.stages])
     run.extra["stages"] = [{**r, "independent_labels": n} for r, n in zip(res.stages, indep, strict=True)]
     run.extra["staged"] = {"total_steps": res.total_steps, "finished": res.finished, "val_rows_used": res.val_rows,
                            "best_step": res.best_step}
 
 
+def weights_label(run: Run) -> str:
+    """"best-epoch" when the model holds the best epoch's weights (``result.restored_best``), else "last-epoch"
+    (EMA, ``restore_best_weights=False``, ``restore(weights="last")``, ``on_interrupt="last"``)."""
+    _need(run, "result", "train")
+    return "best-epoch" if run.result.restored_best else "last-epoch"
+
+
 def training_finished(run: Run) -> bool:
     """True when the training of ``run`` ended by itself (every epoch or stage, or early stopping); False when a
     ``deadline`` cut it (the checkpoint resumes it). The one definition the studies stop on (C-07)."""
     _need(run, "result", "train")
-    if run.staged is not None:
-        return bool(run.staged.finished)
-    return run.result.epochs_done >= run.fit_settings.epochs or run.result.stopped_early
+    return run.result.finished
 
 
 def restore(run: Run, *, weights: str = "best", allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:
@@ -309,8 +315,9 @@ def restore(run: Run, *, weights: str = "best", allow_changes: tuple[str, ...] =
     else:
         run.trainer.model.load_state_dict(ckpt["ema"]["shadow"] if "ema" in ckpt else ckpt["model"])
     history = list(ckpt["history"])
-    run.result = FitResult(history, int(ckpt["epochs_done"]), tracker["best_epoch"], tracker["best"],
-                           len(history) < run.fit_settings.epochs, weights == "best")
+    stopped = int(tracker["wait"]) >= run.fit_settings.early_stop.patience
+    run.result = FitResult(history, int(ckpt["epochs_done"]), tracker["best_epoch"], tracker["best"], stopped,
+                           weights == "best", stopped or len(history) >= run.fit_settings.epochs)
     return run
 
 
@@ -412,7 +419,7 @@ def write_summary(run: Run, extra: dict | None = None) -> dict:
     secs = [r["trace_epoch_seconds"] for r in res.history if "trace_epoch_seconds" in r]  # epochs of earlier jobs too
     n_batches = batches_per_epoch(run, flat_run.batch_groups(ds, run.idx["train"], s.train.batch_by))
     summary = {"seed": s.train.seed, "epochs_requested": fs.epochs, "epochs_done": res.epochs_done,
-               "finished": res.epochs_done >= fs.epochs or res.stopped_early, "stopped_early": res.stopped_early,
+               "finished": res.finished, "stopped_early": res.stopped_early,
                "best_epoch": res.best_epoch, "best_value": res.best_value,
                "step_seconds_per_batch": statistics.median(secs) / n_batches if secs else None,
                "epoch_seconds_median": statistics.median(secs) if secs else None, "batch_size": fs.batch_size,
@@ -439,7 +446,7 @@ def run_all(settings: RunSettings, out=None, *, deadline: float | None = None, o
         train_staged(r, deadline=deadline, on_eval=on_epoch)
     health_step(r)
     rep = test_step(r)
-    print(f"test evaluation ({rep['n_rows']} rows, best-epoch weights):", flush=True)
+    print(f"test evaluation ({rep['n_rows']} rows, {weights_label(r)} weights):", flush=True)
     print("\n".join(test_lines(rep)), flush=True)
     battery_step(r)
     return r

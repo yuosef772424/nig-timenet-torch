@@ -203,7 +203,7 @@ def test_notebook_stop_button_keeps_the_last_finished_epoch_and_runs_the_tests(t
     flat_run.epoch_line = boom
     try:
         ns = run_notebook("main", {**base, "RUN_NAME": "stop1"})
-        assert ns["run"].result.epochs_done == 2 and ns["run"].result.stopped_early
+        assert ns["run"].result.epochs_done == 2 and ns["run"].result.finished is False
         with pytest.raises(KeyboardInterrupt):
             run_notebook("main", {**base, "RUN_NAME": "stop2", "ON_STOP_WEIGHTS": None})
     finally:

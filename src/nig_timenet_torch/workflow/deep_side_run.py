@@ -1,5 +1,5 @@
-"""PURPOSE: Runs the deep-side check (eval/deep_side.py) on the VAL and TEST stages of a finished run (model holding
-    its best weights, e.g. after workflow.run.restore) and writes deep_side_report.txt and deep_side.json.
+"""PURPOSE: Runs the deep-side check (eval/deep_side.py) on the VAL and TEST stages of a finished run (the model of
+    is trained or restored, e.g. after workflow.run.restore) and writes deep_side_report.txt and deep_side.json.
 TAGS: deep side, run reading, derived target, val and test, report writer
 PITFALLS: needs the high, low and close heads and X channels high / low / close as log(price / prev close) (the
     last-bar asymmetry baseline is read from them); predicts each stage once (cached in run.extra by stage_inputs).

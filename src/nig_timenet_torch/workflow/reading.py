@@ -197,7 +197,8 @@ def _book_lines(rows: list[dict]) -> list[str]:
 
 
 def reading_step(run, out_dir, cost: float = DEFAULT_COST_PER_SIDE) -> dict:
-    """The whole reading of ``run`` (model holding the best weights) into ``out_dir``; returns the JSON dict."""
+    """The whole reading of ``run`` (the model holds the weights ``restored_best`` says) into ``out_dir``; returns
+    the JSON dict."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     val, test = stage_data(run, "val"), stage_data(run, "test")
