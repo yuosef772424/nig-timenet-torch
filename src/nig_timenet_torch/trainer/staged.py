@@ -421,8 +421,9 @@ class _Loop:
         checkpoint.save_checkpoint(self.run_dir, state)
 
     def _load(self, ckpt: dict) -> None:
-        t, sg = self.t, ckpt["staged"]
+        # the identity first: a flat run's checkpoint has no "staged" part (D-042: staged settings are in it)
         check_resume(RunIdentity.from_json(json.loads(ckpt["identity"])), self.identity)
+        t, sg = self.t, ckpt["staged"]
         if sg["signature"] != self._signature():
             raise ValueError(f"{self.run_dir}: the staged plan or settings changed since the checkpoint was written")
         t.model.load_state_dict(ckpt["model"])
