@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nig_timenet_torch.eval import battery, battery_lib, battery_profit
+from nig_timenet_torch.eval import battery, battery_lib
 from nig_timenet_torch.eval import strategy_book as sb
 
 COST = 0.0008
@@ -45,11 +45,11 @@ def test_the_battery_definitions_are_reproduced():
     d = table()
     side = np.where(d["p_dir"] > 0.5, 1.0, -1.0)
     m = (d["dir_true"].values != 0) & (side == 1.0)
-    idx = battery._top_abs(d, "mu", 0.20, m)
+    idx = battery_lib.top_abs(d["mu"].values, 0.20, m)
     mine = sb.limit_at_mu_trades(d, idx, 1.0, COST)["pnl"].mean()
     row = [r for r in battery.limit_execution(d, COST)["rows"] if r.startswith("LONG top20%")][0]
     assert f"{mine * 100:+.4f}%" in row
-    pnl, _, _ = battery_profit._limit_pnl(1.0, d["pred_low"].values, d["fut_low"].values, d["y_ret"].values, COST, 2)
+    pnl, _, _ = battery_lib.limit_at_extreme(1.0, d["pred_low"].values, d["fut_low"].values, d["y_ret"].values, COST)
     assert sb.limit_extreme_trades(d, np.ones(len(d), bool), 1.0, COST)["pnl"].mean() == pytest.approx(pnl.mean())
 
 

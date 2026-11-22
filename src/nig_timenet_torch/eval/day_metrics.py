@@ -17,6 +17,8 @@ of up days, which is why it is a baseline every score must beat.
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.eval.battery_lib import DEFAULT_COST_PER_SIDE, net_pnl
+from nig_timenet_torch.eval.day_blocks import DAY_BLOCK_DAYS, calendar_day, day_blocks
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["FRAME_COLUMNS", "absolute_days", "neutral_days", "relative_rank_ic", "day_summary", "paired_days",
@@ -25,19 +27,18 @@ __all__ = ["FRAME_COLUMNS", "absolute_days", "neutral_days", "relative_rank_ic",
 FRAME_COLUMNS = ("time", "coin", "mu", "sigma", "y_ret", "ret_1d", "asym")
 ABSOLUTE_BASELINES = ("always_long", "yesterday_market_sign", "last_bar_asymmetry")
 NEUTRAL_BASELINES = ("momentum_1d", "reversal_1d", "last_bar_asymmetry")
-BLOCK_DAYS = 5          # consecutive days resampled together (labels overlap across midnight; volatility clusters)
 MIN_ROWS = 3            # rows a day needs to count
 
 
 def _days(frame: pd.DataFrame) -> np.ndarray:
-    return frame["time"].to_numpy().astype("datetime64[D]")
+    return calendar_day(frame["time"])
 
 
 def absolute_days(frame: pd.DataFrame, score, cost: float = 0.0, min_rows: int = MIN_ROWS) -> pd.Series:
     """Metric 1: per day, the mean over the day's rows of ``sign(score_i) * y_ret_i - 2 * cost`` (rows with a NaN or
     zero score do not trade). Index = day."""
     s = np.sign(np.nan_to_num(np.asarray(score, dtype=np.float64)))
-    pnl = pd.Series(np.where(s != 0, s * frame["y_ret"].to_numpy(np.float64) - 2.0 * cost, np.nan))
+    pnl = pd.Series(np.where(s != 0, net_pnl(s * frame["y_ret"].to_numpy(np.float64), cost), np.nan))
     g = pnl.groupby(_days(frame))
     return g.mean()[g.count() >= min_rows]
 
@@ -52,11 +53,14 @@ def _timestamp_spread(frame: pd.DataFrame, score, top_share: float) -> pd.Series
 def neutral_days(frame: pd.DataFrame, score, top_share: float = 0.2, cost: float = 0.0,
                  min_rows: int = 1) -> pd.Series:
     """Metric 2: per day, the mean over the day's timestamps of the top-k / bottom-k spread of ``score`` (which is
-    ranked inside the timestamp, so ``score`` and ``score - timestamp mean`` give the same book), minus 2 x cost."""
-    spread = _timestamp_spread(frame, score, top_share) - 2.0 * cost
+    ranked inside the timestamp, so ``score`` and ``score - timestamp mean`` give the same book), minus one round trip
+    (2 x cost) per unit of gross exposure."""
+    # half-unit convention: the spread (mean of the top k minus mean of the bottom k) is already per unit of gross
+    # exposure (the long and the short leg are half a unit each), and a unit of exposure pays one round trip
+    spread = net_pnl(_timestamp_spread(frame, score, top_share), cost)
     if not len(spread):
         return pd.Series(dtype=np.float64)
-    g = spread.groupby(spread.index.to_numpy().astype("datetime64[D]"))
+    g = spread.groupby(calendar_day(spread.index))
     return g.mean()[g.count() >= min_rows]
 
 
@@ -69,19 +73,14 @@ def relative_rank_ic(frame: pd.DataFrame, score) -> float:
     return metrics.rank_ic(rel, np.asarray(score, dtype=np.float64), t)
 
 
-def _blocks(index, block_days: int) -> np.ndarray:
-    d = np.asarray(index).astype("datetime64[D]").astype(np.int64)
-    return (d - (d.min() if len(d) else 0)) // block_days
-
-
-def day_summary(days: pd.Series, level: float = 0.95, block_days: int = BLOCK_DAYS, seed: int = 0) -> dict:
+def day_summary(days: pd.Series, level: float = 0.95, block_days: int = DAY_BLOCK_DAYS, seed: int = 0) -> dict:
     """{n_days, win_share, win_lo, win_hi (block bootstrap over ``block_days``-day blocks), wilson_lo, wilson_hi
     (days as independent), mean, mean_lo, mean_hi, sharpe_day}."""
     v = days.to_numpy(np.float64)
     n = len(v)
     if n == 0:
         return {"n_days": 0}
-    blocks = _blocks(days.index, block_days)
+    blocks = day_blocks(days.index, block_days)
     win, wl, wh = metrics.block_bootstrap_ci((v > 0).astype(np.float64), blocks, level=level, seed=seed)
     mean, ml, mh = metrics.block_bootstrap_ci(v, blocks, level=level, seed=seed)
     wil = metrics.wilson_interval(int((v > 0).sum()), n)
@@ -90,14 +89,14 @@ def day_summary(days: pd.Series, level: float = 0.95, block_days: int = BLOCK_DA
             "mean": mean, "mean_lo": ml, "mean_hi": mh, "sharpe_day": mean / sd if sd and sd > 0 else float("nan")}
 
 
-def paired_days(model: pd.Series, base: pd.Series, level: float = 0.95, block_days: int = BLOCK_DAYS,
+def paired_days(model: pd.Series, base: pd.Series, level: float = 0.95, block_days: int = DAY_BLOCK_DAYS,
                 seed: int = 0) -> dict:
     """Model minus baseline on the days BOTH have: the difference of the mean day P&L and of the winning-day share,
     each with a paired block-bootstrap CI; ``wins`` = the lower end of BOTH CIs is above 0."""
     both = pd.concat([model.rename("m"), base.rename("b")], axis=1).dropna()
     if len(both) < 2:
         return {"n_days": int(len(both)), "wins": False}
-    blocks = _blocks(both.index, block_days)
+    blocks = day_blocks(both.index, block_days)
     d = (both["m"] - both["b"]).to_numpy()
     w = (both["m"] > 0).to_numpy(np.float64) - (both["b"] > 0).to_numpy(np.float64)
     dm, dl, dh = metrics.block_bootstrap_ci(d, blocks, level=level, seed=seed)
@@ -138,7 +137,7 @@ def _section(frame, scores: dict, model: str, days_fn, cost: float, level: float
     return out
 
 
-def day_report(frame: pd.DataFrame, val: pd.DataFrame | None = None, *, cost: float = 0.0008,
+def day_report(frame: pd.DataFrame, val: pd.DataFrame | None = None, *, cost: float = DEFAULT_COST_PER_SIDE,
                top_share: float = 0.2, level: float = 0.95, seed: int = 0) -> dict:
     """Both metrics of one stage for the model (``mu``) and every baseline: per score the gross and net day summary
     and, for a baseline, the paired model-minus-baseline comparison on the gross days. Keys: ``absolute``,
@@ -161,7 +160,7 @@ def day_report(frame: pd.DataFrame, val: pd.DataFrame | None = None, *, cost: fl
                                 lambda f, s, cost: neutral_days(f, s, top_share=top_share, cost=cost), cost, level,
                                 seed),
             "relative_rank_ic": {k: relative_rank_ic(frame, s) for k, s in neutral.items()},
-            "settings": {"cost_per_side": cost, "top_share": top_share, "level": level, "block_days": BLOCK_DAYS,
+            "settings": {"cost_per_side": cost, "top_share": top_share, "level": level, "block_days": DAY_BLOCK_DAYS,
                          "rows": int(len(frame)), "coins": int(frame["coin"].nunique()),
                          "timestamps": int(frame["time"].nunique())}}
 

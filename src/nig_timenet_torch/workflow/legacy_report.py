@@ -18,6 +18,7 @@ import pandas as pd
 
 from nig_timenet_torch.eval import legacy_reports as lr
 from nig_timenet_torch.eval import sample_charts
+from nig_timenet_torch.eval.battery_lib import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.workflow.battery_run import table_path
 
 __all__ = ["stage_report", "legacy_report", "legacy_from_folder", "render", "REPORT_MD", "REPORT_JSON", "SAMPLES_CSV",
@@ -105,7 +106,7 @@ def _samples_csv(reports: dict) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=[f.name for f in dataclasses.fields(sample_charts.Sample)])
 
 
-def legacy_report(tables: dict, out_dir=None, *, cost: float = 0.0008, top_share: float = lr.TOP_SHARE,
+def legacy_report(tables: dict, out_dir=None, *, cost: float = DEFAULT_COST_PER_SIDE, top_share: float = lr.TOP_SHARE,
                   plots: bool = True) -> dict:
     """``tables`` = {stage: battery table}; writes the markdown, the JSON, the samples CSV and (``plots``) the figures
     into ``out_dir`` (None = write nothing). Returns {stage: report}."""
@@ -137,7 +138,7 @@ def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=main.__doc__)
     ap.add_argument("folder")
     ap.add_argument("--out")
-    ap.add_argument("--cost", type=float, default=0.0008)
+    ap.add_argument("--cost", type=float, default=DEFAULT_COST_PER_SIDE)
     ap.add_argument("--top-share", type=float, default=lr.TOP_SHARE)
     ap.add_argument("--no-plots", action="store_true")
     a = ap.parse_args(argv)

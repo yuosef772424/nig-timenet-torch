@@ -13,6 +13,7 @@ import time
 
 def main(argv: list[str]) -> None:
     import nig_timenet_torch
+    from nig_timenet_torch.eval.battery_lib import DEFAULT_COST_PER_SIDE
     from nig_timenet_torch.workflow import battery_run
     from nig_timenet_torch.workflow import grad_stack as gs
 
@@ -39,9 +40,9 @@ def main(argv: list[str]) -> None:
         print(
             f"\n##### {arch}: trained in {time.time() - t0:.0f}s; battery (n_variants=1, as in the reports)", flush=True
         )
-        gs.grad_stack_battery(out, cost=0.0008, show=False)
+        gs.grad_stack_battery(out, cost=DEFAULT_COST_PER_SIDE, show=False)
         folder = f"{out}/runs/full"  # the same tables, n_variants = the 6 models tried so far
-        battery_run.battery_from_folder(folder, cost=0.0008, n_variants=6, out_dir=f"{folder}/n6")
+        battery_run.battery_from_folder(folder, cost=DEFAULT_COST_PER_SIDE, n_variants=6, out_dir=f"{folder}/n6")
         print(f"##### {arch} done {time.time() - t0:.0f}s", flush=True)
 
 

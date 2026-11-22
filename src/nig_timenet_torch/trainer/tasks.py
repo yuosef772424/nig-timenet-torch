@@ -24,6 +24,7 @@ import torch
 import torch.nn.functional as F
 
 from nig_timenet_torch.core.registry import Contract, Registry
+from nig_timenet_torch.eval.battery_lib import DEFAULT_COST_PER_SIDE
 
 __all__ = ["TASK_REGISTRY", "register_task_type", "with_defaults", "evidential_task_loss", "regression_task_loss",
            "classification_task_loss", "nig_regularizer", "nig_w_st", "compute_confidence_calibration_loss",
@@ -288,7 +289,7 @@ def side_payoff_task_loss(y_true, outputs, target_cfg, scheduled_vars, sample_we
 register_task_type("side_payoff", side_payoff_task_loss, ["mae_long", "mae_short"], supports_sample_weight=True,
                    config_keys=("cost_per_side", "scale", "huber_delta", "short_weight", "variance_weight",
                                 "nig_keys"),
-                   default_options={"cost_per_side": 0.0008, "scale": 0.02, "huber_delta": 0.0,
+                   default_options={"cost_per_side": DEFAULT_COST_PER_SIDE, "scale": 0.02, "huber_delta": 0.0,
                                     "short_weight": 1.0, "variance_weight": 0.0, "nig_keys": {}})
 
 

@@ -1,5 +1,5 @@
 {
- "fingerprint": "8eac689d750fc5c7",
+ "fingerprint": "cdacf0f2899a5f3a",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -473,6 +473,11 @@
   "nig_timenet_torch.eval.battery_classics.market_neutral(quantiles)": "(0.2, 0.3, 0.4)",
   "nig_timenet_torch.eval.battery_classics.persistence_baseline(pct)": "0.1",
   "nig_timenet_torch.eval.battery_classics.selective_evaluation(quantiles)": "(0.25, 0.5, 0.75)",
+  "nig_timenet_torch.eval.battery_lib.DEFAULT_COST_PER_SIDE": "0.0008",
+  "nig_timenet_torch.eval.battery_lib.bonferroni_level(alpha)": "0.05",
+  "nig_timenet_torch.eval.battery_lib.section(note)": "''",
+  "nig_timenet_torch.eval.battery_lib.top_abs(mask)": "None",
+  "nig_timenet_torch.eval.battery_lib.trade_stats(min_n)": "50",
   "nig_timenet_torch.eval.battery_profit.DEFAULT_SEED": "0",
   "nig_timenet_torch.eval.battery_profit.DEFAULT_SIDES": "2",
   "nig_timenet_torch.eval.battery_profit.limit_highlow(n_variants)": "1",

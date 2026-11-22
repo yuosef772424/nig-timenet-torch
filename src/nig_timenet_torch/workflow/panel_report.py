@@ -23,6 +23,7 @@ from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TS_COL
 from nig_timenet_torch.data_io.synthetic import oracle_keys
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS
 from nig_timenet_torch.eval import day_metrics, uncertainty_use
+from nig_timenet_torch.eval.battery_lib import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.workflow import battery_run, flat_run, run_common
 
 __all__ = ["trailing_return", "stage_frame", "oracle_frame", "panel_report", "panel_step", "panel_from_folder",
@@ -90,7 +91,7 @@ def oracle_frame(run, stage: str) -> pd.DataFrame:
     return frame[[c for c in frame.columns if not c.startswith(("pred_", "fut_", "sigma_"))]]
 
 
-def panel_report(val: pd.DataFrame, test: pd.DataFrame, *, cost: float = 0.0008, top_share: float = 0.2,
+def panel_report(val: pd.DataFrame, test: pd.DataFrame, *, cost: float = DEFAULT_COST_PER_SIDE, top_share: float = 0.2,
                  seed: int = 0) -> dict:
     """{"val", "test": day_report, "uncertainty": uncertainty_report of TEST with VAL thresholds}."""
     return {"val": day_metrics.day_report(val, None, cost=cost, top_share=top_share, seed=seed),
@@ -146,7 +147,7 @@ def headline(report: dict) -> dict:
     return out
 
 
-def panel_from_folder(folder, *, cost: float = 0.0008, top_share: float = 0.2, out_dir=None) -> dict:
+def panel_from_folder(folder, *, cost: float = DEFAULT_COST_PER_SIDE, top_share: float = 0.2, out_dir=None) -> dict:
     """The panel report of a FINISHED run folder from its two frames (no model, no artifact)."""
     missing = [str(frame_path(folder, st)) for st in ("val", "test") if not frame_path(folder, st).is_file()]
     if missing:
@@ -159,7 +160,7 @@ def panel_from_folder(folder, *, cost: float = 0.0008, top_share: float = 0.2, o
     return report
 
 
-def panel_from_folders(folders, *, cost: float = 0.0008, top_share: float = 0.2, out_dir=None) -> dict:
+def panel_from_folders(folders, *, cost: float = DEFAULT_COST_PER_SIDE, top_share: float = 0.2, out_dir=None) -> dict:
     """ONE panel report over the frames of several run folders whose test windows do not overlap (the folds of a
     rolling study, ``workflow/rolling_run.py``): the TEST frames are concatenated (every day of every fold is scored
     by the model that was trained before it), and so are the VAL frames (they orient the asymmetry baseline and fit

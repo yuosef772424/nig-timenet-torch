@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nig_timenet_torch.eval import battery_profit
+from nig_timenet_torch.eval import battery_lib
 from nig_timenet_torch.eval.battery_profit import limit_highlow, profit_close, profit_sections, sigma_sizing
 
 COST = 0.0008
@@ -108,4 +108,4 @@ def test_profit_sections_bundle_and_defaults():
     out = profit_sections(_table(), COST, n_variants=3)
     assert set(out) == {"profit_close", "profit_limit", "profit_sigma"}
     assert all(s["rows"] for s in out.values())
-    assert battery_profit.DEFAULT_SIDES == 2
+    assert battery_lib.SIDES == 2
