@@ -7,7 +7,7 @@ Closed rows, the port record, the finished hardening campaign 2026-11, the done 
 Launched 2026-11-21 (owner: structure and clarity). HB1 done in MG4 #74 (D-041). HB2-HB8 merged in PR #75 (2026-11-22, 2d0404c; D-042..D-048; HB3-HB8 by Sonnet agents in worktrees, checked by the lead): rows in `docs/status_archive.md`, the plan's Outcome. Left for later / owner decisions: B-14 (market-neutral numbers), A-09, A-18 (which label-scale component stays), D-16 / D-33 / D-35 (manifests), C-16 (job defaults), C-35, the E3 budget.
 
 ## Roadmap (`docs/ROADMAP.md`, rules `docs/RULES.md`, protocol `docs/MODEL_DEV_PROTOCOL.md`)
-PRs since last R-REVIEW: 3 (#74 the review itself, merged; fifth review 2026-11-21 in MG4, `docs/reviews.md`, covered #48-#73; the counter had stayed at 5 for 14 merges; it is hand-kept until H7 derives it).
+PRs since last R-REVIEW: 5 (#74 the review itself, merged; fifth review 2026-11-21 in MG4, `docs/reviews.md`, covered #48-#73; the counter had stayed at 5 for 14 merges; it is hand-kept until H7 derives it).
 
 | Step | Title | State | PR / job | Note |
 |---|---|---|---|---|

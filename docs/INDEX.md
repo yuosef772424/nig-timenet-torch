@@ -67,7 +67,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Audits
 
-18 audit folders.
+19 audit folders.
 
 - `docs/audit/2026-11-14-model-first/`: Model-first audit — running notes (2026-11-14) (`NOTES.md`), 12 files
 - `docs/audit/2026-11-16-panel/`: Report A: architecture of the panel model (panel audit 2026-11-16) (`A_architecture.md`), 6 files
@@ -86,11 +86,12 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/audit/2026-11-20-readings/`: Pre-registration I1: the indicator channels trained like R (owner 2026-11-20) (`PREREGISTERED_I1.md`), 5 files
 - `docs/audit/2026-11-20-v1rep-i2/`: Pre-registration: V1-rep and I2 (owner 2026-11-20: "run the proposals, in parallel, free RAM under 10 GB") (`PREREGISTERED.md`), 3 files
 - `docs/audit/2026-11-21-independent-review/`: , 13 files
+- `docs/audit/2026-11-22-dy1-daily/`: DY1 pre-registration: a daily model that predicts two days ahead, judged as money after costs (`PREREGISTERED.md`), 10 files
 - `docs/audit/2026-11-22-n8-account/`: , 10 files
 
 ## Handoffs
 
-11 handoffs (each carries a `Status:` line: open or closed with a pointer).
+12 handoffs (each carries a `Status:` line: open or closed with a pointer).
 
 - `docs/handoff/2026-11-16-panel-session.md`: Status: closed (PN1 / WF1 #61; `docs/results/panel-001.md`)
 - `docs/handoff/2026-11-18-batch-by-60.md`: Status: closed (`docs/results/batch-by-wf-002.md`)
@@ -103,6 +104,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/handoff/2026-11-20-dw1-running.md`: Status: closed (DW1 #73; `docs/results/dw1-001.md`)
 - `docs/handoff/2026-11-20-start-here.md`: Status: closed (AI1 #71 and AI2 #72 merged in MG4 #74; `docs/results/br1-001.md`, `docs/results/m3-full-001.md`)
 - `docs/handoff/2026-11-21-hardening-2026-11b.md`: Status: closed (PR #75 merged 2026-11-22 as 2d0404c; the items under "Left" stay open in the plan and STATUS)
+- `docs/handoff/2026-11-22-dy1-daily.md`: Status: open
 
 ## Decisions
 
@@ -160,16 +162,16 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Job files
 
-61 job files in `docs/jobs/` (a job file is queued by the planner, `docs/COLAB_OPS.md` "Queue route"), per entry:
+77 job files in `docs/jobs/` (a job file is queued by the planner, `docs/COLAB_OPS.md` "Queue route"), per entry:
 
 - entry `baseline`: 5
 - entry `panel`: 5
-- entry `rolling`: 49
+- entry `rolling`: 65
 - entry `staged`: 2
 
 ## One-off scripts under docs/
 
-55 scripts kept under docs/ (one-off analyses next to the note or audit they belong to; not run by CI).
+60 scripts kept under docs/ (one-off analyses next to the note or audit they belong to; not run by CI).
 
 - `docs/audit/2026-11-14-model-first/colab_follow.py`: Follow, resume and read the multi-coin (panel) arms on a Colab runtime, without the bridge.
 - `docs/audit/2026-11-14-model-first/quick_arms.py`: Small-sample arms on a contract artifact: encoder (gru / transformer) x learning rate, same rows and seed.
@@ -221,6 +223,11 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/audit/2026-11-21-independent-review/a5_placebo_fees.py`: 
 - `docs/audit/2026-11-21-independent-review/a6_timing.py`: The model's breadth (share of coins with mu >= VAL q90) used as the EXPOSURE of one instrument: BTC, or the
 - `docs/audit/2026-11-21-independent-review/load.py`: Shared loader: the 7 TEST folds of one seed of rolling-dw1-r-001 (arm R), each with its VAL 90th pct of mu.
+- `docs/audit/2026-11-22-dy1-daily/build_daily.py`: DY1: build the daily contract artifact (1d bars, window 32, horizon 2 days) from the public Binance archive.
+- `docs/audit/2026-11-22-dy1-daily/failure_read.py`: DY1 failure reading (rule C7, docs/PHILOSOPHY.md section 3) from the saved TEST / VAL tables of one arm and seed.
+- `docs/audit/2026-11-22-dy1-daily/model_free.py`: DY1 model-free bound (ROADMAP N3 at the daily frame): ridge and trivial rules on the folds of the rolling entry.
+- `docs/audit/2026-11-22-dy1-daily/read_dy1.py`: DY1 reading: the pre-registered account of each arm and seed, plus the secondary rows of PREREGISTERED.md.
+- `docs/audit/2026-11-22-dy1-daily/vol_universe.py`: DY1 amendment 1 (owner 2026-11-22): a universe of coins with similar volatility, chosen on the TRAIN era only.
 - `docs/audit/2026-11-22-n8-account/atr_and_charts.py`: Take-profit at k x ATR on the saved battery tables, and consistency charts of the model and its predictions.
 - `docs/audit/2026-11-22-n8-account/scan.py`: N8 account scan: the ACCOUNT section (eval/account.py) of every run folder on Drive that holds battery tables.
 - `docs/audit/2026-11-22-n8-account/timing.py`: Is the account's profit market TIMING skill, or a market move the book happened to sit in?
