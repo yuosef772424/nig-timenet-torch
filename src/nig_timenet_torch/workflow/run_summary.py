@@ -4,7 +4,6 @@ PITFALLS: ``write_summary`` needs a trained Run; ``extra`` (device, gpu name, ..
     per-batch time divides by the batches the fit really used (``batches_per_epoch``), not by rows / batch_size.
 """
 
-import json
 import statistics
 
 from nig_timenet_torch.workflow import flat_run, run_common
@@ -52,5 +51,5 @@ def write_summary(run: Run, extra: dict | None = None) -> dict:
                "run_dir": str(s.run_dir), "history": res.history,
                **{k: v for k, v in run.extra.items() if k != "tables"}, **(extra or {})}
     if run.out is not None:
-        (run.out / SUMMARY).write_text(json.dumps(summary, indent=1, default=float), encoding="utf-8")
+        run_common.write_json(run.out / SUMMARY, summary)
     return summary

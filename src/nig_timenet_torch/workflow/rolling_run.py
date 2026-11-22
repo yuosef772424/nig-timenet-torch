@@ -107,10 +107,7 @@ def _train_fold(run: steps.Run, fold: RollingFold, rolling: RollingSettings, on_
     steps.build(run)       # the scalers and the NIG label scale are fitted on THIS fold's train rows
     run.ident = _fold_identity(run.ident, fold, rolling)
     run.extra["trained_on_fold"] = fold.index
-    if run.settings.train.staged is None:
-        steps.train(run, on_epoch=on_epoch, deadline=deadline)
-    else:
-        steps.train_staged(run, on_eval=on_epoch, deadline=deadline)
+    steps.fit(run, on_epoch=on_epoch, deadline=deadline)
 
 
 def _reuse(run: steps.Run, last: steps.Run, fold: RollingFold, rolling: RollingSettings) -> None:
@@ -196,7 +193,7 @@ def run_rolling(settings: RunSettings, rolling: RollingSettings, out, *, on_epoc
                "test_start": str(fold.test_start), "test_end": str(fold.test_end),
                "best_epoch": run.result.best_epoch, "epochs_done": run.result.epochs_done,
                "metrics": _scalars(report)}
-        (run.out / "fold_row.json").write_text(json.dumps(row, indent=1, default=float), encoding="utf-8")
+        run_common.write_json(run.out / "fold_row.json", row)
         rows.append(row)
         if on_fold is not None:
             on_fold(run, row)
@@ -214,7 +211,7 @@ def run_rolling(settings: RunSettings, rolling: RollingSettings, out, *, on_epoc
     pd.DataFrame([{k: v for k, v in r.items() if k not in ("metrics", "study_hash")} | r["metrics"]
                   for r in rows]).to_csv(
         out / "rolling_folds.csv", index=False)
-    (out / "rolling_summary.json").write_text(json.dumps(summary, indent=1, default=float), encoding="utf-8")
+    run_common.write_json(out / "rolling_summary.json", summary)
     (out / "rolling_summary.md").write_text(render(summary), encoding="utf-8")
     return summary
 

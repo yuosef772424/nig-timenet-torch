@@ -11,6 +11,7 @@ SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run_common.py); changes: st
 """
 
 import dataclasses
+import json
 import subprocess
 from pathlib import Path
 
@@ -33,7 +34,7 @@ from nig_timenet_torch.workflow.settings_roles import RESUMABLE_TRAIN_FIELDS
 
 __all__ = ["load_data", "price_targets", "codec_state", "check_decode", "input_key", "split_bounds", "make_plan",
            "stride_rows", "select_rows", "pick_device", "code_sha", "run_identity", "identity_context",
-           "IDENTITY_SELECTION", "IDENTITY_CONFIGURATION", "RESUMABLE_TRAIN_FIELDS", "json_default"]
+           "IDENTITY_SELECTION", "IDENTITY_CONFIGURATION", "RESUMABLE_TRAIN_FIELDS", "json_default", "write_json"]
 
 
 def load_data(settings: RunSettings) -> LoadedData:
@@ -196,6 +197,12 @@ def cross_section_rows(dataset: dict, idx: np.ndarray, max_rows: int | None) -> 
     keep = max(1, int(round(len(uniq) * max_rows / len(idx))))
     chosen = uniq[np.unique(np.linspace(0, len(uniq) - 1, keep).astype(np.int64))]
     return idx[np.isin(times, chosen)]
+
+
+def write_json(path, obj) -> None:
+    """``obj`` as indented JSON (numpy numbers as Python ones through ``default=float``) in ``path``, UTF-8: the one
+    writer of the run, study and report json files (C-18)."""
+    Path(path).write_text(json.dumps(obj, indent=1, default=float), encoding="utf-8")
 
 
 def json_default(v):

@@ -5,7 +5,6 @@ PITFALLS: the test split is read only by ``test_step``, never for training or se
     whole timestamps in the health subsample (C-01 / C-02); both steps need a trained (or restored) Run.
 """
 
-import json
 import shutil
 from pathlib import Path
 
@@ -74,5 +73,5 @@ def test_step(run: Run) -> dict:
     run.extra.setdefault("tables", {})["test"] = table
     rep = stage_report(run, "test", table)
     if run.out is not None:
-        (run.out / TEST_REPORT).write_text(json.dumps(rep, indent=1, default=float), encoding="utf-8")
+        run_common.write_json(run.out / TEST_REPORT, rep)
     return rep

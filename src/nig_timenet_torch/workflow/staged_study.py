@@ -9,7 +9,6 @@ PITFALLS: exploratory (rule C5): a CPU smoke is not a result; an arm is compared
 """
 
 import dataclasses
-import json
 import time
 from pathlib import Path
 
@@ -20,6 +19,7 @@ from nig_timenet_torch.eval.target_report import INFORMATION_ONLY_DIRECTION_HEAD
 from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS
 from nig_timenet_torch.trainer.staged import baseline_stages
 from nig_timenet_torch.workflow import run as steps
+from nig_timenet_torch.workflow import run_common
 from nig_timenet_torch.workflow.settings import RunSettings
 from nig_timenet_torch.workflow.staged_report import comparison, stage_table
 
@@ -82,7 +82,7 @@ def run_staged_study(settings: RunSettings, seeds, out, *, baselines=BASELINES, 
              "settings": dataclasses.asdict(settings.train.staged)}
     study["verdict"] = verdict(study)
     Path(out).mkdir(parents=True, exist_ok=True)
-    (Path(out) / "study.json").write_text(json.dumps(study, indent=1, default=float), encoding="utf-8")
+    run_common.write_json(Path(out) / "study.json", study)
     (Path(out) / "study.md").write_text(render(study), encoding="utf-8")
     return study
 

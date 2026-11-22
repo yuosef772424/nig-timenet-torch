@@ -19,7 +19,7 @@ from nig_timenet_torch.workflow import flat_run, staged_report
 from nig_timenet_torch.workflow.run_restore import check_on_interrupt, copy_best_weights, handle_interrupt
 from nig_timenet_torch.workflow.run_state import Run, need
 
-__all__ = ["train", "train_staged", "weights_label", "training_finished", "batches_per_epoch", "DAY_WEIGHTS_CSV"]
+__all__ = ["fit", "train", "train_staged", "weights_label", "training_finished", "batches_per_epoch", "DAY_WEIGHTS_CSV"]
 
 
 def train(run: Run, *, deadline: float | None = None, on_epoch=None, on_interrupt: str | None = None,
@@ -113,6 +113,16 @@ def _staged_outputs(run: Run, res: StagedResult) -> None:
     run.extra["stages"] = [{**r, "independent_labels": n} for r, n in zip(res.stages, indep, strict=True)]
     run.extra["staged"] = {"total_steps": res.total_steps, "finished": res.finished, "val_rows_used": res.val_rows,
                            "best_step": res.best_step}
+
+
+def fit(run: Run, *, deadline: float | None = None, on_epoch=None) -> Run:
+    """The training step the settings ask for: ``train`` (the epoch loop) or, with ``settings.train.staged``,
+    ``train_staged`` (``on_epoch`` is then called at every evaluation point). The one place that dispatch is written
+    (C-18); a caller that needs a step's other arguments (``stages``, ``on_interrupt``, ``batch_monitor``) calls the
+    step itself."""
+    if run.settings.train.staged is None:
+        return train(run, deadline=deadline, on_epoch=on_epoch)
+    return train_staged(run, deadline=deadline, on_eval=on_epoch)
 
 
 def weights_label(run: Run) -> str:

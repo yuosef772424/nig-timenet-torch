@@ -26,7 +26,7 @@ from nig_timenet_torch.core.config import updated
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.eval import day_metrics
 from nig_timenet_torch.model.architectures import ModelSettings
-from nig_timenet_torch.workflow import battery_run, panel_report
+from nig_timenet_torch.workflow import battery_run, panel_report, run_common
 from nig_timenet_torch.workflow import run as steps
 from nig_timenet_torch.workflow.settings import RunSettings
 
@@ -119,7 +119,7 @@ def run_arm(settings: RunSettings, name: str, arm: dict, seed: int, out, *, ckpt
     for f in _KEPT:
         if (folder / f).is_file() and keep != folder:
             shutil.copyfile(folder / f, keep / f)
-    (keep / ARM_JSON).write_text(json.dumps(row, indent=1, default=float), encoding="utf-8")
+    run_common.write_json(keep / ARM_JSON, row)
     return row
 
 
@@ -173,7 +173,7 @@ def run_panel_study(settings: RunSettings, arms: dict, seeds, out, *, ckpt_root=
              "accept": {name: _accept(rs) for name, rs in done.items() if rs},
              "vs_baseline_arm": compare(out, arms, seeds) if BASELINE_ARM in arms else {}}
     Path(out).mkdir(parents=True, exist_ok=True)
-    (Path(out) / "study.json").write_text(json.dumps(study, indent=1, default=float), encoding="utf-8")
+    run_common.write_json(Path(out) / "study.json", study)
     (Path(out) / "study.md").write_text(render(study), encoding="utf-8")
     return study
 

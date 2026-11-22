@@ -41,6 +41,7 @@ from nig_timenet_torch.workflow.run_summary import SUMMARY, flat_scalars, test_l
 from nig_timenet_torch.workflow.run_train import (
     DAY_WEIGHTS_CSV,
     batches_per_epoch,
+    fit,
     train,
     train_staged,
     training_finished,
@@ -48,7 +49,8 @@ from nig_timenet_torch.workflow.run_train import (
 )
 from nig_timenet_torch.workflow.settings import RunSettings
 
-__all__ = ["Run", "prepare", "prepare_split", "build", "train", "train_staged", "training_finished", "weights_label",
+__all__ = ["Run", "prepare", "prepare_split", "build", "fit", "train", "train_staged", "training_finished",
+           "weights_label",
            "need", "flat_scalars", "restore", "health_step", "test_step", "battery_step", "write_summary",
            "run_all", "test_lines", "SUMMARY", "TEST_REPORT", "DAY_WEIGHTS_CSV", "stage_report", "batches_per_epoch",
            "RESTORE_WEIGHTS"]
@@ -120,10 +122,7 @@ def build(run: Run) -> Run:
 def run_all(settings: RunSettings, out=None, *, deadline: float | None = None, on_epoch=None) -> Run:
     """prepare -> build -> train -> health report -> test report -> battery (when ``evaluation.battery.enabled``)."""
     r = build(prepare(settings, out))
-    if settings.train.staged is None:
-        train(r, deadline=deadline, on_epoch=on_epoch)
-    else:
-        train_staged(r, deadline=deadline, on_eval=on_epoch)
+    fit(r, deadline=deadline, on_epoch=on_epoch)
     health_step(r)
     rep = test_step(r)
     print(f"test evaluation ({rep['n_rows']} rows, {weights_label(r)} weights):", flush=True)

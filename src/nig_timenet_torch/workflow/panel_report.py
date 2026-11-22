@@ -13,7 +13,6 @@ PITFALLS: the trailing return of a row is read from the FULL artifact (the coin'
 two frames alone (other cost, other top share), no model and no artifact needed.
 """
 
-import json
 from pathlib import Path
 
 import numpy as np
@@ -110,7 +109,7 @@ def frame_path(folder, stage: str) -> Path:
 
 
 def _write(out: Path, report: dict, title: str) -> None:
-    (out / REPORT_JSON).write_text(json.dumps(report, indent=1, default=float), encoding="utf-8")
+    run_common.write_json(out / REPORT_JSON, report)
     (out / REPORT_MD).write_text(render(report, title), encoding="utf-8")
 
 

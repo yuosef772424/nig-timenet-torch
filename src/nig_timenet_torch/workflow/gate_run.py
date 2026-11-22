@@ -244,7 +244,7 @@ def run_gates(settings: RunSettings, g: GateSettings | None = None, out=None, *,
     if out is not None:
         out = Path(out)
         out.mkdir(parents=True, exist_ok=True)
-        (out / GATE_REPORT).write_text(json.dumps(report, indent=1, default=float), encoding="utf-8")
+        run_common.write_json(out / GATE_REPORT, report)
         (out / GATE_REPORT_MD).write_text(gates.report_markdown(report), encoding="utf-8")
     return report
 
