@@ -58,11 +58,41 @@ timing, both seeds), the single-coin model's is not (the audit's "timing, not co
 equal-weight basket held at the book's breadth beats every book, with or without cost: a few concentrated coins
 compound worse than the whole basket (volatility drag) and pay more turnover, which eats the coin-choice edge.
 
-## 4. What it means for the next steps
+## 4. Is the timing a skill, or the market the book happened to sit in? (`timing.py`, `OUT_timing.txt`)
+
+The basket held at the book's breadth, against the SAME breadth series shifted in time by a random offset (keeps its
+distribution and autocorrelation, breaks its link with the market; 50 draws) and against a constant exposure equal to
+its mean (0.10), cost 0.08 % per side:
+
+| run | seed | timing CAGR | constant 0.10 | shifted: mean / p95 | beats | timing IC by year 2023 / 24 / 25 / 26 |
+|---|---|---|---|---|---|---|
+| rolling-dw1-r-001 | 0 | +18.0 % | +1.1 % | -11.1 / -2.1 % | 100 % | +0.072 / +0.057 / +0.054 / +0.010 |
+| rolling-dw1-r-001 | 1 | +17.9 % | +1.1 % | -10.0 / +1.8 % | 100 % | +0.102 / +0.079 / +0.045 / -0.013 |
+| panel-rolling-std-001 | 0 | +24.2 % | +1.1 % | -10.4 / -0.6 % | 100 % | +0.089 / +0.099 / +0.054 / +0.024 |
+| panel-rolling-std-001 | 1 | +20.0 % | +1.1 % | -9.6 / -1.3 % | 100 % | +0.109 / +0.073 / +0.043 / +0.034 |
+| panel-rolling-ls-001 | 0 / 1 | +21.5 / +15.2 % | +1.1 % | p95 -2.6 / +1.1 % | 100 / 100 % | positive every year (2026: +0.005 / +0.020) |
+| snapshot-rolling-base-001 | 0 / 1 | +16.8 / +16.4 % | +1.1 % | p95 -3.6 / -1.5 % | 100 / 100 % | positive every year (2026: +0.027 / +0.027) |
+
+- The profit is NOT the market's direction: the market over TEST loses (always long -6.0 %), a constant 10 %
+  exposure makes +1.1 %, and the same breadth at the wrong times loses about 10 % a year. The model's breadth says
+  WHEN to hold the market, and it is right in every year on every seed: a timing skill of the model (IC +0.04 .. +0.11
+  in 2023-2025).
+- It weakens: the timing IC of 2026 (January-June, the last fold) is +0.00 .. +0.03 on every run (one seed -0.013).
+- Concentration is that of crypto, not of the model: the best 5 % of days hold 200-320 % of the log growth of every
+  book AND of BTC buy-and-hold (283 %); without them every book and BTC lose (-18 .. -25 % / -50 %). With the best AND
+  worst 5 % of days removed every book stays positive (+14 .. +23 %), but so do always long (+24 %) and BTC (+28 %):
+  that trim favours the most volatile series, it does not separate skill. What separates: months > 0 54-66 % for the
+  books against 37 % always long and 54 % BTC; folds > 0 5-6 of 7 against 3 of 7 always long and 5 of 7 BTC.
+- The book's own return, gross of cost, splits into the same exposure on the whole basket and coin choice: single-coin
+  +28.5 = +29.2 - 0.7 and +29.5 = +29.5 + 0.0 points (no coin choice); panel std +38.1 = +35.4 + 2.7 and
+  +33.9 = +31.1 + 2.8, ls +2.4 / +2.9, snapshot base +3.3 / +3.0 points (a small, real coin choice).
+
+## 5. What it means for the next steps
 
 - N8 is confirmed on real tables: the account section, run on any finished fold folders
   (`python -m nig_timenet_torch.workflow.battery_run <folders>`), gives the audit's numbers.
-- The single-coin model is a market-timing signal; the panel (rank_ic) models add a small, real coin choice.
+- The single-coin model is a market-timing signal (a real one: section 4); the panel (rank_ic) models time the market
+  as well and add a small, real coin choice. The timing edge fell in 2026: N9 must read it per year.
 - The best tested use is the breadth as exposure on a diversified basket (N9): every row of section 2 sits under its
   own basket x breadth line. N9 should read the panel models as well as the single-coin one, with the coin tilt as a
   second arm (basket weights tilted toward the top picks, not a few slots only).

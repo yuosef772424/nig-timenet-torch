@@ -86,7 +86,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/audit/2026-11-20-readings/`: Pre-registration I1: the indicator channels trained like R (owner 2026-11-20) (`PREREGISTERED_I1.md`), 5 files
 - `docs/audit/2026-11-20-v1rep-i2/`: Pre-registration: V1-rep and I2 (owner 2026-11-20: "run the proposals, in parallel, free RAM under 10 GB") (`PREREGISTERED.md`), 3 files
 - `docs/audit/2026-11-21-independent-review/`: , 13 files
-- `docs/audit/2026-11-22-n8-account/`: , 2 files
+- `docs/audit/2026-11-22-n8-account/`: , 4 files
 
 ## Handoffs
 
@@ -169,7 +169,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## One-off scripts under docs/
 
-53 scripts kept under docs/ (one-off analyses next to the note or audit they belong to; not run by CI).
+54 scripts kept under docs/ (one-off analyses next to the note or audit they belong to; not run by CI).
 
 - `docs/audit/2026-11-14-model-first/colab_follow.py`: Follow, resume and read the multi-coin (panel) arms on a Colab runtime, without the bridge.
 - `docs/audit/2026-11-14-model-first/quick_arms.py`: Small-sample arms on a contract artifact: encoder (gru / transformer) x learning rate, same rows and seed.
@@ -222,5 +222,6 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/audit/2026-11-21-independent-review/a6_timing.py`: The model's breadth (share of coins with mu >= VAL q90) used as the EXPOSURE of one instrument: BTC, or the
 - `docs/audit/2026-11-21-independent-review/load.py`: Shared loader: the 7 TEST folds of one seed of rolling-dw1-r-001 (arm R), each with its VAL 90th pct of mu.
 - `docs/audit/2026-11-22-n8-account/scan.py`: N8 account scan: the ACCOUNT section (eval/account.py) of every run folder on Drive that holds battery tables.
+- `docs/audit/2026-11-22-n8-account/timing.py`: Is the account's profit market TIMING skill, or a market move the book happened to sit in?
 - `docs/cells/backtest_single_coin.py`: ==== nig_backtest on the SINGLE-COIN model (4h bars, horizon 8h), traded on 15m candles ====
 - `docs/results/cpu_smoke_st1_f2.py`: CPU smoke runner of ROADMAP ST1 (staged study) and F2 (rolling study) on the synthetic environment E1 (rule C5: a
