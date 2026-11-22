@@ -29,6 +29,7 @@ from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_fut
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings
+from nig_timenet_torch.workflow.settings_roles import RESUMABLE_TRAIN_FIELDS
 
 __all__ = ["load_data", "price_targets", "codec_state", "check_decode", "input_key", "split_bounds", "make_plan",
            "stride_rows", "select_rows", "pick_device", "code_sha", "run_identity", "identity_context",
@@ -222,9 +223,8 @@ def code_sha(settings: RunSettings) -> str:
         return "unknown"
 
 
-#: TrainSettings fields a resume may change (more epochs, another device, the trace, steps per execution = speed only):
-#: neither the run identity nor a rolling study hash holds them (tests/workflow/test_run_identity_context.py)
-RESUMABLE_TRAIN_FIELDS = ("epochs", "device", "trace_representative", "steps_per_execution")
+# RESUMABLE_TRAIN_FIELDS (TrainSettings fields a resume may change: neither the run identity nor a rolling study hash
+# holds them; tests/workflow/test_run_identity_context.py) comes from the one role table, workflow/settings_roles.py
 #: D-042 (HB2, audit 2026-11b C-03): the settings that choose WHICH rows and inputs a run sees (every split field, the
 #: input frames). Part of the run identity, not of the gate configuration key (gates run on their own synthetic data).
 IDENTITY_SELECTION = {"split": tuple(f.name for f in dataclasses.fields(SplitSettings)),

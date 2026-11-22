@@ -34,6 +34,7 @@ from nig_timenet_torch.workflow import run_common
 from nig_timenet_torch.workflow.prediction_table import write_table
 from nig_timenet_torch.workflow.rolling import RollingFold, fold_with_val, rolling_folds
 from nig_timenet_torch.workflow.settings import RollingSettings, RunSettings, SplitSettings
+from nig_timenet_torch.workflow.settings_roles import STUDY_HASH_SKIP_FIELDS
 
 __all__ = ["run_rolling", "fold_dir", "summarize", "render", "HEADLINE_KEYS", "study_hash", "StudyMismatchError",
            "SPLIT_FIELDS_REPLACED"]
@@ -68,7 +69,7 @@ def study_hash(settings: RunSettings, rolling: RollingSettings, data_fingerprint
     run settings without the per-process ones (``run_dir``, ``code_sha``, the seed, ``RESUMABLE_TRAIN_FIELDS``, where
     the artifact is read from) and the data fingerprint. Processes sharing one study (``fold_ids``) get the same."""
     a = dataclasses.asdict
-    skip = (*run_common.RESUMABLE_TRAIN_FIELDS, "seed")
+    skip = STUDY_HASH_SKIP_FIELDS
     run = {"split": a(settings.split), "input_timeframes": list(settings.data.input_timeframes),
            "model": a(settings.model), "train": {k: v for k, v in a(settings.train).items() if k not in skip},
            "evaluation": a(settings.evaluation)}

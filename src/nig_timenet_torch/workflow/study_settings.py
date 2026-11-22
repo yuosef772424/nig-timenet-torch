@@ -17,10 +17,11 @@ from nig_timenet_torch.workflow.settings import (
     TrainSettings,
     model_for,
 )
+from nig_timenet_torch.workflow.settings_roles import JOB_KEY_FIELDS
 
 __all__ = ["job_run_settings"]
 
-_OWN_KEYS = ("device", "batch_size", "lr", "seed")
+_OWN_KEYS = JOB_KEY_FIELDS
 
 
 def job_run_settings(*, device: str, run_dir: str, artifact: str, base_tf: str | None, max_rows: int | None,

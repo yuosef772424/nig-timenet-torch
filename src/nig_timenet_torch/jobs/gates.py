@@ -20,10 +20,11 @@ from nig_timenet_torch.colab.device import EXPECTED as DEVICES
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.workflow import gate_run
 from nig_timenet_torch.workflow.settings import RunSettings, TrainSettings, model_for
+from nig_timenet_torch.workflow.settings_roles import JOB_SET_FIELDS
 
 __all__ = ["GatesConfig", "CONFIG", "run_settings", "gate_settings", "main"]
 
-_NOT_CONFIGURATION = ("seed", "epochs", "device")      # set per env / seed / job, never by the configuration
+_NOT_CONFIGURATION = JOB_SET_FIELDS      # set per env / seed / job, never by the configuration
 
 
 @dataclass(frozen=True)
