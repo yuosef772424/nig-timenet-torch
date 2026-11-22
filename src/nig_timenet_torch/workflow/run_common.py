@@ -11,6 +11,7 @@ SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run_common.py); changes: st
 """
 
 import dataclasses
+import json
 import subprocess
 from pathlib import Path
 
@@ -22,16 +23,18 @@ from nig_timenet_torch.colab.identity import identity_for_run
 from nig_timenet_torch.core.registry import unknown_names_text
 from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io.artifact import norm_coin
+from nig_timenet_torch.data_io.asset_index import asset_ids
 from nig_timenet_torch.data_io.loading import LoadedData, load_dataset
 from nig_timenet_torch.data_io.split_plan import purge_embargo_split, sample_times
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, codec_name
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings
+from nig_timenet_torch.workflow.settings_roles import RESUMABLE_TRAIN_FIELDS
 
 __all__ = ["load_data", "price_targets", "codec_state", "check_decode", "input_key", "split_bounds", "make_plan",
            "stride_rows", "select_rows", "pick_device", "code_sha", "run_identity", "identity_context",
-           "IDENTITY_SELECTION", "IDENTITY_CONFIGURATION", "RESUMABLE_TRAIN_FIELDS", "json_default"]
+           "IDENTITY_SELECTION", "IDENTITY_CONFIGURATION", "RESUMABLE_TRAIN_FIELDS", "json_default", "write_json"]
 
 
 def load_data(settings: RunSettings) -> LoadedData:
@@ -134,12 +137,12 @@ def stride_groups(gid: np.ndarray, max_rows: int | None) -> np.ndarray:
     return pos[np.isin(gid, chosen)]
 
 
-def excluded_rows(dataset: dict, coins) -> np.ndarray:
-    """Boolean mask over ALL rows: True for the rows of the coins named in ``coins`` (``split.exclude_coins``). A name
+def excluded_ids(dataset: dict, coins) -> np.ndarray:
+    """The asset ids (positions in ``asset_bounds``) of the coins named in ``coins`` (``split.exclude_coins``). A name
     that is not a coin of the artifact raises (with a did-you-mean); excluding every coin raises."""
     if not coins:
-        return np.zeros(np.asarray(dataset["last_candles"]).shape[0], dtype=bool)
-    keys = {norm_coin(b["name"]): b for b in dataset["asset_bounds"]}
+        return np.zeros(0, dtype=np.int64)
+    keys = {norm_coin(b["name"]): i for i, b in enumerate(dataset["asset_bounds"])}
     wanted = {norm_coin(c): c for c in coins}
     unknown = sorted(c for k, c in wanted.items() if k not in keys)
     if unknown:
@@ -147,10 +150,7 @@ def excluded_rows(dataset: dict, coins) -> np.ndarray:
                          + unknown_names_text(unknown, keys, match=norm_coin))
     if len(wanted) >= len(keys):
         raise ValueError("split.exclude_coins removes every coin of the artifact")
-    mask = np.zeros(np.asarray(dataset["last_candles"]).shape[0], dtype=bool)
-    for k in wanted:
-        mask[keys[k]["start"]:keys[k]["end"]] = True
-    return mask
+    return np.array(sorted(keys[k] for k in wanted), dtype=np.int64)
 
 
 def make_plan(dataset: dict, split: SplitSettings) -> tuple[tuple[np.ndarray, np.ndarray, np.ndarray], tuple]:
@@ -167,8 +167,8 @@ def select_rows(dataset: dict, split: SplitSettings, parts: tuple) -> tuple:
     """The (train, val, test) rows a run uses out of the time split ``parts``: ``exclude_coins`` (after the time split,
     the cut dates do not move), ``top_coins`` (ranked on the TRAIN rows), then the smoke stride / cross-section order.
     A rolling fold (workflow/rolling_run.py) goes through the same function."""
-    drop = excluded_rows(dataset, split.exclude_coins)
-    parts = top_coin_rows(dataset, tuple(i[~drop[i]] for i in parts), split.top_coins)
+    drop = excluded_ids(dataset, split.exclude_coins)
+    parts = top_coin_rows(dataset, tuple(i[~np.isin(asset_ids(dataset, i), drop)] for i in parts), split.top_coins)
     pick = (lambda i: cross_section_rows(dataset, i, split.max_rows)) if split.cross_section else (
         lambda i: stride_rows(i, split.max_rows))
     return tuple(pick(i) for i in parts)
@@ -179,12 +179,9 @@ def top_coin_rows(dataset: dict, parts: tuple, top: int | None) -> tuple:
     The ranking reads the train rows only, so nothing of val / test chooses the universe."""
     if top is None:
         return parts
-    coin = np.empty(np.asarray(dataset["last_candles"]).shape[0], dtype=np.int64)
-    for i, b in enumerate(dataset["asset_bounds"]):
-        coin[b["start"]:b["end"]] = i
-    counts = np.bincount(coin[np.asarray(parts[0])], minlength=len(dataset["asset_bounds"]))
+    counts = np.bincount(asset_ids(dataset, parts[0]), minlength=len(dataset["asset_bounds"]))
     keep = np.argsort(-counts, kind="stable")[:top]
-    return tuple(np.asarray(p)[np.isin(coin[np.asarray(p)], keep)] for p in parts)
+    return tuple(np.asarray(p)[np.isin(asset_ids(dataset, p), keep)] for p in parts)
 
 
 def cross_section_rows(dataset: dict, idx: np.ndarray, max_rows: int | None) -> np.ndarray:
@@ -200,6 +197,12 @@ def cross_section_rows(dataset: dict, idx: np.ndarray, max_rows: int | None) -> 
     keep = max(1, int(round(len(uniq) * max_rows / len(idx))))
     chosen = uniq[np.unique(np.linspace(0, len(uniq) - 1, keep).astype(np.int64))]
     return idx[np.isin(times, chosen)]
+
+
+def write_json(path, obj) -> None:
+    """``obj`` as indented JSON (numpy numbers as Python ones through ``default=float``) in ``path``, UTF-8: the one
+    writer of the run, study and report json files (C-18)."""
+    Path(path).write_text(json.dumps(obj, indent=1, default=float), encoding="utf-8")
 
 
 def json_default(v):
@@ -227,9 +230,8 @@ def code_sha(settings: RunSettings) -> str:
         return "unknown"
 
 
-#: TrainSettings fields a resume may change (more epochs, another device, the trace, steps per execution = speed only):
-#: neither the run identity nor a rolling study hash holds them (tests/workflow/test_run_identity_context.py)
-RESUMABLE_TRAIN_FIELDS = ("epochs", "device", "trace_representative", "steps_per_execution")
+# RESUMABLE_TRAIN_FIELDS (TrainSettings fields a resume may change: neither the run identity nor a rolling study hash
+# holds them; tests/workflow/test_run_identity_context.py) comes from the one role table, workflow/settings_roles.py
 #: D-042 (HB2, audit 2026-11b C-03): the settings that choose WHICH rows and inputs a run sees (every split field, the
 #: input frames). Part of the run identity, not of the gate configuration key (gates run on their own synthetic data).
 IDENTITY_SELECTION = {"split": tuple(f.name for f in dataclasses.fields(SplitSettings)),

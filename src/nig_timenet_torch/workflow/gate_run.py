@@ -35,13 +35,14 @@ from nig_timenet_torch.trainer.grad_report import grad_report
 from nig_timenet_torch.trainer.identity import configuration_hash
 from nig_timenet_torch.workflow import flat_run, run, run_common
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, default_model_settings
+from nig_timenet_torch.workflow.settings_roles import BASELINE_PER_RUN_FIELDS, GATE_PER_RUN_FIELDS
 
 __all__ = ["GateSettings", "GateRefused", "run_gates", "gate_check", "configuration_key", "baseline_arm", "gate_stage",
            "refuse_cross_section", "GATE_REPORT", "GATE_REPORT_MD", "REPORT_SCHEMA"]
 
 GATE_REPORT, GATE_REPORT_MD = "gate_report.json", "gate_report.md"
 REPORT_SCHEMA = "gate_report/1"
-_PER_RUN_KEYS = ("seed", "epochs", "device", "trace_representative")   # not part of the configuration
+_PER_RUN_KEYS = GATE_PER_RUN_FIELDS   # not part of the configuration (workflow/settings_roles.py)
 
 
 @dataclass(frozen=True)
@@ -84,9 +85,7 @@ def configuration_key(r: run.Run) -> str:
 def baseline_arm(settings: RunSettings) -> bool:
     """True for today's default configuration: the default model and the default training settings except the
     per-run ones (seed, epochs, batch size, device, trace switch)."""
-    t = replace(settings.train, seed=TrainSettings.seed, epochs=TrainSettings.epochs,
-                batch_size=TrainSettings.batch_size, device=TrainSettings.device,
-                trace_representative=TrainSettings.trace_representative)
+    t = replace(settings.train, **{f: getattr(TrainSettings, f) for f in BASELINE_PER_RUN_FIELDS})
     return settings.model == default_model_settings() and t == TrainSettings()
 
 
@@ -245,7 +244,7 @@ def run_gates(settings: RunSettings, g: GateSettings | None = None, out=None, *,
     if out is not None:
         out = Path(out)
         out.mkdir(parents=True, exist_ok=True)
-        (out / GATE_REPORT).write_text(json.dumps(report, indent=1, default=float), encoding="utf-8")
+        run_common.write_json(out / GATE_REPORT, report)
         (out / GATE_REPORT_MD).write_text(gates.report_markdown(report), encoding="utf-8")
     return report
 

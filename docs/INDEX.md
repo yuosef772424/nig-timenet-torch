@@ -104,7 +104,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Decisions
 
-46 decisions (format: `docs/decisions/README.md`).
+47 decisions (format: `docs/decisions/README.md`).
 
 - `docs/decisions/D-001-trainer-fit-defaults.md`: D-001 — trainer fit: schedule, early-stopping and fit defaults (ROADMAP T1)
 - `docs/decisions/D-002-colab-runner-defaults.md`: D-002 — Colab runner and notebook support: new defaults (ROADMAP T3)
@@ -152,6 +152,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/decisions/D-045-hb6-workflow.md`: D-045 — Hardening 2026-11b, package HB6a: workflow corrections and dead code (owner 2026-11-21)
 - `docs/decisions/D-046-hb5-data.md`: D-046 — Hardening 2026-11b, package HB5: data structure (owner 2026-11-21)
 - `docs/decisions/D-047-hb4b-builder-fit.md`: D-047 — Hardening 2026-11b, package HB4b: one builder option list, the builder and forward split, shared fit machinery (owner 2026-11-21)
+- `docs/decisions/D-048-hb6b-workflow-structure.md`: D-048 — Hardening 2026-11b, package HB6b: workflow structure (owner 2026-11-21)
 
 ## Job files
 

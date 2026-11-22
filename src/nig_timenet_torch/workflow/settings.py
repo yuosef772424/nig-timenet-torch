@@ -27,7 +27,7 @@ from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import BATCHINGS
 
 __all__ = ["RollingSettings", "RunSettings", "ROLLING_MODES", "SplitSettings", "TrainSettings", "EvalSettings",
-           "BatterySettings", "default_model_settings", "DEFAULT_MODEL_OVERRIDES"]
+           "BatterySettings", "default_model_settings", "DEFAULT_MODEL_OVERRIDES", "model_for"]
 
 ROLLING_MODES = ("expanding", "sliding")
 
@@ -241,6 +241,16 @@ def default_model_settings() -> ModelSettings:
     ``main.ipynb`` model, BUILD_PLAN.md V1) plus ``DEFAULT_MODEL_OVERRIDES``. The model before D-023 / D-026 is
     ``ModelSettings("nig_timenet_v2", dict(ANTI_MEMORIZATION_CONFIG))``."""
     return ModelSettings("nig_timenet_v2", {**ANTI_MEMORIZATION_CONFIG, **DEFAULT_MODEL_OVERRIDES})
+
+
+def model_for(architecture: str | None, overrides: dict | None = None, *, preset: bool = True) -> ModelSettings:
+    """The ModelSettings of ``architecture`` (None = the default model's) with ``overrides``: they merge over the
+    default model (preset + switches) only for its own architecture and with ``preset``; any other architecture
+    starts from ITS registered default config."""
+    base = default_model_settings()
+    arch = base.architecture if architecture is None else architecture
+    keep = preset and arch == base.architecture
+    return ModelSettings(arch, {**(base.overrides if keep else {}), **(overrides or {})})
 
 
 @dataclass(frozen=True)

@@ -29,7 +29,6 @@ Why: the audit `docs/hardening/audit-2026-11b/C_workflow_jobs_colab.md` (rows C-
 - `nig_timenet_torch.colab_ops.recipes.runs_line(device)`: `'cuda'` -> `<removed>`
 - `nig_timenet_torch.colab_ops.recipes.runs_line(script)`: `'/content/run_models.py'` -> `<removed>`
 - `nig_timenet_torch.workflow.rolling.run_rolling_study(out_dir)`: `None` -> `<removed>`
-- `nig_timenet_torch.workflow.run.flat_scalars(prefix)`: `<new>` -> `''`
 - `nig_timenet_torch.workflow.settings.DEFAULT_MODEL_OVERRIDES.bn_warmup`: `<new>` -> `True`
 - `nig_timenet_torch.workflow.settings.DEFAULT_MODEL_OVERRIDES.input_scaler`: `<new>` -> `'train_std'`
 - `nig_timenet_torch.workflow.settings.DEFAULT_MODEL_OVERRIDES.nig_scale_fit`: `<new>` -> `'train_std'`
