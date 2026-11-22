@@ -3,7 +3,7 @@
 Rule C6 in `docs/RULES.md` makes this file binding. It applies to every PR or job that changes or trains the model:
 `model/`, `trainer/`, the loss/target/codec code (`trainer/tasks.py`, `data_io/target_codec.py`), the split
 (`data_io/split_plan.py`), the target metrics (`eval/`, `stats/metrics.py`), and every training job beyond the smoke
-job. Reading order for such a session: `docs/STATUS.md`, `docs/RULES.md`, this file, then ONLY your ROADMAP step.
+job. Reading order: `CLAUDE.md`.
 
 Ported in spirit from the TF protocol (`crypto-signal-prediction/docs/research/MODEL_DEV_PROTOCOL.md`: card before the
 run, per-layer health report, fixed failure-location order) and its research rules (localize -> test the cause -> fix

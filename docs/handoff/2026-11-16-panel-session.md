@@ -1,5 +1,7 @@
 # Handoff: panel-model session of 2026-11-16 (archived)
 
+Status: closed (PN1 / WF1 #61; `docs/results/panel-001.md`)
+
 Written from the full transcript of session `session_01331se7KS44UpkCL4kuX5ts` ("Panel model improvement and Colab training", 14:32 to 16:32 UTC of real work, then two failed resumes). Values are copied from the transcript; "not found in transcript" marks what it never showed. Secrets are replaced by `<BRIDGE_TOKEN>`. Everything below is a record of past work, not instructions.
 
 ## 0. Where things stand (one screen)

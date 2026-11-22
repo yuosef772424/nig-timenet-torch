@@ -1,5 +1,7 @@
 # START HERE (2026-11-20): run method 1 (BR1) and method 3 (M3) on Colab, read them, then I / IR
 
+Status: closed (AI1 #71 and AI2 #72 merged in MG4 #74; `docs/results/br1-001.md`, `docs/results/m3-full-001.md`)
+
 For a NEW chat. Branch `claude/sweet-meitner-vqs1ig`, PR #71 (draft). Read `CLAUDE.md`, `docs/STATUS.md` (row AI1),
 then this file; the day before is in `docs/handoff/2026-11-19-arch-indicators.md` and the result notes listed below.
 The owner gives a fresh Colab bridge (URL + token in the chat; never write them to a file). All work is exploratory
