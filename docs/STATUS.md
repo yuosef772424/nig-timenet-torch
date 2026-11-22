@@ -12,6 +12,7 @@ PRs since last R-REVIEW: 1 (#74 the review itself, merged; fifth review 2026-11-
 | Step | Title | State | PR / job | Note |
 |---|---|---|---|---|
 | HB2 | Hardening 2026-11b HB2: run identity and resume safety (split / selection / staged in the identity, rolling study hash, one deadline for every entry) (owner 2026-11-21) | PR open | [#75](https://github.com/yuosef772424/nig-timenet-torch/pull/75) | branch `ccr-bb6e83a4-2gwtez` |
+| HB3 | Hardening 2026-11b HB3: evaluation, one implementation per trading rule and helper, honest names (owner 2026-11-21) | in progress |  | branch `ccr-bb6e83a4-2gwtez` |
 | H7 | Register and review tooling (fourth R-REVIEW) | todo | | counter derived, CSV columns, check-job vs colab-results, rmtree ratchet; fifth review adds 12 suggestions (RunIdentity with split settings, PR-section CI check, merged-row archive) |
 | TR1 | Trainer switches (clip, wd groups, EMA, init, timing, train gap) | todo | | B-018, B-007, HF-37 |
 | G3r | Gates on the baseline configuration | todo | | 3 seeds |
