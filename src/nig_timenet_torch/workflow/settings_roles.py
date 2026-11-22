@@ -52,6 +52,7 @@ TRAIN_FIELD_ROLES: dict[str, tuple[str, ...]] = {
     "staged": _C,
     "cross_section_loss": _C,
     "cross_section_weight": ("dormant:cross_section_loss",),
+    "base_loss_weight": ("dormant:cross_section_loss",),
     "direction_balance": _C,
     "batch_by": _C,
     "batch_order": _C,

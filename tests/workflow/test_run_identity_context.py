@@ -43,6 +43,7 @@ TRAIN_CASES = {
     "kendall_init_logvar": (0.5, {}), "staged": (StageSettings(), {}),
     "cross_section_loss": ("ic", {"split.cross_section": True}),
     "cross_section_weight": (2.0, {"split.cross_section": True, "cross_section_loss": "ic"}),
+    "base_loss_weight": (0.5, {"split.cross_section": True, "cross_section_loss": "ic"}),
     "direction_balance": (0.1, {}), "batch_by": ("timestamp", {}), "batch_order": ("time_blocks", {}),
     "time_block_bars": (2, {}), "day_weights": (DayWeightSettings(), {}), "aux_loss_weight": (0.5, {}),
     "aux_quantile": (0.8, {}), "aux_variance_weight": (1.0, {}), "lr_schedule": ("cosine", {}),

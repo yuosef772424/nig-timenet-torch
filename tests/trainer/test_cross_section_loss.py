@@ -118,3 +118,43 @@ def test_direction_balance_term_is_zero_for_a_balanced_batch_and_off_by_default(
     assert float(lean.grad.sum()) > 0                              # the gradient pushes the long lean down
     with pytest.raises(ValueError, match="direction_balance"):
         TrainSettings(direction_balance=-1.0)
+
+
+def test_base_loss_weight_zero_leaves_the_cross_section_term_alone_and_one_changes_nothing():
+    """DY1 (owner 2026-11-22, "each loss on its own"): base_loss_weight 0 trains the rank term alone, 1.0 (the
+    default) gives the same total as before, and the setting is refused without a cross-section term."""
+    import copy
+
+    from tests.trainer.fixture_setup import load_fixture
+    from tests.trainer.fixture_setup import trainer_config as fixture_config
+    from tests.trainer.helpers import make_trainer
+
+    assert TrainSettings().base_loss_weight == 1.0 and LOSS_DEFAULTS["base_loss_weight"] == 1.0
+    assert "base_loss_weight" not in trainer_config(TARGET_COLUMNS, 0.1, TrainSettings(cross_section_loss="rank_ic"))[
+        "loss"]                                                                                  # config pinned
+    on = trainer_config(TARGET_COLUMNS, 0.1, TrainSettings(cross_section_loss="rank_ic", base_loss_weight=0.0))
+    assert on["loss"]["base_loss_weight"] == 0.0
+    with pytest.raises(ValueError, match="base_loss_weight"):
+        TrainSettings(base_loss_weight=0.0)
+    with pytest.raises(ValueError, match="base_loss_weight"):
+        TrainSettings(cross_section_loss="rank_ic", base_loss_weight=1.5)
+    x, y = load_fixture(64)
+    gid = torch.arange(8).repeat_interleave(8)
+
+    def losses(**loss):
+        cfg = copy.deepcopy(fixture_config())
+        cfg["loss"].update(loss)
+        tr = make_trainer(config=cfg)
+        tr.model.eval()
+        with torch.no_grad():
+            total, raw, _, stats = tr.compute_losses(x, y, groups=gid)
+        return total, raw, stats
+
+    base, base_raw, _ = losses()
+    one, one_raw, stats = losses(cross_section="rank_ic")
+    same, same_raw, _ = losses(cross_section="rank_ic", base_loss_weight=1.0)
+    alone, alone_raw, alone_stats = losses(cross_section="rank_ic", base_loss_weight=0.0)
+    term = stats["cross_section_loss"]
+    assert torch.allclose(one, base + term) and torch.allclose(same, one) and torch.allclose(same_raw, one_raw)
+    assert torch.allclose(alone, alone_stats["cross_section_loss"]) and torch.allclose(alone_raw, alone)
+    assert torch.allclose(alone, term)

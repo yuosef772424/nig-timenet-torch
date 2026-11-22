@@ -15,7 +15,8 @@ registered as the task's ``config_keys``. ``loss`` may carry ``use_uncertainty_w
 unweighted), ``schedules``, ``constraints`` (must be empty), ``balance`` (a ``trainer.loss_balance.LOSS_BALANCERS``
 name, FX2),
 ``kendall_init_logvar`` (the initial Kendall log-variance, FX2) and ``cross_section`` / ``cross_section_weight`` (a
-``trainer.cross_section_loss.CROSS_SECTION_LOSSES`` name and the weight of that term, D-032) and
+``trainer.cross_section_loss.CROSS_SECTION_LOSSES`` name and the weight of that term, D-032), ``base_loss_weight``
+(the weight of the NIG / class loss while that term is on: 1.0 = as before, 0.0 = the term alone; DY1) and
 ``direction_balance`` / ``direction_balance_targets`` (the weight of ``trainer.direction_balance`` and the names of the
 two-sided targets it reads, D-032). Every lambda variable
 a target names (``lambda_reg_var``, ``lambda_calib_var``) must be a scheduled variable.
@@ -31,14 +32,14 @@ __all__ = ["validate_trainer_config", "resolve_targets", "resolve_loss", "target
 TOP_KEYS = ("targets", "loss", "constraints")
 LOSS_KEYS = ("use_uncertainty_weighting", "uncertainty_weighting_exclude_task_types", "schedules", "constraints",
              "balance", "kendall_init_logvar", "cross_section", "cross_section_weight", "direction_balance",
-             "direction_balance_targets")
+             "direction_balance_targets", "base_loss_weight")
 TARGET_REQUIRED = ("true_key", "task_type", "output_keys")
 TARGET_OPTIONAL = ("loss_weight", "flood_level")
 #: the value of each ``loss`` key a config leaves out (the TF trainer's ``.get`` defaults)
 LOSS_DEFAULTS = {"use_uncertainty_weighting": False, "uncertainty_weighting_exclude_task_types": ["evidential"],
                  "schedules": {}, "constraints": [], "balance": "none", "kendall_init_logvar": 0.0,
                  "cross_section": "none", "cross_section_weight": 1.0, "direction_balance": 0.0,
-                 "direction_balance_targets": []}
+                 "direction_balance_targets": [], "base_loss_weight": 1.0}
 #: the value of each target-level key a config leaves out
 TARGET_DEFAULTS = {"loss_weight": 1.0, "flood_level": None}
 
