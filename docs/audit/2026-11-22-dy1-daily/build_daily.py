@@ -6,7 +6,7 @@ book can hold a coin that later died), minus the sealed holdout coins, whose fir
 seal are dropped by build_logret_dataset. Inputs / labels: data/vision_slice.py::build_logret_dataset (the real
 artifact's definition: log high / low / close moves vs the previous close; labels log(future / last close)).
 
-    python docs/audit/2026-11-22-dy1-daily/build_daily.py OUT --raw RAW [--start 2020-01] [--end 2026-09]
+    python docs/audit/2026-11-22-dy1-daily/build_daily.py OUT --raw RAW [--start 2020-01] [--end 2026-09] [--coins-file F]
 """
 import argparse
 import json
@@ -67,6 +67,7 @@ def main() -> None:
     ap.add_argument("--window", type=int, default=32)
     ap.add_argument("--horizon", type=int, default=2)
     ap.add_argument("--workers", type=int, default=6)
+    ap.add_argument("--coins-file", default="", help="comma-separated symbols: build only these (of the plan)")
     a = ap.parse_args()
     raw, lock = Path(a.raw), load_lock()
     raw.mkdir(parents=True, exist_ok=True)
@@ -80,6 +81,9 @@ def main() -> None:
         plan = {s: [m for m in ms if a.start <= m <= a.end] for s, ms in zip(syms, got) if ms and ms[0] <= a.listed_by}
         plan = {s: ms for s, ms in plan.items() if ms}
         plan_path.write_text(json.dumps(plan))
+    if a.coins_file:
+        want = set(open(a.coins_file).read().strip().split(","))
+        plan = {s: ms for s, ms in plan.items() if s in want}
     print(f"{len(plan)} coins, {sum(map(len, plan.values()))} monthly files", flush=True)
 
     def fetch(s):

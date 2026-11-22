@@ -63,3 +63,23 @@ tried.
   (short-side-001.md: the short side has lost at 4 h; reported, not a candidate).
 - the 4 h runs over the same TEST window (`n8-account-001.md`) as the reference: does the daily frame beat
   panel-rolling-std-001's +23.0 / +18.9 %.
+
+## Amendment 1 (owner 2026-11-22, written before any arm table was read)
+Owner: test every normalisation with two seeds each (the default, std, and the method that removes the market
+direction entirely), each with both model kinds (panel and single-coin); prefer coins of similar volatility and stay
+away from coins that move little (BTC).
+- Universe VM: `vol_universe.py` -> `coins_volmatched.txt`: 82 coins whose sd of daily close log moves over the
+  rows ending before 2023-01-01 (TRAIN era of every fold; >= 180 such days) lies between the 25th and 95th
+  percentile (0.063 .. 0.094 per day). Artifact `art_vm` = `build_daily.py --coins-file coins_volmatched.txt`.
+- Market removed (M3, `data/market_residual.py --raw <raw_1d> --beta-bars 90`): inputs and the close label minus
+  beta x the equal-weight move of the 82 coins (beta from each coin's past 90 days), artifact `art_vm_mres`.
+- Six arms x seeds 0, 1, the same folds: `dy1-vm-s-def` (single, target_norm none), `dy1-vm-s-std` (single,
+  target_norm logret_std), `dy1-vm-s-mres` (single on art_vm_mres), `dy1-vm-p-def` (panel, relative + rank_ic,
+  target_norm none = panel-rolling-001), `dy1-vm-p-std` (panel + logret_std = panel-rolling-std-001), `dy1-vm-p-mres`
+  (panel-rolling-001 config on art_vm_mres). The arms S and P on the 164-coin universe (above) stay as the reference.
+- The accept rule is unchanged (account at 0.08 % per side, CAGR > 0, > always long, > placebo p95, both seeds);
+  candidates are now 8 arms: the CI level becomes 1 - 0.05 / 8. BTC is not in VM: BTC buy-and-hold is read from the
+  164-coin artifact over the same days.
+- An M3 table's y_ret is the residual return (coin minus beta x market): its account is the P&L of a long position
+  hedged with beta x the basket (hedge cost not charged). It is ALSO read on the coins' own returns (the picks joined
+  to `art_vm`'s y_ret), and only that own-return account counts for the accept rule of the M3 arms.
