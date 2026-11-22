@@ -91,3 +91,10 @@ per-row NIG loss of every coin PLUS the rank_ic term (`trainer/trainer.py`: the 
 `dy1-vm-pa-std`, `dy1-vm-pa-mres` (= p-def / p-std / p-mres with `cross_section_loss` none; selection metric
 unchanged, val_rank_ic_reg), seeds 0, 1, started on the same commit (594b0c0) and runtime as the six others.
 Candidates are now 11 arms: the CI level becomes 1 - 0.05 / 11.
+
+## Amendment 3 (owner 2026-11-22: "for each model separately"; written before any arm table was read)
+The loss grid for BOTH model kinds: per-row loss only vs per-row loss + rank term. The panel has both (pa / p); the
+single-coin model gets the rank term in `dy1-vm-sr-def`, `dy1-vm-sr-std`, `dy1-vm-sr-mres` = s-def / s-std / s-mres
+with `split.cross_section` true (the rank term ranks the rows of one timestamp: it needs whole-timestamp batches; the
+inputs stay the coin's own, `cross_input` none), `cross_section_loss` rank_ic and selection val_rank_ic_reg (as every
+rank arm). Seeds 0, 1, commit 594b0c0, the same runtime. Candidates: 14 arms, CI level 1 - 0.05 / 14.
