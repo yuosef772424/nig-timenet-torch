@@ -1,9 +1,10 @@
 """PURPOSE: One Colab job from queue to results: fetch job.json, refuse / repeat / version a finished job_id, check
     out the pinned commit, run the entry under a wall-clock guard, publish the bundle to Drive and colab-results.
 TAGS: colab runner, job queue, check rerun, job versions, wall clock guard, publish, rule e1, rule e2
-PITFALLS: steps never raise (a failure is recorded, later steps skip); with ``on_existing`` new_version the job is
-    REPLACED by its next free version in ``check_rerun`` (job_id, bundle folder, config.run_dir), so everything after
-    it sees the versioned id; the log file keeps the queued id's name.
+PITFALLS: steps never raise an Exception (a failure and its traceback are recorded, later steps skip; an interrupt
+    passes); with ``on_existing`` new_version the job is REPLACED by its next free version in ``check_rerun`` (job_id,
+    bundle folder, config.run_dir), so everything after it sees the versioned id; the log file keeps the queued id's
+    name.
 
 One Colab job from queue to results (ROADMAP T3): ``fetch`` job.json from ``colab-queue`` -> ``check_rerun`` ->
 ``checkout`` the pinned commit -> ``execute`` it under a wall-clock guard -> ``publish`` to ``colab-results`` and Drive.
@@ -31,6 +32,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
@@ -145,8 +147,10 @@ class Runner:
             return
         try:
             fn()
-        except (BootstrapError, device_mod.DeviceError, OSError) as e:
-            self._fail(phase, self.secrets.mask(f"{type(e).__name__}: {e}" if isinstance(e, OSError) else e))
+        except Exception as e:  # the step border: KeyboardInterrupt / SystemExit are not Exceptions and propagate
+            known = isinstance(e, (BootstrapError, device_mod.DeviceError))
+            self._fail(phase, self.secrets.mask(e if known else f"{type(e).__name__}: {e}"))
+            self._log(f"== {phase} traceback:\n{traceback.format_exc()}")
 
     def bundle_dir(self, job_id: str) -> str:
         """Drive when mounted, else the work dir: both survive a cleaned temp dir."""
@@ -270,7 +274,12 @@ class Runner:
         if self.job is None or self.refused:
             return self._block("REFUSED", "-", [f"problem  : {p}" for p in self.problems] + ["nothing was pushed"])
         if not self.problems:
-            self.problems += [f"validate: {p}" for p in validate_outputs(self.out_dir, self.job, self.job["repo_ref"])]
+            try:
+                found = validate_outputs(self.out_dir, self.job, self.job["repo_ref"])
+                self.problems += [f"validate: {p}" for p in found]
+            except Exception as e:  # a crashing validation is a recorded FAIL, not a dead cell
+                self.problems.append(self.secrets.mask(f"validate: {type(e).__name__}: {e}"))
+                self._log(f"== validate traceback:\n{traceback.format_exc()}")
         status = "OK" if not self.problems else "FAIL"
         bundle = self.bundle_dir(self.job["job_id"])
         publish.build_bundle(bundle, self.job, self.out_dir, self.log_path, self.env_info(datetime.now(UTC)), status,

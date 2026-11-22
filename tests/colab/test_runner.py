@@ -289,3 +289,25 @@ def test_every_failing_step_reaches_the_notebook_as_a_message(world):
     queue(world)
     r = runner(world, device_check=lambda expected: (_ for _ in ()).throw(DeviceError("boom"))).run_all()
     assert r["status"] == "FAIL" and any("boom" in p for p in r["problems"])
+
+
+def test_a_step_catches_every_exception_and_records_the_traceback_but_lets_an_interrupt_through(world):
+    """C-14: the step border catches Exception (a RuntimeError here), the FAIL bundle holds the traceback; a
+    KeyboardInterrupt is not swallowed."""
+    queue(world)
+
+    def broken(expected):
+        raise RuntimeError("entry setup broke")
+
+    r = runner(world, device_check=broken).run_all()
+    assert r["status"] == "FAIL" and any("RuntimeError: entry setup broke" in p for p in r["problems"])
+    log = (world["base"] / "work" / "bundle" / "smoke-001" / "run_log.txt").read_text()
+    assert "traceback" in log and "Traceback (most recent call last)" in log
+
+    queue(world, job_id="smoke-002")
+
+    def stop(expected):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        runner(world, device_check=stop).run_all()
