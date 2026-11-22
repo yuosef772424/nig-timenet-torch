@@ -1,0 +1,96 @@
+group	books	folds	rows	cagr	sharpe	max_dd	expo	cagr_rt	placebo_mean	placebo_p95	beats	timing_cagr	timing_sharpe	always_long	btc	years
+arch-ind-look-001/out_ct64 seed 0	table	2	189283	+9.2	1.03	-11.6	0.09	+6.9	+7.8	+9.7	75	+10.9	1.22	+118.4	+164.9	2023:+9
+arch-ind-look-001/out_g128 seed 0	table	2	189283	+2.7	0.31	-13.0	0.08	-0.4	+4.5	+6.5	15	+7.3	0.73	+118.4	+164.9	2023:+3
+arch-ind-look-001/out_g128l3 seed 0	table	2	189283	+6.6	0.73	-10.3	0.08	+3.8	+6.1	+8.4	65	+9.1	1.02	+118.4	+164.9	2023:+6
+arch-ind-look-001/out_g64 seed 0	table	2	189283	+3.1	0.38	-10.5	0.09	+0.3	+2.9	+4.5	50	+6.0	0.68	+118.4	+164.9	2023:+3
+arch-ind-look-001/out_tcn64 seed 0	table	2	189283	+7.7	0.96	-10.5	0.09	+4.9	+7.3	+8.8	65	+10.9	1.32	+118.4	+164.9	2023:+7
+arch-ind-look-001/out_tr64 seed 0	table	2	189283	-7.1	-0.57	-16.5	0.08	-9.7	-6.4	-4.9	20	-4.3	-0.33	+118.4	+164.9	2023:-7
+fx1-real-005/out	artifact	1	239772	-4.4	-0.71	-4.5	0.11	-6.3	-5.0	-1.5	65	+2.2	0.40	+206.0	+178.6	2026:-1
+notebook-main2/out	artifact	1	239772	-0.6	-0.07	-3.5	0.08	-2.6	-0.6	+4.4	65	+6.4	1.23	+206.0	+178.6	2026:-0
+notebook-main2/out/rolling seed 0	artifact	2	298756	+15.8	1.68	-8.2	0.07	+14.4	+12.6	+13.4	100	+18.2	1.56	+88.6	+164.9	2023:+15
+notebook-main2/out/rolling seed 1	artifact	2	298756	+21.8	1.97	-7.4	0.08	+19.3	+17.9	+18.8	100	+27.1	1.99	+88.6	+164.9	2023:+21
+panel-rolling-001/out seed 0	artifact	7	654487	+16.8	1.08	-19.1	0.09	+12.9	+13.9	+14.7	100	+18.2	1.09	-6.0	+45.5	2023:+15 2024:+41 2025:+8 2026:-3
+panel-rolling-001/out seed 1	artifact	7	654487	+17.1	1.14	-17.2	0.09	+13.4	+13.9	+14.8	100	+18.3	1.14	-6.0	+45.5	2023:+18 2024:+46 2025:+4 2026:-4
+panel-rolling-2tf-001/out seed 0	artifact	7	654487	+21.4	1.34	-16.5	0.09	+17.7	+17.9	+18.7	100	+22.2	1.30	-6.0	+45.5	2023:+16 2024:+44 2025:+16 2026:+0
+panel-rolling-2tf-001/out seed 1	artifact	7	654487	+16.8	1.11	-16.6	0.09	+13.0	+13.2	+14.1	100	+17.3	1.07	-6.0	+45.5	2023:+14 2024:+52 2025:-1 2026:-1
+panel-rolling-2tf-smoke-001/out seed 0	artifact	2	39992	-0.5	-0.16	-2.7	0.09	-0.9	-0.9	-0.2	75	-0.1	-0.00	+21.9	+20.2	2023:-1
+panel-rolling-base-001/out seed 0	artifact	7	654487	+6.5	0.48	-26.0	0.09	+3.1	+5.1	+5.8	100	+7.9	0.53	-6.0	+45.5	2023:+18 2024:+22 2025:-12 2026:-2
+panel-rolling-base-001/out seed 1	artifact	7	654487	+0.5	0.11	-30.7	0.10	-3.0	+1.1	+1.8	15	+3.7	0.30	-6.0	+45.5	2023:+11 2024:+28 2025:-21 2026:-9
+panel-rolling-ls-001/out seed 0	artifact	7	654487	+19.7	1.25	-17.2	0.09	+16.0	+16.8	+17.6	100	+21.5	1.26	-6.0	+45.5	2023:+21 2024:+42 2025:+9 2026:-1
+panel-rolling-ls-001/out seed 1	artifact	7	654487	+14.7	1.04	-18.2	0.09	+11.2	+11.3	+12.1	100	+15.2	1.00	-6.0	+45.5	2023:+26 2024:+45 2025:-9 2026:-4
+panel-rolling-ls-smoke-001/out seed 0	artifact	2	39992	+0.3	0.12	-2.3	0.10	-0.3	+0.0	+0.8	55	+1.3	0.50	+21.9	+20.2	2023:+0
+panel-rolling-ref-002/out seed 0	artifact	7	654487	+16.8	1.08	-19.1	0.09	+12.9	+13.9	+14.7	100	+18.2	1.09	-6.0	+45.5	2023:+15 2024:+41 2025:+8 2026:-3
+panel-rolling-ref-002/out seed 1	artifact	7	654487	+17.1	1.14	-17.2	0.09	+13.4	+13.9	+14.8	100	+18.3	1.14	-6.0	+45.5	2023:+18 2024:+46 2025:+4 2026:-4
+panel-rolling-ref-003/out seed 0	artifact	7	654487	+16.8	1.08	-19.1	0.09	+12.9	+13.9	+14.7	100	+18.2	1.09	-6.0	+45.5	2023:+15 2024:+41 2025:+8 2026:-3
+panel-rolling-ref-003/out seed 1	artifact	7	654487	+17.1	1.14	-17.2	0.09	+13.4	+13.9	+14.8	100	+18.3	1.14	-6.0	+45.5	2023:+18 2024:+46 2025:+4 2026:-4
+panel-rolling-std-001/out seed 0	artifact	7	654487	+23.0	1.39	-18.0	0.09	+18.9	+19.8	+20.6	100	+24.2	1.38	-6.0	+45.5	2023:+23 2024:+56 2025:+8 2026:-2
+panel-rolling-std-001/out seed 1	artifact	7	654487	+18.9	1.21	-19.4	0.09	+15.3	+15.7	+16.5	100	+20.0	1.21	-6.0	+45.5	2023:+27 2024:+38 2025:+6 2026:-2
+panel-rolling-std-order-001/out seed 0	artifact	6	566325	+20.5	1.23	-19.2	0.10	+16.3	+17.0	+18.2	100	+22.3	1.25	+2.8	+71.6	2023:+15 2024:+40 2025:+8
+panel-rolling-std-order-001/out seed 1	artifact	6	566325	+20.8	1.30	-17.0	0.09	+16.6	+17.6	+18.6	100	+23.3	1.35	+2.8	+71.6	2023:+18 2024:+43 2025:+3
+panel-rolling-std-smoke-001/out seed 0	artifact	2	39992	-0.0	0.00	-2.1	0.10	-0.7	-0.2	+0.7	60	+1.1	0.38	+21.9	+20.2	2023:-0
+panel-rolling-usdt-001/out seed 0	artifact	7	654487	+12.6	0.86	-18.4	0.09	+8.9	+9.7	+10.6	100	+13.2	0.85	-6.0	+45.5	2023:+23 2024:+30 2025:-2 2026:-3
+panel-rolling-usdt-001/out seed 1	artifact	6	566325	+19.3	1.16	-16.8	0.10	+14.1	+15.1	+16.1	100	+21.4	1.20	+2.8	+71.6	2023:+15 2024:+39 2025:+5
+panel-rolling-usdt-smoke-001/out seed 0	artifact	2	39992	-0.9	-0.26	-4.3	0.11	-1.8	-0.5	+0.3	20	+0.5	0.15	+21.9	+20.2	2023:-1
+panel-std-order-400k-001/out/relative_rank_loss_logret_std_label_order_s0	artifact	1	49791	+23.6	3.02	-2.1	0.07	+22.0	+20.5	+26.9	85	+23.2	2.94	+278.6	+178.6	2026:+6
+panel-std-order-400k-001/out/relative_rank_loss_logret_std_label_order_s1	artifact	1	49791	+27.0	3.42	-2.2	0.07	+24.2	+13.2	+17.9	100	+17.0	2.35	+278.6	+178.6	2026:+7
+panel-std-order-full-001/out/relative_rank_loss_logret_std_label_order_s0	artifact	1	49791	+23.6	3.57	-2.1	0.07	+21.0	+18.0	+21.8	100	+21.7	3.22	+278.6	+178.6	2026:+6
+panel-std-order-full-001/out/relative_rank_loss_logret_std_label_order_s1	artifact	1	49791	+16.0	2.46	-2.0	0.06	+13.7	+14.2	+19.1	75	+16.9	2.55	+278.6	+178.6	2026:+4
+panel-std-order-smoke-001/out/relative_rank_loss_logret_std_label_order_s0	artifact	1	19984	-1.2	-0.33	-1.5	0.11	-2.5	-3.1	+1.4	80	-0.1	-0.01	+118.6	+81.1	2026:-0
+rolling-btcrel-001/out_s0 seed 0	table	7	654487	+13.2	0.91	-23.0	0.09	+10.7	+14.5	+15.3	0	+16.5	1.03	-6.0	+45.5	2023:+12 2024:+39 2025:+4 2026:-5
+rolling-btcrel-001/out_s1 seed 1	table	7	654487	+12.6	0.91	-22.5	0.09	+9.4	+12.6	+13.3	50	+14.7	0.97	-6.0	+45.5	2023:+14 2024:+21 2025:+19 2026:-9
+rolling-btcrel-lbl-001/out_s0 seed 0	SKIP	7		  (horizon_steps: no lag <= 48 steps explains y_ret (best 3: 0% of rows); pass the number 
+rolling-btcrel-lbl-001/out_s1 seed 1	SKIP	7		  (horizon_steps: no lag <= 48 steps explains y_ret (best 3: 0% of rows); pass the number 
+rolling-btcrel-lbl-smoke-001/out seed 0	SKIP	2		  (horizon_steps: no lag <= 48 steps explains y_ret (best 0: 0% of rows); pass the number 
+rolling-btcrel-lbl-smoke-001_at_02dd45f/out seed 0	SKIP	2		  (horizon_steps: no lag <= 48 steps explains y_ret (best 0: 0% of rows); pass the number 
+rolling-btcrel-smoke-001/out seed 0	SKIP	2		  (horizon_steps: no lag <= 48 steps explains y_ret (best 0: 0% of rows); pass the number 
+rolling-dw1-bal-001/out_s0 seed 0	table	7	654487	+13.1	0.89	-17.9	0.09	+10.3	+13.6	+14.6	25	+17.5	1.09	-6.0	+45.5	2023:+18 2024:+31 2025:+3 2026:-4
+rolling-dw1-bal-001/out_s1 seed 1	table	7	654487	+13.2	0.92	-20.2	0.09	+10.8	+12.9	+13.9	60	+16.7	1.08	-6.0	+45.5	2023:+19 2024:+30 2025:+3 2026:-4
+rolling-dw1-dw-001/out_s0 seed 0	table	7	654487	+10.0	0.71	-23.6	0.09	+7.8	+10.5	+11.2	20	+13.6	0.88	-6.0	+45.5	2023:+14 2024:+27 2025:+1 2026:-5
+rolling-dw1-dw-001/out_s1 seed 1	table	7	654487	+15.0	0.99	-18.4	0.09	+12.3	+13.9	+14.8	100	+18.0	1.10	-6.0	+45.5	2023:+23 2024:+42 2025:+1 2026:-8
+rolling-dw1-r-001/out_s0 seed 0	table	7	654487	+13.6	0.92	-19.7	0.09	+10.5	+13.9	+14.5	15	+18.0	1.12	-6.0	+45.5	2023:+15 2024:+32 2025:+5 2026:-3
+rolling-dw1-r-001/out_s1 seed 1	table	7	654487	+14.3	0.94	-20.0	0.09	+11.2	+14.0	+14.5	65	+17.9	1.09	-6.0	+45.5	2023:+16 2024:+42 2025:-0 2026:-3
+rolling-dw1-smoke-001/out seed 0	SKIP	2		  (horizon_steps: no lag <= 48 steps explains y_ret (best 0: 0% of rows); pass the number 
+rolling-ind-001/out_IR_s0 seed 0	table	7	654487	-4.0	-0.22	-23.8	0.09	-8.0	-3.5	-2.8	25	-1.4	-0.02	-6.0	+45.5	2023:+7 2024:-9 2025:-2 2026:-9
+rolling-ind-001/out_IR_s1 seed 1	table	7	654487	+1.1	0.15	-18.4	0.09	-2.3	+1.2	+1.7	30	+3.3	0.29	-6.0	+45.5	2023:+2 2024:+13 2025:-1 2026:-9
+rolling-ind-001/out_I_s0 seed 0	table	7	654487	+9.7	0.73	-21.0	0.09	+7.6	+9.8	+10.7	45	+13.8	0.95	-6.0	+45.5	2023:+15 2024:+25 2025:-6 2026:+1
+rolling-ind-001/out_I_s1 seed 1	table	7	654487	+14.4	0.99	-21.2	0.09	+11.5	+14.2	+15.4	65	+18.5	1.16	-6.0	+45.5	2023:+12 2024:+34 2025:+8 2026:-2
+rolling-ind-001/out_R_s0 seed 0	table	7	654487	+13.6	0.92	-19.7	0.09	+10.5	+13.9	+14.5	15	+18.0	1.12	-6.0	+45.5	2023:+15 2024:+32 2025:+5 2026:-3
+rolling-ind-001/out_R_s1 seed 1	table	7	654487	+14.3	0.94	-20.0	0.09	+11.2	+14.0	+14.5	65	+17.9	1.09	-6.0	+45.5	2023:+16 2024:+42 2025:-0 2026:-3
+rolling-ind-smoke-001/out seed 0	SKIP	2		  (horizon_steps: no lag <= 48 steps explains y_ret (best 0: 0% of rows); pass the number 
+rolling-indr-001/out_s0 seed 0	table	7	654487	+15.6	1.16	-17.6	0.09	+11.8	+14.9	+15.7	85	+19.8	1.36	-6.0	+45.5	2023:+10 2024:+30 2025:+13 2026:+2
+rolling-indr-001/out_s1 seed 1	table	7	654487	+17.4	1.22	-15.8	0.09	+13.7	+17.8	+19.0	35	+22.9	1.46	-6.0	+45.5	2023:+8 2024:+47 2025:+12 2026:-3
+rolling-indr-smoke-001/out seed 0	SKIP	2		  (horizon_steps: no lag <= 48 steps explains y_ret (best 0: 0% of rows); pass the number 
+rolling-lr1-cos-001/out_s2 seed 2	table	7	654487	+16.5	1.10	-21.0	0.09	+13.9	+15.3	+16.0	100	+19.6	1.21	-6.0	+45.5	2023:+17 2024:+39 2025:+6 2026:-2
+rolling-lr1-cos-001/out_s3 seed 3	table	7	654487	+12.4	0.85	-19.9	0.09	+9.7	+12.1	+12.6	70	+15.8	1.00	-6.0	+45.5	2023:+13 2024:+39 2025:-3 2026:-2
+rolling-lr1-smoke-001/out seed 0	SKIP	2		  (horizon_steps: no lag <= 48 steps explains y_ret (best 0: 0% of rows); pass the number 
+rolling-ls1-a0-001/out_s2 seed 2	table	7	654487	+15.8	1.09	-18.8	0.09	+13.1	+15.1	+15.8	95	+19.3	1.24	-6.0	+45.5	2023:+13 2024:+41 2025:+5 2026:-1
+rolling-ls1-a0-001/out_s3 seed 3	table	7	654487	+14.1	0.96	-20.0	0.09	+11.1	+13.8	+14.5	60	+17.4	1.09	-6.0	+45.5	2023:+15 2024:+48 2025:-4 2026:-4
+rolling-ls1-r-001/out_s2 seed 2	table	7	654487	+17.4	1.19	-18.1	0.09	+14.7	+16.8	+17.5	90	+21.1	1.34	-6.0	+45.5	2023:+12 2024:+49 2025:+5 2026:-1
+rolling-ls1-r-001/out_s3 seed 3	table	7	654487	+16.3	1.09	-20.3	0.09	+13.4	+15.4	+16.1	95	+19.4	1.20	-6.0	+45.5	2023:+21 2024:+42 2025:+1 2026:-4
+rolling-ls1-s-001/out_s2 seed 2	table	7	654487	+17.2	1.18	-17.0	0.09	+14.3	+15.7	+16.7	100	+20.0	1.28	-6.0	+45.5	2023:+27 2024:+40 2025:-1 2026:-3
+rolling-ls1-s-001/out_s3 seed 3	table	7	654487	+10.9	0.78	-21.7	0.09	+7.6	+10.4	+11.1	80	+13.9	0.91	-6.0	+45.5	2023:+19 2024:+30 2025:-3 2026:-6
+rolling-ls1-smoke-001/out seed 0	SKIP	2		  (horizon_steps: no lag <= 48 steps explains y_ret (best 0: 0% of rows); pass the number 
+rolling-mres-001/out_s0 seed 0	SKIP	7		  (horizon_steps: no lag <= 48 steps explains y_ret (best 1: 0% of rows); pass the number 
+rolling-mres-001/out_s1 seed 1	SKIP	7		  (horizon_steps: no lag <= 48 steps explains y_ret (best 1: 0% of rows); pass the number 
+rolling-mres-noind-001/out_s0 seed 0	SKIP	7		  (horizon_steps: no lag <= 48 steps explains y_ret (best 1: 0% of rows); pass the number 
+rolling-mres-noind-001/out_s1 seed 1	SKIP	7		  (horizon_steps: no lag <= 48 steps explains y_ret (best 1: 0% of rows); pass the number 
+rolling-mres-noind-smoke-001/out seed 0	SKIP	2		  (horizon_steps: no lag <= 48 steps explains y_ret (best 0: 0% of rows); pass the number 
+rolling-mres-smoke-001/out seed 0	SKIP	2		  (horizon_steps: no lag <= 48 steps explains y_ret (best 0: 0% of rows); pass the number 
+rolling-mres23-001/out_s2 seed 2	SKIP	7		  (horizon_steps: no lag <= 48 steps explains y_ret (best 1: 0% of rows); pass the number 
+rolling-mres23-001/out_s3 seed 3	SKIP	7		  (horizon_steps: no lag <= 48 steps explains y_ret (best 1: 0% of rows); pass the number 
+rolling-r23-001/out_s2 seed 2	table	7	654487	+15.8	1.09	-18.8	0.09	+13.1	+15.1	+15.8	95	+19.3	1.24	-6.0	+45.5	2023:+13 2024:+41 2025:+5 2026:-1
+rolling-r23-001/out_s3 seed 3	table	7	654487	+14.1	0.96	-20.0	0.09	+11.1	+13.8	+14.5	60	+17.4	1.09	-6.0	+45.5	2023:+15 2024:+48 2025:-4 2026:-4
+rolling-single-001/out seed 0	artifact	7	654487	+13.6	0.92	-19.7	0.09	+10.5	+13.9	+14.5	15	+18.0	1.12	-6.0	+45.5	2023:+15 2024:+32 2025:+5 2026:-3
+rolling-single-001/out seed 1	artifact	7	654487	+14.3	0.94	-20.0	0.09	+11.2	+14.0	+14.5	65	+17.9	1.09	-6.0	+45.5	2023:+16 2024:+42 2025:-0 2026:-3
+rolling-single-002/out_s2 seed 2	artifact	7	654487	+15.8	1.09	-18.8	0.09	+13.1	+15.1	+15.8	95	+19.3	1.24	-6.0	+45.5	2023:+13 2024:+41 2025:+5 2026:-1
+rolling-single-002/out_s3 seed 3	artifact	7	654487	+14.1	0.96	-20.0	0.09	+11.1	+13.8	+14.5	60	+17.4	1.09	-6.0	+45.5	2023:+15 2024:+48 2025:-4 2026:-4
+rolling-single-smoke-001/out seed 0	artifact	2	40000	+4.4	2.21	-1.3	0.02	+4.4	+4.3	+5.2	70	+26.5	2.77	-16.8	-9.9	2023:+4
+rolling-single-smoke-ss1/out seed 0	artifact	2	40000	+4.4	2.21	-1.3	0.02	+4.4	+4.3	+5.2	70	+26.5	2.77	-16.8	-9.9	2023:+4
+snapshot-rolling-base-001/out seed 0	table	7	654487	+16.5	1.11	-17.7	0.09	+13.4	+12.9	+14.0	100	+16.8	1.06	-6.0	+45.5	2023:+24 2024:+38 2025:+2 2026:-3
+snapshot-rolling-base-001/out seed 1	table	7	654487	+15.9	1.08	-18.8	0.09	+12.4	+12.4	+13.4	100	+16.4	1.04	-6.0	+45.5	2023:+17 2024:+47 2025:+1 2026:-4
+snapshot-rolling-hybrid-001/out seed 0	table	7	654487	+11.7	0.95	-19.3	0.08	+5.0	+6.6	+7.3	100	+13.1	0.97	-6.0	+45.5	2023:+16 2024:+49 2025:-8 2026:-7
+snapshot-rolling-hybrid-001/out seed 1	table	7	654487	-1.8	-0.14	-25.7	0.08	-8.0	-7.1	-6.2	100	-2.2	-0.15	-6.0	+45.5	2023:+3 2024:+19 2025:-12 2026:-13
+snapshot-rolling-joint-001/out seed 0	table	7	654487	+2.2	0.23	-19.5	0.09	-3.1	-0.1	+0.8	100	+3.5	0.31	-6.0	+45.5	2023:+2 2024:+10 2025:+9 2026:-13
+snapshot-rolling-joint-001/out seed 1	table	7	654487	-2.1	-0.14	-27.0	0.09	-7.5	-5.4	-4.9	100	-2.0	-0.12	-6.0	+45.5	2023:+3 2024:+7 2025:-7 2026:-9
+snapshot-rolling-smoke-001/out seed 0	SKIP	2		  (horizon_steps: no lag <= 48 steps explains y_ret (best 0: 0% of rows); pass the number 
+snapshot-rolling-smoke-001/out seed 1	SKIP	2		  (horizon_steps: no lag <= 48 steps explains y_ret (best 0: 0% of rows); pass the number 

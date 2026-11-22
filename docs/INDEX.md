@@ -25,7 +25,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Results notes
 
-36 notes (rule C7: the failure reading is inside each).
+37 notes (rule C7: the failure reading is inside each).
 
 - `docs/results/arm-i-001.md`: arm-i-001: arm I of rolling-ind-001 (7 indicator channels, lr 1e-5) read against R (exploratory, rule C5)
 - `docs/results/b1-btc-timing-001.md`: b1-btc-timing-001: buy BTC at the times the model is bullish across coins (owner 2026-11-19; exploratory, rule C5)
@@ -51,6 +51,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/results/m3-improve-local-001.md`: m3-improve-local-001: verifying M3 and improving its information, local CPU (owner 2026-11-20; exploratory, C5)
 - `docs/results/m3-local-001.md`: m3-local-001: market residual (method 3), a local CPU look (owner 2026-11-19; exploratory, rule C5)
 - `docs/results/more-data-flat-001.md`: more-data-flat-001: does more training data help? All train rows against 400k on one flat split (owner 2026-11-19)
+- `docs/results/n8-account-001.md`: n8-account-001: every saved run on Drive read as a capital account (N8, owner 2026-11-22; exploratory, C5)
 - `docs/results/nig-scale-default-001.md`: NIG label-scale default (MG2, B-071)
 - `docs/results/no-instance-norm-001.md`: The H3 test again without the normalisation layer (owner 2026-11-18) — refuted, the same partial gain as H
 - `docs/results/panel-001.md`: panel-001: the panel study on the full artifact, flat split (exploratory, rule C5)
@@ -85,7 +86,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/audit/2026-11-20-readings/`: Pre-registration I1: the indicator channels trained like R (owner 2026-11-20) (`PREREGISTERED_I1.md`), 5 files
 - `docs/audit/2026-11-20-v1rep-i2/`: Pre-registration: V1-rep and I2 (owner 2026-11-20: "run the proposals, in parallel, free RAM under 10 GB") (`PREREGISTERED.md`), 3 files
 - `docs/audit/2026-11-21-independent-review/`: , 13 files
-- `docs/audit/2026-11-22-n8-account/`: , 1 files
+- `docs/audit/2026-11-22-n8-account/`: , 2 files
 
 ## Handoffs
 
