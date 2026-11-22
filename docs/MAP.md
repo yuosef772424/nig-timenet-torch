@@ -117,6 +117,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
+| `eval/account.py` | Runs a book of the battery table as a capital account (sub-books per horizon phase, fixed slot per coin, cash, fee on turnover, compounding): CAGR / Sharpe / max drawdown / years beside always-long, BTC, a timing placebo. | account, capital, cagr, sharpe, max drawdown, turnover, fixed slots, timing placebo, buy and hold, battery |
 | `eval/battery.py` | The many-angle sections (SECTION_ORDER lists them), the classics and a ranked verdict over a tidy table (step, mu, sigma, p_dir, y_ret, dir_true, last_ret, coin, end_time); pure functions, no model. | battery, evaluation, trade grid, verdict, uncertainty filter, daily stability, flip test |
 | `eval/battery_adapter.py` | Turns one stage of a run into the table the battery reads: close-only mu / sigma / p_dir / y_ret in return units, plus the high / low predicted and realised extremes the limit-order sections need. | battery adapter, prediction table, close return, nig predictive std, limit order inputs, target codec |
 | `eval/battery_classics.py` | Four classic checks of the old TF project over the tidy table: integrity, persistence baseline, selective evaluation (VAL thresholds, TEST judgment), market-neutral portfolio. | battery classics, integrity, persistence baseline, selective evaluation, market neutral |
@@ -285,6 +286,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 - `jobs/panel.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/rolling.py`: job entry (`docs/jobs/*.json` name it)
 - `jobs/staged.py`: job entry (`docs/jobs/*.json` name it)
+- `workflow/battery_run.py`: runnable (`python -m nig_timenet_torch.workflow.battery_run`)
 - `workflow/e1_arms.py`: runnable (`python -m nig_timenet_torch.workflow.e1_arms`)
 - `workflow/legacy_report.py`: runnable (`python -m nig_timenet_torch.workflow.legacy_report`)
 - `notebooks/colab_nig_timenet_torch.ipynb`: notebook runner
