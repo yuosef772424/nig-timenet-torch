@@ -11,8 +11,25 @@ import re
 
 from tests.scan import ROOT
 
-LIVE_DOCS = ("CLAUDE.md", "docs/STATUS.md", "docs/RULES.md", "docs/ROADMAP.md", "NOTES.md", "notebooks/README.md")
-PATH_IN_BACKTICKS = re.compile(r"`((?:docs|tests|src|reference|notebooks|\.github)/[^`\s]*)`")
+#: docs that quote paths as history, not as a claim about today's tree: results notes, audits (also the hardening
+#: audits) and handoffs describe a past session's files, some since moved or deleted
+#: Also historical records, excluded one by one: the port record (quotes the TF project's tree and files renamed since),
+#: the owner decision records (immutable: a record is never edited after the merge), the append-only review log and
+#: the files of the finished hardening campaign 2026-11 (its audit, plan and branch notes).
+HISTORICAL_DIRS = ("docs/results/", "docs/audit/", "docs/handoff/", "docs/hardening/audit-", "docs/decisions/",
+                   "docs/BUILD_PLAN.md", "docs/reviews.md", "docs/hardening/AUDIT-2026-11.md",
+                   "docs/hardening/PLAN.md", "docs/hardening/BRANCH_AR_STREAM.md")
+EXTRA_DOCS = ("CLAUDE.md", "NOTES.md", "notebooks/README.md")
+
+
+def _live_docs() -> tuple[str, ...]:
+    """Every doc under docs/ except the historical folders, plus the root docs (E-23: a hand-kept list of six)."""
+    found = {p.relative_to(ROOT).as_posix() for p in (ROOT / "docs").rglob("*.md")}
+    return tuple(sorted(rel for rel in found if not rel.startswith(HISTORICAL_DIRS)) + list(EXTRA_DOCS))
+
+
+LIVE_DOCS = _live_docs()
+PATH_IN_BACKTICKS = re.compile(r"`((?:docs|tests|tools|src|reference|notebooks|\.github)/[^`\s]*)`")
 
 #: quoted paths that are legitimately absent today -> the reason (remove the entry the day the file exists; the
 #: test below fails on a stale entry)
@@ -20,6 +37,13 @@ ABSENT_ON_PURPOSE = {
     "reference/README": "RULES.md V1 incident: that is the TF project's file, quoted as history",
     "docs/research/failure_registry.csv": "lives in the TF project (ROADMAP: Using the TF project for follow-up)",
     "docs/research/hardening/bottlenecks.csv": "lives in the TF project (ROADMAP: Using the TF project for follow-up)",
+    "tools/recovered/": "deleted by HB8 (E-29); PLAN-2026-11b names it in the HB8 row (remove this entry when that "
+                        "plan moves to the archive)",
+    "docs/research/plan/lock/holdout.json": "the TF project's sealed-coin lock, quoted by the data contract",
+    "docs/research/templates/": "the TF project's results templates, quoted by MODEL_DEV_PROTOCOL as the model",
+    "tools/export_torch_artifact.py": "the TF project's export tool (the only change there, PLANNER_HANDOFF)",
+    "tools/holdout_guard.py": "the TF project's holdout guard, quoted by the data contract and RULES D1",
+    "tools/check_patterns.py": "the TF project's pattern check, quoted by RULES as the origin of a rule",
 }
 
 
@@ -35,7 +59,7 @@ def _read(rel: str) -> str:
 def _quoted_paths(text: str) -> set[str]:
     out = set()
     for m in PATH_IN_BACKTICKS.finditer(text):
-        path = m.group(1).rstrip(".,:;)").split("::")[0]
+        path = re.sub(r":\d+(-\d+)?$", "", m.group(1).rstrip(".,:;)").split("::")[0])
         if not any(c in path for c in "<*{") and not path.endswith("D-nnn"):  # placeholders / patterns
             out.add(path)
     return out
@@ -164,6 +188,7 @@ FAILURE_READING = ("## What the model learned", "## Where it is right and where 
 BEFORE_C7 = {"baseline-001.md", "deep-side-001.md", "e1-fixes-001.md", "gates-fixes-001.md",
              "nig-scale-default-001.md", "panel-001.md", "rolling-cpu-smoke-001.md", "staged-cpu-smoke-001.md"}
 NOT_APPLICABLE = "Failure reading: not applicable ("
+MIN_REASON_WORDS = 3
 
 
 def test_results_notes_hold_the_failure_reading():
@@ -175,9 +200,19 @@ def test_results_notes_hold_the_failure_reading():
     for heading in FAILURE_READING:
         assert f"`{heading}`" in philosophy, f"docs/PHILOSOPHY.md section 3 lost the heading {heading!r}"
     for name, text in sorted(notes.items()):
-        if name in BEFORE_C7 or NOT_APPLICABLE in text:
+        if name in BEFORE_C7:
+            continue
+        if NOT_APPLICABLE in text:
+            reason = text.split(NOT_APPLICABLE, 1)[1].split(")", 1)[0]
+            assert len(reason.split()) >= MIN_REASON_WORDS, (
+                f"docs/results/{name}: '{NOT_APPLICABLE}<reason>)' needs a reason of at least {MIN_REASON_WORDS} "
+                f"words, got {reason!r}")
             continue
         at = [text.find("\n" + h + "\n") for h in FAILURE_READING]
         assert min(at) >= 0 and at == sorted(at), (
             f"docs/results/{name}: the failure reading (rule C7) needs these headings in order: {FAILURE_READING}; "
             f"or the line '{NOT_APPLICABLE}<reason>)'")
+        for heading, start in zip(FAILURE_READING, at, strict=True):
+            body = text[start + len(heading) + 2:].split("\n## ", 1)[0]
+            assert any(ln.strip() for ln in body.splitlines()), (
+                f"docs/results/{name}: the section {heading!r} is empty: write at least one line (rule C7)")

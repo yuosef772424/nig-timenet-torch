@@ -1,8 +1,7 @@
 """End-of-step bookkeeping in one run: MAP and pins, decision record, STATUS row, the PR's B1 section.
 
 PURPOSE:  Regenerate MAP and stale pins, draft or update the PR's decision record, set the step's STATUS row and
-  write the B1 PR section; --merge leaves decisions alone; --check changes nothing and fails on anything stale;
-  --archive moves closed STATUS rows to docs/status_archive.md.
+  write the B1 PR section; --merge leaves decisions alone; --check fails on anything stale; --archive moves closed rows.
 TAGS:     tools, close, step, bookkeeping, map, pins, decisions, status, pr, description, check
 PITFALLS: Run from the repo root on the PR branch with origin/main fetched. Pin files are regenerated only when their
   test fails (so float noise never rewrites them). A TODO in a drafted decision fails pin_diff and --check. A merge

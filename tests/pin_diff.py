@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 from tests import defaults_pin as dp
+from tools._git import merge_base
 
 
 def undocumented(base_pin: dict[str, str], new_pin: dict[str, str], documented: set[str]) -> list[str]:
@@ -23,6 +24,7 @@ def _git(*args: str) -> str:
 
 def main(base: str) -> int:
     pin_path = dp.PIN_FILE.relative_to(dp.ROOT).as_posix()
+    base = merge_base(dp.ROOT, base)  # the commit the PR forked from, as close_step uses (suggestion 214), not the tip
     try:
         base_pin = json.loads(_git("show", f"{base}:{pin_path}"))["defaults"]
     except subprocess.CalledProcessError:
