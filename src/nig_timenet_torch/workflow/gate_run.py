@@ -30,6 +30,7 @@ from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
 from nig_timenet_torch.data_io.synthetic import SyntheticSettings, oracle_keys, write_synthetic
 from nig_timenet_torch.eval import gates
 from nig_timenet_torch.eval.vol_baseline import window_ranges
+from nig_timenet_torch.model.cross_coin import CROSS_INPUTS
 from nig_timenet_torch.trainer.grad_report import grad_report
 from nig_timenet_torch.trainer.identity import configuration_hash
 from nig_timenet_torch.workflow import flat_run, run, run_common
@@ -191,7 +192,7 @@ def needs_cross_section(settings: RunSettings) -> list[str]:
     over = settings.model.overrides
     if over.get("cross_coin_layers", 0):
         found.append("model cross_coin_layers (rows of one timestamp attend to each other)")
-    if over.get("cross_input", "none") != "none":
+    if CROSS_INPUTS[over.get("cross_input", "none")] is not None:
         found.append(f"model cross_input={over['cross_input']!r}")
     if over.get("cross_center", False):
         found.append("model cross_center")
