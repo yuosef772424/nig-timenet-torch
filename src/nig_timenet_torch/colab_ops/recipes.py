@@ -21,7 +21,6 @@ __all__ = [
     "env_script",
     "arms_line",
     "doctor_line",
-    "runs_line",
 ]
 
 REPO = "https://github.com/yuosef772424/nig-timenet-torch.git"
@@ -130,22 +129,4 @@ def doctor_line(
         f". {ENV_SH} && cd {shlex.quote(repo)} && python -u -m nig_timenet_torch.doctor {ARTIFACT_LOCAL} --run-dir "
         f"{shlex.quote(run_dir)} --trained --max-rows {int(rows)} --batch-size {int(batch_size)} "
         f"--seed {int(seed)} --model {shlex.quote(model)} --train {shlex.quote(train)} --out {shlex.quote(out)}"
-    )
-
-
-def runs_line(
-    models: str,
-    lr: float,
-    lr_min: float,
-    epochs: int,
-    rows: int,
-    *,
-    device: str = "cuda",
-    code: str = "/content/nig_uhub/src",
-    script: str = "/content/run_models.py",
-) -> str:
-    """The single-model runs of the sequential-gradient branch (scripts/run_models.py) with that branch's code."""
-    return (
-        f". {ENV_SH} && cd /content && PYTHONPATH={shlex.quote(code)}:$PYTHONPATH python -u {shlex.quote(script)} "
-        f"{shlex.quote(models)} {lr:g} {lr_min:g} {int(epochs)} {int(rows)} {shlex.quote(device)}"
     )

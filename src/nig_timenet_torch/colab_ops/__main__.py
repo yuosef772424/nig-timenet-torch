@@ -1,19 +1,16 @@
 """PURPOSE: ``python -m nig_timenet_torch.colab_ops <command>``: the Colab steps of every session as one CLI
-    (rt, exec, start, wait, out, put, setup, arms, doctor, runs).
+    (rt, exec, start, wait, out, put, setup, arms, doctor).
 TAGS: colab ops cli, setup runtime, start job, wait job, read output, repeated steps
-PITFALLS: needs CB_URL and COLAB_BRIDGE_TOKEN in the environment; ``setup`` / ``arms`` / ``runs`` start a BACKGROUND
+PITFALLS: needs CB_URL and COLAB_BRIDGE_TOKEN in the environment; ``setup`` / ``arms`` / ``doctor`` start a BACKGROUND
     process and print its id (follow it with ``wait`` / ``out``); output of ``exec`` is capped at 30 kB.
 """
 
 import argparse
 import json
 import sys
-from pathlib import Path
 
 from nig_timenet_torch.colab_ops import recipes
 from nig_timenet_torch.colab_ops.bridge import from_env
-
-SCRIPTS = Path(__file__).parent / "scripts"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -62,13 +59,6 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--rows", type=int, default=20000)
     d.add_argument("--epochs", type=int, default=6)
     d.add_argument("--device", default="cuda")
-    r = sub.add_parser("runs", help="single-model runs of the sequential-gradient branch (needs `setup` of it)")
-    r.add_argument("models")
-    r.add_argument("--lr", type=float, default=1e-4)
-    r.add_argument("--lr-min", type=float, default=1e-6)
-    r.add_argument("--epochs", type=int, default=10)
-    r.add_argument("--rows", type=int, default=320000)
-    r.add_argument("--device", default="cuda")
     return p
 
 
@@ -138,9 +128,6 @@ def _run(a) -> int:
                 "doctor",
             )
         )
-    elif a.cmd == "runs":
-        b.put(str(SCRIPTS / "run_models.py"), "/content/run_models.py")
-        print(b.start(recipes.runs_line(a.models, a.lr, a.lr_min, a.epochs, a.rows, device=a.device), "runs"))
     return 0
 
 

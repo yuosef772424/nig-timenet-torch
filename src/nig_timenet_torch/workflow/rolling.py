@@ -1,10 +1,10 @@
 """PURPOSE: Rolling / walk-forward fold geometry (P37, ROADMAP F2): purged train / test windows per fold, the inner
-    validation tail of a fold, and the callable-based loop ``run_rolling_study``; the run-step loop is rolling_run.py.
+    validation tail of a fold; the run-step loop is rolling_run.py.
 TAGS: rolling folds, walk forward, expanding, sliding, purge embargo, inner validation, fold geometry, label end
 PITFALLS: a fold's ``plan`` has an EMPTY val (the seam contract); ``fold_with_val`` cuts the last ``val_share`` of the
     train window as validation, purged by label end + embargo, and never reads the test window; every plan passes
-    ``check_split_purity``; folds stop when a test window would pass the last label; ``run_rolling_study`` (callbacks)
-    is the original seam, kept for its tests: real runs go through ``rolling_run.run_rolling``.
+    ``check_split_purity``; folds stop when a test window would pass the last label; real runs go through
+    ``rolling_run.run_rolling``.
 
 Fold i (origin = earliest feature_start; cut_i = origin + train_span + i * step):
   train = samples with label_end <= cut_i   (expanding: feature_start >= origin; sliding: >= cut_i - train_span)
@@ -15,19 +15,15 @@ keeps a subset (the same folds, same indices).
 """
 
 import dataclasses
-from collections.abc import Callable
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.roles import Role
 from nig_timenet_torch.data_io.split_plan import SplitPlan, check_split_purity, purge_embargo_split, sample_times
-from nig_timenet_torch.trainer.identity import RunIdentity
-from nig_timenet_torch.workflow.prediction_table import write_table
 from nig_timenet_torch.workflow.settings import RollingSettings
 
-__all__ = ["RollingFold", "rolling_folds", "rolling_folds_from_times", "fold_with_val", "run_rolling_study"]
+__all__ = ["RollingFold", "rolling_folds", "rolling_folds_from_times", "fold_with_val"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -99,27 +95,3 @@ def rolling_folds(dataset, settings: RollingSettings) -> list[RollingFold]:
     SplitPlan (train = FIT, test = REPORT, empty val/calibration)."""
     fs, fe, le = sample_times(dataset)
     return rolling_folds_from_times(fs, fe, le, settings)
-
-
-def run_rolling_study(dataset, settings: RollingSettings, train_fn: Callable, predict_fn: Callable,
-                      parent_identity: RunIdentity, *, out_dir: str | Path | None = None) -> list[pd.DataFrame]:
-    """Loops ``rolling_folds`` x ``settings.seeds``. Fold i / seed s gets its own RunIdentity(fold=i, seed=s,
-    data_cut=train_end ISO, parent_hashes=(parent.settings_hash,)); ``train_fn(dataset, fold, identity)`` returns a
-    model (called only when i % retrain_every_k == 0, else the seed's last model is reused);
-    ``predict_fn(model, dataset, fold, identity)`` returns a PredictionTable, written to
-    ``out_dir/fold_{i:03d}_seed_{s}.parquet`` when out_dir is given. NOT called with real training by any test
-    (that would be the experiment E-roll-001, out of scope)."""
-    tables: list[pd.DataFrame] = []
-    last_model: dict[int, object] = {}
-    for fold in rolling_folds(dataset, settings):
-        for s in settings.seeds:
-            identity = dataclasses.replace(parent_identity, seed=s, fold=fold.index,
-                                           data_cut=fold.train_end.isoformat(),
-                                           parent_hashes=(parent_identity.settings_hash,))
-            if fold.index % settings.retrain_every_k == 0 or s not in last_model:
-                last_model[s] = train_fn(dataset, fold, identity)
-            table = predict_fn(last_model[s], dataset, fold, identity)
-            if out_dir is not None and table is not None:
-                write_table(Path(out_dir) / f"fold_{fold.index:03d}_seed_{s}.parquet", table, identity)
-            tables.append(table)
-    return tables

@@ -21,9 +21,6 @@ export COLAB_BRIDGE_TOKEN=<BRIDGE_TOKEN of the cell>
 | follow a started process | `colab_ops wait <pid> --limit 400` / `colab_ops out <pid>` |
 | copy a small file to the runtime | `colab_ops put <local> <remote>` |
 
-(`colab_ops runs` also exists, for single-model runs of the `claude/sequential-gradient-model-uhub56` branch, which is
-not on main: it needs `setup` of that branch and is not part of the steps of a session.)
-
 ## Queue route (the owner presses Run all; summary of `docs/PLANNER_HANDOFF.md` "How to queue a Colab job")
 
 The alternative to the bridge: a job file `docs/jobs/<job_id>.json` (`repo_ref` there is 40 zeros) is copied to
