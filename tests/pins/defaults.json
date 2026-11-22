@@ -1,5 +1,5 @@
 {
- "fingerprint": "44efeca7522506d2",
+ "fingerprint": "e597a810a8e8e3dc",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -114,6 +114,7 @@
   "nig_timenet_torch.core.registry.Entry(meta)": "{}",
   "nig_timenet_torch.core.registry.Registry(contract)": "None",
   "nig_timenet_torch.core.registry.Registry(view)": "None",
+  "nig_timenet_torch.core.registry.unknown_names_text(match)": "<class 'str'>",
   "nig_timenet_torch.core.seeds.set_determinism(seed)": "0",
   "nig_timenet_torch.data.align.resample_frames(agg)": "None",
   "nig_timenet_torch.data.artifact_writer.git_head(repo)": "None",
@@ -913,6 +914,7 @@
   "nig_timenet_torch.model.nig_layers.OrderedMeans(detach_close)": "False",
   "nig_timenet_torch.model.nig_layers.OrderedMeans(fitted_scale)": "False",
   "nig_timenet_torch.model.nig_layers.OrderedMeans(scale)": "None",
+  "nig_timenet_torch.model.nig_layers.alpha_minus_one(floor)": "0.01",
   "nig_timenet_torch.model.panel.CrossAssetBlock(attention)": "True",
   "nig_timenet_torch.model.panel.CrossAssetBlock(attn_dropout)": "0.1",
   "nig_timenet_torch.model.panel.CrossAssetBlock(d_model)": "64",

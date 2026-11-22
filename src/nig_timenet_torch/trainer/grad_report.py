@@ -45,11 +45,6 @@ def worst(verdicts) -> str:
     return max(verdicts, key=_ORDER.__getitem__, default="pass")
 
 
-def _device(trainer) -> torch.device:
-    first = next(iter(trainer.model.parameters()), None)
-    return torch.device("cpu") if first is None else first.device
-
-
 def _batches(x, y, batches, dev):
     for b in batches:
         ix = torch.as_tensor(np.asarray(b), dtype=torch.long)
@@ -201,7 +196,7 @@ def _a5_a6(trainer, x, y, batches, dev) -> dict:
 def a5_a6(trainer, x, y, batches) -> dict:
     """Only checks A5 / A6 (head gradient shares and pairwise cosines on the shared trunk) of ``batches``; probes such
     as ``workflow.e1_arms.a6_label_probe`` call it with altered labels (no optimizer step, state unchanged)."""
-    return _a5_a6(trainer, x, y, batches, _device(trainer))
+    return _a5_a6(trainer, x, y, batches, trainer.device)
 
 
 def _shared_vector(g: tuple, grads: dict, shared: list[int], dev) -> torch.Tensor:
@@ -261,7 +256,7 @@ def grad_report(trainer, x, y, batches, *, allow_dead=()) -> dict:
         raise RuntimeError("gate A needs the planned optimizer (the trainer has none)")
     if not batches:
         raise ValueError("gate A needs at least one batch")
-    dev = _device(trainer)
+    dev = trainer.device
     checks, layers = _a1_a3(trainer, x, y, batches, dev, set(allow_dead))
     checks["A4"] = _a4(trainer, x, y, batches, dev, skip=set(checks["A2"]["dead"]))
     checks.update(_a5_a6(trainer, x, y, batches, dev))

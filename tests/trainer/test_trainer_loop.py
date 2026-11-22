@@ -2,13 +2,13 @@
 
 import torch
 
-from nig_timenet_torch.core.seeds import set_determinism
+from nig_timenet_torch.core.seeds import seed_everything
 from nig_timenet_torch.trainer.trainer import Trainer
 from tests.trainer.fixture_setup import build_model, load_fixture, trainer_config
 
 
 def test_train_step_reduces_loss_on_fixture():
-    set_determinism(0)
+    seed_everything(0)
     x, y = load_fixture(64)
     model = build_model(16, 18)
     trainer = Trainer(model, trainer_config(), optimizer=lambda ps: torch.optim.AdamW(ps, lr=3e-3))

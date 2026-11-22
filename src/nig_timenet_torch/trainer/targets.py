@@ -6,11 +6,14 @@ PITFALLS: validation and resolution NEVER change the dict they read: ``Trainer.c
     ``LOSS_DEFAULTS`` / ``TARGET_DEFAULTS`` are pinned defaults (decision file); a task option's default lives in
     ``TASK_REGISTRY`` (``default_options``), not here.
 
-Trainer config shape: ``{"targets": {name: target}, "loss": {...}, optional "constraints": [...]}``. A target needs
+Trainer config shape: ``{"targets": {name: target}, "loss": {...}, optional "constraints": []}`` (constraints are
+not implemented: a non-empty list raises NotImplementedError; the empty list is accepted because it is hashed).
+A target needs
 ``true_key``, ``task_type`` and ``output_keys``; it may carry ``loss_weight``, ``flood_level`` and the options
 registered as the task's ``config_keys``. ``loss`` may carry ``use_uncertainty_weighting`` (Kendall),
 ``uncertainty_weighting_exclude_task_types`` (Kendall weights only the OTHER task types; the excluded ones are added
-unweighted), ``schedules``, ``constraints``, ``balance`` (a ``trainer.loss_balance.LOSS_BALANCERS`` name, FX2),
+unweighted), ``schedules``, ``constraints`` (must be empty), ``balance`` (a ``trainer.loss_balance.LOSS_BALANCERS``
+name, FX2),
 ``kendall_init_logvar`` (the initial Kendall log-variance, FX2) and ``cross_section`` / ``cross_section_weight`` (a
 ``trainer.cross_section_loss.CROSS_SECTION_LOSSES`` name and the weight of that term, D-032) and
 ``direction_balance`` / ``direction_balance_targets`` (the weight of ``trainer.direction_balance`` and the names of the
@@ -18,8 +21,7 @@ two-sided targets it reads, D-032). Every lambda variable
 a target names (``lambda_reg_var``, ``lambda_calib_var``) must be a scheduled variable.
 """
 
-import difflib
-
+from nig_timenet_torch.core.registry import unknown_names_text
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer.tasks import TASK_REGISTRY, with_defaults
 
@@ -42,11 +44,7 @@ TARGET_DEFAULTS = {"loss_weight": 1.0, "flood_level": None}
 
 
 def _unknown(where: str, keys, known) -> ValueError:
-    parts = []
-    for k in keys:
-        close = difflib.get_close_matches(str(k), known, n=1)
-        parts.append(f"{k!r}" + (f" (did you mean {close[0]!r}?)" if close else ""))
-    return ValueError(f"{where}: unknown key(s) {', '.join(parts)}. Known keys: {sorted(known)}")
+    return ValueError(f"{where}: unknown key(s) {unknown_names_text(keys, known)}. Known keys: {sorted(known)}")
 
 
 def _check_keys(where: str, d, known) -> None:
@@ -65,6 +63,10 @@ def validate_trainer_config(cfg: dict) -> None:
         if k not in cfg:
             raise ValueError(f"trainer config lacks {k!r}")
     _check_keys("trainer config['loss']", cfg["loss"], LOSS_KEYS)
+    for where, constraints in (("trainer config", cfg), ("trainer config['loss']", cfg["loss"])):
+        if "constraints" in constraints and constraints["constraints"]:
+            raise NotImplementedError(f"{where}: output constraints are not implemented; 'constraints' must be [] (the "
+                                      f"key stays only because the config dict is hashed into the RunIdentity)")
     schedules = cfg["loss"]["schedules"] if "schedules" in cfg["loss"] else LOSS_DEFAULTS["schedules"]
     _check_keys("trainer config['loss']['schedules']", schedules, set(schedules))  # must be a dict
     for name, target in cfg["targets"].items():
@@ -92,10 +94,8 @@ def resolve_targets(cfg: dict) -> dict:
 
 
 def resolve_loss(cfg: dict) -> dict:
-    """``cfg['loss']`` with ``LOSS_DEFAULTS`` filled, plus all constraints (loss and top level): ``all_constraints``."""
-    loss = {**LOSS_DEFAULTS, **cfg["loss"]}
-    loss["all_constraints"] = [*loss["constraints"], *(cfg["constraints"] if "constraints" in cfg else [])]
-    return loss
+    """``cfg['loss']`` with ``LOSS_DEFAULTS`` filled (a new dict, ``cfg`` is not changed)."""
+    return {**LOSS_DEFAULTS, **cfg["loss"]}
 
 
 def targets_config(head_types: dict, *, options_by_kind: dict | None = None) -> dict:

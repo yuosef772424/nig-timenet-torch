@@ -7,8 +7,9 @@ PITFALLS: the group of a row (its timestamp id) arrives as ONE EXTRA INPUT CHANN
     evaluation chunks must be cut at group borders (trainer/groups.py). A row's output depends on the other rows of
     its timestamp, by design. ``center_groups`` (model option ``cross_center``) makes the close mean a RELATIVE
     move: its sign is no longer a bet on the market, and the high / low means are not centred (the ordered-means
-    relation low <= close <= high then holds only up to that shift). Improves on model/panel.py (the TF port,
-    parked): same NIG / class heads and output contract as the per-coin model, no (day, pos) grid from the caller,
+    relation low <= close <= high then holds only up to that shift).
+    Improves on the removed Keras cross-asset port (P43): same NIG / class heads and output contract as the per-coin
+    model, no (day, pos) grid from the caller,
     starts as the per-coin model exactly.
 """
 

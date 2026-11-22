@@ -133,7 +133,7 @@ class _Scorer:
 
     def __init__(self, trainer, x: torch.Tensor, y: dict, blocks: np.ndarray, chunk: int):
         self.trainer, self.x, self.blocks = trainer, x, blocks
-        self.dev = trainer._device()
+        self.dev = trainer.device
         self.y = {k: v.to(self.dev) for k, v in y.items()}
         self.grouped = trainer.group_channel
         self.cuts = (group_chunks(row_groups(x), chunk) if self.grouped
@@ -160,7 +160,7 @@ class _Scorer:
             yb = {k: v[rows] for k, v in self.y.items()}
             ob = {k: v[rows] for k, v in out.items()}
             gid = row_groups(self.x[rows.cpu()]).to(self.dev) if self.grouped else None
-            _, r, pt, _, _ = self.trainer.compute_losses(None, yb, outputs=ob, groups=gid)
+            _, r, pt, _ = self.trainer.compute_losses(None, yb, outputs=ob, groups=gid)
             raw.append(float(r))
             per.append({t: float(v) for t, v in pt.items()})
         ic = {t: metrics.spearman(out[k].float().cpu().numpy().reshape(-1), self.y[lk].cpu().numpy().reshape(-1))

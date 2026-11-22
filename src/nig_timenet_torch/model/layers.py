@@ -292,7 +292,7 @@ class AttentionPool(nn.Module):
 
 class FiLM(nn.Module):
     """x * (1 + gamma(e)) + beta(e) per token, gamma/beta kernels zero-initialised (identity at start)
-    (source: model/readout.py). Not wired into the builder until P34 (level_film is off in both oracles)."""
+    (source: model/readout.py). Not wired into the builder (level_film is not implemented; off in both oracles)."""
 
     def __init__(self, d_model: int, e_dim: int | None = None):
         super().__init__()
@@ -307,7 +307,8 @@ class FiLM(nn.Module):
 
 
 class GatedFusion(nn.Module):
-    """g = sigmoid(W [a; b]); g * a + (1 - g) * b (source: model/readout.py). Not wired until P34 (two_tower off)."""
+    """g = sigmoid(W [a; b]); g * a + (1 - g) * b (source: model/readout.py). Not wired into the builder
+    (two_tower is not implemented)."""
 
     def __init__(self, d_model: int, b_dim: int | None = None):
         super().__init__()

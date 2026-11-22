@@ -3,6 +3,7 @@
 import torch
 
 from nig_timenet_torch.core.seeds import seed_everything
+from nig_timenet_torch.trainer.groups import row_batches
 from nig_timenet_torch.trainer.trainer import Trainer
 from tests.trainer.fixture_setup import build_model, load_fixture, trainer_config
 
@@ -12,7 +13,7 @@ def first_batch_and_step(seed: int):
     x, y = load_fixture(128)
     trainer = Trainer(build_model(16, 18, dropout=0.1), trainer_config(),
                       optimizer=lambda ps: torch.optim.AdamW(ps, lr=1e-3))
-    idx = trainer.batch_indices(x.shape[0], 32)[0]
+    idx = row_batches(x.shape[0], 32, True)[0]
     logs = trainer.train_step(x[idx], {k: v[idx] for k, v in y.items()})
     return idx, logs["total_loss"]
 

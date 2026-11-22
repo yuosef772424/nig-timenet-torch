@@ -28,7 +28,7 @@ from nig_timenet_torch.model.layers import num_patches
 
 __all__ = ["INPUT_SKIP_VARIANTS", "InputSkip", "patch_tokens", "build_input_skip", "skip_variant", "LATE_RAW_K"]
 
-INPUT_SKIP_VARIANTS = Registry("input_skip", Contract("input_skip", required_meta=("build_fn",)))
+INPUT_SKIP_VARIANTS = Registry("input_skip", Contract("input_skip"))
 LATE_RAW_K = 4  # bars; the PLAN says "last-k", k unspecified (docs/friction_log.csv, P34)
 
 
@@ -128,13 +128,13 @@ class NoProj(InputSkip):
 
 
 for _cls in (InputSkip, ConcatEachBlock, DenseSkip, LateRaw, NoProj):
-    INPUT_SKIP_VARIANTS.register(_cls.name, _cls, version=1, build_fn=_cls)
+    INPUT_SKIP_VARIANTS.register(_cls.name, _cls, version=1)
 
 
 def skip_variant(name: str) -> type[InputSkip]:
     """The registered variant class (its flags tell what it adds); unknown name -> UnknownNameError."""
-    return INPUT_SKIP_VARIANTS.entry(name).meta["build_fn"]
+    return INPUT_SKIP_VARIANTS.get(name)
 
 
 def build_input_skip(name: str, **dims) -> InputSkip:
-    return INPUT_SKIP_VARIANTS.entry(name).meta["build_fn"](**dims)
+    return INPUT_SKIP_VARIANTS.get(name)(**dims)

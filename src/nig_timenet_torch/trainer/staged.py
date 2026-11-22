@@ -26,7 +26,7 @@ import torch
 from nig_timenet_torch.core.config import to_dict
 from nig_timenet_torch.core.registry import Contract, Registry
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
-from nig_timenet_torch.core.seeds import seed_everything
+from nig_timenet_torch.core.seeds import bn_refresh_seed, epoch_seed, seed_everything, stage_probe_seed
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
@@ -271,7 +271,7 @@ class _Loop:
         pick = _strided(len(xv), st.val_max_rows)       # the SAME validation rows in every stage and baseline
         self.xv, self.yv = (xv, yv) if pick is None else (xv[torch.as_tensor(pick)],
                                                            {k: v[torch.as_tensor(pick)] for k, v in yv.items()})
-        self.dev, self.bs = trainer._device(), fit.batch_size
+        self.dev, self.bs = trainer.device, fit.batch_size
         self.full_spe = math.ceil(len(self.x) / self.bs)
         es = fit.early_stop
         self.tracker = BestTracker(EarlyStopSettings(patience=_NEVER, min_delta=es.min_delta, smoothing="none",
@@ -288,7 +288,8 @@ class _Loop:
         spec, st = self.stages[self.s], self.st
         pool = np.concatenate([spec.rows] + [spec.new_rows] * (st.new_weight - 1))
         self.pool_t, self.n_pool = torch.as_tensor(pool), len(pool)
-        g = torch.Generator().manual_seed(self.fit.seed * 7919 + self.s)   # own generator: the global RNG is untouched
+        # own generator: the global RNG is untouched
+        g = torch.Generator().manual_seed(stage_probe_seed(self.fit.seed, self.s))
         pick = torch.randperm(len(spec.rows), generator=g)[:st.probe_rows]
         probe = torch.as_tensor(np.sort(spec.rows[pick.numpy()]))
         self.xp, self.yp = self.x[probe], {k: v[probe] for k, v in self.y.items()}
@@ -313,7 +314,7 @@ class _Loop:
     def _refresh_bn(self, spec: StageSpec) -> None:
         """Forward-only train-mode steps on the stage's rows so that BatchNorm moving statistics see the new rows."""
         rows = spec.new_rows if len(spec.new_rows) else spec.rows
-        g = torch.Generator().manual_seed(self.fit.seed * 104729 + self.s)
+        g = torch.Generator().manual_seed(bn_refresh_seed(self.fit.seed, self.s))
         self.t.model.train()
         for _ in range(self.st.bn_refresh_steps):
             ix = torch.as_tensor(rows)[torch.randint(len(rows), (min(self.bs, len(rows)),), generator=g)]
@@ -330,7 +331,7 @@ class _Loop:
 
     def _one_step(self, spec: StageSpec) -> None:
         if self.perm is None:
-            torch.manual_seed(self.fit.seed * 1_000_003 + self.pass_id)   # as Trainer._begin_epoch
+            torch.manual_seed(epoch_seed(self.fit.seed, self.pass_id))   # as Trainer._begin_epoch
             self.perm = torch.randperm(self.n_pool)
         ix = self.pool_t[self.perm[self.b * self.bs:(self.b + 1) * self.bs]]
         self.lr_now = self._lr(spec)
@@ -443,7 +444,7 @@ class _Loop:
             self.detector.load_state(sg["detector"])
             self.stage_best_w = sg["stage_best"]
             if self.b > 0:     # mid-pass: the same permutation, then the dropout stream where it stopped
-                torch.manual_seed(self.fit.seed * 1_000_003 + self.pass_id)
+                torch.manual_seed(epoch_seed(self.fit.seed, self.pass_id))
                 self.perm = torch.randperm(self.n_pool)
                 torch.set_rng_state(sg["rng"])
                 if sg["cuda_rng"]:

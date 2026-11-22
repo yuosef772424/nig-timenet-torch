@@ -90,7 +90,7 @@ def test_aux_heads_join_the_trainer_with_a_fixed_weight_and_zero_trunk_gradient_
     assert tr.targets_cfg[SIDE.name]["loss_weight"] == 0.5 and tr.targets_cfg[UPQ.name]["quantile"] == 0.8
     assert tr.targets_cfg[SIDE.name]["cost_per_side"] == RunSettings(run_dir="x").evaluation.battery.cost_per_side
     assert SIDE.name not in tr.kendall_task_names and UPQ.name not in tr.kendall_task_names
-    _, _, per_target, stats, _ = tr.compute_losses(x, y, training=True)
+    _, _, per_target, stats = tr.compute_losses(x, y, training=True)
     m.zero_grad()
     (per_target[SIDE.name] + per_target[UPQ.name]).backward()
     named = dict(m.named_parameters())

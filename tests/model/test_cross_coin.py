@@ -136,7 +136,6 @@ def test_cross_input_model_reads_its_peers_and_keeps_the_contract():
     assert set(out) == set(base(x)) and all(torch.isfinite(v).all() for v in out.values())
     assert (out2["y_close"][1] - out["y_close"][1]).abs() > 1e-6          # its peer's prediction moves
     torch.testing.assert_close(out2["y_close"][3:], out["y_close"][3:])   # the other timestamp does not
-    assert m._gid is None
     with pytest.raises(ValueError, match="cross_input"):
         build_nig_timenet_v2(32, 3, **KW, cross_input="ranks")
 
