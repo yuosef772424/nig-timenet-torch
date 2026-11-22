@@ -86,7 +86,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/audit/2026-11-20-readings/`: Pre-registration I1: the indicator channels trained like R (owner 2026-11-20) (`PREREGISTERED_I1.md`), 5 files
 - `docs/audit/2026-11-20-v1rep-i2/`: Pre-registration: V1-rep and I2 (owner 2026-11-20: "run the proposals, in parallel, free RAM under 10 GB") (`PREREGISTERED.md`), 3 files
 - `docs/audit/2026-11-21-independent-review/`: , 13 files
-- `docs/audit/2026-11-22-dy1-daily/`: DY1 pre-registration: a daily model that predicts two days ahead, judged as money after costs (`PREREGISTERED.md`), 10 files
+- `docs/audit/2026-11-22-dy1-daily/`: DY1 pre-registration: a daily model that predicts two days ahead, judged as money after costs (`PREREGISTERED.md`), 19 files
 - `docs/audit/2026-11-22-n8-account/`: , 10 files
 
 ## Handoffs
@@ -172,7 +172,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## One-off scripts under docs/
 
-60 scripts kept under docs/ (one-off analyses next to the note or audit they belong to; not run by CI).
+63 scripts kept under docs/ (one-off analyses next to the note or audit they belong to; not run by CI).
 
 - `docs/audit/2026-11-14-model-first/colab_follow.py`: Follow, resume and read the multi-coin (panel) arms on a Colab runtime, without the bridge.
 - `docs/audit/2026-11-14-model-first/quick_arms.py`: Small-sample arms on a contract artifact: encoder (gru / transformer) x learning rate, same rows and seed.
@@ -227,7 +227,10 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/audit/2026-11-22-dy1-daily/build_daily.py`: DY1: build the daily contract artifact (1d bars, window 32, horizon 2 days) from the public Binance archive.
 - `docs/audit/2026-11-22-dy1-daily/failure_read.py`: DY1 failure reading (rule C7, docs/PHILOSOPHY.md section 3) from the saved TEST / VAL tables of one arm and seed.
 - `docs/audit/2026-11-22-dy1-daily/model_free.py`: DY1 model-free bound (ROADMAP N3 at the daily frame): ridge and trivial rules on the folds of the rolling entry.
+- `docs/audit/2026-11-22-dy1-daily/own_returns.py`: DY1 amendment 1: copies of an M3 arm's fold tables with y_ret replaced by the coin's OWN 2-day return.
 - `docs/audit/2026-11-22-dy1-daily/read_dy1.py`: DY1 reading: the pre-registered account of each arm and seed, plus the secondary rows of PREREGISTERED.md.
+- `docs/audit/2026-11-22-dy1-daily/summary_table.py`: DY1: one markdown row per arm (both seeds) from read_dy1.txt lines.  python summary_table.py READ_DY1_TXT
+- `docs/audit/2026-11-22-dy1-daily/timing_baselines.py`: DY1 look (NOT pre-registered; written after the dy1-vm long books were read as timing): does a trivial timing
 - `docs/audit/2026-11-22-dy1-daily/vol_universe.py`: DY1 amendment 1 (owner 2026-11-22): a universe of coins with similar volatility, chosen on the TRAIN era only.
 - `docs/audit/2026-11-22-n8-account/atr_and_charts.py`: Take-profit at k x ATR on the saved battery tables, and consistency charts of the model and its predictions.
 - `docs/audit/2026-11-22-n8-account/scan.py`: N8 account scan: the ACCOUNT section (eval/account.py) of every run folder on Drive that holds battery tables.
