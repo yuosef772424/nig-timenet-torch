@@ -4,11 +4,12 @@ Pre-registered in PREREGISTERED.md (section "Model-free first"). Same folds as e
 180 D, step 180 D, embargo 2 D, 7 folds, val = last 15 % of the train window), same universe (the 100 coins with the
 most TRAIN rows per fold), and each score goes through the SAME account (``eval/account.py::account_section``).
 
-    python docs/audit/2026-11-22-dy1-daily/model_free.py ARTIFACT OUT_JSON [--books 2]
+    python docs/audit/2026-11-22-dy1-daily/model_free.py ARTIFACT OUT_JSON [--books 2] [--tables DIR]
 Prints one line per rule; writes the stats (and the per-fold rank IC) to OUT_JSON.
 """
 import argparse
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -59,6 +60,7 @@ def main() -> None:
     ap.add_argument("artifact")
     ap.add_argument("out")
     ap.add_argument("--books", type=int, default=2)
+    ap.add_argument("--tables", default="", help="also write <dir>/<rule>/fold_<k>/battery_table_{val,test}.parquet")
     a = ap.parse_args()
     ds = npy_dir.load(a.artifact, mmap=False)
     tf = ds["base_tf"]
@@ -70,7 +72,7 @@ def main() -> None:
     coins = np.array([b["name"] for b in ds["asset_bounds"]])
     design, simple = features(x)
     y_log = np.log1p(y_ret)
-    end_time = pd.to_datetime(t + pd.Timedelta(tf).value)   # the bar has closed: the prediction is made then
+    end_time = pd.to_datetime(t + pd.Timedelta(tf.upper()).value)   # the bar has closed: the prediction is made then
     folds = rolling_folds(ds, ROLLING)
     tables = {r: [] for r in RULES}
     ics = {r: [] for r in RULES}
@@ -92,6 +94,11 @@ def main() -> None:
             mk = lambda idx: pd.DataFrame({"mu": s[idx], "y_ret": y_ret[idx], "coin": coins[asset_ids(ds, idx)],  # noqa: E731
                                            "end_time": end_time[idx], "last_close": last_close[idx]})
             tables[r].append((mk(va), mk(te)))
+            if a.tables:
+                d = Path(a.tables) / r / f"fold_{fold.index}"
+                d.mkdir(parents=True, exist_ok=True)
+                tables[r][-1][0].to_parquet(d / "battery_table_val.parquet")
+                tables[r][-1][1].to_parquet(d / "battery_table_test.parquet")
             ics[r].append(float(np.mean(rank_ic(s[te], y_ret[te], t[te]))))
         print(f"fold {fold.index}: train {len(tr)} val {len(va)} test {len(te)} rows, test {fold.test_start.date()}"
               f" .. {fold.test_end.date()}, ridge IC {ics['ridge'][-1]:+.4f}", flush=True)

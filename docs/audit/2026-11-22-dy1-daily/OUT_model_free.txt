@@ -1,0 +1,13 @@
+fold 0: train 59142 val 12066 test 13661 rows, test 2023-01-03 .. 2023-07-02, ridge IC +0.0127
+fold 1: train 73614 val 14913 test 14016 rows, test 2023-07-02 .. 2023-12-29, ridge IC +0.0260
+fold 2: train 88385 val 18117 test 14286 rows, test 2023-12-29 .. 2024-06-26, ridge IC +0.0500
+fold 3: train 103598 val 20844 test 13622 rows, test 2024-06-26 .. 2024-12-23, ridge IC +0.0005
+fold 4: train 118898 val 22364 test 13548 rows, test 2024-12-23 .. 2025-06-21, ridge IC +0.0564
+fold 5: train 133701 val 24788 test 13578 rows, test 2025-06-21 .. 2025-12-18, ridge IC +0.0899
+fold 6: train 148132 val 27437 test 13709 rows, test 2025-12-18 .. 2026-06-16, ridge IC +0.0612
+ridge        IC +0.0424 (t~3.8) excess/trade +0.127% | CAGR fee0   +4.1% fee.08   +2.3% Sharpe 0.64 DD -6% | placebo p95 +1.2% | always long -15.7% | BTC +24.9%
+momentum_7   IC -0.0360 (t~-3.2) excess/trade +0.004% | CAGR fee0   +2.8% fee.08   +1.8% Sharpe 0.28 DD -23% | placebo p95 +2.2% | always long -15.7% | BTC +24.9%
+momentum_30  IC -0.0323 (t~-2.7) excess/trade +0.029% | CAGR fee0   +3.4% fee.08   +2.9% Sharpe 0.36 DD -24% | placebo p95 +2.7% | always long -15.7% | BTC +24.9%
+reversal_1   IC +0.0309 (t~2.7) excess/trade -0.017% | CAGR fee0   +3.9% fee.08   +1.9% Sharpe 0.25 DD -16% | placebo p95 +3.2% | always long -15.7% | BTC +24.9%
+reversal_3   IC +0.0448 (t~4.0) excess/trade +0.042% | CAGR fee0   +5.5% fee.08   +3.7% Sharpe 0.40 DD -25% | placebo p95 +4.0% | always long -15.7% | BTC +24.9%
+low_vol_30   IC +0.0706 (t~4.5) excess/trade +0.119% | CAGR fee0   -0.7% fee.08   -0.8% Sharpe -0.36 DD -8% | placebo p95 -4.6% | always long -15.7% | BTC +24.9%
