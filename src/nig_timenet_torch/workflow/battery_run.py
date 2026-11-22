@@ -4,19 +4,23 @@ TAGS: battery run, stage inputs, t-profit, battery report, adapter entry point, 
 PITFALLS: VAL thresholds are applied to TEST (no leakage), so val and test must be different stages of ONE run;
     n_variants is the number of variants tried so far and widens the CI, state it in the result file; stage_atr
     reads only bars closed by the prediction time (window high / low, else the last NATR_14), battery tables saved
-    before 2026-11-22 have no atr column (the take-profit-at-ATR section is skipped on them).
+    before 2026-11-22 have no atr column (the take-profit-at-ATR section is skipped on them); account_from_folders
+    puts the TEST of SEVERAL fold folders in ONE account (each fold's own VAL threshold): the folds must not overlap.
 
 With ``evaluation.battery.day_metrics`` (D-032, off by default) ``battery_step`` also writes the day metrics of a
 multi-coin run (``workflow.panel_report.panel_step``: ``panel_report.json`` / ``.md`` and the two frames).
 ``battery_step(run)`` (after ``workflow.run.test_step``) writes ``battery_report.txt`` (every section),
 ``battery_profit.json`` (the T-profit sections with their numbers and the verdict) and the two battery tables
 (``battery_table_val.parquet`` / ``battery_table_test.parquet``) into the run's output folder. ``battery_from_folder``
-re-runs the battery from those tables alone (any model that writes them, other costs or more variants), no model needed.
+re-runs the battery from those tables alone (any model that writes them, other costs or more variants), no model needed;
+``account_from_folders`` runs the capital account (``eval.account``) over the TEST of several fold folders (a rolling
+run), the view of the audit scripts a3-a6: ``python -m nig_timenet_torch.workflow.battery_run <fold folders...>``.
 ``StageInputs`` bundles exactly what ``eval.target_report.target_report`` takes for one stage (plus the optional
 ``prev_close`` for the persistence baseline). ``run_battery`` returns ``{section: {title, rows, note, ...}}``;
 ``render`` prints it the way the battery does; ``battery_report.txt`` is written when ``out_dir`` is given.
 """
 
+import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +30,7 @@ import pandas as pd
 
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
 from nig_timenet_torch.data.scaling import PERCENT_SCALE
+from nig_timenet_torch.eval.account import account_section
 from nig_timenet_torch.eval.battery import full_battery, show
 from nig_timenet_torch.eval.battery_adapter import to_battery_table
 from nig_timenet_torch.eval.battery_lib import DEFAULT_COST_PER_SIDE
@@ -33,6 +38,7 @@ from nig_timenet_torch.eval.vol_baseline import window_ranges
 from nig_timenet_torch.workflow import flat_run, run_common
 
 __all__ = ["StageInputs", "run_battery", "run_tables", "render", "battery_step", "battery_from_folder", "stage_inputs",
+           "account_from_folders", "main",
            "stage_atr", "NATR_FEATURE",
            "profit_json", "table_path", "REPORT_TXT", "PROFIT_JSON"]
 
@@ -75,9 +81,11 @@ def run_battery(val: StageInputs, test: StageInputs, *, cost: float = DEFAULT_CO
 
 
 def run_tables(val: pd.DataFrame, test: pd.DataFrame, *, cost: float = DEFAULT_COST_PER_SIDE, n_variants: int = 1,
-               out_dir=None) -> dict:
-    """The same from two ready battery tables (``eval.battery_adapter.to_battery_table`` output)."""
-    sections = full_battery(val, test, cost, n_variants)
+               out_dir=None, trim: str = "best", drop_flat: bool = True, account_books: int = 0) -> dict:
+    """The same from two ready battery tables (``eval.battery_adapter.to_battery_table`` output); ``trim``,
+    ``drop_flat`` and ``account_books`` (0 = read the horizon) as in ``eval.battery.full_battery``."""
+    sections = full_battery(val, test, cost, n_variants, trim=trim, drop_flat=drop_flat,
+                            account_books=account_books or None)
     if out_dir is not None:
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
@@ -123,7 +131,8 @@ def stage_inputs(run, stage: str) -> StageInputs:
 def profit_json(sections: dict) -> dict:
     """The T-profit sections (title, rows, note, stats), the verdict and the scorecard verdict, as plain JSON-able
     data."""
-    keep = {k: v for k, v in sections.items() if k.startswith("profit_") or k in ("verdict", "scorecard_verdict")}
+    keep = {k: v for k, v in sections.items()
+            if k.startswith("profit_") or k in ("verdict", "scorecard_verdict", "account")}
     return {k: {f: v[f] for f in ("title", "rows", "note", "stats", "best", "tradeable", "passed") if f in v}
             for k, v in keep.items()}
 
@@ -139,7 +148,8 @@ def battery_step(run) -> dict:
     if not b.enabled:
         return {}
     val, test = stage_inputs(run, "val").battery_table(), stage_inputs(run, "test").battery_table()
-    sections = run_tables(val, test, cost=b.cost_per_side, n_variants=b.n_variants, out_dir=run.out)
+    sections = run_tables(val, test, cost=b.cost_per_side, n_variants=b.n_variants, out_dir=run.out,
+                          trim=b.verdict_trim, drop_flat=b.drop_flat, account_books=b.account_books)
     if run.out is not None:
         val.to_parquet(table_path(run.out, "val"), index=False)
         test.to_parquet(table_path(run.out, "test"), index=False)
@@ -149,16 +159,46 @@ def battery_step(run) -> dict:
     return sections
 
 
-def battery_from_folder(folder, *, cost: float = DEFAULT_COST_PER_SIDE, n_variants: int = 1, out_dir=None) -> dict:
-    """The battery of a FINISHED run folder: reads its two battery tables, no model and no artifact needed (any model
-    that writes ``battery_table_{val,test}.parquet`` can use it). ``out_dir`` None = write nothing."""
+def _tables(folder) -> tuple[pd.DataFrame, pd.DataFrame]:
     missing = [str(table_path(folder, st)) for st in ("val", "test") if not table_path(folder, st).is_file()]
     if missing:
         raise FileNotFoundError(f"not a finished run folder (no battery tables): {missing}")
-    val, test = (pd.read_parquet(table_path(folder, st)) for st in ("val", "test"))
-    sections = run_tables(val, test, cost=cost, n_variants=n_variants, out_dir=out_dir)
+    return pd.read_parquet(table_path(folder, "val")), pd.read_parquet(table_path(folder, "test"))
+
+
+def battery_from_folder(folder, *, cost: float = DEFAULT_COST_PER_SIDE, n_variants: int = 1, out_dir=None,
+                        trim: str = "best", drop_flat: bool = True, account_books: int = 0) -> dict:
+    """The battery of a FINISHED run folder: reads its two battery tables, no model and no artifact needed (any model
+    that writes ``battery_table_{val,test}.parquet`` can use it). ``out_dir`` None = write nothing."""
+    val, test = _tables(folder)
+    sections = run_tables(val, test, cost=cost, n_variants=n_variants, out_dir=out_dir, trim=trim,
+                          drop_flat=drop_flat, account_books=account_books)
     if out_dir is not None:
         (Path(out_dir) / PROFIT_JSON).write_text(json.dumps({"cost_per_side": cost, "n_variants": n_variants,
                                                              **profit_json(sections)}, indent=1, default=float),
                                                  encoding="utf-8")
     return sections
+
+
+def account_from_folders(folders, *, cost: float = DEFAULT_COST_PER_SIDE, account_books: int = 0, **kw) -> dict:
+    """The ACCOUNT section (``eval.account.account_section``; ``kw`` its other options) over the TEST tables of several
+    finished fold folders in time order, each fold's long book cut at its own VAL quantile: the account of a rolling
+    run (the audit's a3-a6 on rolling-dw1-r-001 were this over the 7 folds of one seed)."""
+    return account_section([_tables(f) for f in folders], cost, n_books=account_books or None, **kw)
+
+
+def main(argv=None) -> int:
+    """Print the ACCOUNT section of fold folders: ``python -m nig_timenet_torch.workflow.battery_run F0 F1 ...``."""
+    ap = argparse.ArgumentParser(description=main.__doc__)
+    ap.add_argument("folders", nargs="+", help="finished run folders with battery_table_{val,test}.parquet")
+    ap.add_argument("--cost", type=float, default=DEFAULT_COST_PER_SIDE, help="cost per side")
+    ap.add_argument("--books", type=int, default=0, help="sub-books (0 = read the label horizon from the table)")
+    ap.add_argument("--placebo", type=int, default=None, help="placebo draws (default eval.account.N_PLACEBO)")
+    a = ap.parse_args(argv)
+    kw = {} if a.placebo is None else {"n_placebo": a.placebo}
+    print(render({"account": account_from_folders(a.folders, cost=a.cost, account_books=a.books, **kw)}), end="")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -17,6 +17,7 @@ import pandas as pd
 
 from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.data_io.loading import LoaderSettings
+from nig_timenet_torch.eval.battery_scorecard import TRIM_KEYS
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES
 from nig_timenet_torch.trainer.day_weights import DayWeightSettings
@@ -207,10 +208,20 @@ class BatterySettings:
     # bottom book against their baselines, uncertainty use): workflow/panel_report.py; read even when ``enabled`` is
     # False (the day metrics have their own files)
     day_metrics: bool = False
+    # N8 (audit 2026-11-21): the scorecard verdict's trim (eval.battery_scorecard.TRIM_KEYS: "best" drops the best
+    # 5 % of days, "symmetric" the best AND worst), whether every section drops the flat rows (dir_true == 0, chosen
+    # by the outcome: E5), and the account's sub-books (0 = read the label horizon from the table, eval.account)
+    verdict_trim: str = "best"
+    drop_flat: bool = True
+    account_books: int = 0
 
     def __post_init__(self):
         if self.cost_per_side < 0 or self.n_variants < 1:
             raise ValueError("cost_per_side >= 0 and n_variants >= 1")
+        if self.verdict_trim not in TRIM_KEYS:
+            raise ValueError(f"verdict_trim must be one of {sorted(TRIM_KEYS)}, got {self.verdict_trim!r}")
+        if self.account_books < 0:
+            raise ValueError("account_books >= 0 (0 = read the horizon from the table)")
 
 
 @dataclass(frozen=True)

@@ -107,3 +107,12 @@ def test_take_profit_at_atr_targets_k_atr_on_the_trade_side_and_falls_back_to_th
     assert sh["pnl"][1] == pytest.approx(-np.expm1(-0.01) - 2 * 0.0008)   # the short's gain at its target
     close_only = bl.take_profit_at_atr(df.drop(columns=["fut_high", "fut_low"]), idx, 1.0, 0.5, 0.0)
     assert not close_only["path"] and not close_only["hit"].any()          # no close reaches half an ATR here
+
+
+def test_battery_settings_n8_switches_default_to_the_old_behaviour_and_refuse_unknown_values():
+    b = BatterySettings()
+    assert (b.verdict_trim, b.drop_flat, b.account_books) == ("best", True, 0)
+    with pytest.raises(ValueError, match="verdict_trim"):
+        BatterySettings(verdict_trim="worst")
+    with pytest.raises(ValueError, match="account_books"):
+        BatterySettings(account_books=-1)

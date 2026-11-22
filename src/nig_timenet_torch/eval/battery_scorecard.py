@@ -8,7 +8,9 @@ PITFALLS: direction source is p_dir via battery_lib.trade_side; y_ret and mu are
 the log label with exp); a short pays -y_ret, so its
     loss grows like exp(log move) while its gain is bounded (asymmetry section). Thresholds come from VAL (never TEST);
     the CI level is Bonferroni over the section's rows x n_variants. A day is the calendar day of end_time; a day's
-    P&L is the equal-weight mean of the trades of that day.
+    P&L is the equal-weight mean of the trades of that day (not an account return: eval.account). The verdict's trim
+    is one-sided (best days) by default, ``trim="symmetric"`` drops the best AND worst days (audit E1); the benchmark
+    rows (always long, BTC) go through the same day test but never into the verdict's best row.
 
 Owner request 2026-11-19: "make the evaluation take into account the confidence, the distribution of the losses over
 the days, the size of the uncertainty and the top". The older battery judges a selection by its per-trade Sharpe
@@ -22,6 +24,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from nig_timenet_torch.eval.account import BENCHMARK_COIN
 from nig_timenet_torch.eval.battery_lib import (
     MIN_TRADES,
     bonferroni_level,
@@ -35,7 +38,8 @@ from nig_timenet_torch.eval.day_blocks import DAY_BLOCK_DAYS, calendar_day
 from nig_timenet_torch.stats.metrics import block_bootstrap_ci
 
 __all__ = ["scorecard_sections", "scorecard", "uncertainty_buckets", "payoff_asymmetry", "scorecard_verdict",
-           "day_profile", "selections", "TOP_SHARES", "TAIL_SHARE", "MIN_TRADES", "N_BUCKETS"]
+           "day_profile", "selections", "benchmark_days", "TOP_SHARES", "TAIL_SHARE", "MIN_TRADES", "N_BUCKETS",
+           "TRIM_KEYS"]
 
 #: the "top" shares of the selections (of the VAL rows, by |mu|)
 TOP_SHARES = (0.05, 0.10, 0.20)
@@ -45,6 +49,11 @@ TAIL_SHARE = 0.05
 N_BUCKETS = 5
 
 _SIDES = (("LONG", 1.0), ("SHORT", -1.0), ("BOTH", 0.0))
+
+#: the verdict's trimmed mean day: without the best ``TAIL_SHARE`` of days (``best``, the rule since T5r) or without
+#: the best AND the worst ``TAIL_SHARE`` (``symmetric``, audit E1: a one-sided trim fails any positively skewed book,
+#: buy-and-hold included)
+TRIM_KEYS = {"best": "mean_wo_best", "symmetric": "mean_sym_trim"}
 
 
 def _days(df) -> np.ndarray:
@@ -69,7 +78,8 @@ def day_profile(pnl: np.ndarray, days: np.ndarray, level: float, seed: int = 0) 
     worst day, CVaR (mean of the worst ``TAIL_SHARE`` of days), the share of all losing-day P&L held by those worst
     days, the max drawdown of the summed day P&L, the mean day without the best ``TAIL_SHARE`` of days, and the mean
     day of the BUSY days (at least the median number of trades): an equal-weight day mean gives a day with one trade
-    the weight of a day with a hundred, so a side that loses on its crowded days can still show a positive mean day."""
+    the weight of a day with a hundred, so a side that loses on its crowded days can still show a positive mean day;
+    and the mean day without the best AND the worst ``TAIL_SHARE`` of days (symmetric trim, audit E1)."""
     pnl = np.asarray(pnl, dtype=np.float64)
     keys, inv = np.unique(days, return_inverse=True)
     counts = np.bincount(inv)
@@ -85,6 +95,7 @@ def day_profile(pnl: np.ndarray, days: np.ndarray, level: float, seed: int = 0) 
             "tail_loss_share": float(order[:k][order[:k] < 0].sum() / losing) if losing < 0 else 0.0,
             "max_dd": float((np.maximum.accumulate(np.maximum(curve, 0.0)) - curve).max()),
             "mean_wo_best": float(order[:-k].mean()) if n > k else float("nan"),
+            "mean_sym_trim": float(order[k:-k].mean()) if n > 2 * k else float("nan"),
             "mean_busy": float(day[counts >= np.median(counts)].mean())}
 
 
@@ -122,7 +133,8 @@ def scorecard(val, test, cost: float, n_variants: int = 1) -> dict:
     masks = selections(val, test)
     level = _level(len(masks) * len(_SIDES), n_variants)
     head = (f"  {'selection':<30}{'side':<6}{'n':>8}{'days':>6}{'win%':>7}{'avg%':>9}{'win d%':>8}"
-            f"{'mean d% [CI]':>28}{'worst d%':>10}{'CVaR%':>8}{'tail%':>7}{'maxDD%':>8}{'w/o best%':>10}{'busy d%':>9}")
+            f"{'mean d% [CI]':>28}{'worst d%':>10}{'CVaR%':>8}{'tail%':>7}{'maxDD%':>8}{'w/o best%':>10}{'busy d%':>9}"
+            f"{'sym trim%':>10}{'median d%':>10}")
     rows, stats = [head], {}
     for name, mask in masks.items():
         for label, sg in _SIDES:
@@ -138,7 +150,14 @@ def scorecard(val, test, cost: float, n_variants: int = 1) -> dict:
                         f"{p['avg'] * 100:>+8.3f}%{p['win_days'] * 100:>7.1f}%"
                         f"{p['mean_day'] * 100:>+9.3f} [{p['ci_lo'] * 100:+.3f}, {p['ci_hi'] * 100:+.3f}]"
                         f"{p['worst_day'] * 100:>+10.2f}{p['cvar'] * 100:>+8.2f}{p['tail_loss_share'] * 100:>6.0f}%"
-                        f"{p['max_dd'] * 100:>8.1f}{p['mean_wo_best'] * 100:>+10.3f}{p['mean_busy'] * 100:>+9.3f}")
+                        f"{p['max_dd'] * 100:>8.1f}{p['mean_wo_best'] * 100:>+10.3f}{p['mean_busy'] * 100:>+9.3f}"
+                        f"{p['mean_sym_trim'] * 100:>+10.3f}{p['median_day'] * 100:>+10.3f}")
+    bench = benchmark_days(test, cost, level)
+    rows.append("  benchmarks under the same day test (never the verdict's row):")
+    for name, b in bench.items():
+        rows.append(f"  {name:<36}{b['n']:>8,}{b['days']:>6}  mean d {b['mean_day'] * 100:+.3f}%  w/o best "
+                    f"{b['mean_wo_best'] * 100:+.3f}%  sym trim {b['mean_sym_trim'] * 100:+.3f}%  median d "
+                    f"{b['median_day'] * 100:+.3f}%")
     out = section(
         "SCORECARD (TEST) - selection x side, judged by DAYS (thresholds from VAL)", rows,
         f"net of {rt:.4%} per trade; a day = equal-weight mean of that day's trades; CI {level * 100:.2f}% from "
@@ -146,10 +165,28 @@ def scorecard(val, test, cost: float, n_variants: int = 1) -> dict:
         "CVaR = "
         f"mean of the worst {TAIL_SHARE:.0%} days; tail% = their share of all losing-day P&L; maxDD on the summed "
         f"day P&L; w/o best = mean day without the best {TAIL_SHARE:.0%} days; busy = mean day of the days with at "
-        "least the median number of trades (where most trades are). A use is real only if its mean day CI "
-        "is above 0, it keeps winning days > 50 %, and its losses do not live in a few days (the verdict asks for a "
-        "positive mean day without the best days).")
+        "least the median number of trades (where most trades are); sym trim = mean day without the best AND worst "
+        f"{TAIL_SHARE:.0%} days; the benchmarks (every row long, {BENCHMARK_COIN} long every row) take the same test. "
+        "A use is real only if its mean day CI is above 0, it keeps winning days > 50 %, and its losses do not live "
+        "in a few days (the verdict asks for a positive trimmed mean day; read the benchmarks' trimmed mean beside "
+        "it: a trim that fails buy-and-hold rejects skew, not a lack of edge). A mean day is not an account return: "
+        "the ACCOUNT section is.")
     out["stats"] = stats
+    out["benchmarks"] = bench
+    return out
+
+
+def benchmark_days(test, cost: float, level: float) -> dict:
+    """The day profile of the books with no model in them, under the scorecard's test: every scored row long, and
+    the ``BENCHMARK_COIN`` rows long (empty when that coin is not in TEST)."""
+    keep, y, days = scored_rows(test), test["y_ret"].to_numpy(), _days(test)
+    out = {}
+    for name, mask in (("always long, every row", keep),
+                       (f"{BENCHMARK_COIN} long, every row", keep & (test["coin"].to_numpy() == BENCHMARK_COIN)
+                        if "coin" in test else np.zeros(len(test), dtype=bool))):
+        idx = np.where(mask)[0]
+        if len(idx) >= MIN_TRADES:
+            out[name] = day_profile(net_pnl(y[idx], cost), days[idx], level) | {"n": int(len(idx))}
     return out
 
 
@@ -254,18 +291,20 @@ def payoff_asymmetry(val, test, cost: float) -> dict:
     return out
 
 
-def scorecard_verdict(card: dict) -> dict:
+def scorecard_verdict(card: dict, trim: str = "best") -> dict:
     """The best scorecard row by the LOWER bound of its mean-day CI (not by a per-trade Sharpe), with its day
-    shape beside it. A row passes only with the CI above 0, winning days above 50 %, a mean day that stays above 0
-    without its best ``TAIL_SHARE`` of days (an edge that lives in a few days is not an edge) and a positive mean on
-    its busy days (an edge that lives on thin days is not tradeable at size)."""
+    shape beside it. A row passes only with the CI above 0, winning days above 50 %, a trimmed mean day above 0
+    (``TRIM_KEYS[trim]``: without its best ``TAIL_SHARE`` of days, or without its best and worst; an edge that lives in
+    a few days is not an edge) and a positive mean on its busy days (an edge that lives on thin days is not tradeable
+    at size). The benchmarks' trimmed mean day is printed beside it (the same test on books with no model)."""
+    trim_key = TRIM_KEYS[trim]
     stats = card.get("stats", {})
     if not stats:
         out = section("SCORECARD VERDICT", ["  no selection x side reached the minimum trades"], "pass=False")
         out.update(best=None, passed=False)
         return out
     name, best = max(stats.items(), key=lambda kv: (kv[1]["ci_lo"] if kv[1]["ci_lo"] == kv[1]["ci_lo"] else -1e9))
-    passed = bool(best["ci_lo"] > 0 and best["win_days"] > 0.5 and best["mean_wo_best"] > 0
+    passed = bool(best["ci_lo"] > 0 and best["win_days"] > 0.5 and best[trim_key] > 0
                   and best["mean_busy"] > 0)
     n_pos = sum(1 for s in stats.values() if s["mean_day"] > 0)
     rows = [f"  BEST (by mean-day CI low): {name}  mean day {best['mean_day'] * 100:+.3f}% "
@@ -273,13 +312,15 @@ def scorecard_verdict(card: dict) -> dict:
             f"worst day {best['worst_day'] * 100:+.2f}%  without the best days {best['mean_wo_best'] * 100:+.3f}%  "
             f"busy days {best['mean_busy'] * 100:+.3f}%",
             f"  rows with a positive mean day: {n_pos} of {len(stats)} (a share near half is what noise gives)",
+            f"  trim: {trim} ({trim_key}); the row {best[trim_key] * 100:+.3f}%; the benchmarks under the same trim: "
+            + (", ".join(f"{k} {b[trim_key] * 100:+.3f}%" for k, b in card.get("benchmarks", {}).items()) or "none"),
             f"  pass: {passed}"]
-    out = section("SCORECARD VERDICT", rows, f"pass={passed} (judged by days, Bonferroni CI)")
+    out = section("SCORECARD VERDICT", rows, f"pass={passed} (judged by days, Bonferroni CI, trim {trim})")
     out.update(best=name, passed=passed)
     return out
 
 
-def scorecard_sections(val, test, cost: float, n_variants: int = 1) -> dict:
+def scorecard_sections(val, test, cost: float, n_variants: int = 1, trim: str = "best") -> dict:
     """The scorecard sections (``scorecard``, ``buckets``, ``asymmetry``, ``scorecard_verdict``: see
     ``battery.SECTION_ORDER``). Returns ``{}`` when TEST has no end_time: ``battery.verdict`` then states "scorecard
     skipped: no end_time"."""
@@ -287,4 +328,4 @@ def scorecard_sections(val, test, cost: float, n_variants: int = 1) -> dict:
         return {}
     card = scorecard(val, test, cost, n_variants)
     return {"scorecard": card, "buckets": uncertainty_buckets(val, test, cost),
-            "asymmetry": payoff_asymmetry(val, test, cost), "scorecard_verdict": scorecard_verdict(card)}
+            "asymmetry": payoff_asymmetry(val, test, cost), "scorecard_verdict": scorecard_verdict(card, trim)}

@@ -3,7 +3,8 @@
 PURPOSE: Shared helpers of the battery: ONE implementation of cost, direction, top-|x| selection, trade stats,
     market, take-profit and limit-order PnL, the multiple-testing level and section shaping.
 TAGS: battery helpers, trade stats, sharpe, profit factor, section, cost, round trip, bonferroni
-PITFALLS: cost is PER SIDE (round_trip = 2x; net_pnl pays it once per trade); the direction of a trade is p_dir
+PITFALLS: cost is PER SIDE (round_trip = 2x; net_pnl pays it once per trade); scored_rows drops the flat rows unless
+    the table carries the keep_flat flag (``keep_flat``, audit E5); the direction of a trade is p_dir
     (trade_side), never sign(mu); trade_stats returns None below MIN_TRADES; Sharpe is per trade; top_abs ranks by
     |values| with a STABLE sort (ties keep row order), so the side comes from the mask; take_profit_at_mu sets a target
     only when sign(mu) == side and checks it on the realised extreme (fut_high / fut_low) when the table has it,
@@ -26,7 +27,8 @@ import numpy as np
 from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE  # re-exported: the one definition is in core
 
 __all__ = ["SIDES", "ALPHA", "MIN_TRADES", "TRADEABLE_SHARPE", "MARGINAL_SHARPE", "DEFAULT_COST_PER_SIDE",
-           "round_trip", "net_pnl", "bonferroni_level", "trade_side", "take_profit_at_mu", "take_profit_at_atr",
+           "KEEP_FLAT_ATTR", "keep_flat", "round_trip", "net_pnl", "bonferroni_level",
+           "trade_side", "take_profit_at_mu", "take_profit_at_atr",
            "limit_at_extreme", "trade_stats", "scored_rows", "top_abs", "direction_pnl", "section", "format_row",
            "HEADER"]
 
@@ -78,8 +80,24 @@ def trade_stats(pnl: np.ndarray, min_n: int = MIN_TRADES) -> dict | None:
             "pf": float(gross_win / gross_loss) if gross_loss > 1e-12 else float("inf")}
 
 
+#: the table flag (``df.attrs``) that makes ``scored_rows`` keep the flat rows (``keep_flat``)
+KEEP_FLAT_ATTR = "keep_flat"
+
+
+def keep_flat(df):
+    """A view of the battery table whose flat rows (``dir_true == 0``) every section keeps: audit E5, the rows are
+    chosen by the realised outcome (2.5 % of rolling-dw1-r-001 TEST, mostly coarse-tick coins), so dropping them
+    flatters every number. Set by ``battery.full_battery(drop_flat=False)``."""
+    out = df.copy(deep=False)
+    out.attrs[KEEP_FLAT_ATTR] = True
+    return out
+
+
 def scored_rows(df) -> "np.ndarray":
-    """The non-flat rows: a flat truth teaches nothing about direction."""
+    """The rows a section scores: the non-flat rows (a flat truth teaches nothing about direction), or every row of a
+    table marked with ``keep_flat``."""
+    if df.attrs.get(KEEP_FLAT_ATTR, False):
+        return np.ones(len(df), dtype=bool)
     return (df["dir_true"] != 0).values
 
 

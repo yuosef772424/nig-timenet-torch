@@ -25,7 +25,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Results notes
 
-36 notes (rule C7: the failure reading is inside each).
+37 notes (rule C7: the failure reading is inside each).
 
 - `docs/results/arm-i-001.md`: arm-i-001: arm I of rolling-ind-001 (7 indicator channels, lr 1e-5) read against R (exploratory, rule C5)
 - `docs/results/b1-btc-timing-001.md`: b1-btc-timing-001: buy BTC at the times the model is bullish across coins (owner 2026-11-19; exploratory, rule C5)
@@ -51,6 +51,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/results/m3-improve-local-001.md`: m3-improve-local-001: verifying M3 and improving its information, local CPU (owner 2026-11-20; exploratory, C5)
 - `docs/results/m3-local-001.md`: m3-local-001: market residual (method 3), a local CPU look (owner 2026-11-19; exploratory, rule C5)
 - `docs/results/more-data-flat-001.md`: more-data-flat-001: does more training data help? All train rows against 400k on one flat split (owner 2026-11-19)
+- `docs/results/n8-account-001.md`: n8-account-001: every saved run on Drive read as a capital account (N8, owner 2026-11-22; exploratory, C5)
 - `docs/results/nig-scale-default-001.md`: NIG label-scale default (MG2, B-071)
 - `docs/results/no-instance-norm-001.md`: The H3 test again without the normalisation layer (owner 2026-11-18) — refuted, the same partial gain as H
 - `docs/results/panel-001.md`: panel-001: the panel study on the full artifact, flat split (exploratory, rule C5)
@@ -66,7 +67,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Audits
 
-17 audit folders.
+18 audit folders.
 
 - `docs/audit/2026-11-14-model-first/`: Model-first audit — running notes (2026-11-14) (`NOTES.md`), 12 files
 - `docs/audit/2026-11-16-panel/`: Report A: architecture of the panel model (panel audit 2026-11-16) (`A_architecture.md`), 6 files
@@ -85,6 +86,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/audit/2026-11-20-readings/`: Pre-registration I1: the indicator channels trained like R (owner 2026-11-20) (`PREREGISTERED_I1.md`), 5 files
 - `docs/audit/2026-11-20-v1rep-i2/`: Pre-registration: V1-rep and I2 (owner 2026-11-20: "run the proposals, in parallel, free RAM under 10 GB") (`PREREGISTERED.md`), 3 files
 - `docs/audit/2026-11-21-independent-review/`: , 13 files
+- `docs/audit/2026-11-22-n8-account/`: , 10 files
 
 ## Handoffs
 
@@ -104,7 +106,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Decisions
 
-48 decisions (format: `docs/decisions/README.md`).
+49 decisions (format: `docs/decisions/README.md`).
 
 - `docs/decisions/D-001-trainer-fit-defaults.md`: D-001 — trainer fit: schedule, early-stopping and fit defaults (ROADMAP T1)
 - `docs/decisions/D-002-colab-runner-defaults.md`: D-002 — Colab runner and notebook support: new defaults (ROADMAP T3)
@@ -154,6 +156,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/decisions/D-047-hb4b-builder-fit.md`: D-047 — Hardening 2026-11b, package HB4b: one builder option list, the builder and forward split, shared fit machinery (owner 2026-11-21)
 - `docs/decisions/D-048-hb6b-workflow-structure.md`: D-048 — Hardening 2026-11b, package HB6b: workflow structure (owner 2026-11-21)
 - `docs/decisions/D-049-at1-atr-take-profit.md`: D-049 — Take-profit at k x ATR in the battery, beside the take-profit at mu (owner 2026-11-22)
+- `docs/decisions/D-050-n8-capital-account.md`: D-050 — Evaluation in a capital account (audit E1-E3, E5)
 
 ## Job files
 
@@ -166,7 +169,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## One-off scripts under docs/
 
-52 scripts kept under docs/ (one-off analyses next to the note or audit they belong to; not run by CI).
+55 scripts kept under docs/ (one-off analyses next to the note or audit they belong to; not run by CI).
 
 - `docs/audit/2026-11-14-model-first/colab_follow.py`: Follow, resume and read the multi-coin (panel) arms on a Colab runtime, without the bridge.
 - `docs/audit/2026-11-14-model-first/quick_arms.py`: Small-sample arms on a contract artifact: encoder (gru / transformer) x learning rate, same rows and seed.
@@ -218,5 +221,8 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/audit/2026-11-21-independent-review/a5_placebo_fees.py`: 
 - `docs/audit/2026-11-21-independent-review/a6_timing.py`: The model's breadth (share of coins with mu >= VAL q90) used as the EXPOSURE of one instrument: BTC, or the
 - `docs/audit/2026-11-21-independent-review/load.py`: Shared loader: the 7 TEST folds of one seed of rolling-dw1-r-001 (arm R), each with its VAL 90th pct of mu.
+- `docs/audit/2026-11-22-n8-account/atr_and_charts.py`: Take-profit at k x ATR on the saved battery tables, and consistency charts of the model and its predictions.
+- `docs/audit/2026-11-22-n8-account/scan.py`: N8 account scan: the ACCOUNT section (eval/account.py) of every run folder on Drive that holds battery tables.
+- `docs/audit/2026-11-22-n8-account/timing.py`: Is the account's profit market TIMING skill, or a market move the book happened to sit in?
 - `docs/cells/backtest_single_coin.py`: ==== nig_backtest on the SINGLE-COIN model (4h bars, horizon 8h), traded on 15m candles ====
 - `docs/results/cpu_smoke_st1_f2.py`: CPU smoke runner of ROADMAP ST1 (staged study) and F2 (rolling study) on the synthetic environment E1 (rule C5: a

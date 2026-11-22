@@ -116,3 +116,55 @@ def test_sections_join_the_full_battery_and_skip_without_timestamps():
         assert key in out and out[key]["rows"]
     assert list(out)[-1] == "verdict"
     assert scorecard_sections(val, test.drop(columns="end_time"), cost=0.0008) == {}
+
+
+def test_symmetric_trim_keeps_a_skewed_book_that_the_one_sided_trim_rejects():
+    """Audit E1, known answer: 18 days +0.1 %, one +10 % day, one -3 % day. Dropping only the best day leaves a
+    negative mean; dropping the best AND the worst leaves +0.1 %."""
+    days = np.arange(20).astype("datetime64[D]")
+    pnl = np.full(20, 0.001)
+    pnl[0], pnl[1] = 0.10, -0.03
+    p = day_profile(pnl, days, level=0.95)
+    assert p["mean_wo_best"] < 0 < p["mean_sym_trim"]
+    assert p["mean_sym_trim"] == pytest.approx(0.001)
+
+
+def _card(**row):
+    base = {"ci_lo": 0.001, "ci_hi": 0.003, "mean_day": 0.002, "win_days": 0.6, "worst_day": -0.03,
+            "mean_wo_best": -0.0005, "mean_sym_trim": 0.002, "mean_busy": 0.001}
+    return {"stats": {"top 10% |mu| | LONG": base | row},
+            "benchmarks": {"always long, every row": base | {"mean_wo_best": -0.002, "mean_sym_trim": -0.001}}}
+
+
+def test_the_verdict_trim_is_a_switch_whose_default_is_the_old_one_sided_rule():
+    old = scorecard_verdict(_card())
+    assert old["passed"] is False and "trim best" in old["note"]
+    sym = scorecard_verdict(_card(), trim="symmetric")
+    assert sym["passed"] is True and "always long, every row -0.100%" in " ".join(sym["rows"])
+    with pytest.raises(KeyError):
+        scorecard_verdict(_card(), trim="none")
+
+
+def test_benchmarks_take_the_same_day_test_but_never_the_verdict_row():
+    val, test = _frame(seed=3), _frame(seed=4)
+    test.loc[test.index[:3000], "coin"] = "BTCUSDT"
+    card = scorecard(val, test, cost=0.0008)
+    assert set(card["benchmarks"]) == {"always long, every row", "BTCUSDT long, every row"}
+    assert not set(card["benchmarks"]) & set(card["stats"])
+    every = card["benchmarks"]["always long, every row"]
+    assert every["n"] == int((test["dir_true"] != 0).sum())
+    assert any("benchmarks under the same day test" in r for r in card["rows"])
+
+
+def test_drop_flat_false_keeps_the_flat_rows_in_every_section_and_the_default_is_unchanged():
+    from nig_timenet_torch.eval.battery_lib import keep_flat, scored_rows
+    from nig_timenet_torch.workflow.battery_run import render
+
+    val, test = _frame(seed=5), _frame(seed=6)
+    test.loc[test.index[:300], ["y_ret", "dir_true"]] = [0.0, 0]
+    assert scored_rows(test).sum() == len(test) - 300 and scored_rows(keep_flat(test)).all()
+    assert "keep_flat" not in test.attrs                        # the caller's table is not marked
+    same = full_battery(val, test, 0.0008, drop_flat=True)
+    assert render(same) == render(full_battery(val, test, 0.0008))
+    kept = full_battery(val, test, 0.0008, drop_flat=False)
+    assert f"n={len(test):,}" in kept["sanity"]["rows"][1] and f"n={len(test) - 300:,}" in same["sanity"]["rows"][1]
