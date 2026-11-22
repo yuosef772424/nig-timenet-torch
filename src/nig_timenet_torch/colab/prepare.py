@@ -1,4 +1,11 @@
-"""Section 2 of the notebook (ROADMAP T3): turn the TF project's training data into a contract artifact, once.
+"""PURPOSE: Notebook section 2: turn the TF project's training data into a contract artifact once, and skip the
+    export when the artifact is sound and made from the same source, export tool and TF lock.
+TAGS: prepare artifact, tf export, source fingerprint, skip when sound, source sidecar, contract artifact
+PITFALLS: the skip needs the same source fingerprint, export tool hash and TF lock hash AND an artifact that still
+    re-hashes to its record; it writes a ``<artifact>.source.json`` sidecar beside the artifact; the TF checkout is
+    only read.
+
+Section 2 of the notebook (ROADMAP T3): turn the TF project's training data into a contract artifact, once.
 
 ``prepare_artifact`` runs the TF export tool (``tools/export_torch_artifact.py`` of the TF checkout) on the source
 (``preprocessing_output_latest.pkl.gz``, the file TF ``main.ipynb`` trains on, or an npy_dir folder), then checks the

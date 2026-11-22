@@ -1,5 +1,5 @@
 {
- "fingerprint": "ade4a3a613d36b1c",
+ "fingerprint": "90b8f292ec099954",
  "defaults": {
   "nig_timenet_torch.colab.__main__.DEFAULT_REPO": "'yuosef772424/nig-timenet-torch'",
   "nig_timenet_torch.colab.__main__.DEFAULT_TOKEN_PATH": "'/content/drive/MyDrive/crypto/secrets/github_token.txt'",
@@ -1218,6 +1218,7 @@
   "nig_timenet_torch.workflow.run.Run(trainer)": "None",
   "nig_timenet_torch.workflow.run.Run(x)": "{}",
   "nig_timenet_torch.workflow.run.Run(y)": "{}",
+  "nig_timenet_torch.workflow.run.flat_scalars(prefix)": "''",
   "nig_timenet_torch.workflow.run.prepare(out)": "None",
   "nig_timenet_torch.workflow.run.restore(allow_changes)": "('code_sha')",
   "nig_timenet_torch.workflow.run.restore(weights)": "'best'",
@@ -1255,6 +1256,11 @@
   "nig_timenet_torch.workflow.settings.BatterySettings(day_metrics)": "False",
   "nig_timenet_torch.workflow.settings.BatterySettings(enabled)": "True",
   "nig_timenet_torch.workflow.settings.BatterySettings(n_variants)": "1",
+  "nig_timenet_torch.workflow.settings.DEFAULT_MODEL_OVERRIDES.bn_warmup": "True",
+  "nig_timenet_torch.workflow.settings.DEFAULT_MODEL_OVERRIDES.input_scaler": "'train_std'",
+  "nig_timenet_torch.workflow.settings.DEFAULT_MODEL_OVERRIDES.nig_scale_fit": "'train_std'",
+  "nig_timenet_torch.workflow.settings.DEFAULT_MODEL_OVERRIDES.nig_trunk_grad": "0.3",
+  "nig_timenet_torch.workflow.settings.DEFAULT_MODEL_OVERRIDES.order_detach_close": "True",
   "nig_timenet_torch.workflow.settings.EvalSettings(battery)": "BatterySettings(enabled=True, cost_per_side=0.0008, n_variants=1)",
   "nig_timenet_torch.workflow.settings.EvalSettings(chunk)": "20000",
   "nig_timenet_torch.workflow.settings.EvalSettings(health_max_rows)": "100000",

@@ -38,14 +38,11 @@ from importlib import metadata
 from pathlib import Path
 
 from nig_timenet_torch.colab import device as device_mod
-from nig_timenet_torch.colab import publish
+from nig_timenet_torch.colab import paths, publish
 from nig_timenet_torch.colab.bootstrap import BootstrapError, Secrets, clean_clone, git_env
 from nig_timenet_torch.colab.contract import validate_outputs
 from nig_timenet_torch.colab.job import JobError, parse_job, versioned
 
-DEFAULT_WORKDIR = "/content/nig_runner"
-DEFAULT_DRIVE_ROOT = "/content/drive/MyDrive"
-DEFAULT_DRIVE_RUNS = DEFAULT_DRIVE_ROOT + "/nig_timenet_runs"
 ENV_PACKAGES = ("torch", "numpy", "pandas", "pyarrow", "scikit-learn", "scipy")
 SECRET_ENV_KEYS = ("GIT_ASKPASS", "COLAB_RUNNER_TOKEN", "GITHUB_TOKEN", "GH_TOKEN")
 
@@ -101,8 +98,8 @@ def package_versions(names=ENV_PACKAGES) -> dict:
 class Runner:
     """One job, one Runner. Order: fetch/load, check_rerun, checkout, execute, publish."""
 
-    def __init__(self, repo_url: str, token: str, workdir: str = DEFAULT_WORKDIR, drive_runs: str = DEFAULT_DRIVE_RUNS,
-                 drive_root: str = DEFAULT_DRIVE_ROOT, queue_branch: str = publish.QUEUE_BRANCH,
+    def __init__(self, repo_url: str, token: str, workdir: str = paths.WORKDIR, drive_runs: str = paths.DRIVE_RUNS,
+                 drive_root: str = paths.DRIVE_ROOT, queue_branch: str = publish.QUEUE_BRANCH,
                  results_branch: str = publish.RESULTS_BRANCH, echo=print, python: str | None = None,
                  grace_seconds: int = 120, device_check=device_mod.assert_device, runner_sha: str = "",
                  push_attempts: int = 4):

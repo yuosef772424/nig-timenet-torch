@@ -26,7 +26,7 @@ import sys
 import time
 from dataclasses import dataclass
 
-from nig_timenet_torch.colab import contract
+from nig_timenet_torch.colab import contract, paths
 from nig_timenet_torch.colab.device import EXPECTED as DEVICES
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.data_io.loading import LoaderSettings
@@ -38,7 +38,7 @@ from nig_timenet_torch.workflow.settings import EvalSettings, RunSettings, Split
 __all__ = ["BaselineConfig", "CONFIG", "DEFAULT_ARTIFACT", "DEFAULT_HEALTH_MAX_ROWS", "SUMMARY", "TEST_REPORT",
            "run_settings", "main"]
 
-DEFAULT_ARTIFACT = "/content/drive/MyDrive/crypto_model/torch_artifacts/preprocessing_output_1"
+DEFAULT_ARTIFACT = paths.ARTIFACT_DRIVE
 DEFAULT_HEALTH_MAX_ROWS = 100_000
 SUMMARY, TEST_REPORT = steps.SUMMARY, steps.TEST_REPORT
 

@@ -5,6 +5,7 @@ import sys
 
 import pytest
 
+from nig_timenet_torch.colab import paths
 from nig_timenet_torch.colab_ops import recipes
 from nig_timenet_torch.colab_ops.__main__ import build_parser
 from nig_timenet_torch.colab_ops.bridge import Bridge
@@ -14,7 +15,7 @@ def test_setup_script_is_valid_bash_idempotent_and_has_no_secret():
     s = recipes.setup_script("ccr-x/y z")
     assert subprocess.run(["bash", "-n"], input=s, text=True).returncode == 0
     assert "'ccr-x/y z'" in s  # the branch is shell-quoted
-    assert recipes.TOKEN_FILE in s and "x-access-token:%s" in s and "$T" in s
+    assert paths.TOKEN_FILE in s and "x-access-token:%s" in s and "$T" in s
     assert "if [ -d" in s and "git fetch" in s and "git clone" in s  # update or clone
     assert "[ -d /content/art1 ] ||" in s  # the artifact copy is skipped when present
     assert "ensure_env('pyproject.toml', '/content/nig_venv', '/content/drive/MyDrive/crypto/nig_timenet_env'" in s

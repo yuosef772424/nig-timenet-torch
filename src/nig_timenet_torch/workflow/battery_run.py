@@ -1,6 +1,4 @@
-"""Battery run: the one call that turns two stages of a run into the printed/written evaluation battery
-
-PURPOSE: Adapts the VAL and TEST stage (table, labels, anchors, last_close, codec state) to battery tables and runs
+"""PURPOSE: Adapts the VAL and TEST stage (table, labels, anchors, last_close, codec state) to battery tables and runs
     the full battery with the T-profit sections; battery_step does it for a finished Run and writes the reports.
 TAGS: battery run, stage inputs, t-profit, battery report, adapter entry point, battery step, profit json
 PITFALLS: VAL thresholds are applied to TEST (no leakage), so val and test must be different stages of ONE run;

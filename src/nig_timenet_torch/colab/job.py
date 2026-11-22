@@ -14,8 +14,8 @@ job.json (every key required except ``rerun`` and ``on_existing``):
     {"job_id": "smoke-001", "repo_ref": "<40-hex commit>", "entry": "device_smoke", "args": [], "config": {},
      "max_minutes": 5, "device": "cuda", "needs_drive": false, "expected_outputs": ["smoke.json"], "note": "free text",
      "rerun": false, "on_existing": "refuse"}
-``on_existing`` says what happens when ``runs/<job_id>/`` already exists on the results branch: ``"refuse"`` (default,
-the behaviour before D-021) or ``"new_version"``: the job runs as ``<job_id>-v2`` (then -v3, ...), the next free id,
+``on_existing`` says what happens when ``runs/<job_id>/`` already exists on the results branch: ``"refuse"`` (default:
+the job is refused) or ``"new_version"``: the job runs as ``<job_id>-v2`` (then -v3, ...), the next free id,
 with its own bundle folder and its own ``config.run_dir`` (the ``/<job_id>/`` segment of the path is renamed), so a
 new version never resumes or overwrites an old one. ``versioned`` builds that job; it records ``base_job_id``.
 The entry runs as ``python -m nig_timenet_torch.jobs.<entry> --config <json> --out <dir> --max-minutes <n> <args...>``

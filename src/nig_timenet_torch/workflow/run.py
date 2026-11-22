@@ -3,8 +3,9 @@
 TAGS: run steps, single split, flat run, train step, health step, test report step, run summary, notebook steps
 PITFALLS: steps share one mutable Run (call them in order; a step that needs an earlier one raises); the test split is
     used only by test_step, never for training or selection; a rolling run is one Run per fold
-    (workflow/rolling_run.py), the panel run is parked; the training data stay on the CPU and move to the device
-    batch by batch (B-019). ``train_staged`` (ST1) shares the Run, the Trainer and the later steps with ``train``.
+    (workflow/rolling_run.py), a panel study is one Run per arm and seed (workflow/panel_study.py); the training data
+    stay on the CPU and move to the device batch by batch (B-019). ``train_staged`` (ST1) shares the Run, the Trainer
+    and the later steps with ``train``.
 SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run.py); changes: single split only, steps over one Run object,
     health report and test report (D-005) as steps, outputs written to an output folder, the code of
     jobs/baseline.py moved here; staged training (ST1) and per-fold runs (F2) added.

@@ -97,7 +97,8 @@ def test_job_ids_and_run_dirs_are_unique():
 def test_every_run_dir_is_on_drive_and_outside_what_the_runner_deletes():
     """B-050 class guard: the runner deletes its work dir's ``out/<job_id>`` before a run and owns only its bundle
     files; a run_dir under the work dir (or off Drive) would lose the checkpoints when the VM ends."""
-    from nig_timenet_torch.colab.runner import DEFAULT_DRIVE_ROOT, DEFAULT_WORKDIR
+    from nig_timenet_torch.colab.paths import DRIVE_ROOT as DEFAULT_DRIVE_ROOT
+    from nig_timenet_torch.colab.paths import WORKDIR as DEFAULT_WORKDIR
 
     for p in sorted((ROOT / "docs" / "jobs").glob("*.json")):
         run_dir = pathlib.PurePosixPath(parse_job(p.read_text())["config"]["run_dir"])
