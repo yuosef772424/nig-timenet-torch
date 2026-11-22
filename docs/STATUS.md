@@ -12,7 +12,7 @@ PRs since last R-REVIEW: 3 (#74 the review itself, merged; fifth review 2026-11-
 | Step | Title | State | PR / job | Note |
 |---|---|---|---|---|
 | AT1 | Take-profit at k x ATR in the battery, beside the take-profit at mu (owner 2026-11-22) | PR open | [#77](https://github.com/yuosef772424/nig-timenet-torch/pull/77) | branch `main` |
-| N8 | Evaluation in a capital account (audit E1-E3, E5) | in progress |  | branch `ccr-000d0833-l7tuev` |
+| N8 | Evaluation in a capital account (audit E1-E3, E5) | PR open | [#78](https://github.com/yuosef772424/nig-timenet-torch/pull/78) | branch `ccr-000d0833-l7tuev` |
 | H7 | Register and review tooling (fourth R-REVIEW) | todo | | counter derived, CSV columns, check-job vs colab-results, rmtree ratchet; fifth review adds 12 suggestions (RunIdentity with split settings, PR-section CI check, merged-row archive) |
 | TR1 | Trainer switches (clip, wd groups, EMA, init, timing, train gap) | todo | | B-018, B-007, HF-37 |
 | G3r | Gates on the baseline configuration | todo | | 3 seeds |
