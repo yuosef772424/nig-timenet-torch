@@ -50,9 +50,8 @@ from nig_timenet_torch.workflow.prediction_table import predict_table, table_met
 from nig_timenet_torch.workflow.settings import RunSettings
 
 __all__ = ["Run", "prepare", "prepare_split", "build", "train", "train_staged", "training_finished", "weights_label",
-           "restore",
-           "health_step", "test_step", "battery_step", "write_summary", "run_all", "test_lines", "SUMMARY",
-           "TEST_REPORT"]
+           "need", "flat_scalars", "restore", "health_step", "test_step", "battery_step", "write_summary",
+           "run_all", "test_lines", "SUMMARY", "TEST_REPORT"]
 
 RESTORE_WEIGHTS = ("best", "last")  # restore(weights=...): best-epoch weights (default) or the last finished epoch
 SUMMARY = "baseline_summary.json"
@@ -86,7 +85,7 @@ class Run:
 
     def table(self, stage: str) -> pd.DataFrame:
         """PredictionTable of ALL rows of ``stage`` (the model holds the weights ``weights_label`` names)."""
-        _need(self, "result", "train")
+        need(self, "result", "train")
         if stage not in self.x:
             self.x[stage], self.y[stage] = flat_run.flat_inputs(self.dataset, self.idx[stage],
                                                                 self.settings.split.cross_section,
@@ -97,7 +96,8 @@ class Run:
                                       chunk=self.settings.evaluation.chunk, fold=self.fold)
 
 
-def _need(run: Run, what: str, step: str) -> None:
+def need(run: Run, what: str, step: str) -> None:
+    """Raise a clear error when a step runs before the step that sets ``Run.<what>`` (shared by the studies)."""
     if getattr(run, what) is None:
         raise RuntimeError(f"call {step}() before this step (Run.{what} is not set)")
 
@@ -190,7 +190,7 @@ def train(run: Run, *, deadline: float | None = None, on_epoch=None, on_interrup
     ``on_interrupt``: ``None`` (default) = a KeyboardInterrupt propagates; ``"last"`` / ``"best"`` = it is caught and
     the model keeps the weights of the last finished epoch / the best epoch so far, ``run.result`` is set.
     ``batch_monitor``: a ``trainer.batch_influence.BatchInfluence`` (log-only; None = none)."""
-    _need(run, "trainer", "build")
+    need(run, "trainer", "build")
     _check_on_interrupt(on_interrupt)
     n = {k: int(len(v)) for k, v in run.idx.items()}
     groups = flat_run.batch_groups(run.dataset, run.idx["train"], run.settings.train.batch_by)
@@ -242,7 +242,7 @@ def train_staged(run: Run, *, deadline: float | None = None, on_eval=None, stage
     ``run.extra['stages']``; ``run.result`` is a FitResult over the evaluation points so the later steps read it as
     before. The scalers were fitted once on the whole training split by ``build``. ``on_interrupt``: as in ``train``
     (the state is saved at every evaluation point; a stop keeps the last saved one, ``run.staged`` stays None)."""
-    _need(run, "trainer", "build")
+    need(run, "trainer", "build")
     _check_on_interrupt(on_interrupt)
     st = run.settings.train.staged
     if st is None:
@@ -280,14 +280,14 @@ def _staged_outputs(run: Run, res: StagedResult) -> None:
 def weights_label(run: Run) -> str:
     """"best-epoch" when the model holds the best epoch's weights (``result.restored_best``), else "last-epoch"
     (EMA, ``restore_best_weights=False``, ``restore(weights="last")``, ``on_interrupt="last"``)."""
-    _need(run, "result", "train")
+    need(run, "result", "train")
     return "best-epoch" if run.result.restored_best else "last-epoch"
 
 
 def training_finished(run: Run) -> bool:
     """True when the training of ``run`` ended by itself (every epoch or stage, or early stopping); False when a
     ``deadline`` cut it (the checkpoint resumes it). The one definition the studies stop on (C-07)."""
-    _need(run, "result", "train")
+    need(run, "result", "train")
     return run.result.finished
 
 
@@ -300,7 +300,7 @@ def restore(run: Run, *, weights: str = "best", allow_changes: tuple[str, ...] =
     commit; settings, seed and data must be the same)."""
     if weights not in RESTORE_WEIGHTS:
         raise ValueError(f"restore: weights must be one of {RESTORE_WEIGHTS}, got {weights!r}")
-    _need(run, "trainer", "build")
+    need(run, "trainer", "build")
     run_dir = Path(run.settings.run_dir)
     ckpt = checkpoint.load_checkpoint(run_dir)
     if ckpt is None:
@@ -336,7 +336,7 @@ def health_step(run: Run) -> Run:
     """Health report on an evenly strided subsample of the validation rows (they must fit on the device); a
     cross-section model gets whole timestamps (C-01 / C-02: a cut timestamp changes its outputs); written to the run
     folder and copied to ``out``."""
-    _need(run, "result", "train")
+    need(run, "result", "train")
     ds, dev = run.dataset, run.device
     val_idx, cap = run.idx["val"], run.settings.evaluation.health_max_rows
     grouped = run.trainer.group_channel
@@ -383,10 +383,11 @@ def test_step(run: Run) -> dict:
     return rep
 
 
-def _flat(d, prefix=""):
+def flat_scalars(d, prefix=""):
+    """``(dotted key, number)`` of every numeric leaf of a nested report dict (bools skipped)."""
     for k, v in d.items():
         if isinstance(v, dict):
-            yield from _flat(v, f"{prefix}{k}.")
+            yield from flat_scalars(v, f"{prefix}{k}.")
         elif isinstance(v, (int, float)) and not isinstance(v, bool):
             yield f"{prefix}{k}", v
 
@@ -394,7 +395,7 @@ def _flat(d, prefix=""):
 def test_lines(report: dict) -> list[str]:
     """Short printable summary of a test report: every scalar except the per-coin breakdowns."""
     return [f"  {k}: {v:.4f}" if isinstance(v, float) else f"  {k}: {v}"
-            for k, v in _flat(report) if "per_coin" not in k and "deciles" not in k]
+            for k, v in flat_scalars(report) if "per_coin" not in k and "deciles" not in k]
 
 
 def batches_per_epoch(run: Run, groups) -> int:
@@ -414,7 +415,7 @@ def batches_per_epoch(run: Run, groups) -> int:
 
 def write_summary(run: Run, extra: dict | None = None) -> dict:
     """``baseline_summary.json`` in ``out``; ``extra`` (device, gpu name, ...) is merged in by the caller."""
-    _need(run, "result", "train")
+    need(run, "result", "train")
     s, res, fs, ds = run.settings, run.result, run.fit_settings, run.dataset
     secs = [r["trace_epoch_seconds"] for r in res.history if "trace_epoch_seconds" in r]  # epochs of earlier jobs too
     n_batches = batches_per_epoch(run, flat_run.batch_groups(ds, run.idx["train"], s.train.batch_by))

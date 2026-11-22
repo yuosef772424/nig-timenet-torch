@@ -35,7 +35,7 @@ from nig_timenet_torch.trainer.identity import configuration_hash
 from nig_timenet_torch.workflow import flat_run, run, run_common
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings, TrainSettings, default_model_settings
 
-__all__ = ["GateSettings", "GateRefused", "run_gates", "gate_check", "configuration_key", "baseline_arm",
+__all__ = ["GateSettings", "GateRefused", "run_gates", "gate_check", "configuration_key", "baseline_arm", "gate_stage",
            "GATE_REPORT", "GATE_REPORT_MD", "REPORT_SCHEMA"]
 
 GATE_REPORT, GATE_REPORT_MD = "gate_report.json", "gate_report.md"
@@ -76,7 +76,7 @@ def _identity_parts(r: run.Run) -> tuple:
 def configuration_key(r: run.Run) -> str:
     """The configuration hash of a built run (``trainer.identity.configuration_hash``) with the configuration part of
     the run context (selection metric, staged plan; D-042), not the data selection (the gates use their own data)."""
-    run._need(r, "trainer", "build")
+    run.need(r, "trainer", "build")
     return configuration_hash(*_identity_parts(r), run_common.identity_context(r.settings, selection=False))
 
 
@@ -136,7 +136,7 @@ def _losses(trainer, x, y, batch_size: int) -> dict:
             "constant": float(trainer.compute_losses(None, yd, outputs=const)[1])}
 
 
-def _stage(r: run.Run, env: str, seed: int, *, with_oracle: bool, with_losses: bool) -> gates.GateStage:
+def gate_stage(r: run.Run, env: str, seed: int, *, with_oracle: bool, with_losses: bool) -> gates.GateStage:
     ds = r.dataset
     table = r.table("test")
     rep = run.stage_report(r, "test", table)
@@ -169,7 +169,7 @@ def _env_seed(settings: RunSettings, env: str, info: dict, seed: int, root: Path
     a0 = grad_report(r.trainer, r.x["train"], r.y["train"], batches)
     run.train(r)
     a1 = grad_report(r.trainer, r.x["train"], r.y["train"], batches)
-    st = _stage(r, env, seed, with_oracle=env == gates.ENVS[0], with_losses=env == gates.ENVS[1])
+    st = gate_stage(r, env, seed, with_oracle=env == gates.ENVS[0], with_losses=env == gates.ENVS[1])
     rows = gates.gate_a_rows(env, seed, "start", a0) + gates.gate_a_rows(env, seed, "end", a1) + gates.stage_rows(st)
     meta = {"seed": seed, "rows": {k: int(len(v)) for k, v in r.idx.items()}, "epochs_done": r.result.epochs_done,
             "best_epoch": r.result.best_epoch, "seconds": round(time.monotonic() - t0, 1),

@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from nig_timenet_torch.eval import deep_side as ds
+from nig_timenet_torch.workflow import run_common
 from nig_timenet_torch.workflow.reading import stage_data
 
 __all__ = ["deep_frames", "deep_side_step", "REPORT", "JSON"]
@@ -40,13 +41,5 @@ def deep_side_step(run, out_dir, seed: int = 0) -> dict:
     f = deep_frames(run)
     res = ds.deep_side(f["VAL"], f["TEST"], seed=seed)
     (out / REPORT).write_text(ds.render(res) + "\n", encoding="utf-8")
-    (out / JSON).write_text(json.dumps(res, indent=1, default=_json), encoding="utf-8")
+    (out / JSON).write_text(json.dumps(res, indent=1, default=run_common.json_default), encoding="utf-8")
     return res
-
-
-def _json(v):
-    if isinstance(v, (np.bool_, bool)):
-        return bool(v)
-    if isinstance(v, np.generic):
-        return v.item()
-    return str(v)

@@ -30,7 +30,7 @@ BASELINES = ("b1", "b2", "b3")
 
 def _ic(report: dict) -> dict:
     """{flat key: value} of every by-timestamp rank IC of a test report (the trivial shuffled baseline excluded)."""
-    return {k: float(v) for k, v in steps._flat(report) if k.endswith("rank_ic_by_timestamp")}
+    return {k: float(v) for k, v in steps.flat_scalars(report) if k.endswith("rank_ic_by_timestamp")}
 
 
 def run_arm(settings: RunSettings, arm: str, seed: int, root, *, plan_from=None, test: bool = True,

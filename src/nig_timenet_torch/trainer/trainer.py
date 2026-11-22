@@ -545,6 +545,5 @@ class Trainer:
             self.model.load_state_dict(best_weights)
         elif ema is not None:
             self.model.load_state_dict(ema.weights())
-        stopped = tracker.should_stop()
-        return FitResult(history, len(history), tracker.best_epoch, tracker.best, stopped, restored,
-                         stopped or len(history) >= settings.epochs)
+        return FitResult(history, len(history), tracker.best_epoch, tracker.best, tracker.should_stop(), restored,
+                         tracker.should_stop() or len(history) >= settings.epochs)

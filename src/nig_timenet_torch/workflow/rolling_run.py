@@ -148,7 +148,7 @@ def _cut(rows: list[dict], art, study: str) -> dict:
 
 
 def _scalars(report: dict) -> dict:
-    return {k: float(v) for k, v in steps._flat(report) if not any(t in k for t in _SKIP)}
+    return {k: float(v) for k, v in steps.flat_scalars(report) if not any(t in k for t in _SKIP)}
 
 
 def run_rolling(settings: RunSettings, rolling: RollingSettings, out, *, on_epoch=None,

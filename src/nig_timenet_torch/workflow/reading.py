@@ -152,7 +152,7 @@ def error_frame(run, st: dict, har_w: dict | None, info: pd.DataFrame) -> pd.Dat
         f[f"std_{t}"], f[f"half_{t}"] = nig_predictive_std(nu, al, be), nig_interval_halfwidth(nu, al, be, 0.8)
         f[f"nll_{t}"] = nig_nll(y, mu, nu, al, be)
         if har_w is not None and t in har_w:
-            f[f"har_{t}"] = vb._ols_predict(st["ranges"], har_w[t], HAR)
+            f[f"har_{t}"] = vb.ols_predict(st["ranges"], har_w[t], HAR)
     f["market_day"] = f.groupby("day")["real_close"].transform("mean") if "real_close" in f else 0.0
     return f
 
@@ -247,13 +247,5 @@ def reading_step(run, out_dir, cost: float = DEFAULT_COST_PER_SIDE) -> dict:
     (out / ERROR_REPORT).write_text(em.render(emap) + "\n", encoding="utf-8")
     res = {"cost_per_side": cost, "c1": c1, "book": [{k: v for k, v in r.items() if k != "trades"} for r in rows],
            "evidence": ev, "diagnosis": diag, "error_map": emap}
-    (out / JSON).write_text(json.dumps(res, indent=1, default=_json), encoding="utf-8")
+    (out / JSON).write_text(json.dumps(res, indent=1, default=run_common.json_default), encoding="utf-8")
     return res
-
-
-def _json(v):
-    if isinstance(v, (np.bool_, bool)):
-        return bool(v)
-    if isinstance(v, np.generic):
-        return v.item()
-    return str(v)

@@ -151,7 +151,7 @@ def run_arm(name: str, arm: dict, seed: int, env: Path, root: Path, *, epochs: i
     a0 = grad_report(r.trainer, r.x["train"], r.y["train"], batches)
     run.train(r)
     a1 = grad_report(r.trainer, r.x["train"], r.y["train"], batches)
-    st = gate_run._stage(r, gates.ENVS[0], seed, with_oracle=True, with_losses=False)
+    st = gate_run.gate_stage(r, gates.ENVS[0], seed, with_oracle=True, with_losses=False)
     rows = (gates.gate_a_rows(gates.ENVS[0], seed, "start", a0) + gates.gate_a_rows(gates.ENVS[0], seed, "end", a1)
             + gates.stage_rows(st))
     return {"seed": seed, "rows": rows, "mu": mu_calibration(r.dataset, r.idx["test"], st.table, r.targets),

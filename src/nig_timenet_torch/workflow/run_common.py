@@ -31,7 +31,7 @@ from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings
 
 __all__ = ["load_data", "price_targets", "codec_state", "check_decode", "input_key", "split_bounds", "make_plan",
            "stride_rows", "select_rows", "pick_device", "code_sha", "run_identity", "identity_context",
-           "IDENTITY_SELECTION", "IDENTITY_CONFIGURATION", "RESUMABLE_TRAIN_FIELDS"]
+           "IDENTITY_SELECTION", "IDENTITY_CONFIGURATION", "RESUMABLE_TRAIN_FIELDS", "json_default"]
 
 
 def load_data(settings: RunSettings) -> LoadedData:
@@ -200,6 +200,15 @@ def cross_section_rows(dataset: dict, idx: np.ndarray, max_rows: int | None) -> 
     keep = max(1, int(round(len(uniq) * max_rows / len(idx))))
     chosen = uniq[np.unique(np.linspace(0, len(uniq) - 1, keep).astype(np.int64))]
     return idx[np.isin(times, chosen)]
+
+
+def json_default(v):
+    """``json.dumps(default=...)`` for numpy scalars (a numpy bool or number becomes the Python one; else ``str``)."""
+    if isinstance(v, (np.bool_, bool)):
+        return bool(v)
+    if isinstance(v, np.generic):
+        return v.item()
+    return str(v)
 
 
 def pick_device(settings: RunSettings) -> torch.device:
