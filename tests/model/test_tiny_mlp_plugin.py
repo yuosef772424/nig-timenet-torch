@@ -12,6 +12,7 @@ from nig_timenet_torch.data_io import npy_dir
 from nig_timenet_torch.model.architectures import ARCHITECTURES, ModelSettings, build_model
 from nig_timenet_torch.model.contract import check_contract, contract_of
 from nig_timenet_torch.stats import metrics
+from nig_timenet_torch.trainer.groups import row_batches
 from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.trainer.trainer import Trainer
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
@@ -33,7 +34,7 @@ def test_tiny_mlp_one_epoch_smoke():
     model = build_model(ModelSettings(architecture="tiny_mlp"), x.shape[1], x.shape[2])
     trainer = Trainer(model, trainer_config(), optimizer=lambda ps: torch.optim.AdamW(ps, lr=1e-3))
     losses = []
-    for idx in trainer.batch_indices(x.shape[0], 64):
+    for idx in row_batches(x.shape[0], 64, True):
         losses.append(trainer.train_step(x[idx], {k: v[idx] for k, v in y.items()})["total_loss"])
     assert losses and all(math.isfinite(v) for v in losses)
 

@@ -92,12 +92,12 @@ def test_grad_report_sees_the_balanced_objective(data):
     x, y = data[0][:32], {k: v[:32] for k, v in data[1].items()}
     t.train_step(x, y)
     t.model.eval()
-    _, _, per_target, _, _ = t.compute_losses(x, y)
+    _, _, per_target, _ = t.compute_losses(x, y)
     w = t.balancer.multipliers()
     plain = make_trainer(config=_config(use_uncertainty_weighting=False))
     plain.model.load_state_dict(t.model.state_dict())
     plain.model.eval()
-    _, _, ref, _, _ = plain.compute_losses(x, y)
+    _, _, ref, _ = plain.compute_losses(x, y)
     for n in t.target_names:
         assert float(per_target[n]) == pytest.approx(float(ref[n]) * w[n], rel=1e-5)
     assert torch.isfinite(torch.stack(list(per_target.values()))).all()

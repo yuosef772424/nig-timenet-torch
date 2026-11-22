@@ -4,12 +4,5 @@ colab/device.py
 colab/identity.py
 colab/prepare.py
 colab/session.py
-core/constants.py
-core/prediction_schema.py
-core/roles.py
-core/seeds.py
 eval/calibrator.py
-trainer/checkpoint.py
-trainer/schedules.py
-trainer/tracker.py
 workflow/staleness.py

@@ -14,11 +14,12 @@ this is a fresh, smaller primitive, not a port (there is no legacy dict config t
 """
 
 import dataclasses
-import difflib
 import types
 import typing
 from collections.abc import Mapping
 from typing import Any
+
+from nig_timenet_torch.core.suggest import did_you_mean, unknown_names_text
 
 __all__ = ["from_dict", "to_dict", "updated"]
 
@@ -36,7 +37,7 @@ def _dataclass_type(hint: Any) -> type | None:
 
 def from_dict(cls: type, d: Mapping[str, Any], *, strict: bool = True):
     """Build a frozen dataclass `cls` from `d`. strict=True (default): a key in `d` not in `cls`'s fields raises
-    ValueError naming the unknown key + a did-you-mean (reuse core.registry's difflib pattern). Nested dataclass
+    ValueError naming the unknown key + a did-you-mean (core.suggest). Nested dataclass
     fields are built recursively. Missing keys use the dataclass field default (no second default source)."""
     if not (isinstance(cls, type) and dataclasses.is_dataclass(cls)):
         raise TypeError(f"from_dict: {cls!r} is not a dataclass type")
@@ -48,11 +49,7 @@ def from_dict(cls: type, d: Mapping[str, Any], *, strict: bool = True):
     unknown = [k for k in d if k not in fields]
     if unknown and strict:
         known = sorted(fields)
-        parts = []
-        for k in unknown:
-            close = difflib.get_close_matches(str(k), known, n=1)
-            parts.append(f"{k!r}" + (f" (did you mean {close[0]!r}?)" if close else ""))
-        raise ValueError(f"{cls.__name__}: unknown key(s) {', '.join(parts)}. Known keys: {known}")
+        raise ValueError(f"{cls.__name__}: unknown key(s) {unknown_names_text(unknown, known)}. Known keys: {known}")
     missing = [n for n, f in fields.items() if n not in d and f.default is dataclasses.MISSING
                and f.default_factory is dataclasses.MISSING]
     if missing:
@@ -96,9 +93,9 @@ def updated(obj: Any, patch: Mapping[str, Any] | None = None, /, **changes: Any)
     for key, value in merged.items():
         head, _, rest = str(key).partition(".")
         if head not in names:
-            close = difflib.get_close_matches(head, names, n=1)
+            close = did_you_mean(head, names)
             raise ValueError(f"{type(obj).__name__}: unknown key {head!r}"
-                             + (f" (did you mean {close[0]!r}?)" if close else "") + f". Known keys: {sorted(names)}")
+                             + (f" (did you mean {close!r}?)" if close else "") + f". Known keys: {sorted(names)}")
         if rest:
             grouped.setdefault(head, {})[rest] = value
         else:

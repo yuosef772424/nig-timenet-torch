@@ -1,4 +1,12 @@
-"""Checkpoint files of a run folder (ROADMAP T1; TF source: trainer/checkpoints.py, simplified).
+"""PURPOSE: The run folder's checkpoint files: atomic save / load of the resumable training state (``checkpoint.pt``)
+    and of the best epoch's weights (``best.pt`` + ``best_meta.json``).
+TAGS: checkpoint, resume, best weights, atomic write, run folder, weights_only, torch save
+PITFALLS: ``checkpoint.pt`` is the state after the LAST finished epoch and is never overwritten by the best weights
+    (resume must equal an uninterrupted run); the state dict's keys are written by ``Trainer._state`` and
+    ``staged._Loop._save``, renaming one orphans old checkpoints. ``weights_only=True``: only tensors and plain
+    containers load. Writes go to ``<name>.tmp`` then ``os.replace``.
+
+Checkpoint files of a run folder (ROADMAP T1; TF source: trainer/checkpoints.py, simplified).
 
 ``checkpoint.pt``  training state after the last finished epoch: model, Kendall log-variances, optimizer, tracker
                    state, history, RunIdentity. Resume continues from exactly this, so it is NOT replaced by the

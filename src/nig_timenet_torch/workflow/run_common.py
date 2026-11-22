@@ -8,7 +8,6 @@ SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run_common.py); changes: st
     retargeting, smoke stride (max_rows), artifact facts moved here, run identity from the manifest.
 """
 
-import difflib
 import subprocess
 from pathlib import Path
 
@@ -18,6 +17,7 @@ import torch
 
 from nig_timenet_torch.colab.identity import identity_for_run
 from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
+from nig_timenet_torch.core.suggest import unknown_names_text
 from nig_timenet_torch.data_io.artifact import norm_coin
 from nig_timenet_torch.data_io.loading import LoadedData, load_dataset
 from nig_timenet_torch.data_io.split_plan import purge_embargo_split, sample_times
@@ -139,9 +139,8 @@ def excluded_rows(dataset: dict, coins) -> np.ndarray:
     wanted = {norm_coin(c): c for c in coins}
     unknown = sorted(c for k, c in wanted.items() if k not in keys)
     if unknown:
-        close = {c: difflib.get_close_matches(norm_coin(c), list(keys), n=1) for c in unknown}
         raise ValueError("split.exclude_coins: not coins of this artifact: "
-                         + ", ".join(f"{c!r}" + (f" (did you mean {m[0]!r}?)" if m else "") for c, m in close.items()))
+                         + unknown_names_text(unknown, keys, match=norm_coin))
     if len(wanted) >= len(keys):
         raise ValueError("split.exclude_coins removes every coin of the artifact")
     mask = np.zeros(np.asarray(dataset["last_candles"]).shape[0], dtype=bool)

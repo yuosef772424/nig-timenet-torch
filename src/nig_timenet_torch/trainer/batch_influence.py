@@ -95,7 +95,7 @@ class _Probe:
         for x, y in self.halves:
             with torch.set_grad_enabled(grad):
                 out = trainer.model(x)
-                _, raw, per_target, _, _ = trainer.compute_losses(
+                _, raw, per_target, _ = trainer.compute_losses(
                     None, y, outputs=out, groups=row_groups(x) if self.grouped else None)
             raws.append(raw)
             per.append(per_target)
@@ -146,7 +146,7 @@ class BatchInfluence:
 
     def start(self, trainer) -> None:
         """Fix the probe's loss definition (the schedules' start values) and measure the starting point."""
-        dev = trainer._device()
+        dev = trainer.device
         self.probes = [p.to(dev) for p in self.probes]
         self.groups = [g.to(dev) for g in self.groups]
         self._vars = {n: float(s.start) for n, s in trainer.schedules.items()}

@@ -24,9 +24,10 @@ Usage:
     TASKS.register("nig", nig_loss, version=1, stat_keys=("mae", "nll"))
     TASKS.get("nig")             # the object; TASKS.get("nigg") raises UnknownNameError (known names + "did you mean 'nig'")
 """
-import difflib
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Iterator, Mapping, Optional, Tuple
+
+from nig_timenet_torch.core.suggest import did_you_mean
 
 __all__ = ["Registry", "Contract", "Entry", "RegistryError", "DuplicateNameError", "UnknownNameError", "ContractError"]
 
@@ -158,8 +159,8 @@ class Registry:
         if name in self._entries:
             return
         known = sorted(self._entries)
-        close = difflib.get_close_matches(str(name), known, n=1) if known else []
-        hint = f" Did you mean {close[0]!r}?" if close else ""
+        close = did_you_mean(name, known)
+        hint = f" Did you mean {close!r}?" if close else ""
         raise UnknownNameError(f"unknown {self.kind} {name!r}. Known {self.kind}s: {known}.{hint}")
 
     def entry(self, name: str) -> Entry:

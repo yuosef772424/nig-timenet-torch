@@ -16,7 +16,7 @@ from torch import nn
 from nig_timenet_torch.core.constants import NIG_ALPHA_DEN_MIN
 from nig_timenet_torch.model.scalers import FITTED_SCALE, FittedScale
 
-__all__ = ["NIGHead", "OrderedMeans", "NIGUncertainty", "ConfidenceHead", "grad_scale"]
+__all__ = ["NIGHead", "OrderedMeans", "NIGUncertainty", "ConfidenceHead", "grad_scale", "alpha_minus_one"]
 
 
 def grad_scale(x: torch.Tensor, g: float) -> torch.Tensor:
@@ -133,6 +133,12 @@ class OrderedMeans(_Scaled):
         return base + up, mu_c, base - down
 
 
+def alpha_minus_one(alpha: torch.Tensor, floor: float = NIG_ALPHA_DEN_MIN) -> torch.Tensor:
+    """The NIG (alpha - 1) denominator, floored at ``floor`` (default ``NIG_ALPHA_DEN_MIN``, the value the model layer
+    and stats.nig.nig_total_std share); a caller with another floor names its own constant and says why."""
+    return torch.clamp_min(alpha - 1.0, floor)
+
+
 class NIGUncertainty(nn.Module):
     """Amini et al.: aleatoric = sqrt(beta / a1), epistemic = sqrt(beta / (nu a1)), a1 = max(alpha - 1,
     NIG_ALPHA_DEN_MIN); with unc_max set, non-finite values become unc_max and both are capped at unc_max.
@@ -143,7 +149,7 @@ class NIGUncertainty(nn.Module):
         self.unc_max = None if unc_max is None else float(unc_max)
 
     def forward(self, nu, alpha, beta) -> tuple[torch.Tensor, torch.Tensor]:
-        a1 = torch.clamp_min(alpha - 1.0, NIG_ALPHA_DEN_MIN)
+        a1 = alpha_minus_one(alpha)
         aleatoric = torch.sqrt(beta / a1)
         epistemic = torch.sqrt(beta / (nu * a1))
         if self.unc_max is not None:

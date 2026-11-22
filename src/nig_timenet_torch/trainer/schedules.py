@@ -1,4 +1,11 @@
-"""Lambda / learning-rate schedules (ROADMAP T1; source: crypto-signal-prediction trainer/schedules.py, identical at
+"""PURPOSE: Lambda (loss weight) and learning-rate schedules as pure functions of the epoch number: ``ParamSchedule`` /
+    ``schedule_value`` / ``apply_schedules`` and ``LrSettings`` / ``lr_at`` (warm-up, constant, cosine, restarts).
+TAGS: schedules, lambda schedule, learning rate, warmup, cosine, warm restarts, epoch, resume
+PITFALLS: both functions index the epoch from 0 (``Trainer.fit`` passes the 0-based index; its history rows and
+    ``BestTracker.update`` use index + 1); nothing here is saved in a checkpoint, so a schedule must stay a pure
+    function of (settings, epoch). An unknown curve / kind raises (TF fell back silently).
+
+Lambda / learning-rate schedules (ROADMAP T1; source: crypto-signal-prediction trainer/schedules.py, identical at
 aeafc564 and cea9cd58). Every function is PURE in the epoch number, which is what makes resume safe: nothing here
 is saved in a checkpoint. Unit parity against values computed from the TF source:
 tests/trainer/test_schedules_parity.py (reference/data_schedules/schedules.json).

@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from nig_timenet_torch.core.registry import ContractError, UnknownNameError
+from nig_timenet_torch.trainer.targets import validate_trainer_config
 from nig_timenet_torch.trainer.tasks import TASK_REGISTRY, register_task_type, with_defaults
 from tests.oracle import oracle_loader as ol
 
@@ -51,11 +52,11 @@ def test_regression_task_loss_kinds():
         torch.testing.assert_close(stats["mae"], torch.tensor(1.5))
 
 
-def test_unported_options_raise():
-    cfg = dict(targets_cfg()["close_reg"], huber_weight=0.5)
-    with pytest.raises(NotImplementedError):
-        fn = TASK_REGISTRY["evidential"]["fn"]
-        fn(ol.load_labels()["y_close_reg"], ol.load_outputs(), with_defaults("evidential", cfg), {})
+@pytest.mark.parametrize("key", ["huber_weight", "normalize_reg", "alpha_floor_straight_through"])
+def test_unimplemented_options_are_not_registered(key):
+    cfg = {"targets": {"close_reg": dict(targets_cfg()["close_reg"], **{key: 0.5})}, "loss": {}}
+    with pytest.raises(ValueError, match=key):
+        validate_trainer_config(cfg)
 
 
 def test_unknown_task_type_raises():

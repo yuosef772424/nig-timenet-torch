@@ -1,4 +1,10 @@
-"""PredictionTable schema (C5; BUILD_PLAN.md P27): pure constants + one validator. Besides the mandatory columns a
+"""PURPOSE: The PredictionTable schema: the mandatory columns and their kinds, the ``y_*`` output-column rule and
+    ``validate_table`` (lists every problem; checks the leakage order of the three times).
+TAGS: prediction table, schema, validate table, columns, leakage, label available at, output columns
+PITFALLS: datetimes must be tz-aware UTC with ns unit and ints int64, or the table is refused; a new mandatory
+    column needs a ``SCHEMA_VERSION`` bump and every writer (workflow.prediction_table) and reader updated.
+
+PredictionTable schema (C5; BUILD_PLAN.md P27): pure constants + one validator. Besides the mandatory columns a
 table carries one float column per model output, named exactly like the output key (``y_*``); nothing else."""
 
 __all__ = ["PREDICTION_TABLE_COLUMNS", "COLUMN_KINDS", "OUTPUT_PREFIX", "SCHEMA_VERSION", "PredictionTableError",

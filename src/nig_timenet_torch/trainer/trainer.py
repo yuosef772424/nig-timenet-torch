@@ -23,12 +23,12 @@ from dataclasses import dataclass, field
 import torch
 
 from nig_timenet_torch.core.config import from_dict
-from nig_timenet_torch.core.seeds import seed_everything
+from nig_timenet_torch.core.seeds import epoch_seed, seed_everything
 from nig_timenet_torch.trainer import checkpoint
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES, cross_section_loss
 from nig_timenet_torch.trainer.day_weights import DayWeightSettings, make_day_weighter
 from nig_timenet_torch.trainer.direction_balance import direction_balance_loss
-from nig_timenet_torch.trainer.groups import BATCH_ORDERS, group_batches, group_chunks, row_batches, row_groups
+from nig_timenet_torch.trainer.groups import BATCH_ORDERS, group_batches, group_chunks, row_groups
 from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
 from nig_timenet_torch.trainer.log_groups import GroupedLogs, tensor_logs
 from nig_timenet_torch.trainer.loss_balance import make_balancer
@@ -129,7 +129,7 @@ def compute_losses(model: torch.nn.Module, x, y, targets_cfg: dict, scheduled_va
                    loss_weights: dict[str, float], uncertainty_layer: UncertaintyWeightedLoss | None,
                    kendall_task_names: list[str], fixed_task_names: list[str], sample_weight=None,
                    training: bool = False, outputs: dict | None = None, multipliers: dict | None = None):
-    """-> (total_loss, raw_loss, per_target_losses, per_stat_values, per_constraint_values).
+    """-> (total_loss, raw_loss, per_target_losses, per_stat_values).
     raw_loss = sum of loss * loss_weight (no Kendall terms) + regularisation; total applies Kendall to
     kendall_task_names and adds fixed_task_names unweighted. ``training`` only gates flooding (the model's own
     train()/eval() mode gates dropout). ``outputs``: precomputed model(x) (then x is not used). ``targets_cfg`` must be
@@ -166,7 +166,7 @@ def compute_losses(model: torch.nn.Module, x, y, targets_cfg: dict, scheduled_va
     if reg is not None:
         extra = reg()
         total, raw = total + extra, raw + extra
-    return total, raw, per_target, per_stat, {}
+    return total, raw, per_target, per_stat
 
 
 class Trainer:
@@ -215,8 +215,6 @@ class Trainer:
         first = next(iter(model.parameters()), None)
         if self.uncertainty_layer is not None and first is not None:  # Kendall log-vars live on the model's device
             self.uncertainty_layer.to(first.device)
-        if loss_cfg["all_constraints"]:
-            raise NotImplementedError("output constraints are not ported yet")
         #: D-032: the cross-section term ("none" = no term) and its weight; needs ``group_channel``
         self.cross_section, self.cross_section_weight = loss_cfg["cross_section"], float(
             loss_cfg["cross_section_weight"])
@@ -247,6 +245,13 @@ class Trainer:
         if self.uncertainty_layer is not None:
             yield from self.uncertainty_layer.parameters()
 
+    def _base_losses(self, x, y, sample_weight, training: bool, outputs: dict | None):
+        """The module-level ``compute_losses`` with this trainer's config (the NIG / class losses and Kendall)."""
+        return compute_losses(self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights,
+                              self.uncertainty_layer, self.kendall_task_names, self.fixed_task_names,
+                              sample_weight=sample_weight, training=training, outputs=outputs,
+                              multipliers=self.balancer.multipliers())
+
     def compute_losses(self, x, y, sample_weight=None, training: bool = False, outputs: dict | None = None,
                        groups: torch.Tensor | None = None, plain: bool = False):
         """``compute_losses`` with this trainer's config; the D-032 terms that are switched on (the cross-section
@@ -257,19 +262,13 @@ class Trainer:
         (the per-head gradient trace, whose rows are not whole timestamps)."""
         cross = CROSS_SECTION_LOSSES[self.cross_section] is not None
         if plain or (not cross and not self.direction_balance):
-            return compute_losses(self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights,
-                                  self.uncertainty_layer, self.kendall_task_names, self.fixed_task_names,
-                                  sample_weight=sample_weight, training=training, outputs=outputs,
-                                  multipliers=self.balancer.multipliers())
+            return self._base_losses(x, y, sample_weight, training, outputs)
         if cross and groups is None and not (self.group_channel and x is not None):
             raise ValueError(f"the cross-section loss {self.cross_section!r} needs whole-timestamp batches: run with "
                              f"SplitSettings.cross_section (the group channel) or TrainSettings.batch_order "
                              f"'time_blocks'")
         outputs = self.model(x) if outputs is None else outputs
-        total, raw, per_target, stats, cons = compute_losses(
-            self.model, x, y, self.targets_cfg, self.scheduled_vars, self.loss_weights, self.uncertainty_layer,
-            self.kendall_task_names, self.fixed_task_names, sample_weight=sample_weight, training=training,
-            outputs=outputs, multipliers=self.balancer.multipliers())
+        total, raw, per_target, stats = self._base_losses(x, y, sample_weight, training, outputs)
         extra = []
         if cross:
             term = cross_section_loss(self.cross_section, outputs, y, self.targets_cfg,
@@ -281,13 +280,7 @@ class Trainer:
             stats["direction_balance_loss"] = term.detach().to(torch.float32)
             extra.append(self.direction_balance * term)
         add = torch.stack(extra).sum()
-        return total + add, raw + add, per_target, stats, cons
-
-    @staticmethod
-    def batch_indices(n: int, batch_size: int, shuffle: bool = True) -> list[torch.Tensor]:
-        """Mini-batch index tensors over n rows; the shuffle draws from torch's global RNG, so it derives from the
-        seed_everything(seed) call made before the Trainer is built."""
-        return row_batches(n, batch_size, shuffle)
+        return total + add, raw + add, per_target, stats
 
     @staticmethod
     def _logs(total, raw, per_target, stats) -> dict[str, float]:
@@ -306,7 +299,7 @@ class Trainer:
             raise RuntimeError("Trainer has no optimizer")
         self.model.train()
         self.optimizer.zero_grad(set_to_none=True)
-        total, raw, per_target, stats, _ = self.compute_losses(x, y, sample_weight=sample_weight, training=True,
+        total, raw, per_target, stats = self.compute_losses(x, y, sample_weight=sample_weight, training=True,
                                                                  groups=groups)
         self.balancer.update(per_target, self._shared)
         total.backward()
@@ -322,7 +315,7 @@ class Trainer:
         """No-grad eval() pass; scalar logs + ``selection_metric`` (the value of ``self.selection_metric``)."""
         self.model.eval()
         outputs = self.model(x)
-        total, raw, per_target, stats, _ = self.compute_losses(x, y, sample_weight=sample_weight, outputs=outputs)
+        total, raw, per_target, stats = self.compute_losses(x, y, sample_weight=sample_weight, outputs=outputs)
         logs = self._logs(total, raw, per_target, stats)
         logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, y, logs)
         return logs
@@ -335,7 +328,7 @@ class Trainer:
         timestamp ids, for the cross-section term and the rank selection metrics; the model sees plain chunks (its
         rows do not interact), only the loss reads the groups."""
         self.model.eval()
-        dev = self._device()
+        dev = self.device
         gid = row_groups(x) if self.group_channel else groups
         if self.group_channel:  # whole timestamps per chunk (rows are time-major: workflow cross_section)
             parts = [self.model(x[c].to(dev)) for c in group_chunks(gid, batch_size)]
@@ -343,14 +336,15 @@ class Trainer:
             parts = [self.model(xb.to(dev)) for xb in x.split(batch_size)]
         outputs = {k: torch.cat([p[k] for p in parts]) for k in parts[0]}
         y = {k: v.to(dev) for k, v in y.items()}
-        total, raw, per_target, stats, _ = self.compute_losses(None, y, outputs=outputs,
+        total, raw, per_target, stats = self.compute_losses(None, y, outputs=outputs,
                                                                groups=None if gid is None else gid.to(dev))
         logs = self._logs(total, raw, per_target, stats)
         labels = y if gid is None else {**y, GROUP_KEY: gid}  # a rank metric reads the timestamps
         logs["selection_metric"] = compute_selection_metric(self.selection_metric, outputs, labels, logs)
         return logs
 
-    def _device(self) -> torch.device:
+    @property
+    def device(self) -> torch.device:
         """The model's device: data may stay on the CPU (a big dataset) and is moved batch by batch (B-019)."""
         first = next(iter(self.model.parameters()), None)
         return torch.device("cpu") if first is None else first.device
@@ -362,7 +356,7 @@ class Trainer:
         ``monitor`` (a ``trainer.batch_influence.BatchInfluence``, log-only) is called around every step.
         ``batch_groups``: one batch per group (all its rows), the groups in a shuffled order (``batch_by``).
         With a ``day_weighter`` the rows carry its weights of this epoch (their summary joins the logs)."""
-        logs, dev = GroupedLogs(settings.steps_per_execution), self._device()
+        logs, dev = GroupedLogs(settings.steps_per_execution), self.device
         weights, day_logs = (None, {}) if self.day_weighter is None else self.day_weighter.epoch_weights(
             self, x, y, epoch)
         if batch_groups is not None:
@@ -393,7 +387,7 @@ class Trainer:
         if settings.lr is not None:
             for group in self.optimizer.param_groups:
                 group["lr"] = lr_at(settings.lr, epoch)
-        torch.manual_seed(settings.seed * 1_000_003 + epoch)
+        torch.manual_seed(epoch_seed(settings.seed, epoch))
         return self.optimizer.param_groups[0]["lr"]
 
     def _state(self, epochs_done: int, tracker: BestTracker, history: list[dict], identity: RunIdentity,
@@ -428,7 +422,7 @@ class Trainer:
 
     def _trace(self, x, y, batch_size: int, batches) -> dict[str, float]:
         """The trace row of the epoch: on the first ``batch_size`` training rows, or the mean over ``batches``."""
-        dev = self._device()
+        dev = self.device
         if batches is None:
             return epoch_trace(self, x[:batch_size].to(dev), {k: v[:batch_size].to(dev) for k, v in y.items()})
         ix = [torch.as_tensor(b, dtype=torch.long) for b in batches]

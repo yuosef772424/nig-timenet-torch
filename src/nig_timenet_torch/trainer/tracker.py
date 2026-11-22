@@ -1,4 +1,12 @@
-"""Best epoch + early stopping in one resumable object (ROADMAP T1; source: crypto-signal-prediction
+"""PURPOSE: ``BestTracker`` + ``EarlyStopSettings``: the best epoch of a selection metric (smoothed: none / window /
+    ema) and the early-stopping counter, in one object whose state goes into the checkpoint.
+TAGS: best tracker, early stopping, smoothing, selection metric, patience, resume, checkpoint state
+PITFALLS: ``update`` takes the 1-based epoch; a non-finite value is skipped (neither better nor a wasted epoch);
+    ``get_state`` keeps only the last 200 history values, which is enough for any window but not a full record;
+    ``load_state`` raises when the metric direction differs. The tracker holds numbers only, the best WEIGHTS live
+    in the Trainer.
+
+Best epoch + early stopping in one resumable object (ROADMAP T1; source: crypto-signal-prediction
 trainer/best_tracker.py, same at aeafc564 and cea9cd58). What "better" means comes from the registered selection
 metric (``higher_is_better`` of its SELECTION_METRICS entry, rule C3), never from loss weights.
 
