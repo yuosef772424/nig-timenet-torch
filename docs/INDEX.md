@@ -25,7 +25,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Results notes
 
-37 notes (rule C7: the failure reading is inside each).
+38 notes (rule C7: the failure reading is inside each).
 
 - `docs/results/arm-i-001.md`: arm-i-001: arm I of rolling-ind-001 (7 indicator channels, lr 1e-5) read against R (exploratory, rule C5)
 - `docs/results/b1-btc-timing-001.md`: b1-btc-timing-001: buy BTC at the times the model is bullish across coins (owner 2026-11-19; exploratory, rule C5)
@@ -39,6 +39,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/results/deep-side-001.md`: Deep side — is "the side where price goes deeper" predicted? (`baseline-002-s0`, seed 0)
 - `docs/results/dominance-look-001.md`: dominance-look-001: USDT.D / BTC.D, and BTC + ETH instead of the cross-section as the panel's reference
 - `docs/results/dw1-001.md`: dw1-001: day-balanced, failure-weighted loss (owner 2026-11-20; exploratory, C5)
+- `docs/results/dy1-daily-001.md`: dy1-daily-001: a daily model that predicts two days ahead, read as money after costs (DY1 = N3; exploratory, C5)
 - `docs/results/e1-fixes-001.md`: E1 fixes — where the mu scale and the close signal are lost, and the switches that fix it (FX1)
 - `docs/results/gates-fixes-001.md`: Gate fixes — why A5 / A6 / the beta floor fail on E1, the switches, and the new run default (FX2)
 - `docs/results/har-range-h3-001.md`: H3: the HAR range terms as a readout input (owner 2026-11-18) — refuted, a partial gain on the low head
@@ -104,7 +105,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/handoff/2026-11-20-dw1-running.md`: Status: closed (DW1 #73; `docs/results/dw1-001.md`)
 - `docs/handoff/2026-11-20-start-here.md`: Status: closed (AI1 #71 and AI2 #72 merged in MG4 #74; `docs/results/br1-001.md`, `docs/results/m3-full-001.md`)
 - `docs/handoff/2026-11-21-hardening-2026-11b.md`: Status: closed (PR #75 merged 2026-11-22 as 2d0404c; the items under "Left" stay open in the plan and STATUS)
-- `docs/handoff/2026-11-22-dy1-daily.md`: Status: open
+- `docs/handoff/2026-11-22-dy1-daily.md`: Status: closed (`docs/results/dy1-daily-001.md`)
 
 ## Decisions
 
