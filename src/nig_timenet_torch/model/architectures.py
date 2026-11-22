@@ -4,9 +4,10 @@ PURPOSE:  The ARCHITECTURES registry (build_fn + default_config per architecture
           anti-memorization preset and the TinyMLP plug-in proof; every architecture exposes the health-report hooks.
 TAGS:     architectures, registry, model settings, default config, tiny mlp, plugin, health report, probe points
 PITFALLS: THE default of nig_timenet_v2 is NIG_TIMENET_V2_DEFAULT_CONFIG (d_model 16, 2 layers, NIG + binary heads);
-          build_nig_timenet_v2's own signature mirrors TF and differs (HF-08). An architecture's model must provide
-          ``head_modules() -> {target: NIGHead}`` and ``default_probe_points`` (module names) for health_report;
-          optional ``activation_points`` (pre-activation Linear names) for gate A7.
+          build_nig_timenet_v2's own signature keeps the TF core defaults and differs (HF-08). An architecture's
+          model must provide ``head_modules() -> {target: NIGHead}`` and ``default_probe_points`` (module names) for
+          health_report; optional ``activation_points`` (pre-activation Linear names) for gate A7. TinyMLP is a
+          plug-in proof (tests, trainer_checks), not a candidate model.
 
 Each entry: ``build_fn(seq_len, n_features, **config) -> nn.Module`` whose forward returns the HEAD_REGISTRY-named
 output dict, plus a ``default_config`` (constructor kwargs without seq_len / n_features). ``nig_timenet_v2`` is the

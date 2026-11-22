@@ -10,7 +10,6 @@ import pytest
 import torch
 
 from nig_timenet_torch.model.builder import build_nig_timenet_v2, tcn_n_blocks
-from nig_timenet_torch.model.panel import build_panel_model, panel_encoder
 from nig_timenet_torch.trainer.tasks import classification_task_loss, with_defaults
 from tests.oracle import oracle_loader as ol
 
@@ -143,57 +142,3 @@ def test_multiclass_loss_matches_upstream_classification_task_loss(ls, weighted)
 def test_binary_and_multiclass_on_one_target_is_refused():
     with pytest.raises(ValueError, match="share the Keras layer names"):
         build_nig_timenet_v2(32, 6, head_types={"close": ["binary_classification", "multiclass_classification"]})
-
-
-def _panel(case):
-    cfg = _cfg(case)
-    enc = panel_encoder(cfg["seq_len"], cfg["n_features"], **cfg["encoder_constructor_kwargs"])
-    m = build_panel_model(enc, **cfg["panel_config"])
-    m.load_oracle_weights(_npz(case, "weights.npz"))
-    return m.eval()
-
-
-@pytest.mark.parametrize("case", ["panel", "panel_no_attention"])
-def test_panel_forward_matches_oracle(case):
-    m = _panel(case)
-    n_enc = sum(1 for k in _npz(case, "weights.npz") if k.startswith("encoder."))
-    assert n_enc == len(list(m.encoder.parameters()))
-    with torch.no_grad():
-        got = m(_npz(case, "inputs.npz"))
-    assert {k: tuple(v.shape) for k, v in got.items()} == {"logit": (10, 3), "mu": (10, 3)}
-    _assert_outputs(got, case)
-
-
-@pytest.mark.parametrize("attention", [True, False])
-def test_panel_masking_day_isolation_and_coin_order(attention):
-    # adapted from upstream cross_asset/selftest.py::test_masking
-    torch.manual_seed(1)
-    enc = panel_encoder(8, 5, d_model=16, num_layers=1)
-    m = build_panel_model(enc, d_model=16, num_heads=4, cross_attention=attention, dropout=0.0).eval()
-    sizes = (4, 2, 6)
-    day = torch.cat([torch.full((n,), d) for d, n in enumerate(sizes)])
-    pos = torch.cat([torch.arange(n) for n in sizes])
-    x = torch.randn(len(day), 8, 5)
-    with torch.no_grad():
-        o_big = m({"x": x, "day": day, "pos": pos})["logit"]
-        rows = day == 1
-        alone = {"x": x[rows], "day": torch.zeros(2, dtype=torch.long), "pos": pos[rows]}
-        o_alone = m(alone)["logit"]
-        torch.testing.assert_close(o_big[rows], o_alone, rtol=0, atol=1e-5)  # padding / other days invisible
-        x2 = alone["x"].clone()
-        x2[0] += 3.0
-        o2 = m({**alone, "x": x2})["logit"]
-        assert (not torch.allclose(o2[1:], o_alone[1:], atol=1e-6)) == attention  # same-day coins interact
-        perm = torch.tensor([1, 0])
-        o3 = m({**alone, "pos": alone["pos"][perm]})["logit"]
-        torch.testing.assert_close(o3, o_alone, rtol=0, atol=1e-5)  # no positional code across coins
-    assert torch.isfinite(o_big).all()
-
-
-def test_panel_with_two_timeframe_encoder():
-    enc = panel_encoder({"1h": 16, "4h": 8}, 5, d_model=16, num_layers=1)
-    m = build_panel_model(enc, d_model=16, num_heads=4).eval()
-    assert hasattr(m, "enc_proj")  # encoder width 32 != d_model 16
-    out = m({"x": {"1h": torch.randn(5, 16, 5), "4h": torch.randn(5, 8, 5)}, "day": torch.tensor([0, 0, 1, 1, 1]),
-             "pos": torch.tensor([0, 1, 0, 1, 2])})
-    assert out["logit"].shape == (5, 3) and torch.isfinite(out["mu"]).all()

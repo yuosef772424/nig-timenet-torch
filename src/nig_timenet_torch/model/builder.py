@@ -4,14 +4,15 @@ encoder branch per timeframe (P41), nig_regression / binary / multiclass heads (
 
 Module attribute names equal the Keras layer names, so weights.json ``attr_path`` strings map 1:1 onto torch
 parameter names (see ``torch_param_name``). Options of the upstream builder that this port does not implement yet
-are accepted and validated: any non-default value raises NotImplementedError naming the step that adds it.
+are accepted and validated: any non-default value raises NotImplementedError (not implemented, no step planned).
 
 PURPOSE:  NigTimeNetV2 (the fused model: input path, one encoder branch per timeframe, trunk, heads) and
           build_nig_timenet_v2; encoders come from model.encoders.ENCODERS, head kinds from HEAD_REGISTRY.
 TAGS:     builder, nig timenet v2, model assembly, encoder dispatch, head dispatch, oracle weights, state dict
 PITFALLS: THE default config is the registry's (architectures.NIG_TIMENET_V2_DEFAULT_CONFIG: d_model 16, 2 layers);
-          this signature mirrors the TF builder (d_model 128, 4 layers, NIG heads only) and must not be edited to
-          "fix" that (HF-08). Attribute names are Keras layer names = checkpoint keys: never rename.
+          the signature keeps the TF builder's core arguments and defaults (d_model 128, 4 layers; the options
+          documented in its docstring beyond the TF ones are port-only) and must not be edited to "fix" that (HF-08).
+          Attribute names are Keras layer names = checkpoint keys: never rename.
           ``activation_points`` only lists module names for gate A7 (no behaviour).
 """
 
@@ -63,10 +64,10 @@ AUX_TARGET = "close"   # the target the auxiliary heads (aux_heads) are attached
 #: InstanceNorm stats_mode values that return no per-window statistics
 NO_STATS_MODES = tuple(m for m, f in STATS_TRANSFORMS.items() if f is None)
 
-# option -> (value this port implements, step that adds the rest)
-_NOT_YET = {
-    "use_decomposition": (True, "P34"), "use_linear_path": (True, "P34"),
-    "level_film": (False, "P34"), "architecture": ("fused", "P34"), "fusion": ("concat", "P34"), "n_coins": (0, "P34"),
+# upstream option -> the one value this port implements; any other value is not implemented (no step planned)
+_UNIMPLEMENTED_OPTIONS = {
+    "use_decomposition": True, "use_linear_path": True, "level_film": False, "architecture": "fused",
+    "fusion": "concat", "n_coins": 0,
 }
 LEVEL_NORMS = (None, "batch")
 
@@ -95,7 +96,6 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         self.cross_center = bool(cross_center)   # D-032: the close mean is taken relative to its timestamp
         self.nig_trunk_grad = float(nig_trunk_grad)
         self.label_scale_name, fit_s = nig_scale_fit, label_scale.fitted(nig_scale_fit)   # FX2 (B-052)
-        self._gid = None  # the rows' timestamp ids during one forward (cross_input reads it inside the branch)
         if cross_input not in CROSS_INPUTS:
             raise ValueError(f"cross_input must be one of {tuple(CROSS_INPUTS)}, not {cross_input!r}")
         if CROSS_INPUTS[cross_input] is not None:
@@ -133,7 +133,7 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             branches = [("", int(seq_len), int(n_features))]
         self.timeframes = tuple(tfs) if tfs and len(tfs) > 1 else None
         if self.timeframes and skip_variant(input_skip).adds_modules:
-            raise NotImplementedError("input_skip is defined on the single-timeframe transformer only (P34)")
+            raise NotImplementedError("input_skip on several timeframes is not implemented (single-timeframe only)")
         self.branch_suffixes = tuple(b[0] for b in branches)
         self.branch_blocks = {}
         dims = EncoderDims(d_model, num_layers, num_heads, num_kv_heads, patch_len, stride, max_rel_pos, dropout,
@@ -261,13 +261,13 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             self._stream[name] = value
         return value
 
-    def branch(self, x: torch.Tensor, sfx: str = "") -> torch.Tensor:
+    def branch(self, x: torch.Tensor, sfx: str = "", gid=None) -> torch.Tensor:
         """One timeframe's encoder up to its pooled embedding h (after readout_fc + linear_path). Stream taps (in
         order): input, scaled, inst_norm, stats, level, tokens, enc_in, enc_block_i, enc_out, pooled, readout,
-        linear_path, branch_out (+ the branch suffix)."""
-        return self.branch_tokens(x, sfx)[0]
+        linear_path, branch_out (+ the branch suffix). ``gid``: the rows' timestamp ids (cross_input reads them)."""
+        return self.branch_tokens(x, sfx, gid)[0]
 
-    def branch_tokens(self, x: torch.Tensor, sfx: str = "") -> tuple[torch.Tensor, torch.Tensor]:
+    def branch_tokens(self, x: torch.Tensor, sfx: str = "", gid=None) -> tuple[torch.Tensor, torch.Tensor]:
         """``branch`` plus the encoder's output tokens (B, T', d_model) after final_norm (attention heads' input)."""
         tap = lambda name, v: self._tap(name + sfx, v)  # noqa: E731
         x = tap("input", x)
@@ -275,7 +275,7 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         if self._m("input_scaler", sfx) is not None:
             x = tap("scaled", self._m("input_scaler", sfx)(x))
         if hasattr(self, "cross_input"):
-            x = tap("cross_input", self.cross_input(x, self._gid))
+            x = tap("cross_input", self.cross_input(x, gid))
         z, stats = self._m("instance_norm", sfx)(x)
         z = tap("inst_norm", z)
         for name in ("feature_dropout", "input_noise"):
@@ -323,11 +323,11 @@ class NigTimeNetV2(OracleWeights, nn.Module):
             raise ValueError(f"multi-timeframe model expects a dict or a sequence in order {list(self.timeframes)}")
         return list(x)
 
-    def trunk(self, x) -> torch.Tensor:
+    def trunk(self, x, gid=None) -> torch.Tensor:
         """x: (B, T, F) tensor, or for multi-timeframe a dict {timeframe: (B, T_tf, F_tf)} / sequence in the
         timeframe order. Returns trunk_drop's output (B, d_model * n_timeframes) — the panel encoder output."""
         xs = [xi.to(torch.float32) for xi in self._branch_inputs(x)]
-        hs = [self.branch(xi, sfx) for xi, sfx in zip(xs, self.branch_suffixes, strict=True)]
+        hs = [self.branch(xi, sfx, gid) for xi, sfx in zip(xs, self.branch_suffixes, strict=True)]
         h = hs[0] if len(hs) == 1 else torch.cat(hs, dim=-1)  # branch_concat
         return self.trunk_drop(self._tap("trunk", self.trunk_norm(h)))
 
@@ -340,17 +340,15 @@ class NigTimeNetV2(OracleWeights, nn.Module):
         gid = None
         if torch.is_tensor(x) and self.n_group_features is not None:  # an optional last channel = the row's timestamp
             x, gid = split_group(x, self.n_group_features)
-        self._gid = gid
         if not reads_sequence(self.nig_head_kind):
-            h = self.trunk(x)
-            self._gid = None
+            h = self.trunk(x, gid)
             if hasattr(self, "cross_coin"):
                 h = self._tap("cross_coin", self.cross_coin(h, gid))
             h_nig = grad_scale(h, self.nig_trunk_grad)   # FX2: 1.0 = h itself
             raw = {t: getattr(self, f"nig_{t}")(h_nig) for t in self.nig_targets}
         else:  # experiment: the NIG heads read the head sequence, the confidence / class heads the pooled trunk
             (xi,) = self._branch_inputs(x)
-            br, tokens = self.branch_tokens(xi.to(torch.float32))
+            br, tokens = self.branch_tokens(xi.to(torch.float32), gid=gid)
             h = self.trunk_drop(self._tap("trunk", self.trunk_norm(br)))
             seq = self.head_seq_norm(torch.cat([br[:, None, :], tokens], dim=1))
             raw = {t: getattr(self, f"nig_{t}")(grad_scale(seq, self.nig_trunk_grad)) for t in self.nig_targets}
@@ -439,8 +437,9 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
                          cross_coin_kind="attention", cross_input="none", cross_center=False, target_norm="none",
                          har_range=None, use_instance_norm=True, order_in_label_units=False, aux_heads=(),
                          aux_trunk_grad=1.0, **options) -> NigTimeNetV2:
-    """Same keyword names and defaults as upstream build_nig_timenet_v2 (``n_classes`` only matters for the
-    multiclass head, P17). The anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
+    """The core keyword names and defaults are the upstream build_nig_timenet_v2's (``n_classes`` only matters for
+    the multiclass head, P17); the options described below are port-only additions (TF has none of them). The
+    anti-memorization options (encoder="gru", stats_mode, input_clip, input_noise_std,
     feature_dropout, level_passthrough, level_norm; P33b) and the FX1 switches (nig_scale, order_detach_close: see
     nig_layers; bn_warmup: layers.BatchNormChannelsLast; readout_dropout: the rate of trunk_drop and of the NIG
     heads' dropout, None = ``dropout``; FX2: nig_trunk_grad (nig_layers.grad_scale), nig_scale_fit (model.label_scale))
@@ -468,18 +467,18 @@ def build_nig_timenet_v2(seq_len: int, n_features: int, *, d_model=128, num_laye
     TARGET_NORMS.entry(target_norm)  # raises UnknownNameError (a ValueError) with the known names + did-you-mean
     INPUT_SKIP_VARIANTS.entry(input_skip)  # likewise
     if skip_variant(input_skip).adds_modules and not ENCODERS.entry(encoder).meta["supports_input_skip"]:
-        raise NotImplementedError(f"input_skip={input_skip!r} is defined on the transformer encoder only (P34)")
+        raise NotImplementedError(f"input_skip={input_skip!r} is defined on the transformer encoder only (not planned)")
     if ffn not in TransformerBlock.FFN_KINDS:
         raise ValueError(f"ffn must be one of {tuple(TransformerBlock.FFN_KINDS)}, not {ffn!r}")
     if level_norm not in LEVEL_NORMS:
         raise ValueError(f"level_norm must be one of {LEVEL_NORMS}, not {level_norm!r}")
     options = dict(options)
     for opt, value in options.items():
-        if opt not in _NOT_YET:
+        if opt not in _UNIMPLEMENTED_OPTIONS:
             raise TypeError(f"build_nig_timenet_v2() got an unexpected keyword argument {opt!r}")
-        supported, step = _NOT_YET[opt]
+        supported = _UNIMPLEMENTED_OPTIONS[opt]
         if value != supported:
-            raise NotImplementedError(f"{opt}={value!r} is not ported yet (only {supported!r}); added in {step}")
+            raise NotImplementedError(f"{opt}={value!r} is not implemented (only {supported!r}; no step planned)")
     if isinstance(n_features, dict) and not isinstance(seq_len, dict):
         raise ValueError("n_features is a dict but seq_len is not: pass both as {timeframe: value}")
     return NigTimeNetV2(
