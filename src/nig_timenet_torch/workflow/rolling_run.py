@@ -21,6 +21,7 @@ import hashlib
 import json
 import math
 import statistics
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -101,14 +102,14 @@ def _fold_run(settings: RunSettings, rolling: RollingSettings, art, fold: Rollin
     return run
 
 
-def _train_fold(run: steps.Run, fold: RollingFold, rolling: RollingSettings, on_epoch) -> None:
+def _train_fold(run: steps.Run, fold: RollingFold, rolling: RollingSettings, on_epoch, deadline) -> None:
     steps.build(run)       # the scalers and the NIG label scale are fitted on THIS fold's train rows
     run.ident = _fold_identity(run.ident, fold, rolling)
     run.extra["trained_on_fold"] = fold.index
     if run.settings.train.staged is None:
-        steps.train(run, on_epoch=on_epoch)
+        steps.train(run, on_epoch=on_epoch, deadline=deadline)
     else:
-        steps.train_staged(run, on_eval=on_epoch)
+        steps.train_staged(run, on_eval=on_epoch, deadline=deadline)
 
 
 def _reuse(run: steps.Run, last: steps.Run, fold: RollingFold, rolling: RollingSettings) -> None:
@@ -138,18 +139,29 @@ def _rows_on_disk(out, folds: list[int], seeds, study: str) -> list[dict]:
     return rows
 
 
+def _cut(rows: list[dict], art, study: str) -> dict:
+    """What ``run_rolling`` returns when the deadline came first (C-07): nothing is summarised."""
+    print(f"rolling: cut by the deadline after {len(rows)} fold x seed row(s) in this call; run again to continue",
+          flush=True)
+    return {"complete": False, "finished": False, "n_rows": len(rows),
+            "data_fingerprint": art.manifest.data_fingerprint, "study_hash": study}
+
+
 def _scalars(report: dict) -> dict:
     return {k: float(v) for k, v in steps._flat(report) if not any(t in k for t in _SKIP)}
 
 
 def run_rolling(settings: RunSettings, rolling: RollingSettings, out, *, on_epoch=None,
-                on_fold: Callable | None = None, ckpt_root=None) -> dict:
+                on_fold: Callable | None = None, ckpt_root=None, deadline: float | None = None) -> dict:
     """The walk-forward study. For every fold x seed: split (``fold_with_val``), train through the run steps (or reuse
     the seed's last model when ``fold % retrain_every_k != 0``), evaluate on the fold's test window, write
     ``fold_<i>_seed_<s>/`` (``test_report.json``, ``test_table.parquet`` + meta, the battery files when enabled,
     ``fold_row.json``). ``on_fold(run, row)`` is called after each fold before its tensors are freed. Writes
     ``rolling_folds.csv``, ``rolling_summary.json`` and ``rolling_summary.md`` to ``out``; returns the summary.
-    ``ckpt_root`` puts the fold checkpoints (the resume points) elsewhere (a Drive folder) than the outputs."""
+    ``ckpt_root`` puts the fold checkpoints (the resume points) elsewhere (a Drive folder) than the outputs.
+    ``deadline`` (a ``time.monotonic()`` value): no fold x seed starts after it and the training stops at an epoch
+    border before it; a cut fold writes no row, and the call returns ``{"complete": False, "finished": False, ...}``
+    (run it again: the cut fold resumes from its checkpoint, the finished ones re-read theirs)."""
     _refuse_replaced_split(settings)
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -162,31 +174,34 @@ def run_rolling(settings: RunSettings, rolling: RollingSettings, out, *, on_epoc
         raise ValueError("the rolling settings give no fold: train_span + embargo + test_span passes the last label")
     rows: list[dict] = []
     last: dict[int, steps.Run] = {}
-    for fold in folds:
-        for seed in rolling.seeds:
-            run = _fold_run(settings, rolling, art, fold, seed, out, ckpt_root)
-            trained = fold.index % rolling.retrain_every_k == 0 or seed not in last
-            if trained:
-                _train_fold(run, fold, rolling, on_epoch)
-            else:
-                _reuse(run, last[seed], fold, rolling)
-            report = steps.test_step(run)
-            steps.battery_step(run)
-            write_table(run.out / "test_table.parquet", run.extra["tables"]["test"], run.ident)
-            row = {"study_hash": study, "fold": fold.index, "seed": seed, "trained": trained,
-                   "trained_on_fold": run.extra["trained_on_fold"],
-                   "n_train": int(len(run.idx["train"])), "n_val": int(len(run.idx["val"])),
-                   "n_test": int(len(run.idx["test"])), "train_end": str(fold.train_end),
-                   "test_start": str(fold.test_start), "test_end": str(fold.test_end),
-                   "best_epoch": run.result.best_epoch, "epochs_done": run.result.epochs_done,
-                   "metrics": _scalars(report)}
-            (run.out / "fold_row.json").write_text(json.dumps(row, indent=1, default=float), encoding="utf-8")
-            rows.append(row)
-            if on_fold is not None:
-                on_fold(run, row)
-            if trained:
-                last[seed] = run
-            run.x.clear(), run.y.clear(), run.extra.pop("tables", None)    # free the tensors; the model stays
+    for fold, seed in ((f, s) for f in folds for s in rolling.seeds):
+        if deadline is not None and time.monotonic() >= deadline:
+            return _cut(rows, art, study)
+        run = _fold_run(settings, rolling, art, fold, seed, out, ckpt_root)
+        trained = fold.index % rolling.retrain_every_k == 0 or seed not in last
+        if trained:
+            _train_fold(run, fold, rolling, on_epoch, deadline)
+            if not steps.training_finished(run):
+                return _cut(rows, art, study)
+        else:
+            _reuse(run, last[seed], fold, rolling)
+        report = steps.test_step(run)
+        steps.battery_step(run)
+        write_table(run.out / "test_table.parquet", run.extra["tables"]["test"], run.ident)
+        row = {"study_hash": study, "fold": fold.index, "seed": seed, "trained": trained,
+               "trained_on_fold": run.extra["trained_on_fold"],
+               "n_train": int(len(run.idx["train"])), "n_val": int(len(run.idx["val"])),
+               "n_test": int(len(run.idx["test"])), "train_end": str(fold.train_end),
+               "test_start": str(fold.test_start), "test_end": str(fold.test_end),
+               "best_epoch": run.result.best_epoch, "epochs_done": run.result.epochs_done,
+               "metrics": _scalars(report)}
+        (run.out / "fold_row.json").write_text(json.dumps(row, indent=1, default=float), encoding="utf-8")
+        rows.append(row)
+        if on_fold is not None:
+            on_fold(run, row)
+        if trained:
+            last[seed] = run
+        run.x.clear(), run.y.clear(), run.extra.pop("tables", None)    # free the tensors; the model stays
     if rolling.fold_ids is not None:     # a share of the study: the summary waits for every fold x seed
         every = rolling_folds(art.dataset, dataclasses.replace(rolling, fold_ids=None))
         rows, rolling = _rows_on_disk(out, [f.index for f in every], rolling.seeds, study), dataclasses.replace(

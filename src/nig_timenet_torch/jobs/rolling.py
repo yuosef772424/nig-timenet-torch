@@ -81,12 +81,16 @@ def _code_sha() -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    started = time.time()
-    config, out, _max_minutes, _rest = contract.entry_args(argv)
+    started, t_mono = time.time(), time.monotonic()
+    config, out, max_minutes, _rest = contract.entry_args(argv)
     cfg = from_dict(RollingConfig, config)
     contract.write_device_json(out, cfg.device)
     summary = rolling_run.run_rolling(run_settings(cfg, _code_sha()), rolling_settings(cfg), out,
-                                      ckpt_root=cfg.run_dir)
+                                      ckpt_root=cfg.run_dir, deadline=contract.deadline(max_minutes, t_mono))
+    if summary.get("finished") is False:     # the deadline came first: the fold checkpoints resume
+        contract.write_manifest(out, config, input_fingerprint=summary["data_fingerprint"], started=started)
+        print(f"rolling NOT FINISHED (deadline): {summary['n_rows']} fold x seed row(s) this run; run the job again")
+        return 0
     if summary.get("complete") is False:     # rolling.fold_ids: another process finishes the study
         print(f"rolling part OK: {summary['n_folds']} folds on disk, the summary waits for the other parts")
         return 0

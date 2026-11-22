@@ -313,7 +313,8 @@ def _cell(v) -> str:
 def report_markdown(report: dict) -> str:
     """The gate report as markdown: verdicts per env and gate, then every row."""
     s = report["summary"]
-    lines = [f"# Gate report `{report['key'][:16]}`", "",
+    cut = "" if report.get("finished", True) else " (NOT finished: deadline)"
+    lines = [f"# Gate report `{str(report['key'])[:16]}`{cut}", "",
              f"- passed: **{s['passed']}** (baseline arm: {report.get('baseline_arm')}); seeds {s['seeds']}; envs "
              f"missing seeds: {s['envs_missing_seeds'] or 'none'}",
              f"- configuration: `{report.get('configuration')}`", f"- code: `{report.get('code_sha')}`", "",

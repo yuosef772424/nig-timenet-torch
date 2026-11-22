@@ -77,6 +77,11 @@ def _peak_mb(device) -> float | None:
     return torch.cuda.max_memory_allocated(device) / 2 ** 20 if device.type == "cuda" else None
 
 
+#: an arm starts only while at least this share of the longest arm so far fits before the deadline (C-22): a shorter
+#: rest would train too few epochs to be worth a resume point
+START_SHARE = 0.25
+
+
 def run_arm(settings: RunSettings, name: str, arm: dict, seed: int, out, *, ckpt_root=None,
             deadline: float | None = None, on_epoch=None) -> dict:
     """One arm x seed -> its row. A finished arm (``arm.json`` under the checkpoint root) is read back, its files
@@ -96,7 +101,7 @@ def run_arm(settings: RunSettings, name: str, arm: dict, seed: int, out, *, ckpt
     steps.train(r, deadline=deadline, on_epoch=on_epoch)
     res = r.result
     row = {"arm": name, "seed": seed, "epochs_done": res.epochs_done, "best_epoch": res.best_epoch,
-           "best_value": res.best_value, "finished": res.epochs_done >= r.fit_settings.epochs or res.stopped_early,
+           "best_value": res.best_value, "finished": steps.training_finished(r),
            "rows": {k: int(len(v)) for k, v in r.idx.items()}, "data_fingerprint": r.art.manifest.data_fingerprint,
            "epoch_seconds": [h["trace_epoch_seconds"] for h in res.history if "trace_epoch_seconds" in h],
            "peak_memory_mb": _peak_mb(r.device), "selection_metric": r.settings.train.selection_metric}
@@ -152,7 +157,7 @@ def run_panel_study(settings: RunSettings, arms: dict, seeds, out, *, ckpt_root=
     rows, finished, longest = {name: [] for name in arms}, True, 0.0
     for seed in seeds:
         for name, arm in arms.items():
-            if deadline is not None and longest and time.monotonic() + 0.25 * longest > deadline:
+            if deadline is not None and longest and time.monotonic() + START_SHARE * longest > deadline:
                 finished = False
                 continue
             t0 = time.monotonic()

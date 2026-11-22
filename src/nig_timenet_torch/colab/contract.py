@@ -1,4 +1,11 @@
-"""The run contract between the runner and a job entry (ROADMAP T3), both sides in one place.
+"""PURPOSE: The run contract between the runner and a job entry: the flags (entry_args), the one training deadline
+    from --max-minutes, device.json (rule E1), the hashed manifest, and the runner-side validation of all of them.
+TAGS: run contract, job entry, max minutes, deadline, device record, manifest, output validation
+PITFALLS: the runner SIGKILLs an entry at max_minutes * 60 + its grace, so an entry passes ``deadline`` to its
+    training and stops early with ``finished: false`` (resumable) instead of being killed with no manifest;
+    ``manifest.json`` is written last (it is the completion marker).
+
+The run contract between the runner and a job entry (ROADMAP T3), both sides in one place.
 
 Entry side: ``entry_args`` reads the flags the runner passes, ``write_device_json`` records the device (rule E1) and
 proves a tensor lands on it, ``write_manifest`` hashes every output. Runner side: ``validate_outputs`` recomputes
@@ -35,6 +42,19 @@ def _outputs(out_dir) -> list[Path]:
 
 
 # ------------------------------------------------------------------------------------------------ entry side
+#: the part of a job's ``max_minutes`` kept back from training for the reports, the manifest and the publish (C-22):
+#: ``min(RESERVE_SECONDS, RESERVE_SHARE * budget)``
+RESERVE_SECONDS = 600.0
+RESERVE_SHARE = 0.2
+
+
+def deadline(max_minutes: int, started_monotonic: float) -> float:
+    """The ``time.monotonic()`` value by which an entry's training stops (at an epoch, stage, fold or arm border):
+    the job's budget from ``started_monotonic`` (taken when the entry started) less the reserve for the outputs."""
+    budget = max_minutes * 60.0
+    return started_monotonic + budget - min(RESERVE_SECONDS, RESERVE_SHARE * budget)
+
+
 def entry_args(argv: list[str] | None = None) -> tuple[dict, Path, int, list[str]]:
     """-> (config dict, out dir, max minutes, remaining args) from the flags the runner passes."""
     ap = argparse.ArgumentParser()

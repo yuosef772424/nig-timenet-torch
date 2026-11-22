@@ -226,3 +226,27 @@ def test_a_rolling_run_refuses_the_split_fields_the_geometry_replaces(tmp_path, 
     assert field in SPLIT_FIELDS_REPLACED
     with pytest.raises(ValueError, match="fold geometry"):
         run_rolling(updated(RunSettings(run_dir="x"), over), rolling(), tmp_path / "out")
+
+
+class _FrozenClock:
+    """``rolling_run.time`` for a test: the study's own start check never fires, the trainer's real clock does."""
+
+    @staticmethod
+    def monotonic():
+        return 0.0
+
+
+@pytest.mark.slow  # rule E3: trains 1 + 2 epochs on CPU; runs in CI's slow step
+def test_a_fold_cut_by_the_deadline_writes_no_row_and_resumes(art, tmp_path, monkeypatch):  # noqa: F811
+    """C-07: the trainer stops at an epoch border before the deadline; the cut fold writes no row and the study
+    returns finished False; the same call again resumes the fold from its checkpoint and finishes."""
+    from nig_timenet_torch.workflow import rolling_run
+    out, s = tmp_path / "roll", settings(art, tmp_path)
+    monkeypatch.setattr(rolling_run, "time", _FrozenClock)
+    cut = run_rolling(s, rolling(max_folds=1), out, deadline=1.0)     # the trainer's clock is far past 1.0
+    assert cut["finished"] is False and cut["complete"] is False and cut["n_rows"] == 0
+    assert not (fold_dir(out, 0, 0) / "fold_row.json").exists() and not (out / "rolling_summary.json").exists()
+    monkeypatch.undo()
+    done = run_rolling(s, rolling(max_folds=1), out)
+    row = json.loads((fold_dir(out, 0, 0) / "fold_row.json").read_text())
+    assert done["n_folds"] == 1 and row["epochs_done"] == 2

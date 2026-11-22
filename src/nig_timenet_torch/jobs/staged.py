@@ -74,14 +74,16 @@ def _code_sha() -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    started = time.time()
-    config, out, _max_minutes, _rest = contract.entry_args(argv)
+    started, t_mono = time.time(), time.monotonic()
+    config, out, max_minutes, _rest = contract.entry_args(argv)
     cfg = from_dict(StagedConfig, config)
     contract.write_device_json(out, cfg.device)
     study = staged_study.run_staged_study(run_settings(cfg, _code_sha()), cfg.seeds, out, baselines=cfg.baselines,
-                                          ckpt_root=cfg.run_dir, on_eval=lambda r: print(eval_line(r), flush=True))
+                                          ckpt_root=cfg.run_dir, on_eval=lambda r: print(eval_line(r), flush=True),
+                                          deadline=contract.deadline(max_minutes, t_mono))
     contract.write_manifest(out, config, input_fingerprint=study["data_fingerprint"], started=started)
-    print(f"staged OK: {study['verdict']}")
+    print(f"staged {'OK' if study['finished'] else 'NOT FINISHED (run the job again to continue)'}: "
+          f"{study['verdict']}")
     return 0
 
 

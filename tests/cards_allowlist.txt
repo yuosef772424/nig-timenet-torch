@@ -1,5 +1,4 @@
 colab/__main__.py
-colab/contract.py
 colab/device.py
 colab/prepare.py
 colab/session.py

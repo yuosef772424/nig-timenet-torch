@@ -10,6 +10,7 @@ PITFALLS: exploratory (rule C5): a CPU smoke is not a result; an arm is compared
 
 import dataclasses
 import json
+import time
 from pathlib import Path
 
 import numpy as np
@@ -33,19 +34,22 @@ def _ic(report: dict) -> dict:
 
 
 def run_arm(settings: RunSettings, arm: str, seed: int, root, *, plan_from=None, test: bool = True,
-            on_eval=None, ckpt_root=None) -> tuple:
+            on_eval=None, ckpt_root=None, deadline: float | None = None) -> tuple:
     """One arm x seed: ``arm`` is ``staged`` or a baseline kind; ``plan_from`` (the finished staged Run of this seed)
     gives a baseline its step count and lr boundaries. The outputs go to ``root/<arm>_s<seed>``, the checkpoint (the
-    resume point) to ``<ckpt_root or root>/<arm>_s<seed>/ckpt``. Returns (Run, row)."""
+    resume point) to ``<ckpt_root or root>/<arm>_s<seed>/ckpt``. Returns (Run, row); an arm cut by ``deadline`` (a
+    ``time.monotonic()`` value) returns its row with ``finished`` False and no test numbers."""
     folder = Path(root) / f"{arm}_s{seed}"
     s = updated(settings, {"train.seed": seed, "run_dir": str(Path(ckpt_root or root) / f"{arm}_s{seed}" / "ckpt")})
     r = steps.build(steps.prepare(s, folder))
     plan = None
     if arm != "staged":
         plan = baseline_stages(arm, plan_from.plan, plan_from.staged, s.train.staged, s.train.batch_size)
-    steps.train_staged(r, stages=plan, on_eval=on_eval)
+    steps.train_staged(r, stages=plan, on_eval=on_eval, deadline=deadline)
     row = {"seed": seed, "steps": r.staged.total_steps, "best_value": r.staged.best_value,
            "finished": r.staged.finished, "best_step": r.staged.best_step, "stages": r.extra["stages"]}
+    if not row["finished"]:
+        return r, row
     if test and len(r.idx["test"]):
         row["test_rank_ic"] = _ic(steps.test_step(r))
     steps.write_summary(r)
@@ -53,22 +57,27 @@ def run_arm(settings: RunSettings, arm: str, seed: int, root, *, plan_from=None,
 
 
 def run_staged_study(settings: RunSettings, seeds, out, *, baselines=BASELINES, test: bool = True,
-                     on_eval=None, ckpt_root=None) -> dict:
+                     on_eval=None, ckpt_root=None, deadline: float | None = None) -> dict:
     """Every seed: the staged arm, then ``baselines`` at its number of steps. Writes ``study.json`` and ``study.md``
-    to ``out`` and returns the study dict ``{"seeds", "arms": {arm: [row per seed]}, "verdict", ...}``. ``ckpt_root``
-    puts the checkpoints elsewhere (a Drive folder) than the outputs."""
+    to ``out`` and returns the study dict ``{"seeds", "arms": {arm: [row per seed]}, "finished", "verdict", ...}``.
+    ``ckpt_root`` puts the checkpoints elsewhere (a Drive folder) than the outputs. ``deadline`` (a
+    ``time.monotonic()`` value): no arm starts after it, a running arm stops at an evaluation point before it;
+    ``finished`` False = cut (run again: every arm resumes from its checkpoint)."""
     if settings.train.staged is None:
         raise ValueError("run_staged_study needs settings.train.staged")
     arms: dict[str, list] = {"staged": [], **{b: [] for b in baselines}}
-    fingerprint = ""
-    for seed in seeds:
-        base, row = run_arm(settings, "staged", seed, out, test=test, on_eval=on_eval, ckpt_root=ckpt_root)
-        arms["staged"].append(row)
-        fingerprint = base.art.manifest.data_fingerprint
-        for b in baselines:
-            arms[b].append(run_arm(settings, b, seed, out, plan_from=base, test=test, on_eval=on_eval,
-                                   ckpt_root=ckpt_root)[1])
-    study = {"seeds": list(seeds), "data_fingerprint": fingerprint, "arms": arms,
+    fingerprint, finished, base = "", True, None    # base: this seed's finished staged Run (the baselines' plan)
+    kw = dict(test=test, on_eval=on_eval, ckpt_root=ckpt_root, deadline=deadline)
+    for seed, arm in ((s, a) for s in seeds for a in ("staged", *baselines)):
+        if not finished or (deadline is not None and time.monotonic() >= deadline):
+            finished = False
+            break
+        r, row = run_arm(settings, arm, seed, out, plan_from=None if arm == "staged" else base, **kw)
+        if arm == "staged":
+            base, fingerprint = r, r.art.manifest.data_fingerprint
+        arms[arm].append(row)
+        finished = row["finished"]
+    study = {"seeds": list(seeds), "data_fingerprint": fingerprint, "arms": arms, "finished": finished,
              "selection_metric": settings.train.selection_metric,
              "settings": dataclasses.asdict(settings.train.staged)}
     study["verdict"] = verdict(study)
@@ -83,6 +92,8 @@ def verdict(study: dict) -> str:
     B2 by more than the seed spread of B1, and its test rank IC is not lower than B1's. Anything else (or not enough
     arms / seeds) is "no gain" or "cannot judge"."""
     arms = study["arms"]
+    if not study.get("finished", True):
+        return "cannot judge: the study was cut by the deadline (finished false); run the job again to continue."
     if len(study["seeds"]) < 2 or not {"b1", "b2"} <= set(arms):
         return "cannot judge: the accept rule needs >= 2 seeds and the baselines b1 and b2 (rule C4)."
     if SELECTION_METRICS.entry(study["selection_metric"]).meta["higher_is_better"]:

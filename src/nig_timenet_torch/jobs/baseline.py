@@ -96,8 +96,7 @@ def main(argv: list[str] | None = None) -> int:
     config, out, max_minutes, _rest = contract.entry_args(argv)
     cfg = from_dict(BaselineConfig, config)
     dev_rep = contract.write_device_json(out, cfg.device)
-    budget = max_minutes * 60
-    deadline = t_mono + budget - min(600.0, 0.2 * budget)  # the rest is for the health report and the outputs
+    deadline = contract.deadline(max_minutes, t_mono)  # the rest is for the health report and the outputs
     r = steps.prepare(run_settings(cfg, _code_sha()), out)
     steps.build(r)
     print(f"gate check: {gate_run.gate_check(r, cfg.gate_report)['result']}", flush=True)

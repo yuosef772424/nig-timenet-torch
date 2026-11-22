@@ -178,27 +178,37 @@ def _env_seed(settings: RunSettings, env: str, info: dict, seed: int, root: Path
     return rows, meta, configuration_key(r)
 
 
-def run_gates(settings: RunSettings, g: GateSettings | None = None, out=None) -> dict:
-    """The gate run; returns the report and writes ``gate_report.json`` / ``.md`` to ``out`` (if given)."""
+def run_gates(settings: RunSettings, g: GateSettings | None = None, out=None, *,
+              deadline: float | None = None) -> dict:
+    """The gate run; returns the report and writes ``gate_report.json`` / ``.md`` to ``out`` (if given).
+    ``deadline`` (a ``time.monotonic()`` value): no env x seed starts after it; the report then says
+    ``finished: false``, lists the runs not done under ``summary.failed`` and does not pass (gate runs never resume:
+    run the job again with a larger ``max_minutes``)."""
     g = g or GateSettings()
     t0 = time.monotonic()
     root = Path(settings.run_dir)
     envs = _write_envs(settings, g, root / "envs")
-    rows, meta, keys = [], {}, set()
+    rows, meta, keys, skipped = [], {}, set(), []
     for env, info in envs.items():
         meta[env] = {"path": info["path"], "fingerprint": info["manifest"]["export"]["data_sha256"],
                      "rows": info["manifest"]["export"]["rows"], "epochs": info["epochs"],
                      **({"permutes": info["permutes"]} if "permutes" in info else {}), "runs": []}
         for seed in g.seeds:
+            if skipped or (deadline is not None and time.monotonic() >= deadline):
+                skipped.append(f"{env} seed {seed}: not run (deadline)")
+                continue
             r_rows, r_meta, key = _env_seed(settings, env, info, seed, root)
             rows += r_rows
             meta[env]["runs"].append(r_meta)
             keys.add(key)
             print(f"gates {env} seed {seed}: {r_meta['seconds']} s", flush=True)
-    if len(keys) != 1:
+    if len(keys) > 1:
         raise RuntimeError(f"the envs built different configurations (keys {sorted(keys)}): check seq_len / features")
     summary = gates.summarize(rows)
-    report = {"schema": REPORT_SCHEMA, "key": keys.pop(), "configuration": _configuration(settings),
+    if skipped:
+        summary = {**summary, "passed": False, "failed": [*skipped, *summary.get("failed", [])]}
+    report = {"schema": REPORT_SCHEMA, "key": keys.pop() if keys else None, "finished": not skipped,
+              "configuration": _configuration(settings),
               "baseline_arm": baseline_arm(settings), "code_sha": run_common.code_sha(settings),
               "gate_settings": asdict(g), "envs": meta, "rows": rows, "summary": summary,
               "seconds": round(time.monotonic() - t0, 1)}

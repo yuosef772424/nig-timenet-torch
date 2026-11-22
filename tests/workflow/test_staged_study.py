@@ -67,3 +67,11 @@ def test_tables_warn_when_the_steps_differ():
 def test_a_study_needs_the_staged_section(art, tmp_path):  # noqa: F811
     with pytest.raises(ValueError, match="staged"):
         run_staged_study(updated(settings(art, tmp_path), {"train.staged": None}), (0,), tmp_path / "o")
+
+
+def test_a_study_past_its_deadline_says_it_is_not_finished(art, tmp_path):  # noqa: F811
+    """C-07: no arm starts after the deadline; the verdict cannot judge a cut study."""
+    import time
+    study = run_staged_study(settings(art, tmp_path), (0, 1), tmp_path / "study", deadline=time.monotonic() - 1.0)
+    assert study["finished"] is False and all(not rows for rows in study["arms"].values())
+    assert study["verdict"].startswith("cannot judge: the study was cut by the deadline")

@@ -106,8 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     config, out, max_minutes, _rest = contract.entry_args(argv)
     cfg = from_dict(PanelConfig, config)
     contract.write_device_json(out, cfg.device)
-    budget = max_minutes * 60
-    deadline = t_mono + budget - min(600.0, 0.2 * budget)      # the rest is for the reports and the publish
+    deadline = contract.deadline(max_minutes, t_mono)          # the rest is for the reports and the publish
     study = panel_study.run_panel_study(
         run_settings(cfg, _code_sha()), arms_of(cfg), cfg.seeds, out, ckpt_root=cfg.run_dir, deadline=deadline,
         on_epoch=lambda row: print(epoch_line(row, cfg.epochs), flush=True))

@@ -49,8 +49,9 @@ from nig_timenet_torch.workflow.health_report import REPORT_JSON, REPORT_MD, Hea
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
 from nig_timenet_torch.workflow.settings import RunSettings
 
-__all__ = ["Run", "prepare", "prepare_split", "build", "train", "train_staged", "restore", "health_step", "test_step",
-           "battery_step", "write_summary", "run_all", "test_lines", "SUMMARY", "TEST_REPORT"]
+__all__ = ["Run", "prepare", "prepare_split", "build", "train", "train_staged", "training_finished", "restore",
+           "health_step", "test_step", "battery_step", "write_summary", "run_all", "test_lines", "SUMMARY",
+           "TEST_REPORT"]
 
 RESTORE_WEIGHTS = ("best", "last")  # restore(weights=...): best-epoch weights (default) or the last finished epoch
 SUMMARY = "baseline_summary.json"
@@ -273,6 +274,15 @@ def _staged_outputs(run: Run, res: StagedResult) -> None:
     run.extra["stages"] = [{**r, "independent_labels": n} for r, n in zip(res.stages, indep, strict=True)]
     run.extra["staged"] = {"total_steps": res.total_steps, "finished": res.finished, "val_rows_used": res.val_rows,
                            "best_step": res.best_step}
+
+
+def training_finished(run: Run) -> bool:
+    """True when the training of ``run`` ended by itself (every epoch or stage, or early stopping); False when a
+    ``deadline`` cut it (the checkpoint resumes it). The one definition the studies stop on (C-07)."""
+    _need(run, "result", "train")
+    if run.staged is not None:
+        return bool(run.staged.finished)
+    return run.result.epochs_done >= run.fit_settings.epochs or run.result.stopped_early
 
 
 def restore(run: Run, *, weights: str = "best", allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:

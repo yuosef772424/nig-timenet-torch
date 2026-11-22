@@ -74,15 +74,17 @@ def gate_settings(cfg: GatesConfig) -> gate_run.GateSettings:
 
 
 def main(argv: list[str] | None = None) -> int:
-    started = time.time()
-    config, out, _max_minutes, _rest = contract.entry_args(argv)
+    started, t_mono = time.time(), time.monotonic()
+    config, out, max_minutes, _rest = contract.entry_args(argv)
     cfg = from_dict(GatesConfig, config)
     contract.write_device_json(out, cfg.device)
     sha = (subprocess.check_output(["git", "-C", os.environ["NIG_REPO_DIR"], "rev-parse", "HEAD"], text=True).strip()
            if "NIG_REPO_DIR" in os.environ else "")
-    report = gate_run.run_gates(run_settings(cfg, sha), gate_settings(cfg), out)
+    report = gate_run.run_gates(run_settings(cfg, sha), gate_settings(cfg), out,
+                                deadline=contract.deadline(max_minutes, t_mono))
     s = report["summary"]
-    print(f"gates {report['key'][:16]}: passed {s['passed']}; gates {s['gates']}; failed {len(s['failed'])} checks")
+    print(f"gates {str(report['key'])[:16]}{'' if report['finished'] else ' NOT FINISHED (deadline)'}: passed "
+          f"{s['passed']}; gates {s['gates']}; failed {len(s['failed'])} checks")
     contract.write_manifest(out, config, input_fingerprint=report["envs"]["E1"]["fingerprint"], started=started)
     return 0
 
