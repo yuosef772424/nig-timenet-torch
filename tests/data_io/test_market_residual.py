@@ -1,4 +1,4 @@
-"""data_io/market_residual.py (owner task 2026-11-19, method 3): the market is the equal-weight mean move, beta uses
+"""data/market_residual.py (owner task 2026-11-19, method 3): the market is the equal-weight mean move, beta uses
 only past bars and finds a planted beta, the residual label removes beta x the market move over the label span and still
 decodes, and the run steps read the 10 channels."""
 
@@ -7,9 +7,9 @@ import pandas as pd
 import pytest
 
 from nig_timenet_torch.core.config import updated
-from nig_timenet_torch.data.artifact_writer import write_artifact
-from nig_timenet_torch.data_io import market_residual as mr
+from nig_timenet_torch.data import market_residual as mr
 from nig_timenet_torch.data_io.artifact import load_artifact
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.data_io.synthetic_panel import PanelSyntheticSettings, build_panel_synthetic
 from nig_timenet_torch.workflow import run as steps

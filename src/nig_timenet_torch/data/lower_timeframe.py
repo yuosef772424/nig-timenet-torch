@@ -9,22 +9,27 @@ PITFALLS: the channels copy the artifact's own (log high / low / close over the 
 
 Usage on Colab (the fine candles are cached per coin under ``--cache``, so a cut run resumes)::
 
-    python -m nig_timenet_torch.data_io.lower_timeframe SRC DST --tf 1h --window 32 --cache DIR [--workers 16]
+    python -m nig_timenet_torch.data.lower_timeframe SRC DST --tf 1h --window 32 --cache DIR [--workers 16]
 """
 
-import argparse
-import json
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
-from nig_timenet_torch.data_io import npy_dir
-from nig_timenet_torch.data_io.artifact import read_manifest
+from nig_timenet_torch.data.channel_math import to_grid, window_take
+from nig_timenet_torch.data.derive import (
+    cache_dir,
+    coin_candles,
+    load_source,
+    make_parser,
+    per_coin_map,
+    print_record,
+    write_derived,
+)
 
 __all__ = ["log_move_windows", "add_timeframe", "DERIVATION_JSON", "main"]
 
@@ -46,17 +51,9 @@ def log_move_windows(candles: pd.DataFrame, end_times: np.ndarray, tf: str, wind
         return out, valid
     step = pd.Timedelta(tf).value
     base = pd.Timedelta(base_tf).value
-    idx = pd.DatetimeIndex(candles.index)
-    idx = idx.tz_convert("UTC") if idx.tz is not None else idx.tz_localize("UTC")
-    open_ns = idx.as_unit("ns").asi8
-    first = int(open_ns.min())
-    pos = (open_ns - first) // step
-    on_grid = (open_ns - first) % step == 0
-    size = int(pos.max()) + 1
-    h, lo, c = (np.full(size, np.nan) for _ in range(3))
-    h[pos[on_grid]] = candles["high"].to_numpy(np.float64)[on_grid]
-    lo[pos[on_grid]] = candles["low"].to_numpy(np.float64)[on_grid]
-    c[pos[on_grid]] = candles["close"].to_numpy(np.float64)[on_grid]
+    first, g = to_grid(candles, step, CHANNELS)
+    h, lo, c = (g[k].to_numpy() for k in CHANNELS)
+    size = len(g)
     prev = np.concatenate([[np.nan], c[:-1]])
     with np.errstate(divide="ignore", invalid="ignore"):
         ch = np.stack([np.log(h / prev), np.log(lo / prev), np.log(c / prev)], axis=1)   # (size, 3)
@@ -66,7 +63,7 @@ def log_move_windows(candles: pd.DataFrame, end_times: np.ndarray, tf: str, wind
     ok &= (e - window + 1 >= 0) & (e < size)
     rows = np.flatnonzero(ok)
     if len(rows):
-        take = e[rows][:, None] + np.arange(-window + 1, 1)[None, :]          # (m, window)
+        take = window_take(e[rows], window)                                    # (m, window)
         w = ch[take]                                                           # (m, window, 3)
         good = np.isfinite(w).all(axis=(1, 2))
         out[rows[good]] = w[good].astype(np.float32)
@@ -74,30 +71,15 @@ def log_move_windows(candles: pd.DataFrame, end_times: np.ndarray, tf: str, wind
     return out, valid
 
 
-def _coin_candles(symbol: str, tf: str, start: pd.Timestamp, end: pd.Timestamp, cache: Path | None,
-                  fetch) -> pd.DataFrame:
-    path = None if cache is None else cache / f"{symbol}_{tf}.parquet"
-    if path is not None and path.is_file():
-        return pd.read_parquet(path)
-    frame = fetch(symbol, tf, start, end)[list(CHANNELS)]
-    if path is not None:
-        tmp = path.with_suffix(".tmp")
-        frame.to_parquet(tmp)
-        tmp.rename(path)
-    return frame
-
-
 def add_timeframe(src, dst, *, tf: str = "1h", window: int = 32, cache=None, workers: int = 16, fetch=None,
                   overwrite: bool = False) -> dict:
     """Write ``dst``: the contract artifact ``src`` plus ``X_<tf>`` (its rows, labels, coins and splits unchanged;
     ``timeframes`` = source frames + ``tf``). Returns the derivation record (also ``dst/derivation.json``)."""
-    from nig_timenet_torch.data.artifact_writer import write_artifact
     from nig_timenet_torch.data.fetch import vision_klines
 
     fetch = fetch or vision_klines
     src, dst = Path(src), Path(dst)
-    man = read_manifest(src)
-    ds = npy_dir.load(src, mmap=False)
+    man, ds = load_source(src)
     if tf in ds["timeframes"]:
         raise ValueError(f"{src} already holds the timeframe {tf!r}")
     base_tf = ds["base_tf"]
@@ -105,9 +87,7 @@ def add_timeframe(src, dst, *, tf: str = "1h", window: int = 32, cache=None, wor
         raise ValueError(f"{tf!r} must be a finer frame that divides the base frame {base_tf!r}")
     if list(ds["feature_order"]) != list(CHANNELS):
         raise ValueError(f"the source channels are {ds['feature_order']}, this tool writes {CHANNELS}")
-    cache = None if cache is None else Path(cache)
-    if cache is not None:
-        cache.mkdir(parents=True, exist_ok=True)
+    cache = cache_dir(cache)
     ts = np.asarray(ds["last_candles"])[:, TS_COL].astype(np.int64)
     x = np.zeros((len(ts), window, len(CHANNELS)), dtype=np.float32)
     span = pd.Timedelta(tf) * (window + 1)
@@ -117,46 +97,33 @@ def add_timeframe(src, dst, *, tf: str = "1h", window: int = 32, cache=None, wor
         t = ts[s:e]
         start = pd.Timestamp(int(t.min()), tz="UTC") + pd.Timedelta(base_tf) - span
         end = pd.Timestamp(int(t.max()), tz="UTC") + pd.Timedelta(base_tf)
-        candles = _coin_candles(b["name"], tf, start, end, cache, fetch)
+        candles = coin_candles(b["name"], tf, start, end, cache, fetch, CHANNELS)
         w, ok = log_move_windows(candles, t, tf, window, base_tf)
         x[s:e] = w
         return b["name"], int(e - s), int((~ok).sum())
 
-    t0 = time.monotonic()
-    per_coin = {}
-    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        for i, (name, rows, missing) in enumerate(pool.map(one, ds["asset_bounds"])):
-            per_coin[name] = {"rows": rows, "missing": missing}
-            if (i + 1) % 25 == 0:
-                print(f"{i + 1}/{len(ds['asset_bounds'])} coins, {time.monotonic() - t0:.0f} s", flush=True)
+    results, t0 = per_coin_map(ds, one, workers=workers)
+    per_coin = {name: {"rows": rows, "missing": missing} for name, rows, missing in results}
     ds = {**ds, f"X_{tf}": x, "timeframes": [*ds["timeframes"], tf],
           "window_sizes": {**dict(ds["window_sizes"]), tf: window}}
-    manifest = write_artifact(ds, dst, source_commit=man.source_commit, overwrite=overwrite,
-                              producer=f"nig_timenet_torch.data_io.lower_timeframe (+X_{tf} on {man.data_fingerprint})")
     n_missing = sum(v["missing"] for v in per_coin.values())
-    record = {"source_artifact": str(src), "source_fingerprint": man.data_fingerprint,
-              "fingerprint": manifest["export"]["data_sha256"], "added": f"X_{tf}", "window": window,
-              "channels": [f"log({c} / previous close)" for c in CHANNELS], "candles": "Binance USD-M futures archive",
-              "rows": int(len(ts)), "missing_rows": n_missing, "missing_share": n_missing / max(1, len(ts)),
-              "seconds": time.monotonic() - t0, "per_coin": per_coin}
-    (dst / DERIVATION_JSON).write_text(json.dumps(record, indent=1), encoding="utf-8")
-    return record
+    return write_derived(
+        src, dst, man, ds, overwrite=overwrite, derivation_json=DERIVATION_JSON,
+        producer=f"nig_timenet_torch.data_io.lower_timeframe (+X_{tf} on {man.data_fingerprint})",
+        record={"added": f"X_{tf}", "window": window,
+                "channels": [f"log({c} / previous close)" for c in CHANNELS],
+                "candles": "Binance USD-M futures archive",
+                "rows": int(len(ts)), "missing_rows": n_missing, "missing_share": n_missing / max(1, len(ts)),
+                "seconds": time.monotonic() - t0, "per_coin": per_coin})
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m nig_timenet_torch.data_io.lower_timeframe", description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("src")
-    ap.add_argument("dst")
+    ap = make_parser("python -m nig_timenet_torch.data.lower_timeframe", __doc__)
     ap.add_argument("--tf", default="1h")
     ap.add_argument("--window", type=int, default=32)
-    ap.add_argument("--cache", default=None)
-    ap.add_argument("--workers", type=int, default=16)
-    ap.add_argument("--overwrite", action="store_true")
     a = ap.parse_args(argv)
-    r = add_timeframe(a.src, a.dst, tf=a.tf, window=a.window, cache=a.cache, workers=a.workers,
-                      overwrite=a.overwrite)
-    print(json.dumps({k: v for k, v in r.items() if k != "per_coin"}, indent=1))
+    print_record(add_timeframe(a.src, a.dst, tf=a.tf, window=a.window, cache=a.cache, workers=a.workers,
+                               overwrite=a.overwrite))
     return 0
 
 

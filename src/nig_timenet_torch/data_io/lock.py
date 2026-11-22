@@ -4,7 +4,7 @@ PURPOSE: The sealed-coin list of the holdout lock, shipped as a hash-pinned pack
     built.
 TAGS: holdout lock, sealed coins, time seal, sha256, package resource
 PITFALLS: the packaged holdout.json must hash to the value pinned in data_io; changing it needs an owner decision,
-    not an edit.
+    not an edit; the file itself stays in data/resources (a package resource, read by name, no import).
 
 The sealed-coin list of the holdout lock (a copy of crypto-signal-prediction docs/research/plan/lock/holdout.json
 shipped as a package resource). The pipeline never builds a window of a sealed coin: the contract artifact
@@ -18,6 +18,7 @@ from importlib import resources
 
 import pandas as pd
 
+from nig_timenet_torch.core.coins import norm_coin
 from nig_timenet_torch.data_io.artifact import EXPECTED_LOCK_SHA256, EXPECTED_SEALED_COUNT, TIME_SEAL
 
 __all__ = ["HoldoutLock", "load_lock", "is_sealed"]
@@ -45,5 +46,4 @@ def load_lock() -> HoldoutLock:
 
 def is_sealed(name: str, lock: HoldoutLock) -> bool:
     """True when `name` (with or without the USDT suffix, any case) is a sealed coin."""
-    n = str(name).strip().upper()
-    return n in lock.sealed or (not n.endswith("USDT") and n + "USDT" in lock.sealed)
+    return norm_coin(name) in {norm_coin(s) for s in lock.sealed}

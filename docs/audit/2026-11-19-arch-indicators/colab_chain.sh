@@ -51,14 +51,14 @@ run_arm() {   # job_id smoke_id artifact
 
 if [ "$WHAT" = br1 ] || [ "$WHAT" = both ]; then
   [ -f /content/art_btcrel/manifest.json ] || \
-    python -u -m nig_timenet_torch.data_io.btc_relative /content/art1 /content/art_btcrel --cache "$CACHE" | tail -n 4
+    python -u -m nig_timenet_torch.data.btc_relative /content/art1 /content/art_btcrel --cache "$CACHE" | tail -n 4
   [ -f /content/art_btcrel_lbl/manifest.json ] || \
-    python -u -m nig_timenet_torch.data_io.btc_relative /content/art_btcrel /content/art_btcrel_lbl --label-only | tail -n 4
+    python -u -m nig_timenet_torch.data.btc_relative /content/art_btcrel /content/art_btcrel_lbl --label-only | tail -n 4
   run_arm rolling-btcrel-lbl-001 rolling-btcrel-lbl-smoke-001 /content/art_btcrel_lbl
 fi
 if [ "$WHAT" = m3 ] || [ "$WHAT" = both ]; then
   [ -f /content/art_mres/manifest.json ] || \
-    python -u -m nig_timenet_torch.data_io.market_residual /content/art1 /content/art_mres --cache "$CACHE" | \
+    python -u -m nig_timenet_torch.data.market_residual /content/art1 /content/art_mres --cache "$CACHE" | \
       grep -v per_coin | tail -n 12
   run_arm rolling-mres-001 rolling-mres-smoke-001 /content/art_mres
 fi

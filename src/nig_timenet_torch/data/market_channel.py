@@ -6,11 +6,9 @@ PITFALLS: the value at a bar is the growth up to the previous UTC day (a daily p
     (``missing_share``); the channel is the same for every coin of a timestamp (the relative inputs give it 0 in their
     two relative blocks); rows, labels, coins and splits stay the source's. Owner task 2026-11-19 (USDT supply).
 
-    python -m nig_timenet_torch.data_io.market_channel SRC DST --series FILE.csv --name usdt_supply_g7 --days 7
+    python -m nig_timenet_torch.data.market_channel SRC DST --series FILE.csv --name usdt_supply_g7 --days 7
 """
 
-import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -18,8 +16,14 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.schema import TS_COL
-from nig_timenet_torch.data_io import npy_dir
-from nig_timenet_torch.data_io.artifact import read_manifest
+from nig_timenet_torch.data.channel_math import to_utc_index
+from nig_timenet_torch.data.derive import (
+    load_source,
+    make_parser,
+    print_record,
+    require_one_frame,
+    write_derived,
+)
 
 __all__ = ["daily_growth", "bar_values", "add_market_channel", "DERIVATION_JSON", "main"]
 
@@ -29,8 +33,7 @@ DERIVATION_JSON = "derivation_market_channel.json"
 def daily_growth(series: pd.Series, days: int) -> pd.Series:
     """log(v_d / v_{d - days}) on a daily UTC grid (gaps forward-filled; the index is the day)."""
     s = series.sort_index()
-    s.index = pd.DatetimeIndex(s.index).tz_convert("UTC").floor("D") if s.index.tz is not None else \
-        pd.DatetimeIndex(s.index).tz_localize("UTC").floor("D")
+    s.index = to_utc_index(s.index).floor("D")
     s = s[~s.index.duplicated(keep="last")].asfreq("D").ffill()
     return np.log(s.astype(float)).diff(days)
 
@@ -54,46 +57,36 @@ def bar_values(growth: pd.Series, last_open_ns: np.ndarray, base_tf: str, window
 def add_market_channel(src, dst, series: pd.Series, *, name: str, days: int = 7, overwrite: bool = False) -> dict:
     """Write ``dst``: the contract artifact ``src`` with one more channel ``name`` in every ``X_<tf>`` window (the base
     frame's), its rows, labels, coins and splits unchanged. Returns the derivation record (also in ``dst``)."""
-    from nig_timenet_torch.data.artifact_writer import write_artifact
-
     src, dst = Path(src), Path(dst)
-    man = read_manifest(src)
-    ds = npy_dir.load(src, mmap=False)
+    man, ds = load_source(src)
     if name in ds["feature_order"]:
         raise ValueError(f"{src} already has a channel {name!r}")
-    if len(ds["timeframes"]) != 1:
-        raise ValueError(f"{src} holds {list(ds['timeframes'])}: add the channel to a one-frame artifact")
+    require_one_frame(ds, src, "add the channel to a one-frame artifact")
     key = f"X_{ds['base_tf']}"
     x = np.asarray(ds[key])
     ts = np.asarray(ds["last_candles"])[:, TS_COL].astype(np.int64)
     vals, ok = bar_values(daily_growth(series, days), ts, ds["base_tf"], x.shape[1])
     ds = {**ds, key: np.concatenate([x, vals[:, :, None].astype(x.dtype)], axis=-1),
           "feature_order": [*ds["feature_order"], name]}
-    manifest = write_artifact(ds, dst, source_commit=man.source_commit, overwrite=overwrite,
-                              producer=f"nig_timenet_torch.data_io.market_channel (+{name} on {man.data_fingerprint})")
-    record = {"source_artifact": str(src), "source_fingerprint": man.data_fingerprint,
-              "fingerprint": manifest["export"]["data_sha256"], "added_channel": name, "growth_days": days,
-              "rule": "log growth over `growth_days` days, value of the previous UTC day for every bar",
-              "series_first": str(series.index.min()), "series_last": str(series.index.max()),
-              "rows": int(len(ts)), "missing_rows": int((~ok).sum()), "missing_share": float((~ok).mean())}
-    (dst / DERIVATION_JSON).write_text(json.dumps(record, indent=1), encoding="utf-8")
-    return record
+    return write_derived(
+        src, dst, man, ds, overwrite=overwrite, derivation_json=DERIVATION_JSON,
+        producer=f"nig_timenet_torch.data_io.market_channel (+{name} on {man.data_fingerprint})",
+        record={"added_channel": name, "growth_days": days,
+                "rule": "log growth over `growth_days` days, value of the previous UTC day for every bar",
+                "series_first": str(series.index.min()), "series_last": str(series.index.max()),
+                "rows": int(len(ts)), "missing_rows": int((~ok).sum()), "missing_share": float((~ok).mean())})
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m nig_timenet_torch.data_io.market_channel", description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("src")
-    ap.add_argument("dst")
+    ap = make_parser("python -m nig_timenet_torch.data.market_channel", __doc__, cache=False, workers=False)
     ap.add_argument("--series", required=True, help="CSV: first column the date, second column the value")
     ap.add_argument("--name", required=True)
     ap.add_argument("--days", type=int, default=7)
-    ap.add_argument("--overwrite", action="store_true")
     a = ap.parse_args(argv)
     raw = pd.read_csv(a.series, index_col=0)
     series = pd.Series(raw.iloc[:, 0].to_numpy(), index=pd.to_datetime(raw.index, utc=True))
     r = add_market_channel(a.src, a.dst, series, name=a.name, days=a.days, overwrite=a.overwrite)
-    print(json.dumps(r, indent=1))
+    print_record(r)
     return 0
 
 

@@ -20,7 +20,7 @@ reads nothing that fit did not put there.
 import numpy as np
 
 from nig_timenet_torch.core.registry import Contract, Registry
-from nig_timenet_torch.core.schema import LAST_COLUMNS
+from nig_timenet_torch.core.schema import FUTURE_OF, LAST_COLUMNS, LAST_OF
 
 __all__ = ["TARGET_CODECS", "ReturnCodec", "LogCloseCodec", "own_anchor_and_future", "anchor_and_future",
            "anchor_column", "future_column", "codec_name", "LOGRET_NORM_MODES", "LAST_COLUMNS"]
@@ -29,8 +29,7 @@ __all__ = ["TARGET_CODECS", "ReturnCodec", "LogCloseCodec", "own_anchor_and_futu
 #: reg_target_mode says (crypto-signal-prediction data/windows.py: ``nz.raw_reg_target(own_future, last_c)``)
 LOGRET_NORM_MODES = ("logret", "logret_std")
 
-_OWN = {"high": ("last_high", "future_high_max"), "low": ("last_low", "future_low_min"),
-        "close": ("last_close", "future_close")}
+_OWN = {t: (LAST_OF[t], FUTURE_OF[t]) for t in LAST_OF}   # target -> (own last column, future column)
 
 TARGET_CODECS = Registry("target_codec", Contract("target_codec", required_meta=("supports_relative",)))
 
@@ -65,6 +64,10 @@ def codec_name(dataset: dict) -> str:
     mode = dataset["reg_target_mode"]
     if mode == ReturnCodec.name and dataset.get("price_norm_mode") in LOGRET_NORM_MODES:
         return LogCloseCodec.name
+    if mode not in TARGET_CODECS:
+        raise ValueError(f"reg_target_mode {mode!r} has no label codec: the supported modes are "
+                         f"{list(TARGET_CODECS.names())} (a dataset built natively with another target mode, "
+                         f"e.g. 'scaled' or 'return_close', cannot be decoded by the workflow)")
     return mode
 
 

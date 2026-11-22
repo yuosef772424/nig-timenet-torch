@@ -24,7 +24,7 @@ import torch
 
 from nig_timenet_torch.core.config import from_dict
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
-from nig_timenet_torch.data.artifact_writer import write_artifact
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 from nig_timenet_torch.data_io.environments import permute_labels, real_slice
 from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
 from nig_timenet_torch.data_io.synthetic import SyntheticSettings, oracle_keys, write_synthetic

@@ -1,4 +1,4 @@
-"""data_io/btc_relative.py (owner task 2026-11-19): relative moves are the coin's minus BTC's of the same bar, the
+"""data/btc_relative.py (owner task 2026-11-19): relative moves are the coin's minus BTC's of the same bar, the
 ratio indicators read coin / BTC, no later bar changes a window, BTC's own rows get zero relative channels, and the
 derived artifact keeps rows / labels and is read by the run steps with 11 channels."""
 
@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.config import updated
-from nig_timenet_torch.data.artifact_writer import write_artifact
-from nig_timenet_torch.data_io import btc_relative as br
+from nig_timenet_torch.data import btc_relative as br
 from nig_timenet_torch.data_io.artifact import load_artifact
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.data_io.synthetic_panel import PanelSyntheticSettings, build_panel_synthetic
 from nig_timenet_torch.workflow import run as steps

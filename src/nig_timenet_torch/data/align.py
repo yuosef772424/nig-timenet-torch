@@ -16,14 +16,13 @@ information that was already known at the base bar the window ends on ("closed":
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import TARGET_COLUMNS
+from nig_timenet_torch.core.schema import OHLCV_AGG, TARGET_COLUMNS
+from nig_timenet_torch.core.timeframe import normalize_tf
 from nig_timenet_torch.data.settings import WindowSettings
-from nig_timenet_torch.data.timeframe import normalize_tf
 
 __all__ = ["OHLCV_AGG", "HLC_AGG", "is_closed_mode", "keep_full_bars", "resample_frames", "window_end_indices",
            "align_windows"]
 
-OHLCV_AGG = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
 HLC_AGG = {k: OHLCV_AGG[k] for k in TARGET_COLUMNS}
 
 

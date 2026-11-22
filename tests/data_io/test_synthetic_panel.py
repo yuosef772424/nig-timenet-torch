@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from nig_timenet_torch.core.schema import TS_COL
-from nig_timenet_torch.data.artifact_writer import write_artifact
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 from nig_timenet_torch.data_io.loading import LoaderSettings, load_dataset
 from nig_timenet_torch.data_io.synthetic import ORACLE_PREFIX, oracle_keys
 from nig_timenet_torch.data_io.synthetic_panel import BETA_FLOOR, PanelSyntheticSettings, build_panel_synthetic

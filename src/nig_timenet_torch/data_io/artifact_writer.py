@@ -14,27 +14,23 @@ manifest records the source commit, the coin list, the full sealed list, the loc
 sha256 of every file. The folder is written next to its destination and renamed, manifest last (completion marker).
 """
 
-import datetime as dt
 import hashlib
 import json
-import pickle
-import re
 import shutil
 import subprocess
-import uuid
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.core.label_time import label_bar_open
 from nig_timenet_torch.core.schema import TS_COL
-from nig_timenet_torch.data.lock import HoldoutLock, is_sealed, load_lock
-from nig_timenet_torch.data.timeframe import tf_timedelta
-from nig_timenet_torch.data_io.artifact import SCHEMA
+from nig_timenet_torch.core.timeframe import tf_timedelta
+from nig_timenet_torch.data_io import npy_dir
+from nig_timenet_torch.data_io.artifact import SCHEMA, SHA1_RE
+from nig_timenet_torch.data_io.lock import HoldoutLock, is_sealed, load_lock
 
 __all__ = ["write_artifact", "git_head", "restrict_to_time_seal"]
-
-_SHA1 = re.compile(r"^[0-9a-f]{40}$")
 
 
 def git_head(repo: str | Path | None = None) -> str:
@@ -49,20 +45,12 @@ def git_head(repo: str | Path | None = None) -> str:
     return out
 
 
-def _sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 22), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 def restrict_to_time_seal(dataset: dict, lock: HoldoutLock) -> dict:
     """Drop sealed coins and windows whose label bar reaches the time seal; asset_bounds are re-tiled."""
     last = np.asarray(dataset["last_candles"])
     n = len(last)
     bar_ns = int(tf_timedelta(dataset["base_tf"]).value)
-    label_ns = last[:, TS_COL].astype("int64") + int(dataset["forecast_horizon"]) * bar_ns
+    label_ns = label_bar_open(last[:, TS_COL].astype("int64"), dataset["forecast_horizon"], bar_ns)
     keep = label_ns < lock.time_seal.value
     for b in dataset["asset_bounds"]:
         if is_sealed(b["name"], lock):
@@ -81,11 +69,6 @@ def restrict_to_time_seal(dataset: dict, lock: HoldoutLock) -> dict:
     return out
 
 
-def _split_keys(dataset: dict) -> tuple[dict, dict]:
-    arrays = {k: v for k, v in dataset.items() if isinstance(v, np.ndarray) and not v.dtype.hasobject}
-    return arrays, {k: v for k, v in dataset.items() if k not in arrays}
-
-
 def write_artifact(dataset: dict, out_dir: str | Path, *, source_commit: str = "", producer: str = "",
                    overwrite: bool = False, lock: HoldoutLock | None = None) -> dict:
     """Write `dataset` (the dict `build_dataset` returns) to `out_dir` and return the manifest."""
@@ -95,7 +78,7 @@ def write_artifact(dataset: dict, out_dir: str | Path, *, source_commit: str = "
     if n == 0:
         raise ValueError("no window is left after removing sealed coins and the sealed period")
     sha = source_commit or git_head()
-    if not _SHA1.match(sha):
+    if not SHA1_RE.match(sha):
         raise ValueError(f"source_commit must be 40 hex characters, got {sha!r}")
     out = Path(out_dir).resolve()
     if out.exists() and not overwrite:
@@ -103,32 +86,21 @@ def write_artifact(dataset: dict, out_dir: str | Path, *, source_commit: str = "
     tmp = out.with_name(out.name + ".tmp")
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
-    arrays, meta = _split_keys(dataset)
-    for k, a in arrays.items():
-        np.save(tmp / f"{k}.npy", a, allow_pickle=False)
-    with open(tmp / "meta.pkl", "wb") as f:
-        pickle.dump(meta, f, protocol=pickle.HIGHEST_PROTOCOL)
-    files = {f"{k}.npy": _sha256_file(tmp / f"{k}.npy") for k in sorted(arrays)}
-    files["meta.pkl"] = _sha256_file(tmp / "meta.pkl")
-    last = np.asarray(dataset["last_candles"])
     bar_ns = int(tf_timedelta(dataset["base_tf"]).value)
-    ts = last[:, TS_COL].astype("int64")
+    ts = np.asarray(dataset["last_candles"])[:, TS_COL].astype("int64")
     iso = lambda ns: pd.Timestamp(int(ns), tz="UTC").isoformat()  # noqa: E731
-    manifest = {
-        "format": "npy_dir", "version": 1, "id": uuid.uuid4().hex,
-        "created": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "key_order": list(dataset), "arrays": {k: {"shape": list(a.shape), "dtype": str(a.dtype)}
-                                                for k, a in arrays.items()},
-        "export": {
+
+    def export(files: dict[str, str]) -> dict:
+        return {
             "schema": SCHEMA, "source_commit": sha, "producer": producer or "nig_timenet_torch.data",
             "coins": [b["name"] for b in dataset["asset_bounds"]], "sealed_excluded": sorted(lock.sealed),
             "lock_sha256": lock.sha256, "time_seal": lock.time_seal.isoformat(),
-            "max_bar_time": iso(ts.max() + int(dataset["forecast_horizon"]) * bar_ns),
+            "max_bar_time": iso(label_bar_open(ts.max(), dataset["forecast_horizon"], bar_ns)),
             "max_window_time": iso(ts.max()), "rows": n,
             "base_tf": dataset["base_tf"], "timeframes": [str(t) for t in dataset["timeframes"]], "files": files,
-            "data_sha256": hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()}}
-    with open(tmp / "manifest.json", "w", encoding="utf-8") as f:
-        json.dump(manifest, f)
+            "data_sha256": hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()}
+
+    manifest = npy_dir.save(dataset, tmp, export=export)
     shutil.rmtree(out, ignore_errors=True)
     tmp.rename(out)
     return manifest

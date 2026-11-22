@@ -38,7 +38,7 @@ class PrepareError(RuntimeError):
 
 
 def _sha(path: Path) -> str:
-    return artifact._sha256_file(path)
+    return artifact.sha256_file(path)
 
 
 def source_fingerprint(source) -> dict:

@@ -23,9 +23,9 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
-from nig_timenet_torch.data_io import market_residual as mr
+from nig_timenet_torch.data import market_residual as mr
 from nig_timenet_torch.data_io import npy_dir
-from nig_timenet_torch.data_io.vision_slice import load_frames
+from nig_timenet_torch.data.vision_slice import load_frames
 from nig_timenet_torch.stats.metrics import block_bootstrap_ci, group_rank_ics
 
 STEP = pd.Timedelta("4h").value

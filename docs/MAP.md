@@ -36,22 +36,26 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 | module | what it is for | tags |
 |---|---|---|
+| `core/coins.py` | One normaliser of coin / symbol names: the comparison key every module uses when it asks "is this the same coin" (build reference coin, sealed list, artifact loader, split exclusion). | coin name, symbol, normalise, usdt suffix, sealed coin, reference coin |
 | `core/config.py` | Strict settings primitive: from_dict builds frozen dataclasses (unknown keys raise), to_dict is its inverse and updated copies a settings object with dotted-key changes. | strict config, settings dataclass, from_dict, to_dict, updated, did you mean |
 | `core/constants.py` | Numeric constants shared by the model layer and the evaluation decoding (today: the floor of the NIG ``alpha - 1`` denominator). | constants, nig alpha floor, uncertainty, shared numerics, model and evaluation, schema pinned |
 | `core/costs.py` | The one default trading cost of the project (cost per side of a trade, 0.08 %), read by the trainer's side-payoff loss, the run settings, the battery and every report (audit 2026-11b B-34). | trading cost, cost per side, round trip, default cost, battery, run settings |
+| `core/label_time.py` | The two times a window's label has, named once: the OPEN of the label's last bar (the time seal asks about it) and the CLOSE of that bar (when the label is known: purging asks about it). | label time, label bar open, label bar close, time seal, purge, leakage, rule d1, rule d2 |
 | `core/prediction_schema.py` | The PredictionTable schema: the mandatory columns and their kinds, the ``y_*`` output-column rule and ``validate_table`` (lists every problem; checks the leakage order of the three times). | prediction table, schema, validate table, columns, leakage, label available at, output columns |
 | `core/registry.py` | The ONE generic registry: `Registry(kind, contract)` registers objects by name with a declared contract (checked AT REGISTRATION); raises on a duplicate name and on an unknown name (known names + did-you-mean). | registry, Registry, Contract, register, unknown name, duplicate name, did you mean, one component one interface, plugin, tier 0 |
 | `core/roles.py` | The ``Role`` enum: what a data split may be used for (fit, calibration, selection, report, sealed). | role, data role, split, calibration, selection, sealed, learned state |
 | `core/schema.py` | The last_candles column schema, price target columns, target modes and raw OHLCV column names, defined once so no package copies them. | schema, constants, last candles, price targets, target modes, ohlcv columns |
 | `core/seeds.py` | ONE seeding entry point (``seed_everything``) and the named per-epoch / per-stage reseeding formulas that ``Trainer.fit`` and the staged loop share, so a resumed run reseeds exactly as an uninterrupted one. | seeds, determinism, seed everything, epoch seed, reseed, resume, reproducibility |
+| `core/timeframe.py` | Normalise time-frame names once (pandas offset aliases are case sensitive and deprecated for hours). | time frame, normalise, offset alias, timedelta |
 
 ### data
 
 | module | what it is for | tags |
 |---|---|---|
 | `data/align.py` | Resample candles to each time frame and cut windows that end on the base frame, without look-ahead across frames. | resample, time frame, aligned windows, closed bars, legacy mode, no look-ahead |
-| `data/artifact_writer.py` | Write a built dataset as a contract artifact (npy_dir plus manifest export block) that data_io.load_artifact accepts, dropping sealed coins and windows after the time seal. | artifact writer, contract artifact, manifest, time seal, sealed coins, sha256 |
+| `data/btc_relative.py` | Write a BTC-relative copy of a contract artifact: each bar's log high / low / close moves minus BTC's of the same bar, RSI and stochastic of the coin / BTC price ratio, the coin's relative volume and BTC's own moves and RSI. | btc relative, market neutral inputs, ratio price, alt btc pair, rsi, stochastic, derived artifact, btc features |
 | `data/build.py` | Turn the raw candles of many coins into the dataset dict every other module reads, with two passes so cross-asset columns see the whole universe. | dataset build, two pass, cross asset, windows, skipped assets, feature order |
+| `data/channel_math.py` | The indicator maths and the grid helpers the five derived-artifact tools share: Wilder RSI, the slow stochastic, the relative quote volume, "index -> UTC ns -> regular grid" and the window gather. | rsi, stochastic, relative volume, regular grid, utc ns, window take, derived artifact, channel math, no lookahead |
 | `data/cli.py` | Build, fetch or show the resolved settings of the native data pipeline from the command line (python -m nig_timenet_torch.data.cli). | cli, nig-data, console script, build, fetch, settings override |
 | `data/coins.py` | The coin lists of the old project by category; SourceSettings.coins always wins when non-empty. | coin universe, categories, symbols, source settings |
 | `data/context.py` | Market context, breadth, momentum rank and orthogonal momentum columns: how a coin relates to the reference coin and to the universe. | cross asset, market context, breadth, momentum rank, orthogonal momentum |
@@ -59,9 +63,13 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `data/custom_basic.py` | Custom feature families built from the bars alone: returns, relative range, candle shape, position in range, volume z-score, calendar. | custom features, basic, returns, candle shape, calendar, volume z-score |
 | `data/custom_features.py` | Run the registered custom feature families over a frame in registry order. | custom features, families, registry order, feature matrix |
 | `data/custom_registry.py` | The registry of custom feature families and the Bars view they read; adding a family is one function plus one decorator line. | custom features, registry, bars, family order |
+| `data/derive.py` | What the five derived-artifact tools share: load and check the source, the per-coin candle cache and thread pool, writing the new artifact with its derivation json, the common command-line flags. | derived artifact, derive pipeline, candle cache, per-coin pool, derivation json, write artifact, argparse |
 | `data/fetch.py` | Download raw candles (Binance USDT-perpetual API and the public data.binance.vision archive) into the layout the old project reads. | fetch, binance, klines, csv layout, asset registry, resume |
+| `data/indicator_channels.py` | Add indicator channels (RSI 14, stochastic %K / %D 14-3-3, relative quote volume) to every bar of the base frame's windows of a contract artifact, from the coin's own base-frame candles with full warm-up history. | indicator channels, rsi, stochastic, volume, relative volume, derived artifact, binance vision, no lookahead |
 | `data/indicators.py` | Compute pandas_ta_classic indicators by name plus the custom families, and derive the feature list from what really ran. | indicators, pandas_ta_classic, feature list, synthetic frame, exclude from features |
-| `data/lock.py` | The sealed-coin list of the holdout lock, shipped as a hash-pinned package resource; sealed coins are never built. | holdout lock, sealed coins, time seal, sha256, package resource |
+| `data/lower_timeframe.py` | Add a finer timeframe's input window (X_<tf>, e.g. the last 32 1h bars) to an existing contract artifact, row by row, from Binance archive candles, as a new contract artifact with the same rows, labels and coins. | lower timeframe, multi timeframe, 1h window, derived artifact, log moves, binance vision, alignment, x_1h |
+| `data/market_channel.py` | Add a market-level input channel from an outside DAILY series (e.g. the USDT supply) to a contract artifact: for every bar of every window, the log growth of the series over k days as known the day BEFORE that bar. | market channel, outside data, usdt supply, stablecoin, daily series, log growth, no lookahead, derived artifact |
+| `data/market_residual.py` | Write a market-residual copy of a contract artifact: each bar's coin moves minus beta x the equal-weight market move (beta per coin from its own past only), residual RSI / stochastic, market features, and the close label made residual too. | market residual, beta, market neutral, idiosyncratic return, equal weight market, derived artifact, rolling beta |
 | `data/pipeline.py` | The data pipeline as one call: settings to dataset dict to an optional contract artifact on disk. | pipeline, build artifact, settings, summary |
 | `data/presets.py` | Named patches (dotted keys) for DataSettings.updated; the defaults already are the production hourly preset. | presets, data settings, dotted keys, tiny, 4h |
 | `data/publish.py` | Publish a built artifact as <name>_<stamp>.dataset plus a <name>_latest.dataset copy in the old file-name convention. | publish, named output, latest dataset, stamp, file name |
@@ -70,7 +78,7 @@ line range). A module without a card shows its first docstring line; it gets a c
 | `data/sources.py` | Candle sources (files in the old layout, Speirsy11 parquet, synthetic) and OHLCV re-aggregation of finer bars up to the requested interval. | candle source, files, parquet, synthetic, resample ohlcv, interval, full bars |
 | `data/ta_backend.py` | Import pandas_ta_classic on first use so the rest of the package works without the [data] extra. | ta backend, pandas_ta_classic, lazy import, data extra |
 | `data/targets.py` | Regression and class targets from the last-candle record, and retarget() to switch the target mode after the data is built. | targets, target modes, retarget, last candle, regression, class, clip |
-| `data/timeframe.py` | Normalise time-frame names once (pandas offset aliases are case sensitive and deprecated for hours). | time frame, normalise, offset alias, timedelta |
+| `data/vision_slice.py` | A REAL-data stand-in for the owner's Drive artifact, buildable anywhere: public Binance USDT-perp 4h klines -> a contract artifact with the real artifact's definition (log-move inputs, log-return labels). | real data, binance vision, klines, logret artifact, contract artifact, doctor, e3 source, cpu readiness run |
 | `data/windows.py` | One coin's frames to windows, targets and the last-candle record, the unit the pipeline builds datasets from. | windows, last candle, targets, horizon, stride, sample filter |
 
 ### data_io
@@ -78,19 +86,15 @@ line range). A module without a card shows its first docstring line; it gets a c
 | module | what it is for | tags |
 |---|---|---|
 | `data_io/artifact.py` | Loader of a contract artifact exported by the TF side: refuses it unless every rule D1 field is present and consistent with the data itself. | artifact loader, rule d1, manifest, sealed coins, time seal, hash verification |
-| `data_io/btc_relative.py` | Write a BTC-relative copy of a contract artifact: each bar's log high / low / close moves minus BTC's of the same bar, RSI and stochastic of the coin / BTC price ratio, the coin's relative volume and BTC's own moves and RSI. | btc relative, market neutral inputs, ratio price, alt btc pair, rsi, stochastic, derived artifact, btc features |
+| `data_io/artifact_writer.py` | Write a built dataset as a contract artifact (npy_dir plus manifest export block) that data_io.load_artifact accepts, dropping sealed coins and windows after the time seal. | artifact writer, contract artifact, manifest, time seal, sealed coins, sha256 |
 | `data_io/environments.py` | Test environments of MODEL_DEV_PROTOCOL section 3: E2 = one global label permutation, E3 = a training-era slice of the real artifact, E3p = its panel form (whole timestamps); nig-envs writes E1 .. E4. | e2 environment, e3 environment, shuffled labels, label permutation, real slice, panel slice, whole timestamps, training era, purged split, leakage canary, gates |
-| `data_io/indicator_channels.py` | Add indicator channels (RSI 14, stochastic %K / %D 14-3-3, relative quote volume) to every bar of the base frame's windows of a contract artifact, from the coin's own base-frame candles with full warm-up history. | indicator channels, rsi, stochastic, volume, relative volume, derived artifact, binance vision, no lookahead |
 | `data_io/loading.py` | One way to load a prepared dataset by base name, latest name or full name, memory-mapped or copied to local disk, with the rule D1 artifact checks applied by default. | dataset loading, latest name, mmap, local copy, artifact checks, rule d1 |
-| `data_io/lower_timeframe.py` | Add a finer timeframe's input window (X_<tf>, e.g. the last 32 1h bars) to an existing contract artifact, row by row, from Binance archive candles, as a new contract artifact with the same rows, labels and coins. | lower timeframe, multi timeframe, 1h window, derived artifact, log moves, binance vision, alignment, x_1h |
-| `data_io/market_channel.py` | Add a market-level input channel from an outside DAILY series (e.g. the USDT supply) to a contract artifact: for every bar of every window, the log growth of the series over k days as known the day BEFORE that bar. | market channel, outside data, usdt supply, stablecoin, daily series, log growth, no lookahead, derived artifact |
-| `data_io/market_residual.py` | Write a market-residual copy of a contract artifact: each bar's coin moves minus beta x the equal-weight market move (beta per coin from its own past only), residual RSI / stochastic, market features, and the close label made residual too. | market residual, beta, market neutral, idiosyncratic return, equal weight market, derived artifact, rolling beta |
-| `data_io/npy_dir.py` | Reader of the npy_dir dataset format (manifest.json + one .npy per array + meta.pkl), optionally memory- mapped, and a local-disk copy helper. | npy dir, dataset reader, mmap, localize, data format, manifest |
+| `data_io/lock.py` | The sealed-coin list of the holdout lock, shipped as a hash-pinned package resource; sealed coins are never built. | holdout lock, sealed coins, time seal, sha256, package resource |
+| `data_io/npy_dir.py` | The npy_dir dataset format (manifest.json + one .npy per array + meta.pkl): its reader (optionally memory- mapped), its writer and a local-disk copy helper. | npy dir, dataset reader, dataset writer, mmap, localize, data format, manifest, sha256 |
 | `data_io/split_plan.py` | One global train/val/test split with purge by label end and embargo, plus the per-row times it needs (feature start, feature end, label end) derived from last_candles. | split plan, purge embargo, label end, sample times, leakage check |
 | `data_io/synthetic.py` | E1 test environment (MODEL_DEV_PROTOCOL section 3): synthetic 4h bars from intrabar random walks, HAR-like volatility, a planted close drift of known IC; a contract artifact with each label's exact conditional mean / sd. | synthetic data, e1 environment, oracle, planted signal, known ic, heteroscedastic noise, har volatility, intrabar path, contract artifact, gates |
 | `data_io/synthetic_panel.py` | E4 test environment (owner task 2026-11-16): a synthetic PANEL of coins with one common market factor, a different beta per coin and a predictable COIN-SPECIFIC move of known IC, as a contract artifact with oracles. | synthetic data, e4 environment, panel, market factor, beta per coin, coin specific signal, known ic, oracle, multi coin, cross section, shared volatility regime, contract artifact |
 | `data_io/target_codec.py` | TARGET_CODECS, the one place a regression target is encoded from last_candles and decoded back to a price: "return" (own-anchor simple return) and "logret_close" (log return vs the last close, TF logret_* artifacts). | target codec, return target, log return, reg target scale, decode to price, own anchor, anchor column |
-| `data_io/vision_slice.py` | A REAL-data stand-in for the owner's Drive artifact, buildable anywhere: public Binance USDT-perp 4h klines -> a contract artifact with the real artifact's definition (log-move inputs, log-return labels). | real data, binance vision, klines, logret artifact, contract artifact, doctor, e3 source, cpu readiness run |
 | `data_io/walk_max.py` | Exact moments of the running maximum M_n = max(0, S_1..S_n) of a Gaussian random walk with iid N(mu, s^2) steps (Spitzer's identity), vectorised over rows: mean, variance and E[exp(theta M_n)]. | random walk, running maximum, spitzer identity, exact moments, moment generating function, oracle, synthetic |
 
 ### doctor
@@ -254,15 +258,15 @@ line range). A module without a card shows its first docstring line; it gets a c
 
 - `colab/__main__.py`: runnable (`python -m nig_timenet_torch.colab`)
 - `colab_ops/__main__.py`: runnable (`python -m nig_timenet_torch.colab_ops`)
+- `data/btc_relative.py`: runnable (`python -m nig_timenet_torch.data.btc_relative`)
 - `data/cli.py`: runnable (`python -m nig_timenet_torch.data.cli`)
+- `data/indicator_channels.py`: runnable (`python -m nig_timenet_torch.data.indicator_channels`)
+- `data/lower_timeframe.py`: runnable (`python -m nig_timenet_torch.data.lower_timeframe`)
+- `data/market_channel.py`: runnable (`python -m nig_timenet_torch.data.market_channel`)
+- `data/market_residual.py`: runnable (`python -m nig_timenet_torch.data.market_residual`)
+- `data/vision_slice.py`: runnable (`python -m nig_timenet_torch.data.vision_slice`)
 - `data_io/artifact.py`: runnable (`python -m nig_timenet_torch.data_io.artifact`)
-- `data_io/btc_relative.py`: runnable (`python -m nig_timenet_torch.data_io.btc_relative`)
 - `data_io/environments.py`: runnable (`python -m nig_timenet_torch.data_io.environments`)
-- `data_io/indicator_channels.py`: runnable (`python -m nig_timenet_torch.data_io.indicator_channels`)
-- `data_io/lower_timeframe.py`: runnable (`python -m nig_timenet_torch.data_io.lower_timeframe`)
-- `data_io/market_channel.py`: runnable (`python -m nig_timenet_torch.data_io.market_channel`)
-- `data_io/market_residual.py`: runnable (`python -m nig_timenet_torch.data_io.market_residual`)
-- `data_io/vision_slice.py`: runnable (`python -m nig_timenet_torch.data_io.vision_slice`)
 - `doctor/__main__.py`: runnable (`python -m nig_timenet_torch.doctor`)
 - `doctor/influence.py`: runnable (`python -m nig_timenet_torch.doctor.influence`)
 - `doctor/readiness.py`: runnable (`python -m nig_timenet_torch.doctor.readiness`)

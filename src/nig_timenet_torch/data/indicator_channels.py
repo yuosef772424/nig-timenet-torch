@@ -16,47 +16,45 @@ Channels (each scaled to about [-1, 1]):
 
 Usage on Colab (candles cached per coin under ``--cache``, so a cut run resumes)::
 
-    python -m nig_timenet_torch.data_io.indicator_channels SRC DST --cache DIR [--workers 16]
+    python -m nig_timenet_torch.data.indicator_channels SRC DST --cache DIR [--workers 16]
 """
 
-import argparse
-import json
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
-from nig_timenet_torch.data_io import npy_dir
-from nig_timenet_torch.data_io.artifact import read_manifest
+from nig_timenet_torch.core.schema import QUOTE_VOLUME_COL, TS_COL
+from nig_timenet_torch.data.channel_math import (
+    RSI_LEN,
+    VOL_LEN,
+    WARMUP_BARS,
+    rsi_scaled,
+    stoch_slow,
+    to_grid,
+    volume_rel,
+    window_take,
+)
+from nig_timenet_torch.data.derive import (
+    CANDLE_COLS,
+    cache_dir,
+    coin_candles,
+    load_source,
+    make_parser,
+    per_coin_map,
+    print_record,
+    require_one_frame,
+    write_derived,
+)
+from nig_timenet_torch.data.fetch import vision_klines
 
 __all__ = ["CHANNELS", "bar_indicators", "indicator_windows", "add_indicator_channels", "DERIVATION_JSON", "main"]
 
 DERIVATION_JSON = "derivation_indicator_channels.json"
 CHANNELS = ("rsi_14", "stoch_k_14_3", "stoch_d_3", "volume_rel_30")
-RSI_LEN, STOCH_LEN, STOCH_SMOOTH, VOL_LEN = 14, 14, 3, 30
-WARMUP_BARS = 100            # history fetched before a coin's first window (RSI converges in ~ 5 x 14 bars)
-VOL_CLIP = 5.0
 CLOSE_TOL = 2e-4             # |log close move (candles) - X close channel| above this = a mismatched bar
-_CANDLE_COLS = (*TARGET_COLUMNS, "quote_volume")          # high, low, close (core.schema) + the volume
-
-
-def _grid(candles: pd.DataFrame, step: int) -> tuple[int, pd.DataFrame]:
-    """(first open ns, the candles on a regular grid of ``step`` ns: missing bars are NaN rows)."""
-    idx = pd.DatetimeIndex(candles.index)
-    idx = idx.tz_convert("UTC") if idx.tz is not None else idx.tz_localize("UTC")
-    open_ns = idx.as_unit("ns").asi8
-    first = int(open_ns.min())
-    pos = (open_ns - first) // step
-    on = (open_ns - first) % step == 0
-    size = int(pos.max()) + 1
-    out = pd.DataFrame(np.nan, index=np.arange(size), columns=list(_CANDLE_COLS))
-    for c in _CANDLE_COLS:
-        out.loc[pos[on], c] = candles[c].to_numpy(np.float64)[on]
-    return first, out
 
 
 def bar_indicators(g: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -65,21 +63,8 @@ def bar_indicators(g: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]
     present = g["close"].notna().to_numpy()
     c = g["close"].ffill()
     h, lo = g["high"].fillna(c), g["low"].fillna(c)
-    d = c.diff()
-    up, dn = d.clip(lower=0.0), (-d).clip(lower=0.0)
-    a = 1.0 / RSI_LEN
-    au, ad = up.ewm(alpha=a, adjust=False).mean(), dn.ewm(alpha=a, adjust=False).mean()
-    rsi = np.where(au + ad > 0, 100.0 * au / (au + ad).where(au + ad > 0, 1.0), 50.0)
-    hh, ll = h.rolling(STOCH_LEN).max(), lo.rolling(STOCH_LEN).min()
-    rng = hh - ll
-    raw_k = (100.0 * (c - ll) / rng.where(rng > 0, 1.0)).where(rng > 0, 50.0).where(rng.notna())
-    k = raw_k.rolling(STOCH_SMOOTH).mean()
-    dd = k.rolling(STOCH_SMOOTH).mean()
-    lv = np.log1p(g["quote_volume"].fillna(0.0).clip(lower=0.0))
-    ref = np.log1p(g["quote_volume"].fillna(0.0).clip(lower=0.0).rolling(VOL_LEN).mean().shift(1))
-    vol = (lv - ref).clip(-VOL_CLIP, VOL_CLIP)
-    ch = np.stack([(np.asarray(rsi, np.float64) - 50.0) / 50.0, (k.to_numpy() - 50.0) / 50.0,
-                   (dd.to_numpy() - 50.0) / 50.0, vol.to_numpy()], axis=1)
+    k, dd = stoch_slow(c, h, lo)
+    ch = np.stack([rsi_scaled(c), k, dd, volume_rel(g[QUOTE_VOLUME_COL]).to_numpy()], axis=1)
     idx = np.arange(len(g))
     valid = present & np.isfinite(ch).all(axis=1) & (idx >= max(RSI_LEN, VOL_LEN + 1))
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -98,7 +83,7 @@ def indicator_windows(candles: pd.DataFrame, end_times: np.ndarray, base_tf: str
     if n == 0 or candles.empty:
         return out, valid, mismatch
     step = pd.Timedelta(base_tf).value
-    first, g = _grid(candles, step)
+    first, g = to_grid(candles, step, CANDLE_COLS)
     ch, bar_ok, move = bar_indicators(g)
     last = np.asarray(end_times, dtype=np.int64) - first
     ok = (last % step == 0) & (last >= 0)
@@ -106,7 +91,7 @@ def indicator_windows(candles: pd.DataFrame, end_times: np.ndarray, base_tf: str
     ok &= (e - window + 1 >= 0) & (e < len(g))
     rows = np.flatnonzero(ok)
     if len(rows):
-        take = e[rows][:, None] + np.arange(-window + 1, 1)[None, :]
+        take = window_take(e[rows], window)
         good = bar_ok[take].all(axis=1)
         if x_close is not None:
             diff = np.abs(move[take] - np.asarray(x_close, np.float64)[rows])
@@ -118,40 +103,21 @@ def indicator_windows(candles: pd.DataFrame, end_times: np.ndarray, base_tf: str
     return out, valid, mismatch
 
 
-def _coin_candles(symbol: str, base_tf: str, start, end, cache: Path | None, fetch) -> pd.DataFrame:
-    path = None if cache is None else cache / f"{symbol}_{base_tf}_hlcqv.parquet"
-    if path is not None and path.is_file():
-        return pd.read_parquet(path)
-    frame = fetch(symbol, base_tf, start, end)[list(_CANDLE_COLS)]
-    if path is not None:
-        tmp = path.with_suffix(".tmp")
-        frame.to_parquet(tmp)
-        tmp.rename(path)
-    return frame
-
-
 def add_indicator_channels(src, dst, *, cache=None, workers: int = 16, fetch=None, overwrite: bool = False) -> dict:
     """Write ``dst``: the one-frame contract artifact ``src`` with the ``CHANNELS`` appended to its base frame's
     windows (rows, labels, coins and splits unchanged). Returns the derivation record (also in ``dst``)."""
-    from nig_timenet_torch.data.artifact_writer import write_artifact
-    from nig_timenet_torch.data.fetch import vision_klines
-
     fetch = fetch or vision_klines
     src, dst = Path(src), Path(dst)
-    man = read_manifest(src)
-    ds = npy_dir.load(src, mmap=False)
+    man, ds = load_source(src)
     if set(CHANNELS) & set(ds["feature_order"]):
         raise ValueError(f"{src} already has indicator channels")
-    if len(ds["timeframes"]) != 1:
-        raise ValueError(f"{src} holds {list(ds['timeframes'])}: add the channels to a one-frame artifact")
+    require_one_frame(ds, src, "add the channels to a one-frame artifact")
     base_tf = ds["base_tf"]
     key = f"X_{base_tf}"
     x = np.asarray(ds[key])
     close_i = list(ds["feature_order"]).index("close")
     window = x.shape[1]
-    cache = None if cache is None else Path(cache)
-    if cache is not None:
-        cache.mkdir(parents=True, exist_ok=True)
+    cache = cache_dir(cache)
     ts = np.asarray(ds["last_candles"])[:, TS_COL].astype(np.int64)
     new = np.zeros((len(ts), window, len(CHANNELS)), dtype=np.float32)
     bar = pd.Timedelta(base_tf)
@@ -161,50 +127,36 @@ def add_indicator_channels(src, dst, *, cache=None, workers: int = 16, fetch=Non
         t = ts[s:e]
         start = pd.Timestamp(int(t.min()), tz="UTC") - bar * (window + WARMUP_BARS)
         end = pd.Timestamp(int(t.max()), tz="UTC") + bar
-        candles = _coin_candles(b["name"], base_tf, start, end, cache, fetch)
+        candles = coin_candles(b["name"], base_tf, start, end, cache, fetch, CANDLE_COLS)
         w, ok, mis = indicator_windows(candles, t, base_tf, window, x[s:e, :, close_i])
         new[s:e] = w
         return b["name"], int(e - s), int((~ok).sum()), int(mis.sum())
 
-    t0 = time.monotonic()
-    per_coin = {}
-    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        for i, (name, rows, missing, mis) in enumerate(pool.map(one, ds["asset_bounds"])):
-            per_coin[name] = {"rows": rows, "missing": missing, "close_mismatch": mis}
-            if (i + 1) % 25 == 0:
-                print(f"{i + 1}/{len(ds['asset_bounds'])} coins, {time.monotonic() - t0:.0f} s", flush=True)
+    results, t0 = per_coin_map(ds, one, workers=workers)
+    per_coin = {name: {"rows": rows, "missing": missing, "close_mismatch": mis}
+                for name, rows, missing, mis in results}
     ds = {**ds, key: np.concatenate([x, new.astype(x.dtype)], axis=-1),
           "feature_order": [*ds["feature_order"], *CHANNELS]}
-    manifest = write_artifact(ds, dst, source_commit=man.source_commit, overwrite=overwrite,
-                              producer=f"nig_timenet_torch.data_io.indicator_channels (+{len(CHANNELS)} channels on "
-                                       f"{man.data_fingerprint})")
     n_missing = sum(v["missing"] for v in per_coin.values())
     n_mis = sum(v["close_mismatch"] for v in per_coin.values())
-    record = {"source_artifact": str(src), "source_fingerprint": man.data_fingerprint,
-              "fingerprint": manifest["export"]["data_sha256"], "added_channels": list(CHANNELS),
-              "rules": {"rsi_14": "(Wilder RSI 14 of close - 50) / 50",
-                        "stoch_k_14_3": "(SMA3 of raw %K over 14 bars - 50) / 50",
-                        "stoch_d_3": "(SMA3 of %K - 50) / 50",
-                        "volume_rel_30": "log1p(quote volume) - log1p(mean quote volume of the 30 previous bars), "
-                                         "clip +-5"},
-              "candles": "Binance USD-M futures archive", "warmup_bars": WARMUP_BARS, "close_tol": CLOSE_TOL,
-              "rows": int(len(ts)), "missing_rows": n_missing, "missing_share": n_missing / max(1, len(ts)),
-              "close_mismatch_rows": n_mis, "seconds": time.monotonic() - t0, "per_coin": per_coin}
-    (dst / DERIVATION_JSON).write_text(json.dumps(record, indent=1), encoding="utf-8")
-    return record
+    return write_derived(
+        src, dst, man, ds, overwrite=overwrite, derivation_json=DERIVATION_JSON,
+        producer=f"nig_timenet_torch.data_io.indicator_channels (+{len(CHANNELS)} channels on {man.data_fingerprint})",
+        record={"added_channels": list(CHANNELS),
+                "rules": {"rsi_14": "(Wilder RSI 14 of close - 50) / 50",
+                          "stoch_k_14_3": "(SMA3 of raw %K over 14 bars - 50) / 50",
+                          "stoch_d_3": "(SMA3 of %K - 50) / 50",
+                          "volume_rel_30": "log1p(quote volume) - log1p(mean quote volume of the 30 previous "
+                                           "bars), clip +-5"},
+                "candles": "Binance USD-M futures archive", "warmup_bars": WARMUP_BARS, "close_tol": CLOSE_TOL,
+                "rows": int(len(ts)), "missing_rows": n_missing, "missing_share": n_missing / max(1, len(ts)),
+                "close_mismatch_rows": n_mis, "seconds": time.monotonic() - t0, "per_coin": per_coin})
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m nig_timenet_torch.data_io.indicator_channels", description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("src")
-    ap.add_argument("dst")
-    ap.add_argument("--cache", default=None)
-    ap.add_argument("--workers", type=int, default=16)
-    ap.add_argument("--overwrite", action="store_true")
+    ap = make_parser("python -m nig_timenet_torch.data.indicator_channels", __doc__)
     a = ap.parse_args(argv)
-    r = add_indicator_channels(a.src, a.dst, cache=a.cache, workers=a.workers, overwrite=a.overwrite)
-    print(json.dumps({k: v for k, v in r.items() if k != "per_coin"}, indent=1))
+    print_record(add_indicator_channels(a.src, a.dst, cache=a.cache, workers=a.workers, overwrite=a.overwrite))
     return 0
 
 

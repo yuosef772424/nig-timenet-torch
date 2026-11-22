@@ -18,7 +18,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from nig_timenet_torch.data.artifact_writer import write_artifact
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 from nig_timenet_torch.data_io.environments import permute_labels
 from nig_timenet_torch.data_io.synthetic import SyntheticSettings, build_synthetic
 from nig_timenet_torch.doctor.common import (

@@ -6,7 +6,7 @@ set -uo pipefail
 RUNS=/content/drive/MyDrive/nig_timenet_runs
 CODE=${CODE:-/content/nig_u}
 say() { echo "[$(date -u +%H:%M:%S)] $*"; }
-while pgrep -f "nig_timenet_torch.jobs.(rolling|panel)|nig_timenet_torch.data_io.lower_timeframe" > /dev/null; do
+while pgrep -f "nig_timenet_torch.jobs.(rolling|panel)|nig_timenet_torch.data.lower_timeframe" > /dev/null; do
   sleep 120
 done
 say "no job left"

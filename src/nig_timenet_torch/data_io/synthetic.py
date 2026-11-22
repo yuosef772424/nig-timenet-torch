@@ -32,10 +32,16 @@ from dataclasses import asdict, dataclass
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import LAST_COLUMNS, TARGET_COLUMNS, TS_COL
+from nig_timenet_torch.core.schema import (
+    LAST_COLUMNS,
+    TARGET_COLUMNS,
+    TS_COL,
+    class_label_key,
+    head_names,
+    reg_label_key,
+)
 from nig_timenet_torch.data_io import walk_max
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, codec_name, own_anchor_and_future
-from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["SyntheticSettings", "ORACLE_PREFIX", "oracle_keys", "build_synthetic", "write_synthetic",
@@ -115,7 +121,7 @@ class SyntheticSettings:
 
 def oracle_keys(target: str) -> tuple[str, str]:
     """(mean column, sd column) of a head's oracle, in label units."""
-    key = head_spec("nig_regression", target).label_key
+    key = reg_label_key(target)
     return f"{ORACLE_PREFIX}{key}_mean", f"{ORACLE_PREFIX}{key}_sd"
 
 
@@ -215,8 +221,7 @@ def dataset_from_rows(s, r: dict, kappa: float, generator: str) -> dict:
     moments_fn, norm_mode = LABEL_CODECS[s.label_codec]
     ds = {"base_params": r["base"].astype(np.float32), "last_candles": r["last"], "mode": "direction_robust",
           "scaler_type": "robust", "feature_order": list(TARGET_COLUMNS), "timeframes": [s.base_tf],
-          "targets": [head_spec(kind, t).name for t in targets for kind in ("binary_classification",
-                                                                               "nig_regression")],
+          "targets": head_names(targets),
           "price_targets": targets,
           "asset_bounds": [{"name": f"SYN{i:03d}USDT", "start": i * r["rows_per_coin"],
                             "end": (i + 1) * r["rows_per_coin"]} for i in range(s.n_coins)],
@@ -232,8 +237,8 @@ def dataset_from_rows(s, r: dict, kappa: float, generator: str) -> dict:
     ds[f"X_{s.base_tf}"] = r["X"]
     for t in targets:
         own = own_anchor_and_future(lc, t)                       # class: own future above own last price
-        ds[head_spec("binary_classification", t).label_key] = (own[:, 1] > own[:, 0]).astype(np.float32)
-        ds[head_spec("nig_regression", t).label_key] = codec.encode(anchor_and_future(lc, t, state), state).astype(
+        ds[class_label_key(t)] = (own[:, 1] > own[:, 0]).astype(np.float32)
+        ds[reg_label_key(t)] = codec.encode(anchor_and_future(lc, t, state), state).astype(
             np.float32)
     params = {"mu": r["mu"], "s": r["sigma"] / math.sqrt(s.substeps), "n": s.horizon * s.substeps,
               **{name: lc[:, LAST_COLUMNS.index(name)] for name in ("last_high", "last_low", "last_close")}}
@@ -257,7 +262,7 @@ def oracle_summary(dataset: dict) -> dict:
     ts, last_close = lc[:, TS_COL], lc[:, LAST_COLUMNS.index("last_close")]
     out = {}
     for t in dataset["price_targets"]:
-        y = np.asarray(dataset[head_spec("nig_regression", t).label_key], np.float64)
+        y = np.asarray(dataset[reg_label_key(t)], np.float64)
         mean, sd = (np.asarray(dataset[k]) for k in oracle_keys(t))
         anchor = anchor_and_future(lc, t, state)[:, 0]
         pred = codec.decode(mean, state, anchor)
@@ -267,7 +272,7 @@ def oracle_summary(dataset: dict) -> dict:
                   "coverage_symmetric_80": metrics.interval_coverage(y, mean - _Z80 * sd, mean + _Z80 * sd),
                   "label_sd": float(y.std()), "label_mean_abs": float(np.abs(y).mean())}
     sd_c = np.asarray(dataset[oracle_keys("close")[1]])
-    y_c = np.asarray(dataset[head_spec("nig_regression", "close").label_key], np.float64)
+    y_c = np.asarray(dataset[reg_label_key("close")], np.float64)
     out["close"]["planted_ic_pearson"] = metrics.pearson(y_c / sd_c, np.asarray(dataset[f"{ORACLE_PREFIX}signal"]))
     return out
 
@@ -276,7 +281,7 @@ def write_synthetic(out_dir, settings: SyntheticSettings | None = None, *, sourc
                     overwrite: bool = False) -> dict:
     """Build E1 and write it as a contract artifact (rule D1) that ``data_io.load_dataset`` reads; returns the
     manifest. ``source_commit`` "" = the git HEAD of this package (the generator's code)."""
-    from nig_timenet_torch.data.artifact_writer import write_artifact
+    from nig_timenet_torch.data_io.artifact_writer import write_artifact
 
     return write_artifact(build_synthetic(settings), out_dir, source_commit=source_commit, overwrite=overwrite,
                           producer="nig_timenet_torch.data_io.synthetic")

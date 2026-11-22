@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from nig_timenet_torch.data.artifact_writer import write_artifact
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 from nig_timenet_torch.data_io import npy_dir
 from nig_timenet_torch.data_io.artifact import read_manifest
 

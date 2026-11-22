@@ -15,8 +15,8 @@ import datetime as dt
 import shutil
 from pathlib import Path
 
-from nig_timenet_torch.data.artifact_writer import write_artifact
 from nig_timenet_torch.data.settings import OutputSettings
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 
 __all__ = ["publish_artifact", "STAMP_FORMAT"]
 

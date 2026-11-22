@@ -9,10 +9,10 @@ The data pipeline as one call: settings -> dataset dict -> (optionally) a contra
 
 import logging
 
-from nig_timenet_torch.data.artifact_writer import write_artifact
 from nig_timenet_torch.data.build import build_dataset
 from nig_timenet_torch.data.publish import publish_artifact
 from nig_timenet_torch.data.settings import DataSettings
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 
 __all__ = ["build_artifact", "summary_lines"]
 

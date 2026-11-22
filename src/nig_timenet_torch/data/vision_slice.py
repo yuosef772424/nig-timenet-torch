@@ -1,7 +1,7 @@
 """PURPOSE: A REAL-data stand-in for the owner's Drive artifact, buildable anywhere: public Binance USDT-perp 4h klines
     -> a contract artifact with the real artifact's definition (log-move inputs, log-return labels).
 TAGS: real data, binance vision, klines, logret artifact, contract artifact, doctor, e3 source, cpu readiness run
-PITFALLS: sealed coins (data.lock) are refused and bars at or after the time seal are dropped, so the holdout stays
+PITFALLS: sealed coins (data_io.lock) are refused and bars at or after the time seal are dropped, so the holdout stays
     clean; this is NOT the owner's artifact (other coins and history, no TF pipeline): numbers measured on it describe
     the method, not the recorded baseline. A month the archive does not have is skipped (the coin was not listed);
     a hole inside a coin's history splits it into segments, and no window or label crosses a hole.
@@ -9,62 +9,60 @@ PITFALLS: sealed coins (data.lock) are refused and bars at or after the time sea
 Why it exists: the sandbox has no Drive and no GPU, so until now every check ran on synthetic E1 or on a 6-coin
 fixture. With this module the whole diagnostic loop (docs/audit/*/cards) runs on real candles on a CPU.
 
-``python -m nig_timenet_torch.data_io.vision_slice OUT [--raw DIR] [--coins A,B] [--start 2021-01] [--end 2026-09]
+``python -m nig_timenet_torch.data.vision_slice OUT [--raw DIR] [--coins A,B] [--start 2021-01] [--end 2026-09]
 [--interval 4h] [--stride 1]`` downloads (resuming: a month already on disk is not fetched again) and writes the
 artifact; ``build_logret_dataset`` is the pure part (frames -> dataset dict), tested without the network.
 """
 
 import argparse
-import io
 import sys
-import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import LAST_COLUMNS, OHLCV_COLUMNS, TARGET_COLUMNS, TS_COL
+from nig_timenet_torch.core.label_time import label_bar_close
+from nig_timenet_torch.core.schema import (
+    LAST_COLUMNS,
+    OHLCV_COLUMNS,
+    OPEN_TIME_COL,
+    TARGET_COLUMNS,
+    TS_COL,
+    class_label_key,
+    head_names,
+    reg_label_key,
+)
+from nig_timenet_torch.data.fetch import VISION_MONTHLY, Http, archive_tag, monthly_url, unzip_first
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, own_anchor_and_future
-from nig_timenet_torch.model.heads import head_spec
 
 __all__ = ["DEFAULT_COINS", "VISION", "fetch_month", "fetch_coin", "load_frames", "build_logret_dataset", "main"]
 
-VISION = "https://data.binance.vision/data/futures/um/monthly/klines"
+VISION = VISION_MONTHLY
 #: liquid USDT perpetuals that are NOT on the sealed holdout list (checked again at build time)
 DEFAULT_COINS = tuple(f"{c}USDT" for c in (
     "BTC ETH BNB SOL XRP ADA DOGE AVAX LINK DOT LTC BCH TRX ATOM NEAR UNI ETC FIL XLM AAVE ALGO SAND MANA AXS EOS "
     "XTZ THETA VET ICP GRT APT ARB OP SUI INJ RUNE DYDX CRV SNX COMP ZEC DASH ENJ CHZ KAVA GALA IMX LDO FET EGLD "
     "HBAR QNT NEO IOTA ZIL BAT ONE CELO ANKR SUSHI").split())
-_COLS = ("open_time", *OHLCV_COLUMNS)
+_COLS = (OPEN_TIME_COL, *OHLCV_COLUMNS)
 _LABEL_CLIP = 1.0   # the TF export clips |log(future / last_close)| at 1.0 (B-054)
 
 
 def fetch_month(coin: str, interval: str, month: pd.Period, raw: Path, get=None) -> Path | None:
     """One monthly kline zip -> ``raw/<coin>/<coin>-<interval>-YYYY-MM.csv`` (kept if already there). None when the
     archive has no such month (HTTP 404). ``get(url) -> bytes | None`` is injectable for tests."""
-    tag = f"{coin}-{interval}-{month.year:04d}-{month.month:02d}"
+    tag = archive_tag(coin, interval, month)
     path = raw / coin / f"{tag}.csv"
     if path.exists():
         return path
     if (raw / coin / f"{tag}.missing").exists():
         return None
-    if get is None:
-        import requests
-
-        def get(url):
-            r = requests.get(url, timeout=60)
-            if r.status_code == 404:
-                return None
-            r.raise_for_status()
-            return r.content
-    blob = get(f"{VISION}/{coin}/{interval}/{tag}.zip")
+    blob = (get or Http().get_bytes)(monthly_url(coin, interval, month))
     path.parent.mkdir(parents=True, exist_ok=True)
     if blob is None:
         (raw / coin / f"{tag}.missing").write_text("")
         return None
-    with zipfile.ZipFile(io.BytesIO(blob)) as z:
-        path.write_bytes(z.read(z.namelist()[0]))
+    path.write_bytes(unzip_first(blob))
     return path
 
 
@@ -83,13 +81,13 @@ def load_frames(raw: Path, coins, interval: str) -> dict[str, pd.DataFrame]:
         parts = []
         for f in files:
             df = pd.read_csv(f, header=None, usecols=range(6), names=_COLS, dtype=str)
-            df = df[df["open_time"].str.isdigit()]                      # newer archives carry a header row
-            parts.append(df.astype({c: np.float64 for c in _COLS[1:]}).astype({"open_time": np.int64}))
+            df = df[df[OPEN_TIME_COL].str.isdigit()]                      # newer archives carry a header row
+            parts.append(df.astype({c: np.float64 for c in _COLS[1:]}).astype({OPEN_TIME_COL: np.int64}))
         if not parts:
             continue
-        df = pd.concat(parts, ignore_index=True).drop_duplicates("open_time").sort_values("open_time")
-        t = df["open_time"].to_numpy()
-        df["open_time"] = np.where(t > 10 ** 14, t // 1000, t) * 1_000_000   # ms (or us in 2025+ files) -> ns
+        df = pd.concat(parts, ignore_index=True).drop_duplicates(OPEN_TIME_COL).sort_values(OPEN_TIME_COL)
+        t = df[OPEN_TIME_COL].to_numpy()
+        df[OPEN_TIME_COL] = np.where(t > 10 ** 14, t // 1000, t) * 1_000_000   # ms (or us in 2025+ files) -> ns
         ok = (df[list(OHLCV_COLUMNS[:4])] > 0).all(axis=1) & (df["high"] >= df["low"])
         out[coin] = df[ok].reset_index(drop=True)
     return out
@@ -119,8 +117,8 @@ def build_logret_dataset(frames: dict[str, pd.DataFrame], *, interval: str = "4h
     for coin in sorted(frames):
         df = frames[coin]
         if time_seal is not None:
-            df = df[df["open_time"] + (horizon + 1) * bar_ns <= pd.Timestamp(time_seal).value]
-        t = df["open_time"].to_numpy()
+            df = df[label_bar_close(df[OPEN_TIME_COL], horizon, bar_ns) <= pd.Timestamp(time_seal).value]
+        t = df[OPEN_TIME_COL].to_numpy()
         h, lo, c = (np.log(df[k].to_numpy()) for k in TARGET_COLUMNS)
         cx, cl, cb = [], [], []
         for a, b in _segments(t, bar_ns):
@@ -157,8 +155,7 @@ def build_logret_dataset(frames: dict[str, pd.DataFrame], *, interval: str = "4h
     targets = list(TARGET_COLUMNS)
     ds = {"base_params": np.concatenate(bases).astype(np.float32), "last_candles": lc, "mode": "direction_robust",
           "scaler_type": "robust", "feature_order": list(TARGET_COLUMNS), "timeframes": [interval],
-          "targets": [head_spec(kind, t).name for t in targets for kind in ("binary_classification",
-                                                                               "nig_regression")],
+          "targets": head_names(targets),
           "price_targets": targets, "asset_bounds": bounds, "base_tf": interval, "window_sizes": {interval: window},
           "stride": stride, "forecast_horizon": horizon, "reg_target_mode": "return", "reg_target_scale": 1.0,
           "reg_target_clip": _LABEL_CLIP, "split_dates": None, "holdout_start": None, "skipped_assets": {},
@@ -168,8 +165,8 @@ def build_logret_dataset(frames: dict[str, pd.DataFrame], *, interval: str = "4h
     state = codec.fit(ds)
     for t in targets:
         own = own_anchor_and_future(lc, t)
-        ds[head_spec("binary_classification", t).label_key] = (own[:, 1] > own[:, 0]).astype(np.float32)
-        ds[head_spec("nig_regression", t).label_key] = codec.encode(anchor_and_future(lc, t, state), state).astype(
+        ds[class_label_key(t)] = (own[:, 1] > own[:, 0]).astype(np.float32)
+        ds[reg_label_key(t)] = codec.encode(anchor_and_future(lc, t, state), state).astype(
             np.float32)
     ds["real_slice"] = {"source": VISION, "interval": interval, "window": window, "horizon": horizon, "stride": stride,
                         "coins": [b["name"] for b in bounds]}
@@ -177,10 +174,10 @@ def build_logret_dataset(frames: dict[str, pd.DataFrame], *, interval: str = "4h
 
 
 def main(argv: list[str] | None = None) -> int:
-    from nig_timenet_torch.data.artifact_writer import write_artifact
-    from nig_timenet_torch.data.lock import is_sealed, load_lock
+    from nig_timenet_torch.data_io.artifact_writer import write_artifact
+    from nig_timenet_torch.data_io.lock import is_sealed, load_lock
 
-    ap = argparse.ArgumentParser(prog="python -m nig_timenet_torch.data_io.vision_slice",
+    ap = argparse.ArgumentParser(prog="python -m nig_timenet_torch.data.vision_slice",
                                  description="Download public klines and write a real-data contract artifact.")
     ap.add_argument("out")
     ap.add_argument("--raw", default="", help="folder of the monthly csv files (default: OUT + '.raw')")

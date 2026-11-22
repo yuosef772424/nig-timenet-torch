@@ -15,6 +15,7 @@ PRs since last R-REVIEW: 1 (#74 the review itself, merged; fifth review 2026-11-
 | HB3 | Hardening 2026-11b HB3: evaluation, one implementation per trading rule and helper, honest names (owner 2026-11-21) | in progress |  | branch `ccr-bb6e83a4-2gwtez` |
 | HB4 | Hardening 2026-11b HB4a: model and trainer clean-ups (dead options and the Keras PanelModel out, one helper each, cards) (owner 2026-11-21) | in progress |  | branch `ccr-bb6e83a4-2gwtez` |
 | HB6 | Hardening 2026-11b HB6a: workflow corrections (FitResult.finished, runner catches every step error, gates refuse cross-section configurations, one code_sha / paths / default overrides, dead modules out, cards) (owner 2026-11-21) | in progress |  | branch `ccr-bb6e83a4-2gwtez` |
+| HB5 | Hardening 2026-11b HB5: data structure (one derive pipeline, one channel-math module, one candle cache, the data / data_io cycle cut, one label-time / coin-name / column source; artifacts byte-identical) (owner 2026-11-21) | in progress |  | branch `ccr-bb6e83a4-2gwtez` |
 | H7 | Register and review tooling (fourth R-REVIEW) | todo | | counter derived, CSV columns, check-job vs colab-results, rmtree ratchet; fifth review adds 12 suggestions (RunIdentity with split settings, PR-section CI check, merged-row archive) |
 | TR1 | Trainer switches (clip, wd groups, EMA, init, timing, train gap) | todo | | B-018, B-007, HF-37 |
 | G3r | Gates on the baseline configuration | todo | | 3 seeds |

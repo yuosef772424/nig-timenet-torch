@@ -13,7 +13,7 @@ PITFALLS: exploratory (rule C5); the fold geometry (``rolling``: spans, step, em
 Config (``RollingConfig``): ``device``, ``run_dir`` (required), ``rolling`` (RollingSettings fields, required: the spans
 have no defaults), ``artifact``, ``base_tf``, ``max_rows`` (smoke mode), ``batch_size``, ``lr``, ``model_overrides``,
 ``train`` (other TrainSettings fields, e.g. ``epochs``, ``staged``), ``split``, ``input_timeframes`` (the frames read
-side by side, e.g. ["4h", "1h"] of an artifact made by data_io/lower_timeframe.py). Outputs: ``rolling_summary.json``
+side by side, e.g. ["4h", "1h"] of an artifact made by data/lower_timeframe.py). Outputs: ``rolling_summary.json``
 / ``.md``, ``rolling_folds.csv`` and one folder per fold x seed (test report, test table, battery files).
 """
 

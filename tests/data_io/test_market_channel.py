@@ -1,4 +1,4 @@
-"""data_io/market_channel.py (owner task 2026-11-19): every bar of a window gets the series' k-day log growth of the
+"""data/market_channel.py (owner task 2026-11-19): every bar of a window gets the series' k-day log growth of the
 PREVIOUS UTC day (never the bar's own day), missing history gives 0 and is counted, the derived artifact keeps the
 source's rows / labels and loads, and the run steps read the extra channel."""
 
@@ -7,9 +7,9 @@ import pandas as pd
 
 from nig_timenet_torch.core.config import updated
 from nig_timenet_torch.core.schema import TS_COL
-from nig_timenet_torch.data.artifact_writer import write_artifact
-from nig_timenet_torch.data_io import market_channel as mc
+from nig_timenet_torch.data import market_channel as mc
 from nig_timenet_torch.data_io.artifact import load_artifact
+from nig_timenet_torch.data_io.artifact_writer import write_artifact
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.data_io.synthetic_panel import PanelSyntheticSettings, build_panel_synthetic
 from nig_timenet_torch.workflow import run as steps
