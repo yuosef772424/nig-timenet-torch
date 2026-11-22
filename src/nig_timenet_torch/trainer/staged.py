@@ -28,8 +28,8 @@ from nig_timenet_torch.core.registry import Contract, Registry
 from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.core.seeds import bn_refresh_seed, epoch_seed, seed_everything, stage_probe_seed
 from nig_timenet_torch.model.heads import head_spec
-from nig_timenet_torch.trainer import checkpoint
-from nig_timenet_torch.trainer.identity import RunIdentity, SeedMismatchError, check_resume
+from nig_timenet_torch.trainer import checkpoint, fit_state
+from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.trainer.log_groups import GroupedLogs
 from nig_timenet_torch.trainer.schedules import apply_schedules
 from nig_timenet_torch.trainer.selection_metric import SELECTION_METRICS
@@ -244,26 +244,18 @@ def _strided(n: int, max_rows: int) -> np.ndarray | None:
     return np.unique(np.linspace(0, n - 1, max_rows).astype(np.int64))
 
 
-def _clone(model: torch.nn.Module) -> dict:
-    return {k: v.detach().clone() for k, v in model.state_dict().items()}
-
-
 class _Loop:
     """The step-level loop of one ``staged_fit`` call; the pieces are small methods so that each fits a screen."""
 
     def __init__(self, trainer: Trainer, data: tuple, stages: list[StageSpec], st: StageSettings, fit: FitSettings,
                  run_dir, identity, resume: bool, deadline, on_eval):
-        if trainer.optimizer is None:
-            raise RuntimeError("Trainer has no optimizer")
+        fit_state.require_optimizer(trainer)
         if trainer.group_channel:
             raise ValueError("staged training does not support a cross-section trainer (stages cut whole rows)")
         if fit.ema_decay is not None or fit.lr is not None:
             raise ValueError("staged training sets the lr itself and keeps no EMA: FitSettings.lr and ema_decay "
                              "must be None")
-        if run_dir is not None and identity is None:
-            raise ValueError("run_dir needs an identity (RunIdentity) so that a resume can be checked")
-        if identity is not None and identity.seed != fit.seed:
-            raise SeedMismatchError(f"identity.seed ({identity.seed}) != settings.seed ({fit.seed})")
+        fit_state.check_run_args(run_dir, identity, fit.seed)
         self.t, self.stages, self.st, self.fit = trainer, stages, st, fit
         self.run_dir, self.identity, self.resume = run_dir, identity, resume
         self.deadline, self.on_eval = deadline, on_eval
@@ -357,13 +349,10 @@ class _Loop:
         row["sign"] = self.detector.update(val["raw_loss"], probe["raw_loss"])
         self.logs, self.interval_rows = GroupedLogs(self.fit.steps_per_execution), 0
         if self.stage_tracker.update(row["eval"], val["selection_metric"]):
-            self.stage_best_w = _clone(self.t.model)
+            self.stage_best_w = fit_state.clone_state(self.t.model)
         if self.tracker.update(row["eval"], val["selection_metric"]):
-            self.best_w = _clone(self.t.model)
-            if self.run_dir is not None:
-                checkpoint.save_best(self.run_dir, self.best_w, {"best": self.tracker.best,
-                                                                 "best_epoch": self.tracker.best_epoch,
-                                                                 "metric": self.t.selection_metric})
+            self.best_w = fit_state.clone_state(self.t.model)
+            fit_state.save_best_weights(self.run_dir, self.best_w, self.tracker, self.t.selection_metric)
         self.history.append(row)
         return row
 
@@ -405,7 +394,6 @@ class _Loop:
     def _save(self) -> None:
         if self.run_dir is None:
             return
-        t = self.t
         staged = {"s": self.s, "started": self.started, "sis": self.sis, "gstep": self.gstep,
                   "pass_id": self.pass_id, "b": self.b, "rng": torch.get_rng_state(),
                   "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else [],
@@ -413,28 +401,17 @@ class _Loop:
                   "stage_tracker": None if self.stage_tracker is None else self.stage_tracker.get_state(),
                   "detector": None if self.detector is None else self.detector.get_state(),
                   "stage_best": self.stage_best_w}
-        state = {"epochs_done": len(self.history), "model": t.model.state_dict(), "tracker": self.tracker.get_state(),
-                 "optimizer": t.optimizer.state_dict(), "history": self.history, "staged": staged,
-                 "kendall": None if t.uncertainty_layer is None else t.uncertainty_layer.state_dict(),
-                 "identity": json.dumps(self.identity.to_json(), sort_keys=True)}
-        if t.balancer.needs_shared:
-            state["balance"] = t.balancer.state_dict()
-        checkpoint.save_checkpoint(self.run_dir, state)
+        checkpoint.save_checkpoint(self.run_dir, fit_state.base_state(
+            self.t, len(self.history), self.tracker, self.history, self.identity, staged=staged))
 
     def _load(self, ckpt: dict) -> None:
         # the identity first: a flat run's checkpoint has no "staged" part (D-042: staged settings are in it)
-        check_resume(RunIdentity.from_json(json.loads(ckpt["identity"])), self.identity)
-        t, sg = self.t, ckpt["staged"]
+        fit_state.check_checkpoint_identity(ckpt, self.identity)
+        sg = ckpt["staged"]
         if sg["signature"] != self._signature():
             raise ValueError(f"{self.run_dir}: the staged plan or settings changed since the checkpoint was written")
-        t.model.load_state_dict(ckpt["model"])
-        t.optimizer.load_state_dict(ckpt["optimizer"])
-        if t.uncertainty_layer is not None:
-            t.uncertainty_layer.load_state_dict(ckpt["kendall"])
-        if t.balancer.needs_shared:
-            t.balancer.load_state_dict(ckpt["balance"])
-        self.tracker.load_state(ckpt["tracker"])
-        self.history, self.records = list(ckpt["history"]), list(sg["records"])
+        self.history = fit_state.restore_base(self.t, ckpt, self.tracker)
+        self.records = list(sg["records"])
         self.s, self.started, self.sis, self.gstep = sg["s"], sg["started"], sg["sis"], sg["gstep"]
         self.pass_id, self.b, self.lr_now = sg["pass_id"], sg["b"], sg["lr_now"]
         self.best_w = None if self.tracker.best is None else checkpoint.load_best(self.run_dir)
@@ -453,10 +430,8 @@ class _Loop:
     # ------------------------------------------------------------------------------------------------------- run
     def run(self) -> StagedResult:
         seed_everything(self.fit.seed)
-        ckpt = None if self.run_dir is None else checkpoint.load_checkpoint(self.run_dir)
+        ckpt = fit_state.load_resume_checkpoint(self.run_dir, self.resume)
         if ckpt is not None:
-            if not self.resume:
-                raise FileExistsError(f"{self.run_dir} already holds a checkpoint; resume=False refuses to overwrite")
             self._load(ckpt)
         else:
             apply_init(self.fit.init, self.t.model)
@@ -482,9 +457,7 @@ class _Loop:
         return self._finish()
 
     def _finish(self) -> StagedResult:
-        restored = self.fit.early_stop.restore_best_weights and self.best_w is not None
-        if restored:
-            self.t.model.load_state_dict(self.best_w)
+        restored = fit_state.finish_weights(self.t.model, self.best_w, self.fit.early_stop.restore_best_weights)
         tr = self.tracker
         return StagedResult(self.history, self.records, self.gstep, tr.best, tr.best_epoch,
                             None if tr.best_epoch is None else self.history[tr.best_epoch - 1]["step"], restored,
