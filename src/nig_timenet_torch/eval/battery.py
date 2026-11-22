@@ -1,18 +1,20 @@
 """Evaluation battery: many-angle judgment of a prediction table
 
-PURPOSE: Ten many-angle sections plus classics and a ranked verdict over a tidy table (step, mu, sigma, p_dir, y_ret,
-    dir_true, last_ret, coin, end_time); pure functions, no model.
-TAGS: battery, evaluation, trade grid, verdict, uncertainty filter, weekly stability, flip test
+PURPOSE: The many-angle sections (SECTION_ORDER lists them), the classics and a ranked verdict over a tidy table
+    (step, mu, sigma, p_dir, y_ret, dir_true, last_ret, coin, end_time); pure functions, no model.
+TAGS: battery, evaluation, trade grid, verdict, uncertainty filter, daily stability, flip test
 PITFALLS: columns are the battery table, not the PredictionTable (build it with eval.battery_adapter); the cost
-    default is battery_lib.DEFAULT_COST_PER_SIDE, charged PER SIDE (a trade pays it twice); direction is p_dir in every
-    section (mu only ranks and sizes); Sharpe is per trade, not annualised.
+    default is battery_lib.DEFAULT_COST_PER_SIDE, charged PER SIDE (a trade pays it twice); direction source is p_dir
+    via battery_lib.trade_side in every section (mu only ranks and sizes); Sharpe is per trade, not annualised;
+    verdict picks its best market-exit strategy ON TEST (a best-of-N, optimistic), the scorecard verdict is VAL-chosen.
 SOURCE: ported from feat/ar-stream 7c9736b, f052cf6 (owner's work)
 
 The evaluation battery: a many-angle judgment of one run, the way a trader would interrogate it before trusting
 money to it. Every section is a pure function over the tidy table, so the notebook stays a thin runner (rule E4/G6).
-Sections: sanity (IC + bias), confidence calibration, anti-cowardice, trading grids (market exit and take-profit at mu),
-an uncertainty filter, shock-regime splits, weekly stability, per-coin, the flip test, the classics ported from the
-old project (battery_classics) and a ranked verdict.
+Sections (names and print order: ``SECTION_ORDER``): sanity (IC + bias), confidence calibration, anti-cowardice,
+trading grids (market exit and take-profit at mu), an uncertainty filter, shock-regime splits, daily stability,
+per-coin, the flip test, the classics ported from the old project (battery_classics), the T-profit and scorecard
+sections and a ranked verdict.
 """
 
 from __future__ import annotations
@@ -28,14 +30,16 @@ from nig_timenet_torch.eval.battery_classics import (
 from nig_timenet_torch.eval.battery_lib import (
     DEFAULT_COST_PER_SIDE,
     HEADER,
+    MARGINAL_SHARPE,
     MIN_TRADES,
+    TRADEABLE_SHARPE,
     direction_pnl,
     format_row,
-    limit_at_mu,
     net_pnl,
     round_trip,
     scored_rows,
     section,
+    take_profit_at_mu,
     top_abs,
     trade_side,
     trade_stats,
@@ -44,7 +48,13 @@ from nig_timenet_torch.eval.battery_profit import profit_sections
 from nig_timenet_torch.eval.battery_scorecard import scorecard_sections
 from nig_timenet_torch.stats.metrics import spearman
 
-__all__ = ["battery", "full_battery", "show", "table_integrity", "persistence_baseline",
+#: the keys of ``full_battery`` in print order (the scorecard keys are absent when TEST has no ``end_time``)
+SECTION_ORDER = ("integrity", "sanity", "confidence", "cowardice", "trades", "take_profit_at_mu", "uncertainty",
+                 "shocks", "daily", "per_coin", "flip", "baseline", "selective", "neutral", "profit_close",
+                 "profit_limit", "profit_sigma", "scorecard", "buckets", "asymmetry", "scorecard_verdict",
+                 "verdict")
+
+__all__ = ["battery", "full_battery", "show", "SECTION_ORDER", "table_integrity", "persistence_baseline",
            "selective_evaluation", "market_neutral"]
 
 
@@ -128,8 +138,8 @@ def trade_grid(test, cost: float, pcts: tuple = (0.05, 0.10, 0.20)) -> dict:
                     "Compare with the persistence baseline before believing any row.")
 
 
-def limit_execution(test, cost: float, pcts: tuple = (0.05, 0.10, 0.20)) -> dict:
-    """Section 5: market entry at the last close with a take-profit AT the predicted mu (battery_lib.limit_at_mu):
+def take_profit_grid(test, cost: float, pcts: tuple = (0.05, 0.10, 0.20)) -> dict:
+    """Section 5: market entry at the last close with a take-profit AT the predicted mu (battery_lib.take_profit_at_mu):
     the target exists only on the trade's side and is checked on the realised extreme when the table has it; a row
     without a target, or whose target is not reached, exits at the true close."""
     rows = [f"{'strategy':<44}{'n':>8}{'fill%':>8}{'tgt%':>7}{'avg%':>10}{'Sharpe':>9}{'PF':>7}"]
@@ -138,7 +148,7 @@ def limit_execution(test, cost: float, pcts: tuple = (0.05, 0.10, 0.20)) -> dict
         for side, sign in (("LONG", 1.0), ("SHORT", -1.0)):
             mask = (trade_side(test) == sign) & scored_rows(test)
             idx = top_abs(test["mu"].values, pct, mask)
-            r = limit_at_mu(test, idx, sign, cost)
+            r = take_profit_at_mu(test, idx, sign, cost)
             path = r["path"]
             s = trade_stats(r["pnl"])
             if s:
@@ -146,7 +156,7 @@ def limit_execution(test, cost: float, pcts: tuple = (0.05, 0.10, 0.20)) -> dict
                             f"{float(r['hit'].mean()) * 100:>7.1f}%{float(r['target'].mean()) * 100:>6.1f}%"
                             f"{s['avg'] * 100:>+9.4f}%{s['sharpe']:>+9.3f}{s['pf']:>7.2f}")
     reach = "the realised high / low" if path else "the CLOSE only (no fut_high / fut_low: fills are a lower bound)"
-    return section("REALISTIC EXECUTION (TEST) - take-profit at mu, else exit at the close", rows,
+    return section("TAKE-PROFIT AT mu (TEST) - take-profit at mu, else exit at the close", rows,
                     f"Target reached on {reach}. tgt% = share of rows whose mu lies on the trade's side (the others "
                     "have no target and exit at the close). A high fill% with a positive avg means the model's "
                     "magnitude is honest; fills with a negative avg mean the target sits inside noise.")
@@ -193,29 +203,31 @@ def shock_split(test, cost: float, n_groups: int = 5, pct: float = 0.10) -> dict
                     "not pattern); what matters is that the PnL does not explode there.")
 
 
-def weekly_stability(test, cost: float, pct: float = 0.10, min_n: int = MIN_TRADES) -> dict:
-    """Section 8: per-week accuracy and PnL of the top-pct trades - one lucky month is not an edge."""
+def daily_stability(test, cost: float, pct: float = 0.10, min_n: int = MIN_TRADES) -> dict:
+    """Section 8: per-DAY (calendar day of end_time) accuracy and PnL of the top-pct trades - one lucky day is not an
+    edge. A day needs ``min_n`` selected trades."""
     if "end_time" not in test:
-        return section("WEEKLY STABILITY - SKIPPED", ["  (windows carry no end timestamps)"],
+        return section("DAILY STABILITY - SKIPPED", ["  (windows carry no end timestamps)"],
                         "Rebuild the windows with the frame index to enable this section.")
     scored = scored_rows(test)
-    idx = set(top_abs(test["mu"].values, pct, scored).tolist())
-    weeks = test["end_time"].values.astype("datetime64[D]")
+    sel = np.sort(top_abs(test["mu"].values, pct, scored))
+    days = test["end_time"].values.astype("datetime64[D]")
+    side, y = trade_side(test), test["y_ret"].values
     rows, pos = [], 0
-    for w in np.unique(weeks):
-        wm = [i for i in np.where(scored)[0] if weeks[i] == w and i in idx]
+    for day in np.unique(days):
+        wm = sel[days[sel] == day]
         if len(wm) < min_n:
             continue
-        pnl = direction_pnl(test, np.array(wm), cost)
-        acc = float(((trade_side(test)[wm] > 0) == (test["y_ret"].values[wm] > 0)).mean())
+        pnl = direction_pnl(test, wm, cost)
+        acc = float(((side[wm] > 0) == (y[wm] > 0)).mean())
         pos += int(pnl.mean() > 0)
         sd = pnl.std(ddof=1)
-        rows.append(f"  week {w}  n={len(wm):>6,}  dir_acc={acc:.4f}  avg={pnl.mean() * 100:+.4f}%"
+        rows.append(f"  day {day}  n={len(wm):>6,}  dir_acc={acc:.4f}  avg={pnl.mean() * 100:+.4f}%"
                     f"  sharpe={pnl.mean() / sd if sd > 0 else 0.0:+.3f}")
     total = len(rows)
-    return section("WEEKLY STABILITY (TEST)", rows or ["  (no week reached the min trade count)"],
-                    (f"{pos} of {total} weeks positive - an edge that lives in one week only is noise."
-                     if total else "no week had enough trades"))
+    return section("DAILY STABILITY (TEST)", rows or ["  (no day reached the min trade count)"],
+                    (f"{pos} of {total} days positive - an edge that lives in one day only is noise."
+                     if total else "no day had enough trades"))
 
 
 def per_coin(test, cost: float, pct: float = 0.10, min_n: int = 30) -> dict:
@@ -255,17 +267,17 @@ def flip_test(test, cost: float, pct: float = 0.10) -> dict:
 
 
 def battery(val, test, cost: float = DEFAULT_COST_PER_SIDE) -> dict:
-    """All fourteen sections over the VAL/TEST prediction tables (same order as the notebook prints them)."""
+    """The core sections over the VAL/TEST prediction tables (the first keys of ``SECTION_ORDER``, in print order)."""
     return {
         "integrity": table_integrity(val, test),
         "sanity": sanity(val, test),
         "confidence": confidence_buckets(test),
         "cowardice": cowardice(test),
         "trades": trade_grid(test, cost),
-        "limit": limit_execution(test, cost),
+        "take_profit_at_mu": take_profit_grid(test, cost),
         "uncertainty": uncertainty_filter(val, test, cost),
         "shocks": shock_split(test, cost),
-        "weekly": weekly_stability(test, cost),
+        "daily": daily_stability(test, cost),
         "per_coin": per_coin(test, cost),
         "flip": flip_test(test, cost),
         "baseline": persistence_baseline(test, cost),
@@ -275,8 +287,10 @@ def battery(val, test, cost: float = DEFAULT_COST_PER_SIDE) -> dict:
 
 
 def verdict(test, cost: float, sections: dict) -> dict:
-    """The ranked bottom line: the best realistic strategy by TEST Sharpe, with the direction edge,
-    the shock sanity and the weekly consistency beside it - so the verdict is never one lucky number."""
+    """The ranked bottom line: the best market-exit strategy (the top-5/10/20 % |mu| x LONG/SHORT grid) by TEST Sharpe,
+    with the shock sanity and the daily consistency beside it. The best of that grid is CHOSEN ON TEST, so it is a
+    best-of-N and optimistic; the VAL-chosen judgment is the scorecard verdict (``scorecard_verdict``). Tradeable
+    means Sharpe > ``TRADEABLE_SHARPE``, marginal > ``MARGINAL_SHARPE``."""
     keep = scored_rows(test)
     side = trade_side(test)
     best = {"name": "none", "sharpe": float("nan")}
@@ -292,24 +306,29 @@ def verdict(test, cost: float, sections: dict) -> dict:
         out.update(best=best, tradeable=False)
         return out
     b = best["stats"]
-    label = ("قابل للتداول نظرياً (Sharpe>0.10)" if best["sharpe"] > 0.10
-             else "هامشي - يحتاج تحقق" if best["sharpe"] > 0.05 else "غير قابل للتداول")
+    label = (f"قابل للتداول نظرياً (Sharpe>{TRADEABLE_SHARPE:.2f})" if best["sharpe"] > TRADEABLE_SHARPE
+             else "هامشي - يحتاج تحقق" if best["sharpe"] > MARGINAL_SHARPE else "غير قابل للتداول")
+    scorecard_note = ("scorecard verdict (VAL-chosen): see SCORECARD VERDICT" if "scorecard_verdict" in sections
+                      else "scorecard skipped: no end_time")
     rows = [f"  BEST: {best['name']}  Sharpe={best['sharpe']:+.3f}  PF={b['pf']:.2f}  "
             f"n={b['n']:,}  avg={b['avg'] * 100:+.4f}%",
             f"  الحكم: {label}",
-            f"  weekly consistency: {sections['weekly']['note']}",
-            "  (the verdict weighs the BEST strategy only - read the shock and weekly sections before "
-            "trusting it: an edge that dies in the wildest quintile or lives in one week is not an edge)"]
+            f"  daily consistency: {sections['daily']['note']}",
+            "  (the BEST strategy is chosen ON TEST from the market-exit grid: a best-of-N, optimistic; "
+            f"{scorecard_note}; read the shock and daily sections before trusting it: an edge that dies in the "
+            "wildest quintile or lives in one day is not an edge)"]
     out = section("VERDICT", rows,
-                  f"tradeable={best['sharpe'] > 0.10} marginal={0.05 < best['sharpe'] <= 0.10}")
+                  f"tradeable={best['sharpe'] > TRADEABLE_SHARPE} "
+                  f"marginal={MARGINAL_SHARPE < best['sharpe'] <= TRADEABLE_SHARPE}")
     out["best"] = best
-    out["tradeable"] = bool(best["sharpe"] > 0.10)
+    out["tradeable"] = bool(best["sharpe"] > TRADEABLE_SHARPE)
     return out
 
 
 def full_battery(val, test, cost: float = DEFAULT_COST_PER_SIDE, n_variants: int = 1) -> dict:
     """The sections, the T-profit sections (battery_profit; ``n_variants`` = variants tried so far, for the CI
-    level) AND the verdict in one call - what the notebook prints, in order."""
+    level), the scorecard sections (only when TEST has ``end_time``) AND the verdict in one call - what the notebook
+    prints, in ``SECTION_ORDER``."""
     sections = battery(val, test, cost)
-    return {**sections, **profit_sections(test, cost, n_variants), **scorecard_sections(val, test, cost, n_variants),
-            "verdict": verdict(test, cost, sections)}
+    extra = {**profit_sections(test, cost, n_variants), **scorecard_sections(val, test, cost, n_variants)}
+    return {**sections, **extra, "verdict": verdict(test, cost, {**sections, **extra})}

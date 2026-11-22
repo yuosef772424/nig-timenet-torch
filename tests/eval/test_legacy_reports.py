@@ -81,7 +81,7 @@ def test_conditioned_tables_and_coin_ranking():
     cond = lr.conditioned(t)
     assert set(cond) == {"by_move", "by_side", "by_sd", "by_batch"}
     assert cond["by_batch"]["rows"].sum() == int((t["y_ret"] != 0).sum()) and len(cond["by_batch"]) == 10
-    assert (cond["by_move"]["ci_lo"] <= cond["by_move"]["hit"]).all()
+    assert (cond["by_move"]["ci_lo"] <= cond["by_move"]["hit_mu_sign"]).all()
     rank = lr.coin_ranking(t)
     assert len(rank) == 6 and rank["r"].is_monotonic_decreasing
 

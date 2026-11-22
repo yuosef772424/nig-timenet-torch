@@ -7,7 +7,8 @@ PITFALLS: a frame is ONE stage of ONE run with the columns of ``FRAME_COLUMNS``;
     that DIFFERS across the coins of a timestamp (a constant score gives no day). Baselines whose sign is unknown
     (last-bar asymmetry) are oriented on the VAL frame, never on the frame they are scored on. Cost is charged per
     side: a row is a round trip (2 sides); the long and the short leg of metric 2 are half a unit each (2 sides per
-    unit of gross exposure). Day P&L of overlapping labels (stride < horizon) is the mean over the tranches.
+    unit of gross exposure). Direction here is sign(mu): the panel frame has no p_dir. Day P&L of overlapping labels
+    (stride < horizon) is the mean over the tranches.
 
 Trivial models (rule C1): a score that is independent of the future scores 50 % winning days on a market with a
 symmetric return (CI around 0.5) and exactly minus the cost after cost; ``always_long`` scores the market's own share
@@ -36,7 +37,7 @@ def _days(frame: pd.DataFrame) -> np.ndarray:
 
 def absolute_days(frame: pd.DataFrame, score, cost: float = 0.0, min_rows: int = MIN_ROWS) -> pd.Series:
     """Metric 1: per day, the mean over the day's rows of ``sign(score_i) * y_ret_i - 2 * cost`` (rows with a NaN or
-    zero score do not trade). Index = day."""
+    zero score do not trade). Index = day. Direction is sign(score), not p_dir."""
     s = np.sign(np.nan_to_num(np.asarray(score, dtype=np.float64)))
     pnl = pd.Series(np.where(s != 0, net_pnl(s * frame["y_ret"].to_numpy(np.float64), cost), np.nan))
     g = pnl.groupby(_days(frame))
@@ -54,7 +55,9 @@ def neutral_days(frame: pd.DataFrame, score, top_share: float = 0.2, cost: float
                  min_rows: int = 1) -> pd.Series:
     """Metric 2: per day, the mean over the day's timestamps of the top-k / bottom-k spread of ``score`` (which is
     ranked inside the timestamp, so ``score`` and ``score - timestamp mean`` give the same book), minus one round trip
-    (2 x cost) per unit of gross exposure."""
+    (2 x cost) per unit of gross exposure. Normalisation: the spread is the full spread halved, so the net is per unit
+    of gross exposure (half a unit per leg); ``battery_classics.market_neutral`` charges the full spread 4 sides
+    instead (not comparable number for number)."""
     # half-unit convention: the spread (mean of the top k minus mean of the bottom k) is already per unit of gross
     # exposure (the long and the short leg are half a unit each), and a unit of exposure pays one round trip
     spread = net_pnl(_timestamp_spread(frame, score, top_share), cost)

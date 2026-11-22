@@ -2,7 +2,8 @@
     across time, is it sharp and calibrated, is the direction biased, does selecting by confidence win more days.
 TAGS: uncertainty use, sd ranks error, across coins, across time, t-sharp, calibration, direction bias, confidence
     selection, winning days, panel diagnostics
-PITFALLS: works on the day-metric frame (``eval.day_metrics.FRAME_COLUMNS``; one stage of one run); a confidence
+PITFALLS: direction here is sign(mu) (the panel frame has no p_dir); works on the day-metric frame
+(``eval.day_metrics.FRAME_COLUMNS``; one stage of one run); a confidence
     threshold is fitted on the VAL frame and applied to the scored frame, never fitted on it; "across time" is a
     correlation inside each coin over its timestamps (it needs >= ``MIN_GROUP`` rows per coin), "across coins" inside
     each timestamp. Every number is descriptive: no trade rule is chosen here. The kept-row rules print the

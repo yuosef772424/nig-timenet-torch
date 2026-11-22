@@ -3,8 +3,9 @@
 PURPOSE: Four classic checks of the old TF project over the tidy table: integrity, persistence baseline, selective
     evaluation (VAL thresholds, TEST judgment), market-neutral portfolio.
 TAGS: battery classics, integrity, persistence baseline, selective evaluation, market neutral
-PITFALLS: cost is PER SIDE (a trade pays it twice, a neutral period twice on each leg); direction is p_dir, never
-    sign(mu); market_neutral needs >= 4 coins plus end_time and persistence needs last_ret (both skip otherwise).
+PITFALLS: cost is PER SIDE (a trade pays it twice, a neutral period twice on each leg); direction source is p_dir
+    via battery_lib.trade_side, never sign(mu) (market_neutral ranks by mu, no direction); market_neutral needs >= 4
+    coins plus end_time and persistence needs last_ret (both skip otherwise).
 SOURCE: ported from feat/ar-stream 7c9736b, f052cf6 (owner's work)
 
 Ported from the crypto-signal-prediction evaluation package; each re-derived as a pure function over the table,
@@ -100,7 +101,9 @@ def selective_evaluation(val, test, cost: float, quantiles: tuple = (0.25, 0.50,
 def market_neutral(val, test, cost: float, quantiles: tuple = (0.2, 0.3, 0.4)) -> dict:
     """Section 14: the old project's market-neutral portfolio - rank the coins by mu each period,
     long the top q against shorting the bottom q, so the market's whole move cancels and only the
-    model's relative ranking can pay. q is chosen on VAL only; TEST rows are shown for transparency."""
+    model's relative ranking can pay. q is chosen on VAL only; TEST rows are shown for transparency.
+    Normalisation: the FULL spread (mean top minus mean bottom, one unit per leg) pays 4 sides; the half-unit
+    convention of ``day_metrics.neutral_days`` (halved spread, 2 sides) is the same cost per unit of gross exposure."""
     if "coin" not in test or "end_time" not in test:
         return section("MARKET-NEUTRAL PORTFOLIO - SKIPPED", ["  (needs coin and end_time columns)"],
                         "Single-coin runs cannot go neutral; run the panel notebook for this section.")

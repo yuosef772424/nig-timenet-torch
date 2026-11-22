@@ -96,7 +96,8 @@ def _lag_and_batches(plt, integ, cond, title):
     ax[0].bar(scan["lag"], scan["mean_r"], color=np.where(scan["lag"] == 0, "#2a9d8f", "#adb5bd"))
     ax[0].set_title("lag scan: mean r of mu(t) with y(t + k) per coin (k < 0 peak = late copying)", fontsize=9)
     b = cond["by_batch"]
-    ax[1].errorbar(b["group"], b["hit"], yerr=[b["hit"] - b["ci_lo"], b["ci_hi"] - b["hit"]], fmt="o",
+    hit = b["hit_mu_sign"]
+    ax[1].errorbar(b["group"], hit, yerr=[hit - b["ci_lo"], b["ci_hi"] - hit], fmt="o",
                    color="#264653")
     ax[1].axhline(0.5, color="#6c757d", ls="--", lw=0.8)
     ax[1].set_title("direction hit by consecutive time batch (Wilson 95 %)", fontsize=9)
@@ -115,7 +116,7 @@ def _coins(plt, table, ranking, title, n_best=2, n_worst=2, last=300):
         a.plot(g["end_time"], g["mu"], color="#e76f51", lw=1.2, label="predicted mu")
         r = ranking.set_index("coin").loc[coin]
         kind = "BEST" if coin in names[:n_best] else "WORST"
-        a.set_title(f"{kind} {coin}: r {r['r']:+.3f}  rank IC {r['rank_ic']:+.3f}  hit {r['hit']:.2f}  rows "
+        a.set_title(f"{kind} {coin}: r {r['r']:+.3f}  rank IC {r['rank_ic']:+.3f}  hit {r['hit_mu_sign']:.2f}  rows "
                     f"{int(r['rows'])} (last {len(g)} shown)", fontsize=9)
         a.legend(fontsize=7, loc="upper left")
         a.grid(alpha=0.25)
