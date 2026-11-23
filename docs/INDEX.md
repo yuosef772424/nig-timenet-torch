@@ -87,7 +87,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/audit/2026-11-20-readings/`: Pre-registration I1: the indicator channels trained like R (owner 2026-11-20) (`PREREGISTERED_I1.md`), 5 files
 - `docs/audit/2026-11-20-v1rep-i2/`: Pre-registration: V1-rep and I2 (owner 2026-11-20: "run the proposals, in parallel, free RAM under 10 GB") (`PREREGISTERED.md`), 3 files
 - `docs/audit/2026-11-21-independent-review/`: , 13 files
-- `docs/audit/2026-11-22-dy1-daily/`: DY1 pre-registration: a daily model that predicts two days ahead, judged as money after costs (`PREREGISTERED.md`), 19 files
+- `docs/audit/2026-11-22-dy1-daily/`: DY1 pre-registration: a daily model that predicts two days ahead, judged as money after costs (`PREREGISTERED.md`), 18 files
 - `docs/audit/2026-11-22-n8-account/`: , 10 files
 
 ## Handoffs
