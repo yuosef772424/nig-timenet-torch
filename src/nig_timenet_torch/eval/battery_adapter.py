@@ -6,7 +6,9 @@ TAGS: battery adapter, prediction table, close return, nig predictive std, limit
 PITFALLS: needs a codec whose decode is a price forecast (``forecasts_price``: not magnitude / entry_range /
     '+relative', which raise); direction (p_dir, dir_true, mu sign) comes from the CLOSE head only; high / low enter
     as price levels, never as a direction (owner, rule D). sigma is the NIG predictive std, not the capped model
-    uncertainty. A missing close class column falls back to a Gaussian P(return > 0), flagged in attrs.
+    uncertainty. A missing close class column falls back to a Gaussian P(return > 0), flagged in attrs. A row without
+    a label (a live row: NaN ``y_ret`` / ``fut_*``) is kept with ``dir_true`` 0; judge only the rows whose ``y_ret``
+    is finite.
 
 Column mapping (return = price / last_close - 1, prices decoded with the head's OWN anchor via the TargetCodec):
 step = 1 (one horizon per row); mu = decode(close mu) return; sigma = (decode(mu + std) - decode(mu)) / last_close
@@ -105,7 +107,7 @@ def to_battery_table(table: pd.DataFrame, labels: dict, *, anchors: dict, last_c
     from_class = cls_key in table.columns
     p_dir = _col(table, cls_key) if from_class else _gaussian_p_up(mu, sigma)
     out = pd.DataFrame({"step": np.ones(n, dtype=np.int64), "mu": mu, "sigma": sigma, "p_dir": p_dir,
-                        "y_ret": y_ret, "dir_true": np.sign(y_ret).astype(np.int64)})
+                        "y_ret": y_ret, "dir_true": np.where(np.isfinite(y_ret), np.sign(y_ret), 0).astype(np.int64)})
     if prev_close is not None:
         prev = np.asarray(prev_close, dtype=np.float64).reshape(-1)
         if prev.shape[0] != n or not np.isfinite(prev).all() or (prev <= 0).any():

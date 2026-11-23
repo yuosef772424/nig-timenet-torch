@@ -41,11 +41,11 @@ from nig_timenet_torch.data.context import (
 from nig_timenet_torch.data.fetch import fetch_all
 from nig_timenet_torch.data.indicators import add_indicators, base_feature_columns
 from nig_timenet_torch.data.settings import DataSettings
-from nig_timenet_torch.data.sources import make_loader, resolve_coins
+from nig_timenet_torch.data.sources import make_loader, normalize_tf, resolve_coins
 from nig_timenet_torch.data.windows import AssetWindows, head_names, prepare_asset
 from nig_timenet_torch.data_io.lock import HoldoutLock, is_sealed, load_lock
 
-__all__ = ["BuildContext", "feature_order", "build_dataset", "DATASET_MODE"]
+__all__ = ["BuildContext", "feature_order", "build_dataset", "build_live", "DATASET_MODE"]
 
 #: The reference pipeline stamps every dataset with this string (its feature-direction mode); kept so a dataset
 #: built here has the same keys as one built there.
@@ -138,7 +138,8 @@ def _context(names: list[str], loader, settings: DataSettings, lock: HoldoutLock
     return ctx
 
 
-def _one_coin(name: str, loader, ctx: BuildContext, features: list[str], settings: DataSettings) -> _Outcome:
+def _one_coin(name: str, loader, ctx: BuildContext, features: list[str], settings: DataSettings,
+              last_n: int | None = None) -> _Outcome:
     w, f = settings.windows, settings.features
     min_len = w.window_sizes[w.tf_order[0]]
     try:
@@ -155,10 +156,29 @@ def _one_coin(name: str, loader, ctx: BuildContext, features: list[str], setting
     n_base = len(dfs[w.tf_order[0]])
     if n_base < 1.5 * min_len:
         return _Outcome(name, reason=f"too short after indicators: {n_base} rows < {1.5 * min_len:g}")
-    res = prepare_asset(dfs, features, settings)
+    res = prepare_asset(dfs, features, settings, last_n=last_n)
     if res.n == 0:
         return _Outcome(name, reason="no valid window")
+    if last_n is not None:
+        why = _live_problem(raw, dfs[w.tf_order[0]], res, settings)
+        if why:
+            return _Outcome(name, reason=why)
     return _Outcome(name, result=res)
+
+
+def _live_problem(raw: pd.DataFrame, base: pd.DataFrame, res: AssetWindows, settings: DataSettings) -> str:
+    """Why a coin's newest live row cannot be trusted ("" = fine): a live row on a stale bar is a prediction about the
+    past, and a newest window with raw bars missing (a gap the indicator step fills) is not the data the model
+    trained on."""
+    w = settings.windows
+    newest = base.index.max()
+    if res.end_times[-1] != newest:
+        return (f"stale: the newest valid window ends {res.end_times[-1]}, the newest {w.tf_order[0]} bar is {newest} "
+                "(a gap or a filtered bar)")
+    span = w.window_sizes[w.tf_order[0]] * pd.Timedelta(normalize_tf(w.tf_order[0]))
+    step = pd.Timedelta(normalize_tf(settings.source.interval))
+    missing = int(span / step) - int((raw.index > raw.index.max() - span).sum())
+    return f"gap: {missing} raw bar(s) missing in the newest window" if missing > 0 else ""
 
 
 def _workers(settings: DataSettings, n: int) -> int:
@@ -166,9 +186,9 @@ def _workers(settings: DataSettings, n: int) -> int:
     return max(1, min(k, n))
 
 
-def _run_coins(names, loader, ctx, features, settings) -> list[_Outcome]:
+def _run_coins(names, loader, ctx, features, settings, last_n: int | None = None) -> list[_Outcome]:
     def job(name):
-        return _one_coin(name, loader, ctx, features, settings)
+        return _one_coin(name, loader, ctx, features, settings, last_n)
     k = _workers(settings, len(names))
     if k == 1:
         return [job(n) for n in names]
@@ -249,6 +269,29 @@ def build_dataset(settings: DataSettings, loader=None, lock: HoldoutLock | None 
         raise ValueError("no coin produced a window; reasons: " + "; ".join(f"{o.name}: {o.reason}" for o in outcomes))
     skipped = {o.name: o.reason for o in outcomes if o.result is None}
     return _assemble(settings, arrays, bounds, features, skipped, sorted(set(requested) - set(names)))
+
+
+def build_live(settings: DataSettings, loader, names: list[str], *, last_n: int,
+               lock: HoldoutLock | None = None) -> dict:
+    """The dataset-shaped dict of the LAST ``last_n`` base bars of every coin in ``names`` (stride 1, no future needed:
+    a bar whose future is not in the data has NaN labels and NaN future columns), built by the very code of
+    ``build_dataset`` (same indicators, cross-asset columns, windows and scaling) from the candles ``loader(name)``
+    returns. Nothing is fetched or written. A coin whose newest bar has no valid window (a gap, a filter, too short)
+    is not predicted on an older bar: it is listed in ``skipped_assets`` with the reason. Sealed coins are dropped,
+    as in ``build_dataset``."""
+    lock = lock or load_lock()
+    kept = [n for n in names if not is_sealed(n, lock)]
+    if not kept:
+        raise ValueError("no coin is left to build: the list is empty or every coin is sealed")
+    features = feature_order(settings)
+    ctx = _context(kept, loader, settings, lock)
+    outcomes = _run_coins(kept, loader, ctx, features, settings, last_n)
+    arrays, bounds = _merge(outcomes, settings, len(features))
+    skipped = {o.name: o.reason for o in outcomes if o.result is None}
+    if not bounds:
+        why = "; ".join(f"{k}: {v}" for k, v in skipped.items())
+        raise ValueError(f"no coin produced a live window; reasons: {why}")
+    return _assemble(settings, arrays, bounds, features, skipped, sorted(set(names) - set(kept)))
 
 
 def _assemble(settings, arrays, bounds, features, skipped, sealed_dropped) -> dict:
