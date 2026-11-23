@@ -11,6 +11,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/COLAB_OPS.md`: Colab ops: the steps of every session (2026-11-15)
 - `docs/DATA_ARTIFACT_CONTRACT.md`: Data-artifact contract (BUILD_PLAN.md P01)
 - `docs/INFLUENCE.md`: INFLUENCE — the effect of each training batch and of each input feature (owner task 2026-11-17)
+- `docs/LIVE.md`: Live prediction and the latest-samples report (owner, 2026-11-23)
 - `docs/MAP.md`: MAP — where do I edit X?
 - `docs/MODEL_DEV_PROTOCOL.md`: MODEL DEVELOPMENT PROTOCOL — binding for every agent that touches the model (owner, 2026-11-07)
 - `docs/PHILOSOPHY.md`: How model work is done here: the working method (owner, 2026-11-16)
@@ -109,7 +110,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Decisions
 
-50 decisions (format: `docs/decisions/README.md`).
+51 decisions (format: `docs/decisions/README.md`).
 
 - `docs/decisions/D-001-trainer-fit-defaults.md`: D-001 — trainer fit: schedule, early-stopping and fit defaults (ROADMAP T1)
 - `docs/decisions/D-002-colab-runner-defaults.md`: D-002 — Colab runner and notebook support: new defaults (ROADMAP T3)
@@ -161,6 +162,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/decisions/D-049-at1-atr-take-profit.md`: D-049 — Take-profit at k x ATR in the battery, beside the take-profit at mu (owner 2026-11-22)
 - `docs/decisions/D-050-n8-capital-account.md`: D-050 — Evaluation in a capital account (audit E1-E3, E5)
 - `docs/decisions/D-051-dy1-defaults.md`: D-051 — A daily model, 2-day label, read as money after costs (N3 through the daily frame)
+- `docs/decisions/D-051-lv1-defaults.md`: D-051 — Latest-samples table, trade selection, chart and live prediction (owner 2026-11-23)
 
 ## Job files
 

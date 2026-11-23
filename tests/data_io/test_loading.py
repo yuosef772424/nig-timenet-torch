@@ -49,6 +49,24 @@ def test_a_base_name_gets_latest_added_and_a_full_name_is_read_as_written(tmp_pa
     assert absolute.name.endswith("284027.pkl.gz")
 
 
+def test_a_name_that_points_at_a_folder_above_the_dataset_lists_what_is_below(tmp_path):
+    """Owner 2026-11-23: name = '.../crypto_model' (two levels above the file) listed only what it tried."""
+    deep = tmp_path / "crypto_model" / "torch_artifacts" / "preprocessing_output_1"
+    deep.mkdir(parents=True)
+    _pkl(deep / "crypto_model_latest.pkl.gz", {"tag": "x"})
+    _artifact(deep / "other_latest.dataset")
+    with pytest.raises(FileNotFoundError) as e:
+        resolve_dataset_path(tmp_path, str(tmp_path / "crypto_model"))
+    assert "holds these datasets lower down" in str(e.value) and "crypto_model_latest.pkl.gz" in str(e.value)
+    assert "other_latest.dataset" in str(e.value)
+    # the whole path of the file works whatever ``directory`` says (the notebook passes ARTIFACT whole)
+    whole = resolve_dataset_path("/nonexistent", str(deep / "crypto_model_latest.pkl.gz"))
+    assert whole.name == "crypto_model_latest.pkl.gz"
+    with pytest.raises(FileNotFoundError) as plain:                 # nothing there: no hint, as before
+        resolve_dataset_path(tmp_path, "nothing")
+    assert "lower down" not in str(plain.value)
+
+
 def test_a_missing_name_lists_what_was_tried(tmp_path):
     with pytest.raises(FileNotFoundError, match=r"preprocessing_output_1_latest\.dataset.*full file name"):
         resolve_dataset_path(tmp_path, "preprocessing_output_1")
@@ -109,9 +127,9 @@ def test_unchecked_sources_are_refused_by_default_rule_d1(tmp_path):
         load_dataset(LoaderSettings(str(tmp_path), "old"))
     with pytest.raises(ArtifactError, match="rule D1"):
         load_dataset(LoaderSettings(str(tmp_path), "old_latest.pkl.gz"))
-    # explicit opt-out: loads, and says so (no manifest)
+    # explicit opt-out: loads, and says so (a DERIVED manifest for a dataset; none for something that is not one)
     plain = load_dataset(LoaderSettings(str(tmp_path), "plain", allow_unchecked=True))
-    assert plain.manifest is None and plain.format == "npy_dir"
+    assert plain.manifest.derived and plain.format == "npy_dir"
     old = load_dataset(LoaderSettings(str(tmp_path), "old", allow_unchecked=True))
     assert old.manifest is None and old.dataset == {"tag": "old"}
     # a checked source carries its manifest, with or without the flag

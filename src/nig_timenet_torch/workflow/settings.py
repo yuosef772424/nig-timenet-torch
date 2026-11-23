@@ -274,7 +274,10 @@ def model_for(architecture: str | None, overrides: dict | None = None, *, preset
 
 @dataclass(frozen=True)
 class RunSettings:
-    """Everything one flat single-split run needs, in sections; notebooks change it with ``updated({...})``."""
+    """Everything one flat single-split run needs, in sections. FROZEN: a field is never assigned (a
+    ``FrozenInstanceError`` says so); change it with ``from nig_timenet_torch.core.config import updated`` ->
+    ``s = updated(s, {"data.name": path, "data.allow_unchecked": True})``, a copy (dotted keys reach the nested
+    sections, an unknown key raises)."""
     run_dir: str                                           # checkpoint and outputs (a Drive folder: a cut run resumes)
     code_sha: str = ""                                     # recorded in the run identity; "" = git HEAD of the package
     data: LoaderSettings = field(default_factory=LoaderSettings)

@@ -4,7 +4,7 @@ PURPOSE: One coin's frames to windows, targets and the last-candle record, the u
     from.
 TAGS: windows, last candle, targets, horizon, stride, sample filter
 PITFALLS: a window ends at base bar t and its future bars are strictly after t; the time seal is applied later by
-    the artifact writer.
+    the artifact writer; ``last_n`` (live) drops the grid and the future requirement, so its rows have NaN labels.
 
 One coin's frames -> windows, targets and the last-candle record (the unit the pipeline builds datasets from).
 
@@ -16,9 +16,11 @@ For a window that ends at base bar ``t`` and a horizon of ``h`` base bars:
 * ``last`` holds ``LAST_COLUMNS`` (last prices, timestamp, future prices) so any other target definition can be
   rebuilt later (data.retarget), and ``bases`` the (centre, scale) of the window's closes.
 A window is dropped when its future is not fully inside the data, when bars are missing inside the window or the
-horizon, or when a sample filter rejects its last bar.
+horizon, or when a sample filter rejects its last bar. ``prepare_asset(last_n=N)`` is the live variant: the windows
+that end on the last N bars, with a missing future allowed (NaN future columns), nothing else changed.
 """
 
+import dataclasses
 from dataclasses import dataclass
 
 import numpy as np
@@ -88,24 +90,41 @@ def _future(arr: np.ndarray, end_idx: np.ndarray, h: int, reducer) -> np.ndarray
     return out
 
 
-def _valid_windows(price_df: pd.DataFrame, tf: str, end_idx: np.ndarray, h: int, win: int,
-                   entry_ok: np.ndarray) -> np.ndarray:
-    """Windows whose bars and horizon are gap-free and whose future is inside the data."""
+def _future_ok(price_df: pd.DataFrame, tf: str, end_idx: np.ndarray, h: int) -> np.ndarray:
+    """True where the ``h`` bars after the window end are inside the data and gap-free."""
     t = len(price_df)
     idx_ns = price_df.index.as_unit("ns").asi8
     bar_ns = int(pd.Timedelta(normalize_tf(tf)) // pd.Timedelta(1, "ns"))
     fe = end_idx + 1 + h
-    ok = fe <= t
     fe_c = np.clip(fe - 1, 0, t - 1)
+    return (fe <= t) & (idx_ns[fe_c] - idx_ns[end_idx] == h * bar_ns)
+
+
+def _valid_windows(price_df: pd.DataFrame, tf: str, end_idx: np.ndarray, h: int, win: int,
+                   entry_ok: np.ndarray, need_future: bool = True) -> np.ndarray:
+    """Windows whose bars (and, with ``need_future``, horizon) are gap-free and whose future is inside the data."""
+    t = len(price_df)
+    idx_ns = price_df.index.as_unit("ns").asi8
+    bar_ns = int(pd.Timedelta(normalize_tf(tf)) // pd.Timedelta(1, "ns"))
     start_c = np.clip(end_idx - win + 1, 0, t - 1)
-    ok &= idx_ns[fe_c] - idx_ns[end_idx] == h * bar_ns
+    ok = _future_ok(price_df, tf, end_idx, h) if need_future else np.ones(len(end_idx), dtype=bool)
     ok &= (end_idx >= win - 1) & (idx_ns[end_idx] - idx_ns[start_c] == (win - 1) * bar_ns)
     return ok & entry_ok[end_idx]
 
 
-def prepare_asset(dfs: dict[str, pd.DataFrame], features: list[str], settings: DataSettings) -> AssetWindows:
-    """Frames of one coin ({tf: processed frame with all feature columns}) -> normalised windows and targets."""
+def prepare_asset(dfs: dict[str, pd.DataFrame], features: list[str], settings: DataSettings, *,
+                  last_n: int | None = None) -> AssetWindows:
+    """Frames of one coin ({tf: processed frame with all feature columns}) -> normalised windows and targets.
+
+    ``last_n`` (live use, ``data.build.build_live``): instead of the grid-aligned windows with a known future, the
+    windows that end on each of the LAST ``last_n`` base bars (stride 1, no grid), whether or not the future exists;
+    a row whose future is missing or has a gap carries NaN in its three future columns of ``last`` (and so NaN
+    labels). The window and the features are the SAME code as in a dataset build."""
     w, tg, sc = settings.windows, settings.targets, settings.scaling
+    if last_n is not None:
+        if last_n < 1:
+            raise ValueError(f"prepare_asset: last_n must be >= 1, not {last_n}")
+        w = dataclasses.replace(w, stride=1)
     base_tf = w.tf_order[0]
     price_df = dfs[base_tf].sort_index()
     for col in TARGET_COLUMNS:
@@ -118,25 +137,32 @@ def prepare_asset(dfs: dict[str, pd.DataFrame], features: list[str], settings: D
         return _empty(settings, len(features))
     end_idx = price_df.index.get_indexer(pd.DatetimeIndex(end_times))
     entry_ok = sample_filter_mask(price_df, w.sample_filters)
-    ok = _valid_windows(price_df, base_tf, end_idx, tg.horizon, w.window_sizes[base_tf], entry_ok) & (end_idx >= 0)
+    ok = _valid_windows(price_df, base_tf, end_idx, tg.horizon, w.window_sizes[base_tf], entry_ok,
+                        need_future=last_n is None) & (end_idx >= 0)
+    if last_n is not None:                       # only the windows ending on the last ``last_n`` base bars
+        ok &= end_idx >= len(price_df) - last_n
     end_idx = end_idx[ok]
     windows = {tf: arr[ok] for tf, arr in windows.items()}
     end_times = [t for t, k in zip(end_times, ok, strict=True) if k]
     if len(end_idx) == 0:
         return _empty(settings, len(features))
-    return _assemble(settings, price_df, features, windows, end_idx, end_times, sc)
+    future_ok = None if last_n is None else _future_ok(price_df, base_tf, end_idx, tg.horizon)
+    return _assemble(settings, price_df, features, windows, end_idx, end_times, sc, future_ok)
 
 
-def _assemble(settings, price_df, features, windows, end_idx, end_times, sc) -> AssetWindows:
+def _assemble(settings, price_df, features, windows, end_idx, end_times, sc, future_ok=None) -> AssetWindows:
     w, tg = settings.windows, settings.targets
     base_tf = w.tf_order[0]
     high, low, close = (price_df[c].to_numpy(dtype="float64") for c in TARGET_COLUMNS)
     last = np.zeros((len(end_idx), len(LAST_COLUMNS)), dtype=LAST_DTYPE)
     last[:, 0], last[:, 1], last[:, 2] = high[end_idx], low[end_idx], close[end_idx]
     last[:, 3] = price_df.index.as_unit("ns").asi8[end_idx]
-    last[:, 4] = close[end_idx + tg.horizon]
+    inside = end_idx + tg.horizon < len(close)           # always true for a window with a known future
+    last[:, 4] = np.where(inside, close[np.minimum(end_idx + tg.horizon, len(close) - 1)], np.nan)
     last[:, 5] = _future(low, end_idx, tg.horizon, np.min)
     last[:, 6] = _future(high, end_idx, tg.horizon, np.max)
+    if future_ok is not None:                            # live rows: a future with a gap is no future
+        last[~future_ok, 4:7] = np.nan
     if "close" in features:
         close_win = windows[base_tf][:, :, features.index("close")]
     else:

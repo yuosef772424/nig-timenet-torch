@@ -27,7 +27,7 @@ from nig_timenet_torch.data.coins import coins_of
 from nig_timenet_torch.data.fetch import raw_path, read_registry
 from nig_timenet_torch.data.settings import SourceSettings
 
-__all__ = ["SOURCES", "make_loader", "resolve_coins", "read_candles", "synthetic_market",
+__all__ = ["SOURCES", "make_loader", "frames_loader", "resolve_coins", "read_candles", "synthetic_market",
            "normalize_tf", "resample_ohlcv"]
 
 SOURCES = Registry("source", Contract("source", required_meta=("needs_path",)))
@@ -162,6 +162,17 @@ def _synthetic_loader(s: SourceSettings) -> Callable[[str], pd.DataFrame]:
 
 SOURCES.register("files", _files_loader, version=1, needs_path=True)
 SOURCES.register("synthetic", _synthetic_loader, version=1, needs_path=False)
+
+
+def frames_loader(frames: dict[str, pd.DataFrame], s: SourceSettings) -> Callable[[str], pd.DataFrame]:
+    """A ``load(name)`` over candle frames already in memory (e.g. ``data.fetch.recent_klines``), cleaned exactly like a
+    file source (UTC index, the OHLCV columns, float64); a coin not in ``frames`` raises FileNotFoundError, the
+    pipeline's 'no candles' skip."""
+    def load(name: str) -> pd.DataFrame:
+        if name not in frames:
+            raise FileNotFoundError(f"[{name}] no candles in memory (have {len(frames)} coins)")
+        return _clean(frames[name], name, s)
+    return load
 
 
 def make_loader(s: SourceSettings) -> Callable[[str], pd.DataFrame]:

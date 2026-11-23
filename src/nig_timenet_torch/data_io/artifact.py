@@ -72,6 +72,9 @@ class ArtifactManifest:
     #: ``declares_timeframes``; the loader then trusts the arrays only)
     base_tf: str | None = None
     timeframes: tuple[str, ...] | None = None
+    #: True = not read from an export block but DERIVED from the data of a file without one (``data_io.unsigned``): the
+    #: coin list, the sealed-coin and time-seal checks come from the data itself, the source commit is unknown
+    derived: bool = False
 
     @property
     def declares_timeframes(self) -> bool:
