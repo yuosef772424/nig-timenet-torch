@@ -1,9 +1,11 @@
 """PURPOSE: One way to load a prepared dataset by base name, latest name or full name, memory-mapped or copied to local
     disk, with the rule D1 artifact checks applied by default.
 TAGS: dataset loading, latest name, mmap, local copy, artifact checks, rule d1
-PITFALLS: a pickle or a folder without a valid export block is refused unless allow_unchecked=True (then manifest is
-    None); with format auto the NEWER of the .dataset folder and the .pkl.gz wins by mtime; local_dir auto copies only
-    under /content/drive.
+PITFALLS: a pickle or a folder without a valid export block is refused unless allow_unchecked=True (then the
+    manifest is DERIVED from the data: sealed coins and the time seal are still checked, ``manifest.derived`` is
+    True); with format auto the NEWER of the .dataset folder and the .pkl.gz wins by mtime; local_dir auto copies
+    only under /content/drive; a name that is a FOLDER holding datasets lower down is not read: the error lists what
+    it found there.
 
 One way to load a prepared dataset: name resolution, format detection, memory-mapping, local copy, checks.
 
@@ -17,11 +19,14 @@ A path with a directory part (or an absolute one) ignores ``directory``. Pure nu
 
 import gzip
 import json
+import os
 import pickle
 from dataclasses import dataclass
 from pathlib import Path
 
 from nig_timenet_torch.data_io import artifact, npy_dir
+from nig_timenet_torch.data_io.npy_dir import sha256_file
+from nig_timenet_torch.data_io.unsigned import UNSIGNED_PREFIX, derive_manifest
 
 __all__ = ["LoaderSettings", "LoadedData", "resolve_dataset_path", "load_dataset", "FORMATS"]
 
@@ -35,6 +40,10 @@ LOCAL_COPY_ROOT = "/content/pipeline_data"
 
 @dataclass(frozen=True)
 class LoaderSettings:
+    """Where the dataset is and how it is read. Frozen: inside a ``RunSettings`` change it with
+    ``core.config.updated(settings, {"data.name": ..., "data.allow_unchecked": True})``, not by assignment. ``name`` is
+    the WHOLE path of the file or artifact folder (then ``directory`` is ignored) or a base name looked up in
+    ``directory``."""
     directory: str = "."                       # folder that holds the file; ignored when `name` has a directory part
     name: str = "preprocessing_output"         # base name (+ "_latest") or full file/folder name, see module doc
     format: str = "auto"                       # "auto" | "pkl.gz" | "npy_dir"
@@ -60,7 +69,8 @@ class LoadedData:
     dataset: dict
     path: Path
     format: str                                # "pkl.gz" | "npy_dir"
-    manifest: object | None = None             # artifact.ArtifactManifest; None only for an allow_unchecked load
+    manifest: object | None = None             # artifact.ArtifactManifest (``derived`` for an unsigned file); None only
+                                               # for an allow_unchecked load of something that is not a dataset
 
 
 def _is_dataset_dir(p: Path) -> bool:
@@ -69,6 +79,26 @@ def _is_dataset_dir(p: Path) -> bool:
 
 def _stamp(p: Path) -> float:
     return (p / "manifest.json" if p.is_dir() else p).stat().st_mtime
+
+
+def _datasets_below(folder: Path, depth: int = 3, limit: int = 5) -> list[str]:
+    """Up to ``limit`` datasets (a ``.pkl.gz`` / ``.pkl`` file, or a folder with a manifest.json) at most ``depth``
+    levels below ``folder``, as paths: the hint of a name that points at the wrong level."""
+    found: list[str] = []
+    if not folder.is_dir():
+        return found
+    for root, dirs, files in os.walk(folder):
+        level = len(Path(root).relative_to(folder).parts)
+        for f in sorted(files):
+            if f.endswith((".pkl.gz", ".pkl")):
+                found.append(str(Path(root) / f))
+        for d in sorted(dirs):
+            if _is_dataset_dir(Path(root) / d):
+                found.append(str(Path(root) / d))
+        dirs[:] = [d for d in sorted(dirs) if level + 1 < depth and not d.endswith(DIR_SUFFIX)]
+        if len(found) >= limit:
+            break
+    return found[:limit]
 
 
 def resolve_dataset_path(directory: str | Path, name: str, fmt: str = "auto") -> Path:
@@ -90,8 +120,11 @@ def resolve_dataset_path(directory: str | Path, name: str, fmt: str = "auto") ->
         tried.append(base / f"{stem}.pkl.gz")
     found = [p for p in tried if p.is_file() or _is_dataset_dir(p)]
     if not found:
+        below = _datasets_below(exact)
+        hint = (f"; {exact} is a folder and holds these datasets lower down (pass one of them as the whole name, "
+                f"data.name = the full path of the file or artifact folder): {below}" if below else "")
         raise FileNotFoundError(f"no dataset for name {name!r} (format {fmt}) in {base}: tried "
-                                f"{[p.name for p in tried]}; give the full file name to read a dated copy")
+                                f"{[p.name for p in tried]}; give the full file name to read a dated copy{hint}")
     return max(found, key=_stamp)
 
 
@@ -122,19 +155,24 @@ def load_dataset(settings: LoaderSettings | None = None) -> LoadedData:
     """Resolve, copy to local disk if asked, read, and check (rule D1).
 
     By default ONLY a contract artifact folder (``export`` manifest block, every D1 field consistent with the data)
-    loads; anything else (a ``.pkl.gz``, a plain ``npy_dir`` without the block) raises ``ArtifactError``. Skipping
-    the check is explicit: ``allow_unchecked=True`` (tests, fixtures, old files) lets a source WITHOUT a manifest
-    through (``manifest`` is None); a folder that has the export block is checked either way."""
+    loads; anything else (a ``.pkl.gz``, a plain ``npy_dir`` without the block) raises ``ArtifactError``.
+    ``allow_unchecked=True`` loads a source WITHOUT a manifest (an old-project ``.pkl.gz``, a fixture) after the
+    checks the data itself allows (no sealed coin, nothing at or after the time seal: ``data_io.unsigned``) and gives it
+    a DERIVED manifest (``manifest.derived``, source commit unknown, fingerprint ``unsigned:<sha256 of the file>``), so
+    prepare -> build -> train work on it; a source that violates a check is refused even then. A folder that has the
+    export block is checked fully either way."""
     settings = settings or LoaderSettings()
     path = resolve_dataset_path(settings.directory, settings.name, settings.format)
     if not path.is_dir():
         if not settings.allow_unchecked:
             raise artifact.ArtifactError(
                 f"{path}: a pickle file carries no D1 manifest (rule D1: source commit, coin list, sealed coins "
-                f"excluded, time seal); export it as an artifact folder, or pass allow_unchecked=True")
+                f"excluded, time seal); export it as an artifact folder, or pass allow_unchecked=True (loads it after "
+                f"checking the sealed coins and the time seal on the data itself, with a derived manifest)")
         if settings.verify_hashes:
             raise ValueError(f"{path}: verify_hashes needs an artifact manifest (export block); a pickle has none")
-        return LoadedData(_read_pickle(path), path, "pkl.gz")
+        data = _read_pickle(path)
+        return LoadedData(data, path, "pkl.gz", derive_manifest(data, UNSIGNED_PREFIX + sha256_file(path), path))
     target = _local_target(path, settings.local_dir)
     if target is not None:
         path = npy_dir.localize(path, target)
@@ -149,4 +187,5 @@ def load_dataset(settings: LoaderSettings | None = None) -> LoadedData:
         raise ValueError(f"{path}: verify_hashes needs an artifact manifest (export block); this folder has none")
     data = npy_dir.load(path, mmap=settings.mmap)
     _check_expected_tf(data, settings, path)
-    return LoadedData(data, path, "npy_dir")
+    return LoadedData(data, path, "npy_dir",
+                      derive_manifest(data, UNSIGNED_PREFIX + sha256_file(path / "manifest.json"), path))
