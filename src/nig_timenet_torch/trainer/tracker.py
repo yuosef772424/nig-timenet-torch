@@ -11,7 +11,8 @@ trainer/best_tracker.py, same at aeafc564 and cea9cd58). What "better" means com
 metric (``higher_is_better`` of its SELECTION_METRICS entry, rule C3), never from loss weights.
 
 The tracker holds numbers only (smoothed metric, best, wait). The weights of the best epoch are kept by the
-Trainer (trainer/checkpoint.py). Not ported: ``weights_snapshot="ema_weights"`` (needs optimizer EMA).
+Trainer (trainer/checkpoint.py). The TF ``weights_snapshot="ema_weights"`` is ``TrainSettings.ema_decay``: with it the
+Trainer selects on, and keeps as the best weights, the EMA copy (B-018).
 """
 
 import math
@@ -42,12 +43,12 @@ SMOOTHERS = {"none": _smooth_none, "window": _smooth_window, "ema": _smooth_ema}
 
 @dataclass(frozen=True)
 class EarlyStopSettings:
-    patience: int = 15
-    min_delta: float = 1e-4
+    patience: int = 15                 # epochs without an improvement before the run stops early
+    min_delta: float = 1e-4            # the smallest change of the selection metric that counts as an improvement
     smoothing: str = "window"          # "none" | "window" (mean of the last `window` epochs) | "ema"
-    window: int = 3
+    window: int = 3                    # epochs averaged when smoothing = "window"
     ema_beta: float = 0.7              # s_t = beta * s_(t-1) + (1 - beta) * x_t, s_1 = x_1
-    restore_best_weights: bool = True
+    restore_best_weights: bool = True  # True = the model returns to the best epoch's weights after training
 
     def __post_init__(self):
         if self.smoothing not in SMOOTHERS:

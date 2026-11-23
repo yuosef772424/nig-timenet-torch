@@ -24,8 +24,11 @@ from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, Mode
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES
 from nig_timenet_torch.trainer.day_weights import DayWeightSettings
 from nig_timenet_torch.trainer.groups import BATCH_ORDERS
+from nig_timenet_torch.trainer.loss_balance import LOSS_BALANCERS
 from nig_timenet_torch.trainer.schedules import LR_KINDS
+from nig_timenet_torch.trainer.selection_metric import check_selectable
 from nig_timenet_torch.trainer.staged import StageSettings
+from nig_timenet_torch.trainer.switches import INITS, WEIGHT_DECAY_GROUPS
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import BATCHINGS
 
@@ -39,12 +42,12 @@ ROLLING_MODES = ("expanding", "sliding")
 class RollingSettings:
     mode: str = "expanding"            # "expanding" | "sliding"
     train_span: pd.Timedelta           # expanding: span of the FIRST fold's train window; sliding: every fold's
-    test_span: pd.Timedelta
+    test_span: pd.Timedelta            # length of every fold's test window
     step: pd.Timedelta                 # how far train_end advances per fold
-    embargo: pd.Timedelta
-    max_folds: int | None = None
+    embargo: pd.Timedelta              # gap between a fold's train end and its test start (plus the label purge)
+    max_folds: int | None = None       # stop after this many folds (None = every fold that fits)
     retrain_every_k: int = 1           # retrain on fold i iff i % k == 0, else reuse the last trained model
-    seeds: tuple[int, ...] = (0,)
+    seeds: tuple[int, ...] = (0,)      # every fold is trained once per seed
     # only these fold indices (None = every fold): several processes share one study, each on its folds (owner
     # 2026-11-20); needs retrain_every_k == 1 (a reused model comes from an earlier fold)
     fold_ids: tuple[int, ...] | None = None
@@ -78,10 +81,10 @@ class RollingSettings:
 class SplitSettings:
     """Train / validation / test by time. ``train_end`` / ``val_end`` (both, ISO instants) win; else the artifact's own
     ``split_dates``; else the ``train_share`` / ``train_share + val_share`` quantiles of the window times."""
-    train_end: str = ""
-    val_end: str = ""
-    train_share: float = 0.80            # TF data/defaults.py train_pct
-    val_share: float = 0.10              # TF data/defaults.py val_pct
+    train_end: str = ""                  # last instant of train (ISO date); given together with val_end or not at all
+    val_end: str = ""                    # last instant of validation; the test set follows it
+    train_share: float = 0.80            # share of the window times that is train, when no dates are given
+    val_share: float = 0.10              # share that is validation (TF val_pct); the rest is test
     embargo_hours: float = 0.0           # 0: the split already purges by label end
     max_rows: int | None = None          # smoke mode (rule E5): at most this many rows per split, evenly strided
     exclude_coins: tuple[str, ...] = ()  # coins whose rows leave train, val AND test (after the time split; names as in
@@ -132,13 +135,13 @@ class SplitSettings:
 
 @dataclass(frozen=True)
 class TrainSettings:
-    epochs: int = 5
-    batch_size: int = 256
-    seed: int = 0
-    lr: float = 1e-3
-    weight_decay: float = 1e-4
+    epochs: int = 5                                        # passes over the training rows
+    batch_size: int = 256                                  # rows per batch (not used by batch_by timestamp / day)
+    seed: int = 0                                          # initialisation, shuffling, dropout (arms: >= 2 seeds, C4)
+    lr: float = 1e-3                                       # initial learning rate
+    weight_decay: float = 1e-4                             # weight decay (tiny at this lr)
     label_smoothing: float = 0.1                           # the classification heads
-    selection_metric: str = "val_raw_loss"
+    selection_metric: str = "val_raw_loss"                 # the validation metric that picks the best epoch
     early_stop: EarlyStopSettings = field(default_factory=EarlyStopSettings)
     device: str = "auto"                                   # "auto" = cuda when available, else cpu
     trace_representative: bool = False                     # trainer trace on the representative batch set (D-019)
@@ -183,7 +186,7 @@ class TrainSettings:
     # side_payoff / upper_quantile; read only when the model has them): their fixed loss weight (they are never
     # Kendall-weighted) and the quantile the upper_quantile head learns. The side payoffs use the battery's cost.
     aux_loss_weight: float = 1.0
-    aux_quantile: float = 0.9
+    aux_quantile: float = 0.9                              # the quantile the upper_quantile head learns, in (0, 1)
     # LS1: the side-payoff rows weighted by (close NIG predictive variance)^-this (0 = plain squared error; 1 = WLS)
     aux_variance_weight: float = 0.0
     # LR1 (owner 2026-11-19, "a gap in the settings or the training"): the learning-rate schedule over ``epochs``
@@ -196,6 +199,13 @@ class TrainSettings:
         if self.batch_by not in BATCHINGS:
             raise ValueError(f"TrainSettings.batch_by must be one of {sorted(BATCHINGS)}, not {self.batch_by!r}")
         BATCH_ORDERS.entry(self.batch_order)               # unknown names raise now
+        for registry, name in ((INITS, self.init), (WEIGHT_DECAY_GROUPS, self.weight_decay_groups),
+                               (LOSS_BALANCERS, self.loss_balance)):
+            registry.entry(name)                           # likewise (before: only when the trainer was built)
+        check_selectable(self.selection_metric)
+        if self.cross_section_loss not in CROSS_SECTION_LOSSES:   # before: an unknown name read as "off" here
+            raise ValueError(f"TrainSettings.cross_section_loss must be one of {sorted(CROSS_SECTION_LOSSES)}, "
+                             f"not {self.cross_section_loss!r}")
         for name in ("epochs", "batch_size", "steps_per_execution", "time_block_bars"):
             v = getattr(self, name)
             if isinstance(v, bool) or not isinstance(v, int) or v < 1:
@@ -217,7 +227,7 @@ class TrainSettings:
 @dataclass(frozen=True)
 class BatterySettings:
     """The evaluation battery (eval/battery.py) on the val and test stage of the run (owner goal: profit)."""
-    enabled: bool = True
+    enabled: bool = True                 # False = no battery in the run (the test report stays)
     cost_per_side: float = DEFAULT_COST_PER_SIDE   # charged on EVERY side of a trade: a round trip pays twice this
     n_variants: int = 1                  # variants tried so far (widens the confidence intervals)
     # D-032: also write the day metrics of a multi-coin run (winning days of the sign portfolio and of the top /
@@ -227,9 +237,9 @@ class BatterySettings:
     # N8 (audit 2026-11-21): the scorecard verdict's trim (eval.battery_scorecard.TRIM_KEYS: "best" drops the best
     # 5 % of days, "symmetric" the best AND worst), whether every section drops the flat rows (dir_true == 0, chosen
     # by the outcome: E5), and the account's sub-books (0 = read the label horizon from the table, eval.account)
-    verdict_trim: str = "best"
-    drop_flat: bool = True
-    account_books: int = 0
+    verdict_trim: str = "best"           # which days the scorecard verdict trims (eval.battery_scorecard.TRIM_KEYS)
+    drop_flat: bool = True               # every section drops the rows whose true move is zero (dir_true == 0)
+    account_books: int = 0               # sub-books of the capital account (0 = read the label horizon from the table)
 
     def __post_init__(self):
         if self.cost_per_side < 0 or self.n_variants < 1:
