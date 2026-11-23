@@ -72,7 +72,8 @@ ANTI_MEMORIZATION_CONFIG: dict[str, Any] = {
 class ModelSettings:
     """Mirrors the TF side's ModelSettings.architecture (S23): which ARCHITECTURES entry to build, plus overrides
     of that entry's default_config."""
-    architecture: str = DEFAULT_ARCHITECTURE
+    architecture: str = DEFAULT_ARCHITECTURE   # a name of the ARCHITECTURES registry
+    # builder options merged over the architecture's default config
     overrides: dict[str, Any] = field(default_factory=dict)
 
 

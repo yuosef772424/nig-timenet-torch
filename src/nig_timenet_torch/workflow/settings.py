@@ -16,19 +16,25 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE
+from nig_timenet_torch.data.targets import ENTRY_CLOSE_REGS, parse_mode
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.eval.battery_scorecard import TRIM_KEYS
+from nig_timenet_torch.eval.verification_text import Variant
+from nig_timenet_torch.eval.verification_trading import STOP_DISTANCE
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES
 from nig_timenet_torch.trainer.day_weights import DayWeightSettings
 from nig_timenet_torch.trainer.groups import BATCH_ORDERS
+from nig_timenet_torch.trainer.loss_balance import LOSS_BALANCERS
 from nig_timenet_torch.trainer.schedules import LR_KINDS
+from nig_timenet_torch.trainer.selection_metric import check_selectable
 from nig_timenet_torch.trainer.staged import StageSettings
+from nig_timenet_torch.trainer.switches import INITS, WEIGHT_DECAY_GROUPS
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import BATCHINGS
 
 __all__ = ["RollingSettings", "RunSettings", "ROLLING_MODES", "SplitSettings", "TrainSettings", "EvalSettings",
-           "BatterySettings", "default_model_settings", "DEFAULT_MODEL_OVERRIDES", "model_for"]
+           "BatterySettings", "VerificationSettings", "default_model_settings", "DEFAULT_MODEL_OVERRIDES", "model_for"]
 
 ROLLING_MODES = ("expanding", "sliding")
 
@@ -37,12 +43,12 @@ ROLLING_MODES = ("expanding", "sliding")
 class RollingSettings:
     mode: str = "expanding"            # "expanding" | "sliding"
     train_span: pd.Timedelta           # expanding: span of the FIRST fold's train window; sliding: every fold's
-    test_span: pd.Timedelta
+    test_span: pd.Timedelta            # length of every fold's test window
     step: pd.Timedelta                 # how far train_end advances per fold
-    embargo: pd.Timedelta
-    max_folds: int | None = None
+    embargo: pd.Timedelta              # gap between a fold's train end and its test start (plus the label purge)
+    max_folds: int | None = None       # stop after this many folds (None = every fold that fits)
     retrain_every_k: int = 1           # retrain on fold i iff i % k == 0, else reuse the last trained model
-    seeds: tuple[int, ...] = (0,)
+    seeds: tuple[int, ...] = (0,)      # every fold is trained once per seed
     # only these fold indices (None = every fold): several processes share one study, each on its folds (owner
     # 2026-11-20); needs retrain_every_k == 1 (a reused model comes from an earlier fold)
     fold_ids: tuple[int, ...] | None = None
@@ -76,10 +82,10 @@ class RollingSettings:
 class SplitSettings:
     """Train / validation / test by time. ``train_end`` / ``val_end`` (both, ISO instants) win; else the artifact's own
     ``split_dates``; else the ``train_share`` / ``train_share + val_share`` quantiles of the window times."""
-    train_end: str = ""
-    val_end: str = ""
-    train_share: float = 0.80            # TF data/defaults.py train_pct
-    val_share: float = 0.10              # TF data/defaults.py val_pct
+    train_end: str = ""                  # last instant of train (ISO date); given together with val_end or not at all
+    val_end: str = ""                    # last instant of validation; the test set follows it
+    train_share: float = 0.80            # share of the window times that is train, when no dates are given
+    val_share: float = 0.10              # share that is validation (TF val_pct); the rest is test
     embargo_hours: float = 0.0           # 0: the split already purges by label end
     max_rows: int | None = None          # smoke mode (rule E5): at most this many rows per split, evenly strided
     exclude_coins: tuple[str, ...] = ()  # coins whose rows leave train, val AND test (after the time split; names as in
@@ -94,8 +100,22 @@ class SplitSettings:
     # snapshot panel model (model/snapshot.py, owner 2026-11-18): every row also carries its coin id (the dataset's
     # asset index) as one more input channel, after the features and before the timestamp channel; needs cross_section
     coin_channel: bool = False
+    # owner 2026-11-23: the target mode of the rows after the split (data.targets.retarget_splits; every statistic is
+    # fitted on the TRAIN rows): None = the artifact's own targets; else a TARGET_RAW mode ("return", "return_close",
+    # "scaled", "window_scale", "volnorm", "magnitude", "entry_range") with an optional "+relative" suffix (not on
+    # entry_range; "relative" = "return+relative"). ``entry_close_reg`` is the close head of entry_range ("abs_return" |
+    # "range_pos"); ``target_clip`` overrides the mode's clip of the regression label (None = the mode's own).
+    target_mode: str | None = None
+    entry_close_reg: str = "abs_return"
+    target_clip: float | None = None
 
     def __post_init__(self):
+        if self.target_mode is not None:
+            parse_mode(self.target_mode)                       # unknown names raise
+        if self.entry_close_reg not in ENTRY_CLOSE_REGS:
+            raise ValueError(f"split.entry_close_reg must be one of {ENTRY_CLOSE_REGS}, got {self.entry_close_reg!r}")
+        if self.target_clip is not None and not self.target_clip > 0:
+            raise ValueError(f"split.target_clip must be None or > 0, got {self.target_clip!r}")
         coins = (self.exclude_coins,) if isinstance(self.exclude_coins, str) else tuple(self.exclude_coins)
         if not all(isinstance(c, str) and c.strip() for c in coins):
             raise ValueError(f"exclude_coins must be coin names (non-empty strings), got {self.exclude_coins!r}")
@@ -116,13 +136,13 @@ class SplitSettings:
 
 @dataclass(frozen=True)
 class TrainSettings:
-    epochs: int = 5
-    batch_size: int = 256
-    seed: int = 0
-    lr: float = 1e-3
-    weight_decay: float = 1e-4
+    epochs: int = 5                                        # passes over the training rows
+    batch_size: int = 256                                  # rows per batch (not used by batch_by timestamp / day)
+    seed: int = 0                                          # initialisation, shuffling, dropout (arms: >= 2 seeds, C4)
+    lr: float = 1e-3                                       # initial learning rate
+    weight_decay: float = 1e-4                             # weight decay (tiny at this lr)
     label_smoothing: float = 0.1                           # the classification heads
-    selection_metric: str = "val_raw_loss"
+    selection_metric: str = "val_raw_loss"                 # the validation metric that picks the best epoch
     early_stop: EarlyStopSettings = field(default_factory=EarlyStopSettings)
     device: str = "auto"                                   # "auto" = cuda when available, else cpu
     trace_representative: bool = False                     # trainer trace on the representative batch set (D-019)
@@ -167,7 +187,7 @@ class TrainSettings:
     # side_payoff / upper_quantile; read only when the model has them): their fixed loss weight (they are never
     # Kendall-weighted) and the quantile the upper_quantile head learns. The side payoffs use the battery's cost.
     aux_loss_weight: float = 1.0
-    aux_quantile: float = 0.9
+    aux_quantile: float = 0.9                              # the quantile the upper_quantile head learns, in (0, 1)
     # LS1: the side-payoff rows weighted by (close NIG predictive variance)^-this (0 = plain squared error; 1 = WLS)
     aux_variance_weight: float = 0.0
     # LR1 (owner 2026-11-19, "a gap in the settings or the training"): the learning-rate schedule over ``epochs``
@@ -180,6 +200,13 @@ class TrainSettings:
         if self.batch_by not in BATCHINGS:
             raise ValueError(f"TrainSettings.batch_by must be one of {sorted(BATCHINGS)}, not {self.batch_by!r}")
         BATCH_ORDERS.entry(self.batch_order)               # unknown names raise now
+        for registry, name in ((INITS, self.init), (WEIGHT_DECAY_GROUPS, self.weight_decay_groups),
+                               (LOSS_BALANCERS, self.loss_balance)):
+            registry.entry(name)                           # likewise (before: only when the trainer was built)
+        check_selectable(self.selection_metric)
+        if self.cross_section_loss not in CROSS_SECTION_LOSSES:   # before: an unknown name read as "off" here
+            raise ValueError(f"TrainSettings.cross_section_loss must be one of {sorted(CROSS_SECTION_LOSSES)}, "
+                             f"not {self.cross_section_loss!r}")
         for name in ("epochs", "batch_size", "steps_per_execution", "time_block_bars"):
             v = getattr(self, name)
             if isinstance(v, bool) or not isinstance(v, int) or v < 1:
@@ -201,7 +228,7 @@ class TrainSettings:
 @dataclass(frozen=True)
 class BatterySettings:
     """The evaluation battery (eval/battery.py) on the val and test stage of the run (owner goal: profit)."""
-    enabled: bool = True
+    enabled: bool = True                 # False = no battery in the run (the test report stays)
     cost_per_side: float = DEFAULT_COST_PER_SIDE   # charged on EVERY side of a trade: a round trip pays twice this
     n_variants: int = 1                  # variants tried so far (widens the confidence intervals)
     # D-032: also write the day metrics of a multi-coin run (winning days of the sign portfolio and of the top /
@@ -211,9 +238,9 @@ class BatterySettings:
     # N8 (audit 2026-11-21): the scorecard verdict's trim (eval.battery_scorecard.TRIM_KEYS: "best" drops the best
     # 5 % of days, "symmetric" the best AND worst), whether every section drops the flat rows (dir_true == 0, chosen
     # by the outcome: E5), and the account's sub-books (0 = read the label horizon from the table, eval.account)
-    verdict_trim: str = "best"
-    drop_flat: bool = True
-    account_books: int = 0
+    verdict_trim: str = "best"           # which days the scorecard verdict trims (eval.battery_scorecard.TRIM_KEYS)
+    drop_flat: bool = True               # every section drops the rows whose true move is zero (dir_true == 0)
+    account_books: int = 0               # sub-books of the capital account (0 = read the label horizon from the table)
 
     def __post_init__(self):
         if self.cost_per_side < 0 or self.n_variants < 1:
@@ -225,10 +252,40 @@ class BatterySettings:
 
 
 @dataclass(frozen=True)
+class VerificationSettings:
+    """The integrated verification (eval/verification.py, the old TF section 7-d) of a finished run: one verdict table
+    over data integrity, baselines, confidence / R:R trades and the candle shape. The cost is the battery's."""
+    enabled: bool = True                 # False = ``verification_step`` writes and returns nothing
+    target_acc: float = 0.65             # the confident slice must reach this direction accuracy on TEST
+    rr: float = 2.0                      # reward : risk of the trades (target at rr x the stop distance)
+    stop_mode: str = "nig"               # stop distance: "nig" (NIG std) | "model_levels" (predicted high / low)
+    n_boot: int = 500                    # day-block bootstrap draws of every interval
+    run_candle: bool = True              # also the candle-shape baseline (fits sklearn models on up to 300 000 rows)
+    latest_n: int = 1                    # last test samples per coin in the per-target latest table (0 = no table)
+    latest_coins: int = 3                # how many coins (the ones with most test rows) the latest table shows
+    # the choices the old TF project made differently (eval.verification_text.Variant); ``match_old`` sets ALL of them
+    # to the old project's and its 0.08 % round-trip cost, so the output equals the old one (tests/parity)
+    match_old: bool = False              # True = the old project's text, cost, stop width, bootstrap unit and draws
+    lang: str = "en"                     # text of the table and the printed reports: "en" | "ar" (the old text)
+    stop_width: str = "predictive_std"   # "nig" stop distance: "predictive_std" (NIG sd) | "student_t" (the old scale)
+    bootstrap_unit: str = "day"          # what a bootstrap resamples: the UTC "day" | the raw bar "timestamp" (old)
+
+    def __post_init__(self):
+        if not 0.0 < self.target_acc < 1.0 or self.rr <= 0 or self.n_boot < 1:
+            raise ValueError("verification: target_acc in (0, 1), rr > 0 and n_boot >= 1")
+        if self.latest_n < 0 or self.latest_coins < 1:
+            raise ValueError("verification: latest_n >= 0 and latest_coins >= 1")
+        if self.stop_mode not in STOP_DISTANCE:
+            raise ValueError(f"verification.stop_mode must be one of {sorted(STOP_DISTANCE)}, got {self.stop_mode!r}")
+        Variant(lang=self.lang, stop_width=self.stop_width, block=self.bootstrap_unit)   # validated where defined
+
+
+@dataclass(frozen=True)
 class EvalSettings:
     chunk: int = 20_000                  # rows per predict chunk (a big split must fit the device)
     health_max_rows: int = 100_000       # evenly strided subsample of the validation rows for the health report
     battery: BatterySettings = field(default_factory=BatterySettings)
+    verification: VerificationSettings = field(default_factory=VerificationSettings)
 
     def __post_init__(self):
         if self.chunk < 1 or self.health_max_rows < 1:

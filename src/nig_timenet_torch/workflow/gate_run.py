@@ -151,7 +151,7 @@ def gate_stage(r: run.Run, env: str, seed: int, *, with_oracle: bool, with_losse
                for t in r.targets} if with_oracle else None)
     losses = _losses(r.trainer, r.x["val"], r.y["val"], r.fit_settings.batch_size) if with_losses else None
     return gates.GateStage(env=env, seed=seed, table=table, labels={k: v.numpy() for k, v in r.y["test"].items()},
-                           report=rep, anchors=flat_run.anchors_by_name(lc, idx, r.targets, codec),
+                           report=rep, anchors=flat_run.anchors_by_name(lc, idx, r.targets, codec, dataset=ds),
                            last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]], codec_state=codec,
                            ranges=ranges, last_move=x[:, -1, fo.index("close")] if "close" in fo else None,
                            oracle=oracle, losses=losses)

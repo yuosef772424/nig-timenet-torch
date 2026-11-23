@@ -81,7 +81,7 @@ def oracle_frame(run, stage: str) -> pd.DataFrame:
     state = run_common.codec_state(ds)
     codec = TARGET_CODECS[state["mode"]]()
     lc = np.asarray(ds["last_candles"])
-    anchor = flat_run.anchors_by_name(lc, idx, ("close",), state)["close"]
+    anchor = flat_run.anchors_by_name(lc, idx, ("close",), state, dataset=ds)["close"]
     last_close = lc[idx, LAST_COLUMN_INDEX["last_close"]]
     mean, sd = np.asarray(ds[mean_key], np.float64)[idx], np.asarray(ds[sd_key], np.float64)[idx]
     dec = lambda v: codec.decode(v, state, anchor)  # noqa: E731

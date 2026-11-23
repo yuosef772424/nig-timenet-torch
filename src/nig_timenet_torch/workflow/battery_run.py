@@ -1,11 +1,13 @@
 """PURPOSE: Adapts the VAL and TEST stage (table, labels, anchors, last_close, codec state) to battery tables and runs
     the full battery with the T-profit sections; battery_step does it for a finished Run and writes the reports.
 TAGS: battery run, stage inputs, t-profit, battery report, adapter entry point, battery step, profit json
-PITFALLS: VAL thresholds are applied to TEST (no leakage), so val and test must be different stages of ONE run;
-    n_variants is the number of variants tried so far and widens the CI, state it in the result file; stage_atr
-    reads only bars closed by the prediction time (window high / low, else the last NATR_14), battery tables saved
-    before 2026-11-22 have no atr column (the take-profit-at-ATR section is skipped on them); account_from_folders
-    puts the TEST of SEVERAL fold folders in ONE account (each fold's own VAL threshold): the folds must not overlap.
+PITFALLS: battery_step skips (and says so in run.extra['battery_skipped']) a run whose target mode does not decode
+    to a price forecast (magnitude, entry_range, '+relative'); VAL thresholds are applied to TEST (no leakage), so
+    val and test must be different stages of ONE run; n_variants is the number of variants tried so far and widens
+    the CI, state it in the result file; stage_atr reads only bars closed by the prediction time (window high / low,
+    else the last NATR_14), battery tables saved before 2026-11-22 have no atr column (the take-profit-at-ATR section
+    is skipped on them); account_from_folders puts the TEST of SEVERAL fold folders in ONE account (each fold's own
+    VAL threshold): the folds must not overlap.
 
 With ``evaluation.battery.day_metrics`` (D-032, off by default) ``battery_step`` also writes the day metrics of a
 multi-coin run (``workflow.panel_report.panel_step``: ``panel_report.json`` / ``.md`` and the two frames).
@@ -30,6 +32,7 @@ import pandas as pd
 
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX
 from nig_timenet_torch.data.scaling import PERCENT_SCALE
+from nig_timenet_torch.data_io.target_codec import TARGET_CODECS
 from nig_timenet_torch.eval.account import account_section
 from nig_timenet_torch.eval.battery import full_battery, show
 from nig_timenet_torch.eval.battery_adapter import to_battery_table
@@ -123,7 +126,8 @@ def stage_inputs(run, stage: str) -> StageInputs:
     lc = np.asarray(run.dataset["last_candles"])
     idx = run.idx[stage]
     return StageInputs(tables[stage], {k: v.numpy() for k, v in run.y[stage].items()},
-                       flat_run.anchors_by_name(lc, idx, run.targets, run_common.codec_state(run.dataset)),
+                       flat_run.anchors_by_name(lc, idx, run.targets, run_common.codec_state(run.dataset),
+                                                dataset=run.dataset),
                        lc[idx, LAST_COLUMN_INDEX["last_close"]], run_common.codec_state(run.dataset),
                        atr=stage_atr(run.dataset, idx, run.settings.data.input_timeframes))
 
@@ -141,6 +145,12 @@ def battery_step(run) -> dict:
     """Run the battery on the val and test stage of ``run`` with the run's ``evaluation.battery`` settings; writes
     ``battery_report.txt`` and ``battery_profit.json`` to the run's output folder (when it has one)."""
     b = run.settings.evaluation.battery
+    state = run_common.codec_state(run.dataset)
+    if not TARGET_CODECS[state["mode"]]().forecasts_price(state):   # magnitude / entry_range / '+relative'
+        run.extra["battery_skipped"] = (f"target mode {state['target_mode']!r}: its decoded price is not a forecast "
+                                        "(no sign or no market level); the trading rules need a signed target")
+        print(f"battery and panel report skipped: {run.extra['battery_skipped']}", flush=True)
+        return {}
     if b.day_metrics:
         from nig_timenet_torch.workflow.panel_report import panel_step  # it imports this module
 

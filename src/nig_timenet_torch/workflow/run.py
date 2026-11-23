@@ -84,6 +84,7 @@ def prepare_split(settings: RunSettings, art: LoadedData, parts: tuple, bounds: 
 
 
 def _assemble(settings: RunSettings, art: LoadedData, targets: tuple, parts: tuple, bounds: tuple, out) -> Run:
+    art = run_common.retarget_art(art, settings.split, targets, parts)   # a no-op without split.target_mode
     ds = art.dataset
     run = Run(settings, art, targets, dict(zip(("train", "val", "test"), parts, strict=True)), bounds,
               run_common.pick_device(settings), None if out is None else Path(out))

@@ -2,8 +2,9 @@
     steps: inputs, anchors, model settings, trainer, fit settings, one chunked predict per stage.
 TAGS: flat run, run steps, trainer config, stage inputs, anchors by name, head kinds, predict stage
 PITFALLS: heads come from head_spec / targets_config (never a literal output name); price anchors and last_close are
-    taken by column NAME (LAST_COLUMN_INDEX), never by position; the trainer config must stay byte-equal to the
-    baseline's (it is hashed into the RunIdentity, tests/pins/trainer_config.json).
+    taken by column NAME (LAST_COLUMN_INDEX), never by position (the target-mode codec needs ``dataset=``); the
+    trainer config must stay byte-equal to the baseline's (it is hashed into the RunIdentity,
+    tests/pins/trainer_config.json).
 SOURCE: ported from feat/ar-stream aa0f3dd (workflow/flat_run.py); changes: trainer config from
     trainer.targets.targets_config (not flat_trainer_config), price targets read from the artifact, predict per stage.
 """
@@ -17,7 +18,7 @@ import torch
 from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io.asset_index import asset_ids, row_coins
-from nig_timenet_torch.data_io.target_codec import anchor_column
+from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_column
 from nig_timenet_torch.model.architectures import ModelSettings, build_model
 from nig_timenet_torch.model.heads import AUX_TASK_TYPES, head_spec
 from nig_timenet_torch.trainer.batch_set import representative_batches
@@ -28,7 +29,7 @@ from nig_timenet_torch.trainer.switches import param_groups
 from nig_timenet_torch.trainer.targets import targets_config
 from nig_timenet_torch.trainer.trainer import FitSettings, Trainer
 from nig_timenet_torch.workflow.prediction_table import predict_table, table_meta
-from nig_timenet_torch.workflow.run_common import input_keys, price_targets
+from nig_timenet_torch.workflow.run_common import decode_anchors, input_keys, price_targets
 from nig_timenet_torch.workflow.settings import RunSettings, TrainSettings
 
 __all__ = ["HEAD_KINDS", "LAMBDA_SCHEDULES", "anchors_by_name", "flat_inputs", "model_settings", "trainer_config",
@@ -40,11 +41,18 @@ LAMBDA_SCHEDULES = {"lambda_reg": {"start": 0.0, "end": 0.05, "warmup_epochs": 5
                     "lambda_calib": {"start": 0.0, "end": 0.1, "warmup_epochs": 5, "schedule": "cosine"}}
 
 
-def anchors_by_name(last_candles: np.ndarray, idx: np.ndarray, targets,
-                    codec_state: dict | None = None) -> dict:
-    """{target: the price the head's label is relative to}, picked by column NAME, never by position: the codec's
+def anchors_by_name(last_candles: np.ndarray, idx: np.ndarray, targets, codec_state: dict | None = None, *,
+                    dataset: dict | None = None) -> dict:
+    """{target: what the codec decodes against}, picked by column NAME, never by position: the codec's
     ``anchor_column`` (own last price ``last_<target>`` for "return", ``last_close`` for "logret_close"); without
-    ``codec_state`` the own last price."""
+    ``codec_state`` the own last price. The target-mode codec (any other ``reg_target_mode``) needs the ``dataset``
+    (window bases, centres) and gives (n, 2) rows ``[anchor, slope]`` (``run_common.decode_anchors``, evaluation:
+    no truth enters)."""
+    if codec_state is not None and dataset is not None:
+        return decode_anchors(dataset, idx, targets, codec_state)
+    if codec_state is not None and getattr(TARGET_CODECS[codec_state["mode"]], "row_anchors", False):
+        raise ValueError(f"the {codec_state['target_mode']!r} codec decodes with the dataset's window bases and "
+                         "centres: pass dataset=")
     lc = np.asarray(last_candles)
     col = (lambda t: f"last_{t}") if codec_state is None else (lambda t: anchor_column(codec_state, t))
     return {t: lc[idx, LAST_COLUMN_INDEX[col(t)]] for t in targets}

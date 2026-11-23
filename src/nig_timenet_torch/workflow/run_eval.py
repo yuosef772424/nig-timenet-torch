@@ -44,7 +44,7 @@ def health_step(run: Run) -> Run:
     probe_target = "close" if "close" in run.targets else run.targets[0]
     labels = {k: v[torch.as_tensor(pick)].numpy() for k, v in run.y["val"].items()}
     hr = HealthRun(run_dir=Path(run.settings.run_dir), model=run.trainer.model, x=xs, predictions=table,
-                   labels=labels, anchors=flat_run.anchors_by_name(lc, idx, run.targets, codec),
+                   labels=labels, anchors=flat_run.anchors_by_name(lc, idx, run.targets, codec, dataset=ds),
                    last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]], codec_state=codec,
                    probe_labels=tuple(head_spec(k, probe_target).label_key
                                       for k in ("nig_regression", "binary_classification")))
@@ -60,7 +60,7 @@ def stage_report(run: Run, stage: str, table: pd.DataFrame) -> dict:
     lc, codec = np.asarray(run.dataset["last_candles"]), run_common.codec_state(run.dataset)
     idx = run.idx[stage]
     return target_report(table, {k: v.numpy() for k, v in run.y[stage].items()},
-                         anchors=flat_run.anchors_by_name(lc, idx, run.targets, codec),
+                         anchors=flat_run.anchors_by_name(lc, idx, run.targets, codec, dataset=run.dataset),
                          last_close=lc[idx, LAST_COLUMN_INDEX["last_close"]], codec_state=codec)
 
 
