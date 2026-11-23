@@ -73,8 +73,8 @@ def alignment(dataset: dict, *, max_pairs: int = 20000) -> dict | None:
     (b) the labels of row i must equal what the bars AFTER i say, read from window j: close = sum of the next h
     close moves, high / low = the max / min of the running close + that bar's high / low move. Returns the largest
     absolute errors (None when the inputs are not the raw log-move channels)."""
-    if not _raw_logmoves(dataset):
-        return None
+    if not _raw_logmoves(dataset) or dataset.get("target_mode") is not None:
+        return None     # a retargeted dataset (split.target_mode) holds labels the bars do not read as log moves
     x = np.asarray(dataset[run_common.input_key(dataset)])
     lc = np.asarray(dataset["last_candles"])
     n, t = x.shape[0], x.shape[1]
@@ -212,11 +212,13 @@ def coverage(dataset: dict, idx: np.ndarray, targets) -> dict:
         res["zero_close_move_share"] = float((x[:, :, fo.index("close")] == 0).mean())
     clip = label_clip(dataset)
     scale = float(dataset["reg_target_scale"])
+    scales = dataset.get("reg_target_scales") or {}      # per head, stamped by a retarget (range_pos close: 1.0)
     for t in targets:
         y = np.asarray(dataset[reg_key(t)])[idx].astype(np.float64)
         res[f"{t}_nonfinite_labels"] = int((~np.isfinite(y)).sum())
         res[f"{t}_zero_label_share"] = float((y == 0).mean())
-        res[f"{t}_clipped_label_share"] = float((np.abs(y / scale) >= 0.999 * clip).mean()) if clip else 0.0
+        res[f"{t}_clipped_label_share"] = (float((np.abs(y / scales.get(t, scale)) >= 0.999 * clip).mean())
+                                           if clip else 0.0)
     return res
 
 
@@ -311,7 +313,12 @@ def data_checks(ctx: DoctorContext) -> list[Check]:
     except ValueError as e:
         checks.append(Check("C", "data/units", "codec decodes the stored labels to the future prices", "FAILS", "",
                             "fail", str(e)[:200]))
-    if "close" in ctx.targets:
+    base, relative = parse_mode(ds["reg_target_mode"])
+    if "close" in ctx.targets and (TARGET_RAW.entry(base).meta["class_rule"] != "sign" or relative):
+        checks.append(Check("C", "data/units", "close class label == sign of the close regression label", "not "
+                            "applicable", "", "info", f"target mode {ds['reg_target_mode']!r}: the class label is not "
+                            "the sign of the regression label (own direction / train median / beats the market)"))
+    elif "close" in ctx.targets:
         y = np.asarray(ds[reg_key("close")])[r.idx["train"]]
         c = np.asarray(ds[head_spec("binary_classification", "close").label_key])[r.idx["train"]]
         bad = float(((y > 0) != (c > 0.5))[y != 0].mean())

@@ -6,8 +6,9 @@ PITFALLS: every data fact (price targets, codec, timeframe, split dates) is read
     check_decode refuses an artifact whose labels the codec does not decode to the real future prices (B-051); a new
     RunSettings field that changes what is learned and reaches neither FitSettings, the trainer config nor the
     optimizer belongs in IDENTITY_SELECTION / IDENTITY_CONFIGURATION (tests/workflow/test_run_identity_context.py).
-SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run_common.py); changes: strict split settings without
-    retargeting, smoke stride (max_rows), artifact facts moved here, run identity from the manifest.
+SOURCE: ported from feat/ar-stream aa0f3dd (workflow/run_common.py); changes: strict split settings, retargeting of
+    the split rows through data.targets.retarget_splits (``retarget_art``, split.target_mode), smoke stride
+    (max_rows), artifact facts moved here, run identity from the manifest.
 """
 
 import dataclasses
