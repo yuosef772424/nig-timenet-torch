@@ -22,8 +22,11 @@ from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, Mode
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES
 from nig_timenet_torch.trainer.day_weights import DayWeightSettings
 from nig_timenet_torch.trainer.groups import BATCH_ORDERS
+from nig_timenet_torch.trainer.loss_balance import LOSS_BALANCERS
 from nig_timenet_torch.trainer.schedules import LR_KINDS
+from nig_timenet_torch.trainer.selection_metric import check_selectable
 from nig_timenet_torch.trainer.staged import StageSettings
+from nig_timenet_torch.trainer.switches import INITS, WEIGHT_DECAY_GROUPS
 from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import BATCHINGS
 
@@ -180,6 +183,13 @@ class TrainSettings:
         if self.batch_by not in BATCHINGS:
             raise ValueError(f"TrainSettings.batch_by must be one of {sorted(BATCHINGS)}, not {self.batch_by!r}")
         BATCH_ORDERS.entry(self.batch_order)               # unknown names raise now
+        for registry, name in ((INITS, self.init), (WEIGHT_DECAY_GROUPS, self.weight_decay_groups),
+                               (LOSS_BALANCERS, self.loss_balance)):
+            registry.entry(name)                           # likewise (before: only when the trainer was built)
+        check_selectable(self.selection_metric)
+        if self.cross_section_loss not in CROSS_SECTION_LOSSES:   # before: an unknown name read as "off" here
+            raise ValueError(f"TrainSettings.cross_section_loss must be one of {sorted(CROSS_SECTION_LOSSES)}, "
+                             f"not {self.cross_section_loss!r}")
         for name in ("epochs", "batch_size", "steps_per_execution", "time_block_bars"):
             v = getattr(self, name)
             if isinstance(v, bool) or not isinstance(v, int) or v < 1:
