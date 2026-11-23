@@ -1,0 +1,219 @@
+[
+ {
+  "section": "أ) البيانات",
+  "check": "X_train بلا NaN/Inf",
+  "value": "True",
+  "verdict": "✅",
+  "note": ""
+ },
+ {
+  "section": "أ) البيانات",
+  "check": "X_val بلا NaN/Inf",
+  "value": "True",
+  "verdict": "✅",
+  "note": ""
+ },
+ {
+  "section": "أ) البيانات",
+  "check": "X_test بلا NaN/Inf",
+  "value": "True",
+  "verdict": "✅",
+  "note": ""
+ },
+ {
+  "section": "أ) البيانات",
+  "check": "الأهداف تطابق الأسعار الخام (val)",
+  "value": "1.0",
+  "verdict": "✅",
+  "note": "{\"high_class\": 1.0, \"high_reg\": 1.0, \"low_class\": 1.0, \"low_reg\": 1.0, \"close_class\": 1.0, \"close_reg\": 1.0}"
+ },
+ {
+  "section": "أ) البيانات",
+  "check": "الأهداف تطابق الأسعار الخام (test)",
+  "value": "1.0",
+  "verdict": "✅",
+  "note": "{\"high_class\": 1.0, \"high_reg\": 1.0, \"low_class\": 1.0, \"low_reg\": 1.0, \"close_class\": 1.0, \"close_reg\": 1.0}"
+ },
+ {
+  "section": "أ) البيانات",
+  "check": "train قبل val زمنياً (فجوة بالشموع)",
+  "value": "13.0",
+  "verdict": "✅",
+  "note": "المطلوب ≥ نافذة+أفق = 9"
+ },
+ {
+  "section": "أ) البيانات",
+  "check": "val قبل test زمنياً (فجوة بالشموع)",
+  "value": "13.0",
+  "verdict": "✅",
+  "note": "المطلوب ≥ نافذة+أفق = 9"
+ },
+ {
+  "section": "أ) البيانات",
+  "check": "نسبة الصعود في train (high)",
+  "value": "0.363",
+  "verdict": "ℹ️",
+  "note": "خط أساس الفئة الأكبر = max(p, 1−p)"
+ },
+ {
+  "section": "أ) البيانات",
+  "check": "نسبة الصعود في train (low)",
+  "value": "0.662",
+  "verdict": "ℹ️",
+  "note": "خط أساس الفئة الأكبر = max(p, 1−p)"
+ },
+ {
+  "section": "أ) البيانات",
+  "check": "نسبة الصعود في train (close)",
+  "value": "0.498",
+  "verdict": "ℹ️",
+  "note": "خط أساس الفئة الأكبر = max(p, 1−p)"
+ },
+ {
+  "section": "ب) خطوط الأساس",
+  "check": "أيام test المستقلة",
+  "value": "88",
+  "verdict": "ℹ️",
+  "note": "كل الأحكام أدناه على هذه الأيام — أقل من ~250 يوماً يعني أحكاماً ضعيفة إحصائياً"
+ },
+ {
+  "section": "ب) خطوط الأساس",
+  "check": "دقة اتجاه high − الفئة الأكبر (test)",
+  "value": "0.1545",
+  "verdict": "✅",
+  "note": "دقة النموذج 0.8227 | الفئة الأكبر 0.6682 | فاصل [+0.1089, +0.2115]"
+ },
+ {
+  "section": "ب) خطوط الأساس",
+  "check": "دقة اتجاه low − الفئة الأكبر (test)",
+  "value": "0.1932",
+  "verdict": "✅",
+  "note": "دقة النموذج 0.8227 | الفئة الأكبر 0.6295 | فاصل [+0.1295, +0.2535]"
+ },
+ {
+  "section": "ب) خطوط الأساس",
+  "check": "دقة اتجاه close − الفئة الأكبر (test)",
+  "value": "0.3364",
+  "verdict": "✅",
+  "note": "دقة النموذج 0.8636 | الفئة الأكبر 0.5273 | فاصل [+0.2864, +0.3807]"
+ },
+ {
+  "section": "ب) خطوط الأساس",
+  "check": "MAE الثابت − MAE النموذج (high_reg، test)",
+  "value": "0.00171",
+  "verdict": "✅",
+  "note": "MAE النموذج 0.00409 | الثابت (-0.00223) 0.00581 | فاصل [+0.00125, +0.00228]"
+ },
+ {
+  "section": "ب) خطوط الأساس",
+  "check": "MAE الثابت − MAE النموذج (low_reg، test)",
+  "value": "0.00195",
+  "verdict": "✅",
+  "note": "MAE النموذج 0.00396 | الثابت (+0.00294) 0.00591 | فاصل [+0.00145, +0.00241]"
+ },
+ {
+  "section": "ب) خطوط الأساس",
+  "check": "MAE الثابت − MAE النموذج (close_reg، test)",
+  "value": "0.00423",
+  "verdict": "✅",
+  "note": "MAE النموذج 0.00403 | الثابت (-0.00005) 0.00826 | فاصل [+0.00377, +0.00477]"
+ },
+ {
+  "section": "ج) الثقة",
+  "check": "اتساق الثقة (class_margin)",
+  "value": "val +0.95 / test +0.92",
+  "verdict": "✅",
+  "note": "المطلوب > +0.5 على الفترتين معاً"
+ },
+ {
+  "section": "ج) الثقة",
+  "check": "شريحة ≥ 65% (class_margin)",
+  "value": "0.8636363636363636",
+  "verdict": "✅",
+  "note": "✅ صمد على test"
+ },
+ {
+  "section": "ج) الثقة",
+  "check": "اتساق الثقة (nig_edge)",
+  "value": "val +0.95 / test +0.92",
+  "verdict": "✅",
+  "note": "المطلوب > +0.5 على الفترتين معاً"
+ },
+ {
+  "section": "ج) الثقة",
+  "check": "شريحة ≥ 65% (nig_edge)",
+  "value": "0.8636363636363636",
+  "verdict": "✅",
+  "note": "✅ صمد على test"
+ },
+ {
+  "section": "ج) الثقة",
+  "check": "اتساق الثقة (conf_head)",
+  "value": "val +0.98 / test +0.96",
+  "verdict": "✅",
+  "note": "المطلوب > +0.5 على الفترتين معاً"
+ },
+ {
+  "section": "ج) الثقة",
+  "check": "شريحة ≥ 65% (conf_head)",
+  "value": "0.8656036446469249",
+  "verdict": "✅",
+  "note": "✅ صمد على test"
+ },
+ {
+  "section": "ج) الثقة",
+  "check": "اتساق الثقة (agree_margin)",
+  "value": "val +0.95 / test +0.92",
+  "verdict": "✅",
+  "note": "المطلوب > +0.5 على الفترتين معاً"
+ },
+ {
+  "section": "ج) الثقة",
+  "check": "شريحة ≥ 65% (agree_margin)",
+  "value": "0.8636363636363636",
+  "verdict": "✅",
+  "note": "✅ صمد على test"
+ },
+ {
+  "section": "ج) التداول",
+  "check": "صفقات 2:1 (class_margin)",
+  "value": "1.2051579618396102",
+  "verdict": "✅",
+  "note": "val_exp_R=1.182, t_days=26.57"
+ },
+ {
+  "section": "ج) التداول",
+  "check": "صفقات 2:1 (nig_edge)",
+  "value": "1.2051579618396102",
+  "verdict": "✅",
+  "note": "val_exp_R=1.182, t_days=26.57"
+ },
+ {
+  "section": "ج) التداول",
+  "check": "صفقات 2:1 (conf_head)",
+  "value": "1.2243937909145055",
+  "verdict": "✅",
+  "note": "val_exp_R=1.179, t_days=29.47"
+ },
+ {
+  "section": "ج) التداول",
+  "check": "صفقات 2:1 (agree_margin)",
+  "value": "1.2051579618396102",
+  "verdict": "✅",
+  "note": "val_exp_R=1.182, t_days=26.57"
+ },
+ {
+  "section": "د) شكل الشمعة",
+  "check": "high_class فوق candle_gbm",
+  "value": "0.2151",
+  "verdict": "✅",
+  "note": "✅ النموذج يضيف معلومة فوق candle_gbm (ΔAUC عند الدمج +0.2151، فاصل [+0.1697, +0.2644])"
+ },
+ {
+  "section": "د) شكل الشمعة",
+  "check": "low_class فوق rule_cpos",
+  "value": "0.2132",
+  "verdict": "✅",
+  "note": "✅ النموذج يضيف معلومة فوق rule_cpos (ΔAUC عند الدمج +0.2132، فاصل [+0.1623, +0.2564])"
+ }
+]

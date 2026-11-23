@@ -16,6 +16,7 @@ from tests.eval.verification_world import TARGETS, make_dataset, make_idx, make_
 
 PASS, FAIL, FLAT, WARN, INFO = ver.PASS, ver.FAIL, ver.FLAT, ver.WARN, ver.INFO
 COST = 0.0008
+SEC_A, SEC_B, SEC_C, SEC_C_CONF, SEC_C_TRADE, SEC_D = (ver._sec("en", k) for k in ("a", "b", "c", "conf", "trade", "d"))
 
 
 def run(world, **kw):
@@ -46,7 +47,7 @@ def test_summary_has_the_old_columns_and_sections(skilled):
     out = run(skilled)
     s = out["summary"]
     assert list(s.columns) == ["section", "check", "value", "verdict", "note"]
-    assert set(s["section"]) == {ver.A, ver.B, ver.C_CONF, ver.C_TRADE}
+    assert set(s["section"]) == {SEC_A, SEC_B, SEC_C_CONF, SEC_C_TRADE}
     assert set(out["details"]) == {"selective", "trades", "val_df", "test_df", "latest"}
     assert set(s["verdict"]) <= {PASS, FAIL, FLAT, WARN, INFO}
 
@@ -55,20 +56,20 @@ def test_summary_has_the_old_columns_and_sections(skilled):
 def test_a_inputs_finite_passes_and_a_nan_fails_only_its_stage(skilled):
     ds, idx, tables = skilled
     out = run(skilled)
-    assert {row(out, ver.A, f"X_{s}")["verdict"] for s in ("train", "val", "test")} == {PASS}
+    assert {row(out, SEC_A, f"X_{s}")["verdict"] for s in ("train", "val", "test")} == {PASS}
     bad = {**ds, "X_1D": ds["X_1D"].copy()}
     bad["X_1D"][idx["test"][7], 3, 1] = np.nan
     bad["X_1D"][idx["val"][2], 0, 0] = np.inf
     out = run((bad, idx, tables))
-    assert row(out, ver.A, "X_train")["verdict"] == PASS
-    assert row(out, ver.A, "X_val")["verdict"] == FAIL and row(out, ver.A, "X_test")["verdict"] == FAIL
+    assert row(out, SEC_A, "X_train")["verdict"] == PASS
+    assert row(out, SEC_A, "X_val")["verdict"] == FAIL and row(out, SEC_A, "X_test")["verdict"] == FAIL
 
 
 def test_a_labels_match_the_raw_prices_and_shuffled_labels_fail(skilled):
     ds, idx, tables = skilled
     out = run(skilled)
     for stage in ("val", "test"):
-        r = row(out, ver.A, f"labels match the raw prices ({stage})")
+        r = row(out, SEC_A, f"labels match the raw prices ({stage})")
         assert r["verdict"] == PASS and r["value"] == 1.0
     shuffled = dict(ds)
     rng = np.random.default_rng(0)
@@ -78,7 +79,7 @@ def test_a_labels_match_the_raw_prices_and_shuffled_labels_fail(skilled):
             shuffled[key] = rng.permutation(ds[key])
     out = run((shuffled, idx, tables))
     for stage in ("val", "test"):
-        r = row(out, ver.A, f"labels match the raw prices ({stage})")
+        r = row(out, SEC_A, f"labels match the raw prices ({stage})")
         assert r["verdict"] == FAIL and r["value"] < 0.99
         assert set(json.loads(r["note"])) == {f"{t}_{k}" for t in TARGETS for k in ("class", "reg")}
 
@@ -87,17 +88,17 @@ def test_a_one_wrong_head_is_enough_to_fail_the_label_check(skilled):
     ds, idx, tables = skilled
     key = head_spec("binary_classification", "low").label_key
     bad = {**ds, key: 1.0 - ds[key]}
-    r = row(run((bad, idx, tables)), ver.A, "labels match the raw prices (test)")
+    r = row(run((bad, idx, tables)), SEC_A, "labels match the raw prices (test)")
     shares = json.loads(r["note"])
     assert r["verdict"] == FAIL and shares["low_class"] == 0.0 and shares["high_class"] == 1.0
 
 
 def test_a_label_check_is_skipped_for_other_target_modes(skilled):
     out = run(skilled, target_mode="scaled")
-    r = row(out, ver.A, "labels match the raw prices (test)")
+    r = row(out, SEC_A, "labels match the raw prices (test)")
     assert r["verdict"] == INFO and "scaled" in r["note"]
     # c) too: it assumes return targets
-    assert row(out, ver.C, "skipped")["verdict"] == INFO
+    assert row(out, SEC_C, "skipped")["verdict"] == INFO
     assert run(skilled, target_mode="return")["summary"].eval("verdict == @INFO").sum() > 0
 
 
@@ -114,15 +115,15 @@ def test_a_split_gap_enough_adjacent_and_overlapping(skilled):
     ds, idx, tables = skilled
     ok = run(skilled)
     for a, b in (("train", "val"), ("val", "test")):
-        r = row(ok, ver.A, f"{a} before {b}")
+        r = row(ok, SEC_A, f"{a} before {b}")
         assert r["verdict"] == PASS and r["value"] == 13.0 and "9" in r["note"]      # window 8 + horizon 1
     near = make_world(val_start=205)            # val starts 6 days after the last train day: positive but < 9
-    r = row(run(near), ver.A, "train before val")
+    r = row(run(near), SEC_A, "train before val")
     assert r["verdict"] == WARN and r["value"] == 6.0
     overlap = make_world(val_start=150)         # val rows lie inside the train period
-    r = row(run(overlap), ver.A, "train before val")
+    r = row(run(overlap), SEC_A, "train before val")
     assert r["verdict"] == FAIL and r["value"] < 0
-    assert row(run(overlap), ver.A, "val before test")["verdict"] == PASS
+    assert row(run(overlap), SEC_A, "val before test")["verdict"] == PASS
 
 
 def test_a_up_share_of_train_is_reported_per_target(skilled):
@@ -130,7 +131,7 @@ def test_a_up_share_of_train_is_reported_per_target(skilled):
     out = run(skilled)
     for t in TARGETS:
         key = head_spec("binary_classification", t).label_key
-        r = row(out, ver.A, f"up share in train ({t})")
+        r = row(out, SEC_A, f"up share in train ({t})")
         assert r["verdict"] == INFO and r["value"] == round(float(np.mean(ds[key][idx["train"]] > 0)), 4)
 
 
@@ -138,26 +139,26 @@ def test_a_up_share_of_train_is_reported_per_target(skilled):
 def test_b_a_skilled_model_beats_the_majority_class_and_the_constant(skilled):
     out = run(skilled)
     for t in TARGETS:
-        assert row(out, ver.B, f"direction accuracy {t}")["verdict"] == PASS
-        assert row(out, ver.B, f"MAE constant - MAE model ({t}_reg")["verdict"] == PASS
-    assert row(out, ver.B, "independent test days")["value"] == 88
+        assert row(out, SEC_B, f"direction accuracy {t}")["verdict"] == PASS
+        assert row(out, SEC_B, f"MAE constant - MAE model ({t}_reg")["verdict"] == PASS
+    assert row(out, SEC_B, "independent test days")["value"] == 88
 
 
 def test_b_a_model_that_predicts_the_majority_class_is_not_a_pass():
     world = make_world(kind="majority")
     out = run(world)
     for t in TARGETS:
-        r = row(out, ver.B, f"direction accuracy {t}")
+        r = row(out, SEC_B, f"direction accuracy {t}")
         assert r["value"] == 0.0 and r["verdict"] == FLAT      # as accurate as the majority class: no gain, no loss
-        r = row(out, ver.B, f"MAE constant - MAE model ({t}_reg")
+        r = row(out, SEC_B, f"MAE constant - MAE model ({t}_reg")
         assert r["verdict"] != PASS
 
 
 def test_b_an_unskilled_model_loses_to_the_baselines(unskilled):
     out = run(unskilled)
     for t in TARGETS:
-        assert row(out, ver.B, f"direction accuracy {t}")["verdict"] == FAIL
-        assert row(out, ver.B, f"MAE constant - MAE model ({t}_reg")["verdict"] == FAIL
+        assert row(out, SEC_B, f"direction accuracy {t}")["verdict"] == FAIL
+        assert row(out, SEC_B, f"MAE constant - MAE model ({t}_reg")["verdict"] == FAIL
 
 
 def test_b_the_interval_is_by_day_blocks_not_rows(skilled):
@@ -169,7 +170,7 @@ def test_b_the_interval_is_by_day_blocks_not_rows(skilled):
     narrow = run((ds, few, few_tables))
 
     def width(o):
-        lo, hi = row(o, ver.B, "MAE constant - MAE model (close_reg")["note"].split("[")[1][:-1].split(", ")
+        lo, hi = row(o, SEC_B, "MAE constant - MAE model (close_reg")["note"].split("[")[1][:-1].split(", ")
         return float(hi) - float(lo)
     assert width(narrow) > width(wide)
 
@@ -178,7 +179,7 @@ def test_b_the_interval_is_by_day_blocks_not_rows(skilled):
 def test_c_confidence_slice_and_trades_pass_for_a_skilled_model(skilled):
     out = run(skilled)
     s = out["summary"]
-    conf, trade = s[s["section"] == ver.C_CONF], s[s["section"] == ver.C_TRADE]
+    conf, trade = s[s["section"] == SEC_C_CONF], s[s["section"] == SEC_C_TRADE]
     assert len(conf) == 8 and set(conf["verdict"]) == {PASS}
     assert len(trade) == 4 and set(trade["verdict"]) == {PASS}
     sel = out["details"]["selective"]
@@ -191,15 +192,15 @@ def test_c_confidence_slice_and_trades_pass_for_a_skilled_model(skilled):
 def test_c_an_unskilled_model_passes_nothing(unskilled):
     out = run(unskilled)
     s = out["summary"]
-    assert set(s[s["section"].isin([ver.C_CONF, ver.C_TRADE])]["verdict"]) == {FAIL}
+    assert set(s[s["section"].isin([SEC_C_CONF, SEC_C_TRADE])]["verdict"]) == {FAIL}
     assert "nothing tradeable" in ver.summary_text(out["summary"])
 
 
 def test_c_a_slice_nobody_can_fill_fails_with_a_reason(skilled):
     out = run(skilled, target_acc=0.99, min_n=1000)           # val has 440 rows: no slice holds 1000
-    r = row(out, ver.C_CONF, "slice >= 99% (class_margin)")
+    r = row(out, SEC_C_CONF, "slice >= 99% (class_margin)")
     assert r["verdict"] == FAIL and "no val slice reached 99%" in r["note"]
-    assert row(out, ver.C_CONF, "confidence consistency (class_margin)")["verdict"] == PASS   # a separate check
+    assert row(out, SEC_C_CONF, "confidence consistency (class_margin)")["verdict"] == PASS   # a separate check
 
 
 def test_c_shuffled_test_labels_break_the_slice_even_with_a_good_val_threshold(skilled):
@@ -211,14 +212,14 @@ def test_c_shuffled_test_labels_break_the_slice_even_with_a_good_val_threshold(s
         col[idx["test"]] = col[idx["test"]][perm]
         shuffled[key] = col
     out = run((shuffled, idx, tables))
-    r = row(out, ver.C_CONF, "slice >= 65% (class_margin)")
+    r = row(out, SEC_C_CONF, "slice >= 65% (class_margin)")
     assert r["verdict"] == FAIL and "did not hold on test" in r["note"]
-    assert row(out, ver.C_CONF, "confidence consistency (class_margin)")["verdict"] == FAIL
+    assert row(out, SEC_C_CONF, "confidence consistency (class_margin)")["verdict"] == FAIL
 
 
 def test_c_model_levels_stop_needs_predicted_extremes_and_runs(skilled):
     out = run(skilled, stop_mode="model_levels")
-    assert len(out["summary"][out["summary"]["section"] == ver.C_TRADE]) == 4
+    assert len(out["summary"][out["summary"]["section"] == SEC_C_TRADE]) == 4
     with pytest.raises(ValueError, match="stop_mode"):
         run(skilled, stop_mode="atr")
 
@@ -227,15 +228,15 @@ def test_c_trades_are_skipped_without_the_high_low_heads(skilled):
     ds, idx, tables = skilled
     drop = {s: tables[s][[c for c in tables[s].columns if "high" not in c and "low" not in c]] for s in tables}
     out = run((ds, idx, drop), targets=("close",))
-    assert row(out, ver.C_TRADE, "skipped")["verdict"] == INFO
-    assert (out["summary"]["section"] == ver.C_CONF).sum() == 8          # direction does not need them
+    assert row(out, SEC_C_TRADE, "skipped")["verdict"] == INFO
+    assert (out["summary"]["section"] == SEC_C_CONF).sum() == 8          # direction does not need them
 
 
 def test_c_skipped_without_the_close_head(skilled):
     ds, idx, tables = skilled
     drop = {s: tables[s][[c for c in tables[s].columns if "close" not in c]] for s in tables}
     out = run((ds, idx, drop), targets=("high", "low"))
-    assert row(out, ver.C, "skipped")["verdict"] == INFO
+    assert row(out, SEC_C, "skipped")["verdict"] == INFO
 
 
 def test_signals_frame_columns_and_units(skilled):
@@ -308,7 +309,7 @@ def test_selective_report_on_a_perfectly_monotone_and_on_a_flat_confidence():
 @pytest.mark.slow   # sklearn boosting: seconds alone, minutes when the CPU is shared (rule E3)
 def test_d_a_model_with_information_beyond_the_candle_shape_passes(skilled):
     out = run(skilled, run_candle=True)
-    d = out["summary"][out["summary"]["section"] == ver.D]
+    d = out["summary"][out["summary"]["section"] == SEC_D]
     assert len(d) == 2 and set(d["verdict"]) == {PASS}
     cb = out["details"]["candle"]
     assert set(cb["verdicts"]) == {"high", "low"}
@@ -320,7 +321,7 @@ def test_d_a_model_with_information_beyond_the_candle_shape_passes(skilled):
 @pytest.mark.slow
 def test_d_a_model_the_candle_shape_beats_fails(unskilled):
     d = run(unskilled, run_candle=True)["summary"]
-    d = d[d["section"] == ver.D]
+    d = d[d["section"] == SEC_D]
     assert len(d) == 2 and set(d["verdict"]) == {FAIL} and d["note"].str.contains("adds nothing").all()
 
 
@@ -330,8 +331,8 @@ def test_d_skipped_without_high_low_class_heads_and_off_by_the_flag(skilled):
                           ("asset", "horizon_ns", "prediction_made_at", "label_available_at", "identity_hash", "stage",
                            "fold", "train_end", "schema_version")]] for s in tables}
     out = run((ds, idx, drop), targets=("close",), run_candle=True)
-    assert row(out, ver.D, "skipped")["verdict"] == INFO
-    assert ver.D not in set(run(skilled, run_candle=False)["summary"]["section"])
+    assert row(out, SEC_D, "skipped")["verdict"] == INFO
+    assert SEC_D not in set(run(skilled, run_candle=False)["summary"]["section"])
 
 
 # ---------------------------------------------------------------------------------------------------- the writer

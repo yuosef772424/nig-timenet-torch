@@ -10,6 +10,7 @@ PITFALLS: needs a trained (or restored) Run, the test split is read only here an
 """
 
 from nig_timenet_torch.eval.verification import run_full_verification
+from nig_timenet_torch.eval.verification_text import Variant
 from nig_timenet_torch.workflow import run_common
 from nig_timenet_torch.workflow.run_state import Run, need
 
@@ -36,4 +37,5 @@ def verification_step(run: Run, *, verbose: bool = False) -> dict:
         cost_per_side=run.settings.evaluation.battery.cost_per_side, target_mode=ds.get("target_mode"),
         target_acc=v.target_acc, rr=v.rr, stop_mode=v.stop_mode, n_boot=v.n_boot, run_candle=v.run_candle,
         latest_n=v.latest_n, latest_coins=v.latest_coins,
+        variant=Variant(lang=v.lang, stop_width=v.stop_width, block=v.bootstrap_unit), match_old=v.match_old,
         out_dir=run.out, verbose=verbose)
