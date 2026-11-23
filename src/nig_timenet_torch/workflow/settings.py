@@ -19,6 +19,7 @@ from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.data.targets import ENTRY_CLOSE_REGS, parse_mode
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.eval.battery_scorecard import TRIM_KEYS
+from nig_timenet_torch.eval.verification_text import Variant
 from nig_timenet_torch.eval.verification_trading import STOP_DISTANCE
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES
@@ -262,6 +263,12 @@ class VerificationSettings:
     run_candle: bool = True              # also the candle-shape baseline (fits sklearn models on up to 300 000 rows)
     latest_n: int = 1                    # last test samples per coin in the per-target latest table (0 = no table)
     latest_coins: int = 3                # how many coins (the ones with most test rows) the latest table shows
+    # the choices the old TF project made differently (eval.verification_text.Variant); ``match_old`` sets ALL of them
+    # to the old project's and its 0.08 % round-trip cost, so the output equals the old one (tests/parity)
+    match_old: bool = False              # True = the old project's text, cost, stop width, bootstrap unit and draws
+    lang: str = "en"                     # text of the table and the printed reports: "en" | "ar" (the old text)
+    stop_width: str = "predictive_std"   # "nig" stop distance: "predictive_std" (NIG sd) | "student_t" (the old scale)
+    bootstrap_unit: str = "day"          # what a bootstrap resamples: the UTC "day" | the raw bar "timestamp" (old)
 
     def __post_init__(self):
         if not 0.0 < self.target_acc < 1.0 or self.rr <= 0 or self.n_boot < 1:
@@ -270,6 +277,7 @@ class VerificationSettings:
             raise ValueError("verification: latest_n >= 0 and latest_coins >= 1")
         if self.stop_mode not in STOP_DISTANCE:
             raise ValueError(f"verification.stop_mode must be one of {sorted(STOP_DISTANCE)}, got {self.stop_mode!r}")
+        Variant(lang=self.lang, stop_width=self.stop_width, block=self.bootstrap_unit)   # validated where defined
 
 
 @dataclass(frozen=True)

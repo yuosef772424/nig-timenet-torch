@@ -16,7 +16,6 @@ from nig_timenet_torch.stats.nig import nig_predictive_std
 
 TARGETS = ("high", "low", "close")
 SCALE = 100.0
-BAR_NS = 86_400_000_000_000
 WINDOW, HORIZON = 8, 1
 SD = 0.01                                    # sd of the close return and of the NIG predictive std (return units)
 T0 = int(pd.Timestamp("2025-01-01").value)
@@ -29,8 +28,10 @@ def _splits(n_days: int, n_coins: int, val_start: int, test_start: int) -> dict:
             "test": np.flatnonzero(day >= test_start)}
 
 
-def make_dataset(seed: int = 0, n_days: int = 400, n_coins: int = 5):
-    """-> (dataset, truth) with truth = {"r": close return, "cpos": close position in the last candle}."""
+def make_dataset(seed: int = 0, n_days: int = 400, n_coins: int = 5, bar: str = "1D"):
+    """-> (dataset, truth) with truth = {"r": close return, "cpos": close position in the last candle}. ``n_days`` is
+    the number of bars of the base timeframe ``bar`` ("1D", or "6h": four bars per calendar day)."""
+    bar_ns = int(pd.Timedelta(bar).value)
     rng = np.random.default_rng(seed)
     n = n_days * n_coins
     last_close = 100.0 * np.exp(rng.normal(0, 0.1, n))
@@ -41,14 +42,14 @@ def make_dataset(seed: int = 0, n_days: int = 400, n_coins: int = 5):
     fut_close = last_close * (1 + r)
     fut_high = last_close * (1 + np.maximum(r, 0) + np.abs(rng.normal(0, 0.002, n)))
     fut_low = last_close * (1 + np.minimum(r, 0) - np.abs(rng.normal(0, 0.002, n)))
-    ts = (T0 + (np.arange(n) // n_coins) * BAR_NS).astype(np.float64)
+    ts = (T0 + (np.arange(n) // n_coins) * bar_ns).astype(np.float64)
     lc = np.zeros((n, len(LAST_COLUMNS)))
     columns = (last_high, last_low, last_close, ts, fut_close, fut_low, fut_high)
     for name, col in zip(LAST_COLUMNS, columns, strict=True):
         lc[:, LAST_COLUMNS.index(name)] = col
-    ds = {"last_candles": lc, "base_tf": "1D", "timeframes": ["1D"], "window_sizes": {"1D": WINDOW},
+    ds = {"last_candles": lc, "base_tf": bar, "timeframes": [bar], "window_sizes": {bar: WINDOW}, "bar_ns": bar_ns,
           "forecast_horizon": HORIZON, "reg_target_mode": "return", "reg_target_scale": SCALE,
-          "price_targets": list(TARGETS), "X_1D": rng.normal(size=(n, WINDOW, 3)).astype(np.float32)}
+          "price_targets": list(TARGETS), f"X_{bar}": rng.normal(size=(n, WINDOW, 3)).astype(np.float32)}
     state = TARGET_CODECS["return"]().fit(ds)
     for t in TARGETS:
         raw = anchor_and_future(lc, t, state)
@@ -72,8 +73,10 @@ def make_table(ds: dict, rows, *, kind: str = "skilled", seed: int = 1, majority
     ts = pd.to_datetime(np.asarray(ds["last_candles"])[rows, LAST_COLUMNS.index("timestamp")].astype(np.int64),
                         utc=True).as_unit("ns")
     cols = {"timestamp": ts, "asset": pd.array([f"C{i % ds['n_coins']}" for i in rows], dtype="str"),
-            "horizon_ns": np.full(n, BAR_NS, dtype=np.int64), "prediction_made_at": ts + pd.Timedelta(days=1),
-            "label_available_at": ts + pd.Timedelta(days=2), "identity_hash": pd.array(np.full(n, "h"), dtype="str"),
+            "horizon_ns": np.full(n, ds["bar_ns"], dtype=np.int64),
+            "prediction_made_at": ts + pd.Timedelta(ds["bar_ns"]),
+            "label_available_at": ts + pd.Timedelta(2 * ds["bar_ns"]),
+            "identity_hash": pd.array(np.full(n, "h"), dtype="str"),
             "stage": pd.array(np.full(n, "val"), dtype="str"), "fold": np.zeros(n, dtype=np.int64),
             "train_end": pd.DatetimeIndex(np.full(n, 0)).tz_localize("UTC").as_unit("ns"),
             "schema_version": np.full(n, SCHEMA_VERSION, dtype=np.int64)}
@@ -103,9 +106,10 @@ def make_table(ds: dict, rows, *, kind: str = "skilled", seed: int = 1, majority
     return pd.DataFrame(cols)
 
 
-def make_world(*, kind: str = "skilled", seed: int = 0, val_start: int = 212, test_start: int = 312):
+def make_world(*, kind: str = "skilled", seed: int = 0, val_start: int = 212, test_start: int = 312,
+               bar: str = "1D"):
     """-> (dataset, idx, tables) with tables = {"val": ..., "test": ...}."""
-    ds, _ = make_dataset(seed)
+    ds, _ = make_dataset(seed, bar=bar)
     idx = make_idx(ds, val_start=val_start, test_start=test_start)
     maj = {t: bool(np.mean(ds[head_spec("binary_classification", t).label_key][idx["train"]] > 0) >= 0.5)
            for t in TARGETS}

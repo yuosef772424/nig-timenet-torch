@@ -59,6 +59,18 @@ def test_the_step_reuses_the_tables_the_battery_kept_and_reads_the_target_mode(t
     assert calls == [] and (s["verdict"] == "ℹ️").sum() >= 3        # label check x2 and block c skipped
 
 
+def test_match_old_gives_the_old_text_cost_and_no_latest_table(tmp_path):
+    run, _ = fake_run(tmp_path, {"evaluation.verification.match_old": True, "evaluation.verification.n_boot": 30})
+    out = verification_step(run, verbose=True)
+    s = out["summary"]
+    assert "أ) البيانات" in set(s["section"]) and "latest" not in out["details"]
+    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == ["verification_summary.csv",
+                                                                    "verification_summary.json"]
+    run2, _ = fake_run(tmp_path / "b", {"evaluation.verification.lang": "ar", "evaluation.verification.n_boot": 30})
+    ar = verification_step(run2)["summary"]
+    assert "أ) البيانات" in set(ar["section"]) and (tmp_path / "b" / "out" / "verification_latest.csv").is_file()
+
+
 def test_the_step_off_returns_nothing_and_writes_nothing(tmp_path):
     run, calls = fake_run(tmp_path, {"evaluation.verification.enabled": False})
     assert verification_step(run) == {} and calls == [] and not (tmp_path / "out").exists()
@@ -88,8 +100,10 @@ def test_verification_settings_are_strict_and_default_to_the_old_values():
     assert updated(RunSettings(run_dir="x"), {"evaluation.verification.stop_mode": "model_levels"}) \
         .evaluation.verification.stop_mode == "model_levels"
     assert (v.latest_n, v.latest_coins) == (1, 3)
+    assert (v.match_old, v.lang, v.stop_width, v.bootstrap_unit) == (False, "en", "predictive_std", "day")
     for bad in ({"stop_mode": "atr"}, {"target_acc": 1.0}, {"target_acc": 0.0}, {"rr": 0.0}, {"n_boot": 0},
-                {"latest_n": -1}, {"latest_coins": 0}):
+                {"latest_n": -1}, {"latest_coins": 0}, {"lang": "fr"}, {"stop_width": "sd"},
+                {"bootstrap_unit": "week"}):
         with pytest.raises(ValueError):
             VerificationSettings(**bad)
     with pytest.raises(ValueError, match="unknown key"):

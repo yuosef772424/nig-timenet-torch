@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.eval.battery_lib import round_trip
+from nig_timenet_torch.eval.verification_text import t
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["direction_scores", "selective_direction_report", "rr_trading_report", "simulate_rr_trades",
@@ -77,11 +78,11 @@ def _slice_stats(df: pd.DataFrame, mask: np.ndarray, correct: np.ndarray) -> dic
 
 
 def selective_direction_report(val: pd.DataFrame, test: pd.DataFrame, target_acc: float = 0.65,
-                               min_n: int = 200) -> pd.DataFrame:
+                               min_n: int = 200, lang: str = "en") -> pd.DataFrame:
     """Per confidence source: is the accuracy monotone in confidence on VAL and on TEST, then the VAL threshold that
     reaches ``target_acc`` applied to TEST; passes when TEST holds >= ``min_n`` rows at >= ``target_acc`` with a Wilson
     lower bound above 0.5. The Wilson interval assumes independent rows (the coins of one day are not): read
-    ``test_days``."""
+    ``test_dates``."""
     v_scores, t_scores = direction_scores(val), direction_scores(test)
     rows = []
     for name, (v_side, v_s) in v_scores.items():
@@ -92,14 +93,14 @@ def selective_direction_report(val: pd.DataFrame, test: pd.DataFrame, target_acc
         row = {"score": name, "acc_all_test": t_ok.mean(), "monotonic_val": _slice_trend(v_s, v_ok),
                "monotonic_test": _slice_trend(t_s, t_ok), "threshold": thr}
         if thr is None:
-            row["verdict"] = f"{FAIL} no val slice reached {target_acc:.0%}"
+            row["verdict"] = f"{FAIL} " + t(lang, "sel_none", acc=target_acc)
         else:
             vs, ts = _slice_stats(val, v_s >= thr, v_ok), _slice_stats(test, t_s >= thr, t_ok)
             row.update({"val_acc": vs["accuracy"], "val_n": vs["n"], "test_acc": ts["accuracy"], "test_n": ts["n"],
-                        "test_days": ts["n_days"], "test_coverage": ts["coverage"], "test_wilson_lo": ts["lo"],
+                        "test_dates": ts["n_days"], "test_coverage": ts["coverage"], "test_wilson_lo": ts["lo"],
                         "test_wilson_hi": ts["hi"]})
             held = ts["n"] >= min_n and ts["accuracy"] >= target_acc and ts["lo"] > 0.5
-            row["verdict"] = f"{PASS} held on test" if held else f"{FAIL} did not hold on test"
+            row["verdict"] = f"{PASS} " + t(lang, "sel_pass") if held else f"{FAIL} " + t(lang, "sel_fail")
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -148,7 +149,7 @@ def _trade_summary(tr: pd.DataFrame) -> dict:
 
 
 def rr_trading_report(val: pd.DataFrame, test: pd.DataFrame, *, rr: float = 2.0, stop_mode: str = "nig",
-                      cost_per_side: float, min_trades: int = 200, seed: int = 0) -> pd.DataFrame:
+                      cost_per_side: float, min_trades: int = 200, seed: int = 0, lang: str = "en") -> pd.DataFrame:
     """Per confidence source: the quantile threshold with the best mean R on VAL (>= ``min_trades`` trades), applied to
     TEST, beside the same rows with a random direction. Passes when VAL and TEST both earn, the TEST day t-stat is
     >= 2 and TEST beats the random direction (a random walk wins ~1/3 at rr = 2: a 40 % win rate alone is nothing)."""
@@ -165,7 +166,7 @@ def rr_trading_report(val: pd.DataFrame, test: pd.DataFrame, *, rr: float = 2.0,
             if st["n"] >= min_trades and (best is None or st["expectancy_R"] > best[1]["expectancy_R"]):
                 best = (thr, st)
         if best is None:
-            rows.append({"score": name, "verdict": f"{FAIL} fewer than {min_trades} trades on val"})
+            rows.append({"score": name, "verdict": f"{FAIL} " + t(lang, "tr_few", n=min_trades)})
             continue
         thr, vst = best
         sel = t_s >= thr
@@ -175,11 +176,9 @@ def rr_trading_report(val: pd.DataFrame, test: pd.DataFrame, *, rr: float = 2.0,
         passed = (tst.get("n", 0) >= min_trades and vst["expectancy_R"] > 0 and tst.get("expectancy_R", -1) > 0
                   and tst.get("t_days", 0.0) >= 2.0 and tst.get("expectancy_R", -1) > base.get("expectancy_R", np.inf))
         rows.append({"score": name, "threshold": thr, "val_n": vst["n"], "val_win": vst["win_rate"],
-                     "val_exp_R": vst["expectancy_R"], "test_n": tst.get("n", 0), "test_days": tst.get("n_days", 0),
+                     "val_exp_R": vst["expectancy_R"], "test_n": tst.get("n", 0), "test_dates": tst.get("n_days", 0),
                      "test_win": tst.get("win_rate"), "test_both_hit": tst.get("both_hit"),
                      "test_exp_R": tst.get("expectancy_R"), "test_t_days": tst.get("t_days"),
                      "random_dir_win": base.get("win_rate"), "random_dir_exp_R": base.get("expectancy_R"),
-                     "verdict": (f"{PASS} earned on val and test, significant over days, beats a random direction"
-                                 if passed else f"{FAIL} did not hold (needs val_exp_R > 0, test_exp_R > 0, "
-                                                f"test_t_days >= 2)")})
+                     "verdict": f"{PASS} " + t(lang, "tr_pass") if passed else f"{FAIL} " + t(lang, "tr_fail")})
     return pd.DataFrame(rows)
