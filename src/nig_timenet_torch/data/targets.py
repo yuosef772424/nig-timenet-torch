@@ -26,6 +26,8 @@ threshold) is fitted on the TRAIN rows and reused on val / test, the cross-secti
 each split, ``mode=None`` restores the pipeline's own y and stamps, and any order of modes gives the result of the
 last one (the arrays are always rebuilt from ``last_candles``, never from the previous y).
 
+WARNING: magnitude / entry_range heads mostly track volatility; judge them against a volatility-only baseline.
+
 Decoding: each mode registers ``decode(P, price, u) -> future price`` for a prediction ``u`` in raw units. Extra
 columns of ``P`` that a mode may need: ``sign`` (+1 up / -1 down per row; the close head of magnitude and
 entry_range), ``close_reg`` and ``range_high`` / ``range_low`` (decoded prices of the high and low heads; the

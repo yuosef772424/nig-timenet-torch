@@ -23,7 +23,12 @@ import torch
 from nig_timenet_torch.colab.identity import identity_for_run
 from nig_timenet_torch.core.registry import unknown_names_text
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS, TS_COL
-from nig_timenet_torch.data.targets import retarget_splits, row_anchors  # also registers the "target_raw" codec
+from nig_timenet_torch.data.targets import (  # also registers the "target_raw" codec
+    TARGET_RAW,
+    parse_mode,
+    retarget_splits,
+    row_anchors,
+)
 from nig_timenet_torch.data_io.artifact import norm_coin
 from nig_timenet_torch.data_io.asset_index import asset_ids
 from nig_timenet_torch.data_io.loading import LoadedData, load_dataset
@@ -107,6 +112,9 @@ def retarget_art(art: LoadedData, split: SplitSettings, targets, parts: tuple) -
     check_decode(ds, targets)
     shown = {k: report[k] for k in ("mode", "clip", "scales", "thresholds", "share_small_groups") if k in report}
     print(f"target mode {split.target_mode!r} (fitted on the train rows): {shown}", flush=True)
+    if not TARGET_RAW.entry(parse_mode(split.target_mode)[0]).meta["signed"]:
+        print("WARNING: magnitude heads mostly track volatility: compare them with a volatility-only baseline "
+              "(eval.vol_baseline) before reading them as skill; the battery is skipped (no sign to trade)", flush=True)
     return dataclasses.replace(art, dataset=ds)
 
 
