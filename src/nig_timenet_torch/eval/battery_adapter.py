@@ -84,6 +84,11 @@ def to_battery_table(table: pd.DataFrame, labels: dict, *, anchors: dict, last_c
     high / low are used when present. ``prev_close`` (the close before ``last_close``) adds ``last_ret``; ``atr`` (per
     row, the mean true range of the last input bars in log units, ``eval.vol_baseline.window_ranges``) adds ``atr``
     for the take-profit-at-ATR section."""
+    codec = TARGET_CODECS[codec_state["mode"]]()
+    if not codec.forecasts_price(codec_state):
+        name = codec_state.get("target_mode", codec_state["mode"])
+        raise ValueError(f"to_battery_table: the {name!r} target does not decode to a price forecast (no sign or no "
+                         "market level), the trading rules cannot read it")
     validate_table(table)
     n = len(table)
     if n == 0:
@@ -93,11 +98,6 @@ def to_battery_table(table: pd.DataFrame, labels: dict, *, anchors: dict, last_c
         raise ValueError(f"last_close has {last_close.shape[0]} rows, the table has {n}")
     if not np.isfinite(last_close).all() or (last_close <= 0).any():
         raise ValueError("last_close must be finite and > 0")
-    codec = TARGET_CODECS[codec_state["mode"]]()
-    if not codec.forecasts_price(codec_state):
-        name = codec_state.get("target_mode", codec_state["mode"])
-        raise ValueError(f"to_battery_table: the {name!r} target does not decode to a price forecast (no sign or no "
-                         "market level), the trading rules cannot read it")
     if head_spec("nig_regression", "close").output_keys["mu"] not in table.columns:
         raise ValueError("to_battery_table: the table has no close NIG head (direction is judged on the close only)")
     mu, y_ret, sigma = _head(table, labels, anchors, last_close, codec, codec_state, "close")
