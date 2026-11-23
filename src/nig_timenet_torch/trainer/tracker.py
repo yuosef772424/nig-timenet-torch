@@ -42,12 +42,12 @@ SMOOTHERS = {"none": _smooth_none, "window": _smooth_window, "ema": _smooth_ema}
 
 @dataclass(frozen=True)
 class EarlyStopSettings:
-    patience: int = 15
-    min_delta: float = 1e-4
+    patience: int = 15                 # epochs without an improvement before the run stops early
+    min_delta: float = 1e-4            # the smallest change of the selection metric that counts as an improvement
     smoothing: str = "window"          # "none" | "window" (mean of the last `window` epochs) | "ema"
-    window: int = 3
+    window: int = 3                    # epochs averaged when smoothing = "window"
     ema_beta: float = 0.7              # s_t = beta * s_(t-1) + (1 - beta) * x_t, s_1 = x_1
-    restore_best_weights: bool = True
+    restore_best_weights: bool = True  # True = the model returns to the best epoch's weights after training
 
     def __post_init__(self):
         if self.smoothing not in SMOOTHERS:

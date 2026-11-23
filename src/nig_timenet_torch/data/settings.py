@@ -164,9 +164,10 @@ def _default_indicators() -> dict:
 @dataclass(frozen=True)
 class FeatureSettings:
     """Indicators (pandas_ta_classic, by name) + the custom families + the cross-asset columns."""
-    indicator_settings: dict = field(default_factory=_default_indicators)
-    static_indicators: tuple[str, ...] = ()
-    static_indicator_params: dict = field(default_factory=dict)
+    indicator_settings: dict = field(default_factory=_default_indicators)   # {pandas_ta_classic name: [lengths]}
+    static_indicators: tuple[str, ...] = ()       # indicators computed with fixed parameters (static_indicator_params)
+    static_indicator_params: dict = field(default_factory=dict)   # {indicator: {parameter: value}} for those
+    # columns that are computed but NOT fed to the model (the raw open / high / low, and the redundant ones)
     exclude_from_features: tuple[str, ...] = (*OHLCV_COLUMNS[:3], "ADX_14", "BBL_20_2.0", "BBM_20_2.0",
                                               "BBU_20_2.0", "BBP_20_2.0", "SUPERT_DIR_10", "MKT_ret_1")
     custom: CustomFeatureSettings = field(default_factory=CustomFeatureSettings)
@@ -183,10 +184,10 @@ class FeatureSettings:
 class WindowSettings:
     """Time frames, window lengths and the grid the windows are cut on."""
     tf_order: tuple[str, ...] = ("1h",)       # the first one is the base frame (targets and grid)
-    window_sizes: dict = field(default_factory=lambda: {"1h": 32})
-    stride: int = 8
+    window_sizes: dict = field(default_factory=lambda: {"1h": 32})   # {frame: bars per window}; one entry per tf_order
+    stride: int = 8                           # bars between two window ends on the base frame
     align_to_grid: bool = True                # windows end on bars whose number is a multiple of `stride`
-    grid_anchor: str = "1970-01-01"
+    grid_anchor: str = "1970-01-01"           # UTC instant the stride grid counts from (the same for every coin)
     higher_tf_mode: str = "legacy"            # "closed": a higher-frame bar is used only once it is complete
     higher_tf_offset: int = 2                 # legacy mode: how many higher-frame bars back the window ends
     sample_filters: tuple[dict, ...] = ()     # {"feature": col, "op": ">", "value": x} or {"expr": "..."}
@@ -225,11 +226,11 @@ class TargetSettings:
 @dataclass(frozen=True)
 class ScalingSettings:
     """Per-window normalisation of the inputs."""
-    scaler_type: str = "robust"
-    clip_abs: float = 5.0
-    eps: float = 1e-8
-    price_norm_mode: str = "window_scale"
-    price_pct_clip: float = 100.0
+    scaler_type: str = "robust"               # per-window centre / scale: median / IQR (robust) or min / range (minmax)
+    clip_abs: float = 5.0                     # the scaled values are clipped to +-this (0 = no clip)
+    eps: float = 1e-8                         # added to the scale so a flat window does not divide by zero
+    price_norm_mode: str = "window_scale"     # price columns: scaled by the window itself, or as % change
+    price_pct_clip: float = 100.0             # pct_change only: clip of the % change
 
     def __post_init__(self):
         _check_choice("ScalingSettings.scaler_type", self.scaler_type, SCALER_TYPES)
@@ -251,11 +252,11 @@ class RuntimeSettings:
 class OutputSettings:
     """Where the artifact is written and the metadata it carries."""
     path: str = ""                            # the artifact folder (npy_dir); "" = build in memory only
-    overwrite: bool = False
+    overwrite: bool = False                   # True = replace an artifact folder that already exists
     split_dates: dict | None = None           # {"train_end": ..., "val_end": ...} copied into the dataset meta
-    holdout_start: str | None = None
+    holdout_start: str | None = None          # start of the sealed holdout period written into the manifest
     source_commit: str = ""                   # 40 hex; "" = this checkout's git HEAD
-    producer: str = "nig_timenet_torch.data"
+    producer: str = "nig_timenet_torch.data"   # recorded in the manifest as the tool that wrote the artifact
     directory: str = ""                       # non-empty: write <name>_<stamp>.dataset and <name>_latest.dataset here
     name: str = "preprocessing_output"        # base name of the two folders above (the TF file-name convention)
     stamp: str = ""                           # "" = the build time, UTC, YYYYMMDD_HHMMSS
