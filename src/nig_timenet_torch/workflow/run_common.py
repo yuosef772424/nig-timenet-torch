@@ -21,20 +21,22 @@ import torch
 
 from nig_timenet_torch.colab.identity import identity_for_run
 from nig_timenet_torch.core.registry import unknown_names_text
-from nig_timenet_torch.core.schema import TARGET_COLUMNS, TS_COL
+from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TARGET_COLUMNS, TS_COL
+from nig_timenet_torch.data.targets import retarget_splits, row_anchors  # also registers the "target_raw" codec
 from nig_timenet_torch.data_io.artifact import norm_coin
 from nig_timenet_torch.data_io.asset_index import asset_ids
 from nig_timenet_torch.data_io.loading import LoadedData, load_dataset
 from nig_timenet_torch.data_io.split_plan import purge_embargo_split, sample_times
-from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, codec_name
+from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_column, codec_name, future_column
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.trainer.identity import RunIdentity
 from nig_timenet_torch.workflow.settings import RunSettings, SplitSettings
 from nig_timenet_torch.workflow.settings_roles import RESUMABLE_TRAIN_FIELDS
 
-__all__ = ["load_data", "price_targets", "codec_state", "check_decode", "input_key", "split_bounds", "make_plan",
-           "stride_rows", "select_rows", "pick_device", "code_sha", "run_identity", "identity_context",
-           "IDENTITY_SELECTION", "IDENTITY_CONFIGURATION", "RESUMABLE_TRAIN_FIELDS", "json_default", "write_json"]
+__all__ = ["load_data", "price_targets", "codec_state", "decode_anchors", "check_decode", "retarget_art", "input_key",
+           "split_bounds", "make_plan", "stride_rows", "select_rows", "pick_device", "code_sha", "run_identity",
+           "identity_context", "IDENTITY_SELECTION", "IDENTITY_CONFIGURATION", "RESUMABLE_TRAIN_FIELDS", "json_default",
+           "write_json"]
 
 
 def load_data(settings: RunSettings) -> LoadedData:
@@ -61,6 +63,16 @@ def codec_state(dataset: dict) -> dict:
     return TARGET_CODECS[codec_name(dataset)]().fit(dataset)
 
 
+def decode_anchors(dataset: dict, idx: np.ndarray, targets, state: dict, *, truth: bool = False) -> dict:
+    """{target: what ``codec.decode(pred, state, anchors[target])`` needs} for the rows ``idx``: the codec's anchor
+    column (an array of prices) or, for the target-mode codec, ``data.targets.row_anchors`` ((n, 2); ``truth`` sets
+    how the sign / centre the labels dropped are filled, see there)."""
+    if getattr(TARGET_CODECS[state["mode"]], "row_anchors", False):
+        return row_anchors(dataset, idx, targets, truth=truth)
+    lc = np.asarray(dataset["last_candles"])
+    return {t: lc[idx, LAST_COLUMN_INDEX[anchor_column(state, t)]] for t in targets}
+
+
 def check_decode(dataset: dict, targets, n: int = 2000, rtol: float = 1e-4) -> None:
     """Rule B3 guard (B-051): the codec of ``dataset`` must decode its stored regression labels back to the REAL
     future prices of last_candles (evenly strided ``n`` rows, unclipped labels only); raises with the worst head."""
@@ -68,16 +80,33 @@ def check_decode(dataset: dict, targets, n: int = 2000, rtol: float = 1e-4) -> N
     codec = TARGET_CODECS[state["mode"]]()
     lc = np.asarray(dataset["last_candles"])
     rows = stride_rows(np.arange(lc.shape[0]), n)
+    anchors = decode_anchors(dataset, rows, targets, state, truth=True)
     for t in targets:
         y = np.asarray(dataset[head_spec("nig_regression", t).label_key])[rows].astype(np.float64)
-        raw = anchor_and_future(lc[rows], t, state)
-        ok = np.abs(y / state["scale"]) < 0.999
-        dec = codec.decode(y[ok], state, raw[ok, 0])
-        err = float(np.max(np.abs(dec / raw[ok, 1] - 1.0))) if ok.any() else 0.0
+        future = lc[rows, LAST_COLUMN_INDEX[future_column(t)]].astype(np.float64)
+        scale = state["scales"][t] if "scales" in state else state["scale"]
+        ok = np.abs(y / scale) < 0.999 * (state["clip"] or 1.0)
+        dec = codec.decode(y[ok], state, anchors[t][ok])
+        err = float(np.max(np.abs(dec / future[ok] - 1.0))) if ok.any() else 0.0
         if err > rtol:
             raise ValueError(f"codec {state['mode']!r} does not decode the {t!r} labels to the future prices of "
                              f"last_candles (max relative error {err:.2e} > {rtol:g}); the artifact's target "
                              f"definition (reg_target_mode / price_norm_mode) is not the codec's")
+
+
+def retarget_art(art: LoadedData, split: SplitSettings, targets, parts: tuple) -> LoadedData:
+    """``art`` with the regression and class labels of the rows ``parts`` = (train, val, test) rebuilt in the
+    ``split.target_mode`` (``data.targets.retarget_splits``: statistics fitted on the TRAIN rows, the stamps and the
+    '+relative' centres stored); the new labels must decode to the real future prices (``check_decode``). A split with
+    no ``target_mode`` returns ``art`` itself, so the default run is untouched."""
+    if split.target_mode is None:
+        return art
+    ds, report = retarget_splits(art.dataset, parts, split.target_mode, targets=targets, clip=split.target_clip,
+                                 close_reg=split.entry_close_reg)
+    check_decode(ds, targets)
+    shown = {k: report[k] for k in ("mode", "clip", "scales", "thresholds", "share_small_groups") if k in report}
+    print(f"target mode {split.target_mode!r} (fitted on the train rows): {shown}", flush=True)
+    return dataclasses.replace(art, dataset=ds)
 
 
 def input_key(dataset: dict) -> str:

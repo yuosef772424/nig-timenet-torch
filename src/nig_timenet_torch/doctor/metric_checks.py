@@ -137,6 +137,11 @@ def metric_checks(ctx: DoctorContext, *, include_test: bool = False) -> list[Che
         # D2 decode path: the round trip of the predictions and the price-space error
         for t in ctx.targets:
             mu = table[head_spec("nig_regression", t).output_keys["mu"]].to_numpy(dtype=np.float64)
+            if getattr(codec, "row_anchors", False):   # no encode in the target-mode codec: data.targets tests its trip
+                checks.append(Check("D", f"metrics/{stage}/{t}", "decode: encode(decode(mu)) error", "n/a", "",
+                                    "info", f"target mode {codec_state['target_mode']!r}: labels are encoded by "
+                                    "data.targets, which has its own round-trip tests"))
+                continue
             anchor = flat_run.anchors_by_name(lc, idx, [t], codec_state)[t]
             price = codec.decode(mu, codec_state, anchor)
             back = codec.encode(np.stack([anchor, price], axis=1), {**codec_state, "clip": None})

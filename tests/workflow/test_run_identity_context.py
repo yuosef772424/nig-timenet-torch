@@ -55,7 +55,9 @@ SPLIT_CASES = {"train_end": {"train_end": "2024-01-01", "val_end": "2024-06-01"}
                "embargo_hours": {"embargo_hours": 4},
                "max_rows": {"max_rows": 1000}, "exclude_coins": {"exclude_coins": ("BTC",)},
                "cross_section": {"cross_section": True}, "top_coins": {"top_coins": 10},
-               "coin_channel": {"cross_section": True, "coin_channel": True}}
+               "coin_channel": {"cross_section": True, "coin_channel": True},
+               "target_mode": {"target_mode": "scaled"}, "entry_close_reg": {"entry_close_reg": "range_pos"},
+               "target_clip": {"target_clip": 5.0}}
 
 
 @pytest.fixture(scope="module")
