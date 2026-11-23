@@ -274,3 +274,19 @@ To repeat it, open `notebooks/colab_nig_timenet_torch.ipynb` and run section 2: 
 does, no manual conversion), verifies with the loader above, and skips the export when `<artifact>.source.json` says the
 artifact is sound and was made from the same source file, export tool and lock (`colab/prepare.py`). The loader needs only
 numpy and pandas (no torch install, so Colab's CUDA torch is left alone).
+
+## Old-project data without an export block (owner, 2026-11-23)
+
+A processed dataset of the old project (`crypto_model_latest.pkl.gz`, or a plain `npy_dir` without the `export` block) has
+the contract arrays but no manifest. `data.allow_unchecked = True` loads it (`LoaderSettings`; the notebook's `CHANGES` has
+the key): `data_io/unsigned.py` then checks what the DATA shows (no coin of the packaged holdout lock in `asset_bounds`, no
+duplicate coin, no label bar at or after the time seal) and derives the manifest (`manifest.derived`, source commit
+"unsigned", `data_fingerprint = "unsigned:" + sha256 of the file` or of its manifest.json), so `prepare -> build -> train` work.
+It is refused when a check fails. What it cannot prove: where the file came from. A run on it never has the identity of a run
+on a signed artifact (the fingerprint differs), and tools that write a NEW artifact from it (`data_io.environments`,
+`gate_run`) need a real source commit and refuse it. The default stays `False`: a signed artifact folder is still the way
+for a result that is recorded. Something that is not a dataset (no `asset_bounds` / `last_candles` / `base_tf` /
+`forecast_horizon`) gets no manifest and `build` says so.
+
+`data.name` takes the whole path (file or folder); if it points at a folder above the dataset the error lists the datasets
+found below it. The settings are frozen: use `core.config.updated(settings, {"data.name": path})`.

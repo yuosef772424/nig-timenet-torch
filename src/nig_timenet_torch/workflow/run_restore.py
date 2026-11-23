@@ -6,13 +6,15 @@ PITFALLS: ``restore`` checks the saved RunIdentity against the run's (only ``cod
     copy never overwrites itself (``out`` may be the run folder).
 """
 
+import difflib
 import json
+import os
 import shutil
 from dataclasses import replace
 from pathlib import Path
 
 from nig_timenet_torch.trainer import checkpoint
-from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META
+from nig_timenet_torch.trainer.checkpoint import BEST, BEST_META, CHECKPOINT
 from nig_timenet_torch.trainer.identity import RunIdentity, check_resume
 from nig_timenet_torch.trainer.trainer import FitResult
 from nig_timenet_torch.workflow.run_state import Run, need
@@ -41,20 +43,54 @@ def check_on_interrupt(on_interrupt) -> None:
         raise ValueError(f"on_interrupt must be None or one of {RESTORE_WEIGHTS}, got {on_interrupt!r}")
 
 
-def restore(run: Run, *, weights: str = "best", allow_changes: tuple[str, ...] = ("code_sha",)) -> Run:
-    """Instead of ``train``: read a FINISHED run folder (``settings.run_dir``) and put its weights in the model, so the
-    evaluation steps re-read a trained model without training (T5r). ``weights``: ``"best"`` (default) = the
-    best-epoch weights (``best.pt``); ``"last"`` = the weights after the last finished epoch (``checkpoint.pt``; the EMA
-    copy when the run trained with ``ema_decay``, exactly what ``fit`` leaves in the model without
-    ``restore_best_weights``). The saved RunIdentity must equal this run's except for ``allow_changes`` (default: the
-    commit; settings, seed and data must be the same)."""
+def _similar_runs(run_dir: Path) -> list[str]:
+    """Run folders next to ``run_dir`` (or next to its run name folder, ``<root>/<RUN_NAME>/train``) whose name is close
+    to it and that hold a checkpoint: the likely intended folder when the name has a typo."""
+    out: list[str] = []
+    for level, key in ((run_dir.parent.parent, run_dir.parent.name), (run_dir.parent, run_dir.name)):
+        if not level.is_dir():
+            continue
+        names = [d.name for d in level.iterdir() if d.is_dir() and d.name != key]
+        for match in difflib.get_close_matches(key, names, n=3, cutoff=0.75):
+            cand = level / match
+            if (cand / CHECKPOINT).is_file() or (cand / "train" / CHECKPOINT).is_file():
+                out.append(str(cand))
+    return out
+
+
+def _no_checkpoint(run_dir: Path) -> str:
+    """Why ``restore`` found nothing: no such folder (a new RUN_NAME or a typo in it), or a folder without the
+    checkpoint file; with the run folders of a similar name that DO hold one."""
+    if not run_dir.exists():
+        what = f"{run_dir} does not exist: no run was ever started there (a new RUN_NAME, or a typo in it)"
+    elif not run_dir.is_dir():
+        what = f"{run_dir} is not a folder"
+    else:
+        held = sorted(p.name for p in run_dir.iterdir())[:8]
+        what = (f"{run_dir} exists but holds no {CHECKPOINT} (it holds {held}); a run writes {CHECKPOINT} (the last "
+                f"finished epoch, what a resume continues from) and {BEST} (the best epoch) into its train folder")
+    near = _similar_runs(run_dir)
+    return f"{what}: nothing to restore" + (f"; did you mean {near}?" if near else "")
+
+
+def restore(run: Run, *, weights: str = "best", allow_changes: tuple[str, ...] = ("code_sha",),
+            from_dir=None) -> Run:
+    """Instead of ``train``: read a FINISHED run folder (``settings.run_dir``, ``<RUN_NAME>/train`` in the notebook; or
+    ``from_dir``, another run's folder, whose saved identity must still equal this run's) and put its weights in the
+    model, so the evaluation steps re-read a trained model without training (T5r). ``weights``: ``"best"`` (default) =
+    the best-epoch weights (``best.pt``); ``"last"`` = the weights after the last finished epoch (``checkpoint.pt``;
+    the EMA copy when the run trained with ``ema_decay``, exactly what ``fit`` leaves in the model without
+    ``restore_best_weights``); it is never a path: use ``from_dir`` for another folder. The saved RunIdentity must
+    equal this run's except for ``allow_changes`` (default: the commit; settings, seed and data must be the same)."""
     if weights not in RESTORE_WEIGHTS:
-        raise ValueError(f"restore: weights must be one of {RESTORE_WEIGHTS}, got {weights!r}")
+        hint = (f" (a path is not accepted here: pass from_dir={weights!r} to read another run's folder)"
+                if os.sep in str(weights) or str(weights).endswith(".pt") else "")
+        raise ValueError(f"restore: weights must be one of {RESTORE_WEIGHTS}, got {weights!r}{hint}")
     need(run, "trainer", "build")
-    run_dir = Path(run.settings.run_dir)
+    run_dir = Path(from_dir if from_dir is not None else run.settings.run_dir)
     ckpt = checkpoint.load_checkpoint(run_dir)
     if ckpt is None:
-        raise FileNotFoundError(f"{run_dir} holds no {checkpoint.CHECKPOINT}: nothing to restore")
+        raise FileNotFoundError(_no_checkpoint(run_dir))
     check_resume(RunIdentity.from_json(json.loads(ckpt["identity"])), run.ident,
                  allow_changes=("epochs", *allow_changes))
     tracker = ckpt["tracker"]
