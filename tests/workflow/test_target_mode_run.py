@@ -109,3 +109,8 @@ def test_a_whole_run_in_another_target_mode(art, tmp_path, mode):  # noqa: F811
         assert (out / "battery_report.txt").is_file() and "battery_skipped" not in r.extra
     else:
         assert not (out / "battery_report.txt").exists() and "entry_range" in r.extra["battery_skipped"]
+    # the integrated verification follows the same codec: label checks and the trading blocks are skipped for a
+    # non-return target, the latest-samples table needs a price forecast
+    from nig_timenet_torch.workflow.verification_run import verification_step
+    v = verification_step(r)
+    assert ("latest" in v["details"]) == (mode == "scaled") and (v["summary"]["verdict"] == "ℹ️").sum() >= 3

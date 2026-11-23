@@ -8,7 +8,8 @@ PITFALLS: prices come from the registered target codec (``decode``) and the raw 
     (last_high / last_low / last_close), as the TF table did; the signal is the class head (p_up >= 0.5), ``conf`` the
     NIG confidence head (0-100, blank when the head is missing), ``unc`` the NIG predictive sd as a percent of the
     entry; ``ok`` = the signalled side matches the true move; err_move = move - true_move in percentage points,
-    err_px = pred - true (price units); a target mode the codec registry cannot decode raises in ``codec_name``.
+    err_px = pred - true (price units); a target mode that does not decode to a price forecast
+    (magnitude, entry_range, '+relative': ``forecasts_price`` False) raises.
 SOURCE: format of crypto-signal-prediction evaluation/unified.py (_print_v4_report, build_latest_table); columns
     true_move, err_move and err_px added at the owner's request (2026-11-23).
 """
@@ -17,9 +18,10 @@ import numpy as np
 import pandas as pd
 
 from nig_timenet_torch.core.schema import FUTURE_OF, LAST_COLUMN_INDEX, LAST_OF, TS_COL
-from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_column
+from nig_timenet_torch.data_io.target_codec import TARGET_CODECS
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats.nig import nig_predictive_std
+from nig_timenet_torch.workflow.run_common import decode_anchors
 
 __all__ = ["latest_by_target", "format_latest_by_target", "print_latest_by_target", "LATEST_TARGET_COLUMNS"]
 
@@ -53,6 +55,9 @@ def latest_by_target(dataset: dict, rows, table: pd.DataFrame, state: dict, targ
     lc = np.asarray(dataset["last_candles"], dtype=np.float64)[rows]
     pos = _positions(table["asset"].astype(str).to_numpy(), lc[:, TS_COL], n, n_coins)
     codec, frames = TARGET_CODECS[state["mode"]](), []
+    if not codec.forecasts_price(state):
+        raise ValueError(f"latest_by_target: the {state.get('target_mode', state['mode'])!r} target does not decode to "
+                         "a price forecast (no sign or no market level)")
     for t in targets:
         reg, cls = head_spec("nig_regression", t), head_spec("binary_classification", t)
         if reg.output_keys["mu"] not in table.columns:
@@ -60,7 +65,7 @@ def latest_by_target(dataset: dict, rows, table: pd.DataFrame, state: dict, targ
         mu = col(table, pos, reg.output_keys["mu"])
         std = nig_predictive_std(*(col(table, pos, reg.output_keys[k]) for k in ("nu", "alpha", "beta")))
         entry = lc[pos, LAST_COLUMN_INDEX[LAST_OF[t]]]
-        anchor = lc[pos, LAST_COLUMN_INDEX[anchor_column(state, t)]]
+        anchor = decode_anchors(dataset, rows[pos], [t], state)[t]
         pred = codec.decode(mu, state, anchor)
         width = codec.decode(mu + std, state, anchor) - pred
         true = lc[pos, LAST_COLUMN_INDEX[FUTURE_OF[t]]]

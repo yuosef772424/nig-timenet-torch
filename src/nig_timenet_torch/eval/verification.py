@@ -21,7 +21,7 @@ import pandas as pd
 
 from nig_timenet_torch.core.schema import FUTURE_OF, LAST_COLUMN_INDEX, LAST_OF, TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io.split_plan import sample_times
-from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, anchor_column, codec_name
+from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, codec_name
 from nig_timenet_torch.eval.battery_adapter import to_battery_table
 from nig_timenet_torch.eval.day_blocks import calendar_day, day_blocks
 from nig_timenet_torch.eval.verification_candle import candle_baseline_report
@@ -29,6 +29,7 @@ from nig_timenet_torch.eval.verification_latest import latest_by_target, print_l
 from nig_timenet_torch.eval.verification_trading import FAIL, PASS, rr_trading_report, selective_direction_report
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats import metrics
+from nig_timenet_torch.workflow.run_common import decode_anchors
 
 __all__ = ["run_full_verification", "signals_frame", "label_agreement", "summary_text", "SUMMARY_CSV", "SUMMARY_JSON",
            "LATEST_CSV", "DEFAULT_TARGET_MODES", "MIN_LABEL_AGREEMENT"]
@@ -159,7 +160,7 @@ def signals_frame(dataset: dict, rows, table: pd.DataFrame, state: dict, targets
     lc = np.asarray(dataset["last_candles"])
     keys = {t: head_spec("nig_regression", t).label_key for t in targets}
     labels = {key: np.asarray(dataset[key])[rows] for key in keys.values()}
-    anchors = {t: lc[rows, LAST_COLUMN_INDEX[anchor_column(state, t)]] for t in targets}
+    anchors = decode_anchors(dataset, rows, targets, state)    # a price column, or the (n, 2) rows of a target mode
     df = to_battery_table(table, labels, anchors=anchors, last_close=lc[rows, LAST_COLUMN_INDEX["last_close"]],
                           codec_state=state)
     df["up"] = (df["y_ret"] > 0).astype(int)
@@ -250,8 +251,8 @@ def run_full_verification(dataset: dict, idx: dict, tables: dict, *, targets, x_
         candle, more = candle_rows(dataset, idx, tables, targets, x_keys[0], n_boot)
         rows, details = rows + candle, {**details, **more}
     summary = pd.DataFrame(rows)
-    if latest_n > 0:
-        state = TARGET_CODECS[codec_name(dataset)]().fit(dataset)
+    state = TARGET_CODECS[codec_name(dataset)]().fit(dataset)
+    if latest_n > 0 and TARGET_CODECS[state["mode"]]().forecasts_price(state):   # a magnitude has no price to show
         details["latest"] = latest_by_target(dataset, idx["test"], tables["test"], state, targets, latest_n,
                                              latest_coins)
     if verbose:
