@@ -13,9 +13,6 @@ PRs since last R-REVIEW: 5 (#74 the review itself, merged; fifth review 2026-11-
 |---|---|---|---|---|
 | AT1 | Take-profit at k x ATR in the battery, beside the take-profit at mu (owner 2026-11-22) | PR open | [#77](https://github.com/yuosef772424/nig-timenet-torch/pull/77) | branch `main` |
 | N8 | Evaluation in a capital account (audit E1-E3, E5) | PR open | [#78](https://github.com/yuosef772424/nig-timenet-torch/pull/78) | branch `ccr-000d0833-l7tuev`; `n8-account-001.md`: audit reproduced; panel (rank_ic) books pick coins, single-coin books time the market |
-| DY1 | A daily model, 2-day label, read as money after costs (N3 through the daily frame) | merged | [#79](https://github.com/yuosef772424/nig-timenet-torch/pull/79) | branch `ccr-b0b89f04-cka5zq`; `dy1-daily-001.md`: 20 arms, the panel rank-loss-alone arms pay after fees on both seeds (+1..+4.5 %/yr at 10 % exposure, CI across 0); D-051 `base_loss_weight` |
-| LV1 | Latest-samples table, trade selection, chart and live prediction (owner 2026-11-23) | merged | [#80](https://github.com/yuosef772424/nig-timenet-torch/pull/80) | branch `ccr-b7f2e798-w27pu0` |
-| LV2 | Data loading: old-project pickles, restore messages (owner 2026-11-23) | merged | [#80](https://github.com/yuosef772424/nig-timenet-torch/pull/80) | branch `ccr-b7f2e798-w27pu0` |
 | H7 | Register and review tooling (fourth R-REVIEW) | todo | | counter derived, CSV columns, check-job vs colab-results, rmtree ratchet; fifth review adds 12 suggestions (RunIdentity with split settings, PR-section CI check, merged-row archive) |
 | TR1 | Trainer switches (clip, wd groups, EMA, init, timing, train gap) | todo | | B-018, B-007, HF-37 |
 | G3r | Gates on the baseline configuration | todo | | 3 seeds |

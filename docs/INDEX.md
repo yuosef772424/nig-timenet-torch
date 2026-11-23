@@ -162,7 +162,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/decisions/D-049-at1-atr-take-profit.md`: D-049 — Take-profit at k x ATR in the battery, beside the take-profit at mu (owner 2026-11-22)
 - `docs/decisions/D-050-n8-capital-account.md`: D-050 — Evaluation in a capital account (audit E1-E3, E5)
 - `docs/decisions/D-051-dy1-defaults.md`: D-051 — A daily model, 2-day label, read as money after costs (N3 through the daily frame)
-- `docs/decisions/D-051-lv1-defaults.md`: D-051 — Latest-samples table, trade selection, chart and live prediction (owner 2026-11-23)
+- `docs/decisions/D-052-lv1-defaults.md`: D-052 — Latest-samples table, trade selection, chart and live prediction (owner 2026-11-23)
 
 ## Job files
 

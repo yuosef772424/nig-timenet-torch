@@ -1,4 +1,4 @@
-# D-051 — Latest-samples table, trade selection, chart and live prediction (owner 2026-11-23)
+# D-052 — Latest-samples table, trade selection, chart and live prediction (owner 2026-11-23)
 
 Date: 2026-11-23 (LV1 + the data-loading part, same PR)
 Owner decision: owner message 2026-11-23 (translated): "yes, build the list - start with the first (the latest-samples table) then the second (trade selection); it should show the confidence, the uncertainty, the expected and the true move, the error, the entry point and the expected and the true target; I also want the way to draw it; and I want the project ready for live trading: it fetches the data from Binance, prepares it, loads the model from a folder path and predicts, so that the model predicts more than one candle as a historical test and the last one is live"
