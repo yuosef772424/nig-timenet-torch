@@ -54,6 +54,51 @@
    "friction": 1,
    "merged_at": "2026-11-19T14:03:42Z",
    "suggestions": 2
+  },
+  "70": {
+   "friction": 2,
+   "merged_at": "2026-11-21T19:32:59Z",
+   "suggestions": 4
+  },
+  "71": {
+   "friction": 5,
+   "merged_at": "2026-11-21T19:32:59Z",
+   "suggestions": 9
+  },
+  "72": {
+   "friction": 0,
+   "merged_at": "2026-11-21T19:32:59Z",
+   "suggestions": 0
+  },
+  "74": {
+   "friction": 5,
+   "merged_at": "2026-11-21T19:32:57Z",
+   "suggestions": 5
+  },
+  "75": {
+   "friction": 5,
+   "merged_at": "2026-11-22T11:13:19Z",
+   "suggestions": 7
+  },
+  "76": {
+   "friction": 0,
+   "merged_at": "2026-11-22T11:24:33Z",
+   "suggestions": 1
+  },
+  "77": {
+   "friction": 1,
+   "merged_at": "2026-11-22T18:55:00Z",
+   "suggestions": 2
+  },
+  "78": {
+   "friction": 3,
+   "merged_at": "2026-11-22T18:55:14Z",
+   "suggestions": 5
+  },
+  "80": {
+   "friction": 2,
+   "merged_at": "2026-11-23T14:48:36Z",
+   "suggestions": 3
   }
  },
  "since": "2026-11-16T00:01:00Z"
