@@ -20,6 +20,7 @@ high / low heads (``pred_high`` / ``fut_high``): their targets are price levels,
 import numpy as np
 import pandas as pd
 
+from nig_timenet_torch.core.schema import TARGET_COLUMNS
 from nig_timenet_torch.eval.battery_lib import trade_side
 
 __all__ = ["latest_table", "format_latest_table", "print_latest_table", "LATEST_COLUMNS", "REQUIRED_COLUMNS"]
@@ -29,7 +30,7 @@ REQUIRED_COLUMNS = ("mu", "sigma", "p_dir", "y_ret", "coin", "end_time", "last_c
 LATEST_COLUMNS = ("coin", "time", "status", "signal", "confidence_pct", "uncertainty_pct", "move_pct",
                   "true_move_pct", "error_pct", "edge_ratio", "agrees", "entry", "target", "target_lo", "target_hi",
                   "true_target", "ok")
-_LEVELS = ("high", "low")
+_LEVELS = tuple(c for c in TARGET_COLUMNS if c != "close")      # the high / low heads
 
 
 def _check(table: pd.DataFrame) -> None:

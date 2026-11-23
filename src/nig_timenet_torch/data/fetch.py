@@ -111,18 +111,25 @@ def _ms(text: str) -> int:
     return int(pd.Timestamp(text, tz="UTC").timestamp() * 1000) if text else 0
 
 
-def _futures_rows(http: Http, symbol: str, interval: str, lo: int, hi: int) -> list[list]:
+FUTURES_KLINES = f"{FAPI}/fapi/v1/klines"
+
+
+def _futures_rows(http: Http, symbol: str, interval: str, lo: int, hi: int, url: str = FUTURES_KLINES,
+                  stop_on_short: bool = True) -> list[list]:
+    """Pages of klines from ``lo`` up to (not including) ``hi``. A page shorter than the limit asked ends the loop
+    (``stop_on_short``) unless the endpoint caps its pages below the limit (the spot mirror gives 1000, not 1500): then
+    only an empty page or reaching ``hi`` ends it, so a capped page never cuts the newest bars off."""
     rows, cur = [], lo
     while cur < hi:
         params = {"symbol": symbol, "interval": interval, "startTime": cur, "limit": PAGE}
         if hi < 2 ** 62:
             params["endTime"] = hi - 1
-        batch = http.get_json(f"{FAPI}/fapi/v1/klines", params)
+        batch = http.get_json(url, params)
         if not batch:
             break
         rows.extend(kline_row(k) for k in batch)
         cur = int(batch[-1][0]) + 1
-        if len(batch) < PAGE:
+        if stop_on_short and len(batch) < PAGE:
             break
     return rows
 
@@ -183,11 +190,14 @@ def vision_klines(symbol: str, interval: str, start, end, http: Http | None = No
 
 
 def recent_klines(symbol: str, interval: str, bars: int, http: Http | None = None, now=None, *,
-                  tries: int = 3, pause: float = 1.0) -> pd.DataFrame:
+                  tries: int = 3, pause: float = 1.0, url: str = FUTURES_KLINES) -> pd.DataFrame:
     """The last ``bars`` CLOSED candles of ``symbol`` from the live futures API, as a frame indexed by the bar OPEN time
     (UTC) with float OHLCV + quote_volume / trades (nothing is written). A bar still open at ``now`` (default: the
     clock) is dropped: its numbers change until it closes, so a model must never see it. Retries a failed request
-    ``tries`` times, ``pause`` seconds x the attempt apart; the last error is raised."""
+    ``tries`` times, ``pause`` seconds x the attempt apart; the last error is raised. ``url``: the klines endpoint
+    (default the USDT-perpetual futures API, which Binance refuses from some countries with HTTP 451; the spot mirror
+    ``https://data-api.binance.vision/api/v3/klines`` has the same row format but SPOT prices, not the futures ones
+    the models trained on)."""
     import time
 
     if bars < 1:
@@ -197,7 +207,7 @@ def recent_klines(symbol: str, interval: str, bars: int, http: Http | None = Non
     lo = now_ms - (bars + 1) * int(step.total_seconds() * 1000)
     for attempt in range(1, tries + 1):
         try:
-            rows = _futures_rows(http, symbol, interval, lo, 2 ** 62)
+            rows = _futures_rows(http, symbol, interval, lo, now_ms, url, stop_on_short=False)
             break
         except Exception:
             if attempt == tries:

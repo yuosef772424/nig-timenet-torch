@@ -22,7 +22,7 @@ import torch
 
 from nig_timenet_torch.core.schema import LAST_COLUMN_INDEX, TS_COL
 from nig_timenet_torch.data.build import build_live
-from nig_timenet_torch.data.fetch import Http, recent_klines
+from nig_timenet_torch.data.fetch import FUTURES_KLINES, Http, recent_klines
 from nig_timenet_torch.data.settings import DataSettings
 from nig_timenet_torch.data.sources import frames_loader, normalize_tf, resample_ohlcv
 from nig_timenet_torch.data_io.asset_index import asset_ids
@@ -70,14 +70,15 @@ def drop_stale(table: pd.DataFrame, clock: pd.Timestamp, bar: str, max_bars: flo
     return table[~table["coin"].isin(late)].reset_index(drop=True), late
 
 
-def fetch_universe(coins, interval: str, bars: int, http: Http | None = None, now=None, workers: int = 8):
+def fetch_universe(coins, interval: str, bars: int, http: Http | None = None, now=None, workers: int = 8,
+                   url: str = FUTURES_KLINES):
     """({coin: closed-candle frame}, {coin: error text}) for ``coins`` from the live API; one failed coin does not stop
     the others (it is listed with its error)."""
     http = http or Http()
 
     def one(coin):
         try:
-            return coin, recent_klines(coin, interval, bars, http, now), ""
+            return coin, recent_klines(coin, interval, bars, http, now, url=url), ""
         except Exception as e:                       # a delisted or renamed coin, a rate limit: report, carry on
             return coin, None, f"{type(e).__name__}: {str(e)[:200]}"
     with ThreadPoolExecutor(max_workers=max(1, min(workers, len(coins)))) as pool:
@@ -108,7 +109,8 @@ def _universe(lm: LiveModel, s: DataSettings, coins) -> list[str]:
 
 def live_run(model_dir, coins=None, *, data_settings=None, last: int = 6, bars: int = 1000, http: Http | None = None,
              now=None, device: str = "cpu", out_dir=None, k: float = 1.0, rank_by: str = "combined",
-             top: int | None = None, cost: float = DEFAULT_COST_PER_SIDE, charts: bool = True, echo=print) -> dict:
+             top: int | None = None, cost: float = DEFAULT_COST_PER_SIDE, charts: bool = True, echo=print,
+             klines_url: str = FUTURES_KLINES) -> dict:
     """Fetch -> prepare -> load -> predict -> report. ``coins``: the coins to show (default: the training universe);
     ``last``: how many of the newest bars per coin to predict (the ones whose horizon is over are judged, the rest are
     live); ``bars``: closed raw candles read per coin; ``now``: the clock (tests). Returns {"table": the battery table
@@ -117,7 +119,7 @@ def live_run(model_dir, coins=None, *, data_settings=None, last: int = 6, bars: 
     s = _settings(lm, data_settings)
     clock = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now)
     names = _universe(lm, s, coins)
-    frames, errors = fetch_universe(names, s.source.interval, bars, http, clock)
+    frames, errors = fetch_universe(names, s.source.interval, bars, http, clock, url=klines_url)
     want = [c for c in (coins or lm.spec["coins"])]
     if not [c for c in want if c in frames]:
         raise RuntimeError(f"no candles fetched for any asked coin; errors: {errors}")
@@ -145,7 +147,8 @@ def live_run(model_dir, coins=None, *, data_settings=None, last: int = 6, bars: 
 
 def main(argv=None) -> None:
     """``python -m nig_timenet_torch.workflow.live_run --model DIR [--coins A,B] [--last 6] [--bars 1000] [--k 1.0]
-    [--rank-by combined] [--top N] [--data-settings JSON_FILE] [--out DIR] [--no-charts] [--device cpu]``"""
+    [--rank-by combined] [--top N] [--data-settings JSON_FILE] [--out DIR] [--no-charts] [--device cpu]
+    [--klines-url URL]``"""
     ap = argparse.ArgumentParser(description=main.__doc__)
     ap.add_argument("--model", required=True)
     ap.add_argument("--coins", default="")
@@ -159,10 +162,13 @@ def main(argv=None) -> None:
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--out")
     ap.add_argument("--no-charts", action="store_true")
+    ap.add_argument("--klines-url", default=FUTURES_KLINES,
+                    help="klines endpoint; the futures API answers HTTP 451 from some countries")
     a = ap.parse_args(argv)
     ds = json.loads(Path(a.data_settings).read_text()) if a.data_settings else None
     live_run(a.model, [c for c in a.coins.split(",") if c] or None, data_settings=ds, last=a.last, bars=a.bars,
-             k=a.k, rank_by=a.rank_by, top=a.top, cost=a.cost, device=a.device, out_dir=a.out, charts=not a.no_charts)
+             k=a.k, rank_by=a.rank_by, top=a.top, cost=a.cost, device=a.device, out_dir=a.out, charts=not a.no_charts,
+             klines_url=a.klines_url)
 
 
 if __name__ == "__main__":
