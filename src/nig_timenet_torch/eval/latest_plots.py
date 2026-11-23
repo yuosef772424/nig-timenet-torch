@@ -5,8 +5,8 @@ TAGS: latest chart, latest samples plot, entry target chart, uncertainty band, e
 PITFALLS: matplotlib is an optional dependency (extra ``plots``) imported inside the plot function only, Agg backend; a
     row is drawn from its entry (the prediction time, the close of its last bar) to entry + ``horizon``; the horizon is
     inferred from the spacing of the rows unless given, so pass it for a single row; a LIVE row (no truth) is drawn
-    dashed with no true marker; candles are indexed by bar OPEN time, ``bar`` is the bar length (a ``pd.Timedelta``);
-    one PNG per coin, the file name holds the coin and the last time.
+    dashed with no true marker; candles are indexed by bar OPEN time (UTC; naive or aware), ``bar`` is the bar
+    length (a ``pd.Timedelta``); one PNG per coin, the file name holds the coin and the last time.
 """
 
 from pathlib import Path
@@ -82,6 +82,8 @@ def latest_chart(latest: pd.DataFrame, coin: str, out_dir, candles: pd.DataFrame
     fig, (top, bottom) = plt.subplots(2, 1, figsize=(13, 9), gridspec_kw={"height_ratios": [3, 2]})
     view = None
     if candles is not None and len(candles):
+        if candles.index.tz is not None:                      # the table's times are naive UTC
+            candles = candles.set_axis(candles.index.tz_convert("UTC").tz_localize(None))
         b = pd.Timedelta(bar) if bar is not None else pd.Timedelta(candles.index.to_series().diff().median())
         lo = pd.Timestamp(d["time"].min()) - b * context_bars
         view = candles[(candles.index >= lo) & (candles.index <= pd.Timestamp(d["time"].max()) + h)]

@@ -30,14 +30,16 @@ def _md(frame: pd.DataFrame) -> str:
 
 def latest_report(table: pd.DataFrame, out_dir=None, *, n: int = 5, coins=None, k: float = 1.0,
                   rank_by: str = "combined", top: int | None = None, cost: float = DEFAULT_COST_PER_SIDE,
-                  now=None, candles: dict | None = None, charts: bool = True, title: str = "", echo=print) -> dict:
+                  now=None, candles: dict | None = None, charts: bool = True, title: str = "", echo=print,
+                  show_latest: bool = True) -> dict:
     """{"latest": the last ``n`` rows per coin, "selection": the rows ``trade_selection.select_trades`` keeps,
     "charts": [PNG paths]}; prints both tables through ``echo`` and, with ``out_dir``, writes ``latest_table.csv``,
     ``latest_selection.csv``, ``latest_report.md`` and the charts (``charts`` False: none; ``candles``: {coin: OHLCV
-    frame by bar open time} draws the candles under each chart)."""
+    frame by bar open time} draws the candles under each chart; ``show_latest`` False prints only the selection)."""
     latest = latest_table.latest_table(table, n=n, coins=coins, now=now)
     selection = trade_selection.select_trades(latest, k=k, rank_by=rank_by, top=top, cost=cost)
-    latest_table.print_latest_table(latest, title=f"{title} latest {n} samples per coin".strip(), echo=echo)
+    if show_latest:
+        latest_table.print_latest_table(latest, title=f"{title} latest {n} samples per coin".strip(), echo=echo)
     latest_table.print_latest_table(selection, title=f"selected: edge > {k} x uncertainty, ranked by {rank_by}",
                                     echo=echo)
     paths: list[Path] = []
