@@ -12,6 +12,7 @@
 
 ### `main.ipynb` في سطور
 * **خلية إعدادات واحدة** (الثالثة): مصدر الكود، المسارات، وكل حقل من `RunSettings` بقيمته الافتراضية وتعليق عربي (المعنى، القيم المسموحة، الأثر). اختبار يقارن القيم بالكود فلا تبقى قيمة قديمة.
+* **كل الإعدادات القابلة للضبط (القسم ٥ب):** قائمة **مولَّدة من الكود** (`workflow/settings_listing.py`، وأيضاً `python -m nig_timenet_torch.workflow.settings_listing`) تطبع `RunSettings` كلها (مع خيارات النموذج `model.overrides.*` والأقسام الفرعية `train.staged` و`train.day_weights`) و`DataSettings` و`RollingSettings`: المسار، الافتراضي، القيم المسموحة من السجلات، المعنى من تعليق الحقل، وعلامة `<- NOW` على ما غيّرتَه. `SHOW_SETTINGS = "all" | "changed" | "none"` في خلية الإعدادات (وفي `data_pipeline.ipynb` لـ`DataSettings`). `tests/workflow/test_settings_listing.py` يفشل إن غاب حقل أو اختلفت قيمة مسموحة عن سجلّها.
 * **الكود:** `REPO_SOURCE = "auto" | "github" | "drive"`؛ نسخة المشروع الدائمة على Drive (`REPO_DIR`) تُحدَّث من GitHub عند `UPDATE_DRIVE_COPY = True` وتَرفض الكتابة فوق تعديلاتك (`DISCARD_LOCAL_CHANGES`).
   التوكن للقراءة فقط: سرّ Colab `GITHUB_TOKEN` ← ملف على Drive ← سؤال مخفي؛ لا يُطبع ولا يدخل `.git/config`. **لا `git push` من Colab.**
 * **البيئة:** `python -m venv --system-site-packages` على Drive كملف tar واحد مفتاحه (بايثون + torch + المتطلبات)؛ يُعاد بناؤه عند تغيّر المفتاح (`colab/env_cache.py`).
@@ -46,7 +47,10 @@ candle files on Drive and writes `<NAME>_<stamp>.dataset` plus `<NAME>_latest.da
 ## The main notebook
 
 [`main.ipynb`](main.ipynb) is one run from settings to profit, in Arabic (T3b): one settings cell (code source and Drive paths, then
-`CHANGES` = every `RunSettings` field with its default and an Arabic comment, compared with the code by a test), then the Colab-only cells
+`CHANGES` = every `RunSettings` field with its default and an Arabic comment, compared with the code by a test; then `SHOW_SETTINGS`: section 5b prints the
+listing GENERATED from the settings dataclasses by `workflow/settings_listing.py` for every tunable setting of `RunSettings` (model options and the
+`train.staged` / `train.day_weights` sections included), `DataSettings` and `RollingSettings`, with default, valid values read from the registries and the
+meaning from the field comments; `tests/workflow/test_settings_listing.py` fails when a field is missing from it), then the Colab-only cells
 (tagged `colab-only`: code source `colab/bootstrap.py::load_code`, cached env `colab/env_cache.py`, device check), the Drive folders
 (`colab/drive_sync.py`: `run_paths`, `restore_run`, `push_run`), then the steps of `src/nig_timenet_torch/workflow/run.py` one cell each: `prepare`
 (load, split) -> `build` -> `train` -> `health_step` -> `test_step` -> `battery_step` -> `write_summary`; the same steps
