@@ -11,7 +11,8 @@ trainer/best_tracker.py, same at aeafc564 and cea9cd58). What "better" means com
 metric (``higher_is_better`` of its SELECTION_METRICS entry, rule C3), never from loss weights.
 
 The tracker holds numbers only (smoothed metric, best, wait). The weights of the best epoch are kept by the
-Trainer (trainer/checkpoint.py). Not ported: ``weights_snapshot="ema_weights"`` (needs optimizer EMA).
+Trainer (trainer/checkpoint.py). The TF ``weights_snapshot="ema_weights"`` is ``TrainSettings.ema_decay``: with it the
+Trainer selects on, and keeps as the best weights, the EMA copy (B-018).
 """
 
 import math
