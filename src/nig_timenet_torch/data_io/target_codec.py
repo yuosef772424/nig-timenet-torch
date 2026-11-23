@@ -4,7 +4,9 @@ TAGS: target codec, return target, log return, reg target scale, decode to price
 PITFALLS: decode needs the anchor the codec names (``anchor_column``: own last price for "return", last_close for
     "logret_close"); ``codec_name`` picks the codec from reg_target_mode AND price_norm_mode (a TF logret_* artifact
     says reg_target_mode "return" but its labels are log(future / last_close), B-051); fit refuses a dataset without
-    reg_target_scale; LAST_COLUMNS lives in core.schema and is only re-exported here.
+    reg_target_scale; LAST_COLUMNS lives in core.schema and is only re-exported here; every other reg_target_mode
+    (scaled, magnitude, '+relative', ...) is the "target_raw" codec of data.targets (registered when that module is
+    imported, decode = anchor + slope * pred on (n, 2) rows), never a second formula here.
 
 TARGET_CODECS: the one place a regression target is encoded / decoded (C4; BUILD_PLAN.md P26).
 
@@ -23,11 +25,16 @@ from nig_timenet_torch.core.registry import Contract, Registry
 from nig_timenet_torch.core.schema import FUTURE_OF, LAST_COLUMNS, LAST_OF
 
 __all__ = ["TARGET_CODECS", "ReturnCodec", "LogCloseCodec", "own_anchor_and_future", "anchor_and_future",
-           "anchor_column", "future_column", "codec_name", "LOGRET_NORM_MODES", "LAST_COLUMNS"]
+           "anchor_column", "future_column", "codec_name", "LOGRET_NORM_MODES", "LAST_COLUMNS", "TARGET_MODE_CODEC"]
 
 #: price_norm_mode values of the TF pipeline whose regression labels are log(future price / last close), whatever
 #: reg_target_mode says (crypto-signal-prediction data/windows.py: ``nz.raw_reg_target(own_future, last_c)``)
 LOGRET_NORM_MODES = ("logret", "logret_std")
+
+#: the codec of every other ``reg_target_mode`` (scaled, return_close, magnitude, entry_range, '+relative', ...): its
+#: class is ``data.targets.TargetModeCodec``, registered by ``data.targets`` (it needs the TARGET_RAW registry, which
+#: sits above this layer), so import ``data.targets`` before looking it up
+TARGET_MODE_CODEC = "target_raw"
 
 _OWN = {t: (LAST_OF[t], FUTURE_OF[t]) for t in LAST_OF}   # target -> (own last column, future column)
 
@@ -64,11 +71,9 @@ def codec_name(dataset: dict) -> str:
     mode = dataset["reg_target_mode"]
     if mode == ReturnCodec.name and dataset.get("price_norm_mode") in LOGRET_NORM_MODES:
         return LogCloseCodec.name
-    if mode not in TARGET_CODECS:
-        raise ValueError(f"reg_target_mode {mode!r} has no label codec: the supported modes are "
-                         f"{list(TARGET_CODECS.names())} (a dataset built natively with another target mode, "
-                         f"e.g. 'scaled' or 'return_close', cannot be decoded by the workflow)")
-    return mode
+    if mode == ReturnCodec.name:
+        return mode
+    return TARGET_MODE_CODEC   # every other mode is a data.targets.TARGET_RAW mode (an unknown name raises at fit)
 
 
 class ReturnCodec:
@@ -102,6 +107,11 @@ class ReturnCodec:
     def decode(self, pred: np.ndarray, state: dict, anchors: np.ndarray) -> np.ndarray:
         self._check(state)
         return np.asarray(anchors, dtype=np.float64) * (1.0 + np.asarray(pred, dtype=np.float64) / state["scale"])
+
+    def forecasts_price(self, state: dict) -> bool:
+        """``decode(mu)`` is a price forecast on its own (a trading rule may read it as the expected price)."""
+        self._check(state)
+        return True
 
     def eval_spec(self, state: dict) -> dict:
         self._check(state)
