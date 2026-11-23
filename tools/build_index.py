@@ -77,7 +77,7 @@ def _audits(docs: Path) -> list[str]:
     out = []
     for d in sorted(p for p in (docs / "audit").iterdir() if p.is_dir()):
         lead = _audit_lead(d)
-        files = sum(1 for f in d.rglob("*") if f.is_file())
+        files = sum(1 for f in d.rglob("*") if f.is_file() and "__pycache__" not in f.parts)
         head = _cell(first_heading(lead)) if lead else ""
         where = f" (`{lead.name}`)" if lead else ""
         out.append(f"- `docs/audit/{d.name}/`: {head}{where}, {files} files")

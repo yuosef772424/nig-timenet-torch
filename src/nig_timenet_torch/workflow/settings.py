@@ -147,6 +147,9 @@ class TrainSettings:
     # (trainer.cross_section_loss.CROSS_SECTION_LOSSES: "none" | "ic" | "rank_ic"); needs split.cross_section
     cross_section_loss: str = "none"
     cross_section_weight: float = 1.0                      # weight of that term (read only when it is on)
+    # DY1 (owner 2026-11-22, "try each loss on its own"): weight of the per-row NIG / class loss while the
+    # cross-section term is on (1.0 = as before; 0.0 = the rank term alone trains the model; read only when it is on)
+    base_loss_weight: float = 1.0
     # D-032 (owner idea 2026-11-16): weight of a term that penalises a batch whose close predictions lean long or
     # short (trainer.direction_balance; NIG mean and class probability of the close head); 0 = off
     direction_balance: float = 0.0
@@ -190,6 +193,11 @@ class TrainSettings:
                self.cross_section_weight, self.direction_balance, self.aux_loss_weight, self.aux_variance_weight) < 0:
             raise ValueError("class_loss_weight, lambda_reg_end, lambda_calib_end, beta_nll, cross_section_weight, "
                              "direction_balance, aux_loss_weight and aux_variance_weight must be >= 0")
+        if not 0.0 <= self.base_loss_weight <= 1.0:
+            raise ValueError(f"base_loss_weight must be in [0, 1], got {self.base_loss_weight!r}")
+        if self.base_loss_weight != 1.0 and CROSS_SECTION_LOSSES.get(self.cross_section_loss) is None:
+            raise ValueError("base_loss_weight scales the per-row loss beside the cross-section term: it needs "
+                             "cross_section_loss 'ic' or 'rank_ic'")
         if self.lr_schedule not in LR_KINDS:
             raise ValueError(f"TrainSettings.lr_schedule must be one of {sorted(LR_KINDS)}, not {self.lr_schedule!r}")
         if not 0.0 < self.lr_min_ratio <= 1.0:

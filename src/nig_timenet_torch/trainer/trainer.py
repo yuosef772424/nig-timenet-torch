@@ -218,6 +218,8 @@ class Trainer:
         #: D-032: the cross-section term ("none" = no term) and its weight; needs ``group_channel``
         self.cross_section, self.cross_section_weight = loss_cfg["cross_section"], float(
             loss_cfg["cross_section_weight"])
+        #: DY1: weight of the per-row NIG / class loss while the cross-section term is on (0 = the term alone)
+        self.base_loss_weight = float(loss_cfg["base_loss_weight"])
         if self.cross_section not in CROSS_SECTION_LOSSES:
             raise ValueError(f"loss 'cross_section' must be one of {tuple(CROSS_SECTION_LOSSES)}, "
                              f"not {self.cross_section!r}")
@@ -280,6 +282,8 @@ class Trainer:
             stats["direction_balance_loss"] = term.detach().to(torch.float32)
             extra.append(self.direction_balance * term)
         add = torch.stack(extra).sum()
+        if cross and self.base_loss_weight != 1.0:
+            total, raw = total * self.base_loss_weight, raw * self.base_loss_weight
         return total + add, raw + add, per_target, stats
 
     @staticmethod
