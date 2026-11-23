@@ -68,7 +68,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Audits
 
-18 audit folders.
+19 audit folders.
 
 - `docs/audit/2026-11-14-model-first/`: Model-first audit — running notes (2026-11-14) (`NOTES.md`), 12 files
 - `docs/audit/2026-11-16-panel/`: Report A: architecture of the panel model (panel audit 2026-11-16) (`A_architecture.md`), 6 files
@@ -88,6 +88,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/audit/2026-11-20-v1rep-i2/`: Pre-registration: V1-rep and I2 (owner 2026-11-20: "run the proposals, in parallel, free RAM under 10 GB") (`PREREGISTERED.md`), 3 files
 - `docs/audit/2026-11-21-independent-review/`: , 13 files
 - `docs/audit/2026-11-22-n8-account/`: , 10 files
+- `docs/audit/2026-11-23-settings-parity/`: Settings parity audit 2026-11-23: every tunable setting of the TF project against this one, and what the notebooks show (`README.md`), 1 files
 
 ## Handoffs
 
@@ -107,7 +108,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Decisions
 
-50 decisions (format: `docs/decisions/README.md`).
+51 decisions (format: `docs/decisions/README.md`).
 
 - `docs/decisions/D-001-trainer-fit-defaults.md`: D-001 — trainer fit: schedule, early-stopping and fit defaults (ROADMAP T1)
 - `docs/decisions/D-002-colab-runner-defaults.md`: D-002 — Colab runner and notebook support: new defaults (ROADMAP T3)
@@ -159,6 +160,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/decisions/D-049-at1-atr-take-profit.md`: D-049 — Take-profit at k x ATR in the battery, beside the take-profit at mu (owner 2026-11-22)
 - `docs/decisions/D-050-n8-capital-account.md`: D-050 — Evaluation in a capital account (audit E1-E3, E5)
 - `docs/decisions/D-051-lv1-defaults.md`: D-051 — Latest-samples table, trade selection, chart and live prediction (owner 2026-11-23)
+- `docs/decisions/D-052-tg1-defaults.md`: D-052 — Full verification, target modes with decode, settings listing (owner 2026-11-23)
 
 ## Job files
 

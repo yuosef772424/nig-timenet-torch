@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nig_timenet_torch.core.schema import FUTURE_OF, LAST_COLUMN_INDEX, LAST_OF, TS_COL
+from nig_timenet_torch.core.schema import FUTURE_OF, LAST_COLUMN_INDEX, LAST_OF, TARGET_COLUMNS, TS_COL
 from nig_timenet_torch.data_io.split_plan import sample_times
 from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_future, anchor_column, codec_name
 from nig_timenet_torch.eval.battery_adapter import to_battery_table
@@ -205,7 +205,7 @@ def confidence_rows(dataset: dict, idx: dict, tables: dict, targets, target_mode
 
 def candle_rows(dataset: dict, idx: dict, tables: dict, targets, x_key: str, n_boot: int) -> tuple[list, dict]:
     """Block d: (rows, details) for the high / low class heads that the run has."""
-    wanted = tuple(t for t in ("high", "low") if t in targets and all(
+    wanted = tuple(t for t in TARGET_COLUMNS[:2] if t in targets and all(
         head_spec(k, t).output_keys[o] in tables[s] for s in ("val", "test")
         for k, o in (("binary_classification", "logits"), ("nig_regression", "mu"))))
     if not wanted:

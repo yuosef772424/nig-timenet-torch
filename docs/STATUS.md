@@ -15,6 +15,7 @@ PRs since last R-REVIEW: 3 (#74 the review itself, merged; fifth review 2026-11-
 | N8 | Evaluation in a capital account (audit E1-E3, E5) | PR open | [#78](https://github.com/yuosef772424/nig-timenet-torch/pull/78) | branch `ccr-000d0833-l7tuev`; `n8-account-001.md`: audit reproduced; panel (rank_ic) books pick coins, single-coin books time the market |
 | LV1 | Latest-samples table, trade selection, chart and live prediction (owner 2026-11-23) | PR open | [#80](https://github.com/yuosef772424/nig-timenet-torch/pull/80) | branch `ccr-b7f2e798-w27pu0` |
 | LV2 | Data loading: old-project pickles, restore messages (owner 2026-11-23) | PR open | [#80](https://github.com/yuosef772424/nig-timenet-torch/pull/80) | branch `ccr-b7f2e798-w27pu0` |
+| TG1 | Full verification, target modes with decode, settings listing (owner 2026-11-23) | PR open | [#81](https://github.com/yuosef772424/nig-timenet-torch/pull/81) | branch `claude/torch-retarget-splits-modes-w04pae` |
 | H7 | Register and review tooling (fourth R-REVIEW) | todo | | counter derived, CSV columns, check-job vs colab-results, rmtree ratchet; fifth review adds 12 suggestions (RunIdentity with split settings, PR-section CI check, merged-row archive) |
 | TR1 | Trainer switches (clip, wd groups, EMA, init, timing, train gap) | todo | | B-018, B-007, HF-37 |
 | G3r | Gates on the baseline configuration | todo | | 3 seeds |
