@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE
+from nig_timenet_torch.data.targets import ENTRY_CLOSE_REGS, parse_mode
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.eval.battery_scorecard import TRIM_KEYS
 from nig_timenet_torch.eval.verification_trading import STOP_DISTANCE
@@ -95,8 +96,22 @@ class SplitSettings:
     # snapshot panel model (model/snapshot.py, owner 2026-11-18): every row also carries its coin id (the dataset's
     # asset index) as one more input channel, after the features and before the timestamp channel; needs cross_section
     coin_channel: bool = False
+    # owner 2026-11-23: the target mode of the rows after the split (data.targets.retarget_splits; every statistic is
+    # fitted on the TRAIN rows): None = the artifact's own targets; else a TARGET_RAW mode ("return", "return_close",
+    # "scaled", "window_scale", "volnorm", "magnitude", "entry_range") with an optional "+relative" suffix (not on
+    # entry_range; "relative" = "return+relative"). ``entry_close_reg`` is the close head of entry_range ("abs_return" |
+    # "range_pos"); ``target_clip`` overrides the mode's clip of the regression label (None = the mode's own).
+    target_mode: str | None = None
+    entry_close_reg: str = "abs_return"
+    target_clip: float | None = None
 
     def __post_init__(self):
+        if self.target_mode is not None:
+            parse_mode(self.target_mode)                       # unknown names raise
+        if self.entry_close_reg not in ENTRY_CLOSE_REGS:
+            raise ValueError(f"split.entry_close_reg must be one of {ENTRY_CLOSE_REGS}, got {self.entry_close_reg!r}")
+        if self.target_clip is not None and not self.target_clip > 0:
+            raise ValueError(f"split.target_clip must be None or > 0, got {self.target_clip!r}")
         coins = (self.exclude_coins,) if isinstance(self.exclude_coins, str) else tuple(self.exclude_coins)
         if not all(isinstance(c, str) and c.strip() for c in coins):
             raise ValueError(f"exclude_coins must be coin names (non-empty strings), got {self.exclude_coins!r}")

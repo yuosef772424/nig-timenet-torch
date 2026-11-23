@@ -46,7 +46,7 @@ def test_clip_and_state_checks():
 
 
 def test_unregistered_mode_raises():
-    assert TARGET_CODECS.names() == ("return", "logret_close")
+    assert TARGET_CODECS.names()[:2] == ("return", "logret_close")   # + "target_raw" once data.targets is imported
     with pytest.raises(UnknownNameError):
         TARGET_CODECS["entry_range"]
 

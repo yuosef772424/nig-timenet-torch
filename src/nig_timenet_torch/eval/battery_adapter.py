@@ -3,10 +3,12 @@
 PURPOSE: Turns one stage of a run into the table the battery reads: close-only mu / sigma / p_dir / y_ret in return
     units, plus the high / low predicted and realised extremes the limit-order sections need.
 TAGS: battery adapter, prediction table, close return, nig predictive std, limit order inputs, target codec
-PITFALLS: direction (p_dir, dir_true, mu sign) comes from the CLOSE head only; high / low enter as price levels,
-    never as a direction (owner, rule D). sigma is the NIG predictive std, not the capped model uncertainty. A
-    missing close class column falls back to a Gaussian P(return > 0), flagged in attrs. A row without a label (a live
-    row: NaN ``y_ret`` / ``fut_*``) is kept with ``dir_true`` 0; judge only the rows whose ``y_ret`` is finite.
+PITFALLS: needs a codec whose decode is a price forecast (``forecasts_price``: not magnitude / entry_range /
+    '+relative', which raise); direction (p_dir, dir_true, mu sign) comes from the CLOSE head only; high / low enter
+    as price levels, never as a direction (owner, rule D). sigma is the NIG predictive std, not the capped model
+    uncertainty. A missing close class column falls back to a Gaussian P(return > 0), flagged in attrs. A row without
+    a label (a live row: NaN ``y_ret`` / ``fut_*``) is kept with ``dir_true`` 0; judge only the rows whose ``y_ret``
+    is finite.
 
 Column mapping (return = price / last_close - 1, prices decoded with the head's OWN anchor via the TargetCodec):
 step = 1 (one horizon per row); mu = decode(close mu) return; sigma = (decode(mu + std) - decode(mu)) / last_close
@@ -62,7 +64,7 @@ def _head(table, labels, anchors, last_close, codec, state, target: str):
     n = len(table)
     mu = _col(table, spec.output_keys["mu"])
     std = nig_predictive_std(*(_col(table, spec.output_keys[k]) for k in ("nu", "alpha", "beta")))
-    anchor = np.asarray(anchors[target], dtype=np.float64).reshape(-1)
+    anchor = np.asarray(anchors[target], dtype=np.float64)   # (n,) prices, or (n, 2) rows of the target-mode codec
     if anchor.shape[0] != n:
         raise ValueError(f"anchor of {target!r} has {anchor.shape[0]} rows, the table has {n}")
     pred = codec.decode(mu, state, anchor) / last_close - 1.0
@@ -84,6 +86,11 @@ def to_battery_table(table: pd.DataFrame, labels: dict, *, anchors: dict, last_c
     high / low are used when present. ``prev_close`` (the close before ``last_close``) adds ``last_ret``; ``atr`` (per
     row, the mean true range of the last input bars in log units, ``eval.vol_baseline.window_ranges``) adds ``atr``
     for the take-profit-at-ATR section."""
+    codec = TARGET_CODECS[codec_state["mode"]]()
+    if not codec.forecasts_price(codec_state):
+        name = codec_state.get("target_mode", codec_state["mode"])
+        raise ValueError(f"to_battery_table: the {name!r} target does not decode to a price forecast (no sign or no "
+                         "market level), the trading rules cannot read it")
     validate_table(table)
     n = len(table)
     if n == 0:
@@ -93,7 +100,6 @@ def to_battery_table(table: pd.DataFrame, labels: dict, *, anchors: dict, last_c
         raise ValueError(f"last_close has {last_close.shape[0]} rows, the table has {n}")
     if not np.isfinite(last_close).all() or (last_close <= 0).any():
         raise ValueError("last_close must be finite and > 0")
-    codec = TARGET_CODECS[codec_state["mode"]]()
     if head_spec("nig_regression", "close").output_keys["mu"] not in table.columns:
         raise ValueError("to_battery_table: the table has no close NIG head (direction is judged on the close only)")
     mu, y_ret, sigma = _head(table, labels, anchors, last_close, codec, codec_state, "close")
