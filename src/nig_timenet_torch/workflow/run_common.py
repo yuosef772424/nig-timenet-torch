@@ -267,5 +267,10 @@ def run_identity(trainer, fit_settings, model_settings, art, settings: RunSettin
     """The identity of the run the built ``trainer`` is about to fit (colab/identity.py is the one builder); ``art`` is
     the loaded artifact (its manifest gives the data fingerprint), ``settings`` gives the run context
     (``identity_context``: split, input frames, selection metric, staged plan where not at their defaults)."""
+    if art.manifest is None:
+        raise ValueError(f"{art.path}: the loaded data has no manifest, so the run has no data fingerprint to be "
+                         "identified by (it is not a dataset with asset_bounds / last_candles / base_tf / "
+                         "forecast_horizon). An old-project pickle loads with data.allow_unchecked=True and gets a "
+                         "derived manifest; anything else cannot be trained on")
     return identity_for_run(trainer, fit_settings, model_settings, art.manifest, code_sha(settings),
                             run_context=identity_context(settings))

@@ -35,4 +35,5 @@ def verification_step(run: Run, *, verbose: bool = False) -> dict:
         x_keys=run_common.input_keys(ds, run.settings.data.input_timeframes),
         cost_per_side=run.settings.evaluation.battery.cost_per_side, target_mode=ds.get("target_mode"),
         target_acc=v.target_acc, rr=v.rr, stop_mode=v.stop_mode, n_boot=v.n_boot, run_candle=v.run_candle,
+        latest_n=v.latest_n, latest_coins=v.latest_coins,
         out_dir=run.out, verbose=verbose)

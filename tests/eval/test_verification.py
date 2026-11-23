@@ -47,7 +47,7 @@ def test_summary_has_the_old_columns_and_sections(skilled):
     s = out["summary"]
     assert list(s.columns) == ["section", "check", "value", "verdict", "note"]
     assert set(s["section"]) == {ver.A, ver.B, ver.C_CONF, ver.C_TRADE}
-    assert set(out["details"]) == {"selective", "trades", "val_df", "test_df"}
+    assert set(out["details"]) == {"selective", "trades", "val_df", "test_df", "latest"}
     assert set(s["verdict"]) <= {PASS, FAIL, FLAT, WARN, INFO}
 
 
@@ -305,6 +305,7 @@ def test_selective_report_on_a_perfectly_monotone_and_on_a_flat_confidence():
 
 
 # ------------------------------------------------------------------------------------------------- d) candle shape
+@pytest.mark.slow   # sklearn boosting: seconds alone, minutes when the CPU is shared (rule E3)
 def test_d_a_model_with_information_beyond_the_candle_shape_passes(skilled):
     out = run(skilled, run_candle=True)
     d = out["summary"][out["summary"]["section"] == ver.D]
@@ -316,6 +317,7 @@ def test_d_a_model_with_information_beyond_the_candle_shape_passes(skilled):
     assert (cb["table"]["majority_baseline"] >= 0.5).all()
 
 
+@pytest.mark.slow
 def test_d_a_model_the_candle_shape_beats_fails(unskilled):
     d = run(unskilled, run_candle=True)["summary"]
     d = d[d["section"] == ver.D]

@@ -25,14 +25,16 @@ from nig_timenet_torch.data_io.target_codec import TARGET_CODECS, anchor_and_fut
 from nig_timenet_torch.eval.battery_adapter import to_battery_table
 from nig_timenet_torch.eval.day_blocks import calendar_day, day_blocks
 from nig_timenet_torch.eval.verification_candle import candle_baseline_report
+from nig_timenet_torch.eval.verification_latest import latest_by_target, print_latest_by_target
 from nig_timenet_torch.eval.verification_trading import FAIL, PASS, rr_trading_report, selective_direction_report
 from nig_timenet_torch.model.heads import head_spec
 from nig_timenet_torch.stats import metrics
 
 __all__ = ["run_full_verification", "signals_frame", "label_agreement", "summary_text", "SUMMARY_CSV", "SUMMARY_JSON",
-           "DEFAULT_TARGET_MODES", "MIN_LABEL_AGREEMENT"]
+           "LATEST_CSV", "DEFAULT_TARGET_MODES", "MIN_LABEL_AGREEMENT"]
 
 SUMMARY_CSV, SUMMARY_JSON = "verification_summary.csv", "verification_summary.json"
+LATEST_CSV = "verification_latest.csv"
 FLAT, WARN, INFO = "➖", "⚠️", "ℹ️"        # ➖ ⚠️ ℹ️
 #: the target modes whose labels ARE returns of the raw prices (the label check compares them with last_candles)
 DEFAULT_TARGET_MODES = (None, "return")
@@ -228,15 +230,17 @@ def summary_text(summary: pd.DataFrame) -> str:
 
 def run_full_verification(dataset: dict, idx: dict, tables: dict, *, targets, x_keys, cost_per_side: float,
                           target_mode=None, target_acc: float = 0.65, rr: float = 2.0, stop_mode: str = "nig",
-                          n_boot: int = 500, run_candle: bool = True, min_n: int = 200, out_dir=None,
-                          verbose: bool = False) -> dict:
+                          n_boot: int = 500, run_candle: bool = True, min_n: int = 200, latest_n: int = 1,
+                          latest_coins: int = 3, out_dir=None, verbose: bool = False) -> dict:
     """Every check of the integrated verification -> ``{"summary": verdict table (section, check, value, verdict,
     note), "details": {selective, trades, val_df, test_df, candle}}``; with ``out_dir`` also
     ``verification_summary.csv`` / ``.json``. ``dataset``: the artifact dict; ``idx``: {"train" | "val" | "test": rows};
     ``tables``: {"val" | "test": PredictionTable of those rows in order}; ``targets``: the run's price targets;
     ``x_keys``: the ``X_<tf>`` keys the model reads (the first is the base frame of the last-step baseline);
     ``target_mode``: the stamped mode of the labels (None / "return" = plain returns); ``cost_per_side``: the battery's;
-    ``min_n``: the smallest slice / trade count a verdict accepts (200 in the old project)."""
+    ``min_n``: the smallest slice / trade count a verdict accepts (200 in the old project); ``latest_n`` > 0 adds the
+    latest-samples table of each price target (``details["latest"]``, ``verification_latest.csv``): the last
+    ``latest_n`` test samples of ``latest_coins`` coins."""
     rows = data_rows(dataset, idx, targets, x_keys, target_mode)
     rows += baseline_rows(dataset, idx, tables, targets, n_boot)
     conf_rows, details = confidence_rows(dataset, idx, tables, targets, target_mode, target_acc=target_acc, rr=rr,
@@ -246,11 +250,19 @@ def run_full_verification(dataset: dict, idx: dict, tables: dict, *, targets, x_
         candle, more = candle_rows(dataset, idx, tables, targets, x_keys[0], n_boot)
         rows, details = rows + candle, {**details, **more}
     summary = pd.DataFrame(rows)
+    if latest_n > 0:
+        state = TARGET_CODECS[codec_name(dataset)]().fit(dataset)
+        details["latest"] = latest_by_target(dataset, idx["test"], tables["test"], state, targets, latest_n,
+                                             latest_coins)
     if verbose:
         print(summary_text(summary))
+        if "latest" in details:
+            print_latest_by_target(details["latest"], latest_n)
     if out_dir is not None:
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
+        if "latest" in details:
+            details["latest"].to_csv(out / LATEST_CSV, index=False)
         summary.to_csv(out / SUMMARY_CSV, index=False, encoding="utf-8-sig")
         records = summary.astype(str).to_dict("records")
         (out / SUMMARY_JSON).write_text(json.dumps(records, ensure_ascii=False, indent=1), encoding="utf-8")

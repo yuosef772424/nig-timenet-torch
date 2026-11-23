@@ -38,6 +38,8 @@ def test_the_step_writes_the_summary_files_with_the_settings_and_the_battery_cos
     out = verification_step(run)
     assert set(out) == {"summary", "details"} and calls == ["val", "test"]
     assert (tmp_path / "out" / "verification_summary.csv").is_file()
+    latest = pd.read_csv(tmp_path / "out" / "verification_latest.csv")      # the per-target latest table, next to it
+    assert set(latest["target"]) == set(TARGETS) and len(latest) == 3 * 3 and "err_px" in latest.columns
     records = json.loads((tmp_path / "out" / "verification_summary.json").read_text(encoding="utf-8"))
     assert len(records) == len(out["summary"])
     s = out["summary"]
@@ -72,6 +74,7 @@ def test_the_step_needs_a_trained_run_and_test_rows(tmp_path):
         verification_step(run)
 
 
+@pytest.mark.slow
 def test_candle_runs_when_asked(tmp_path):
     run, _ = fake_run(tmp_path, {"evaluation.verification.run_candle": True})
     s = verification_step(run)["summary"]
@@ -84,7 +87,9 @@ def test_verification_settings_are_strict_and_default_to_the_old_values():
     assert RunSettings(run_dir="x").evaluation.verification == v and EvalSettings().verification == v
     assert updated(RunSettings(run_dir="x"), {"evaluation.verification.stop_mode": "model_levels"}) \
         .evaluation.verification.stop_mode == "model_levels"
-    for bad in ({"stop_mode": "atr"}, {"target_acc": 1.0}, {"target_acc": 0.0}, {"rr": 0.0}, {"n_boot": 0}):
+    assert (v.latest_n, v.latest_coins) == (1, 3)
+    for bad in ({"stop_mode": "atr"}, {"target_acc": 1.0}, {"target_acc": 0.0}, {"rr": 0.0}, {"n_boot": 0},
+                {"latest_n": -1}, {"latest_coins": 0}):
         with pytest.raises(ValueError):
             VerificationSettings(**bad)
     with pytest.raises(ValueError, match="unknown key"):

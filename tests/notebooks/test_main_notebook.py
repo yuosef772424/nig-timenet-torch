@@ -249,3 +249,25 @@ def test_target_norm_and_the_panel_rolling_switches_reach_the_settings(tmp_path,
     assert ns["rolling_summary"]["n_folds"] == 2
     assert (tmp_path / "local" / "rp" / "out" / "rolling" / "pooled_days_seed_0" / "panel_report.md").is_file()
     assert (tmp_path / "drive" / "rp" / "out" / "rolling" / "rolling_summary.md").is_file()   # pushed to the fake Drive
+
+
+@pytest.mark.slow  # rule E3: the notebook runs a 1-epoch fixture training
+def test_latest_samples_and_live_model_sections_run_headless(tmp_path, art):
+    """LV1: the latest-samples section writes its table, selection and charts from the battery table, the export
+    section writes live_model.json beside best.pt, and the live section (LIVE_MODEL set) loads that folder and asks for
+    the data settings a TF-exported fixture does not carry, before any network call."""
+    drive, local = tmp_path / "drive", tmp_path / "local"
+    small = {"train.epochs": 1, "train.batch_size": 64, "train.device": "cpu", "evaluation.health_max_rows": 50}
+    base = {"ARTIFACT": str(art), "RUN_NAME": "lv1", "WORK_ON": "local", "DRIVE_RUNS": str(drive),
+            "LOCAL_RUNS": str(local), "CHANGES": small, "BATTERY_FOLDER": "", "LATEST_N": 3}
+    ns = run_notebook("main", base)
+    out, train = local / "lv1" / "out", local / "lv1" / "train"
+    frame = ns["latest"]["latest"]
+    assert len(frame) > 0 and len(ns["latest"]["charts"]) == frame["coin"].nunique()
+    for name in ("latest_table.csv", "latest_selection.csv", "latest_report.md"):
+        assert (out / name).is_file(), name
+    assert (train / "live_model.json").is_file() and (train / "best.pt").is_file()
+    off = run_notebook("main", {**base, "RUN_NAME": "lv1off", "LATEST_REPORT": False, "EXPORT_LIVE_MODEL": False})
+    assert "latest" not in off and not (local / "lv1off" / "train" / "live_model.json").exists()
+    with pytest.raises(ValueError, match="data_settings"):
+        run_notebook("main", {**base, "RUN_NAME": "lv1", "LIVE_MODEL": str(train)})

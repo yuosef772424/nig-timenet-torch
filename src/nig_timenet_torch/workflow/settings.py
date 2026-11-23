@@ -235,10 +235,14 @@ class VerificationSettings:
     stop_mode: str = "nig"               # stop distance: "nig" (NIG std) | "model_levels" (predicted high / low)
     n_boot: int = 500                    # day-block bootstrap draws of every interval
     run_candle: bool = True              # also the candle-shape baseline (fits sklearn models on up to 300 000 rows)
+    latest_n: int = 1                    # last test samples per coin in the per-target latest table (0 = no table)
+    latest_coins: int = 3                # how many coins (the ones with most test rows) the latest table shows
 
     def __post_init__(self):
         if not 0.0 < self.target_acc < 1.0 or self.rr <= 0 or self.n_boot < 1:
             raise ValueError("verification: target_acc in (0, 1), rr > 0 and n_boot >= 1")
+        if self.latest_n < 0 or self.latest_coins < 1:
+            raise ValueError("verification: latest_n >= 0 and latest_coins >= 1")
         if self.stop_mode not in STOP_DISTANCE:
             raise ValueError(f"verification.stop_mode must be one of {sorted(STOP_DISTANCE)}, got {self.stop_mode!r}")
 
@@ -286,7 +290,10 @@ def model_for(architecture: str | None, overrides: dict | None = None, *, preset
 
 @dataclass(frozen=True)
 class RunSettings:
-    """Everything one flat single-split run needs, in sections; notebooks change it with ``updated({...})``."""
+    """Everything one flat single-split run needs, in sections. FROZEN: a field is never assigned (a
+    ``FrozenInstanceError`` says so); change it with ``from nig_timenet_torch.core.config import updated`` ->
+    ``s = updated(s, {"data.name": path, "data.allow_unchecked": True})``, a copy (dotted keys reach the nested
+    sections, an unknown key raises)."""
     run_dir: str                                           # checkpoint and outputs (a Drive folder: a cut run resumes)
     code_sha: str = ""                                     # recorded in the run identity; "" = git HEAD of the package
     data: LoaderSettings = field(default_factory=LoaderSettings)
