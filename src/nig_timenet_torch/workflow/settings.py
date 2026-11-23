@@ -18,6 +18,7 @@ import pandas as pd
 from nig_timenet_torch.core.costs import DEFAULT_COST_PER_SIDE
 from nig_timenet_torch.data_io.loading import LoaderSettings
 from nig_timenet_torch.eval.battery_scorecard import TRIM_KEYS
+from nig_timenet_torch.eval.verification_trading import STOP_DISTANCE
 from nig_timenet_torch.model.architectures import ANTI_MEMORIZATION_CONFIG, ModelSettings
 from nig_timenet_torch.trainer.cross_section_loss import CROSS_SECTION_LOSSES
 from nig_timenet_torch.trainer.day_weights import DayWeightSettings
@@ -28,7 +29,7 @@ from nig_timenet_torch.trainer.tracker import EarlyStopSettings
 from nig_timenet_torch.trainer.trainer import BATCHINGS
 
 __all__ = ["RollingSettings", "RunSettings", "ROLLING_MODES", "SplitSettings", "TrainSettings", "EvalSettings",
-           "BatterySettings", "default_model_settings", "DEFAULT_MODEL_OVERRIDES", "model_for"]
+           "BatterySettings", "VerificationSettings", "default_model_settings", "DEFAULT_MODEL_OVERRIDES", "model_for"]
 
 ROLLING_MODES = ("expanding", "sliding")
 
@@ -225,10 +226,33 @@ class BatterySettings:
 
 
 @dataclass(frozen=True)
+class VerificationSettings:
+    """The integrated verification (eval/verification.py, the old TF section 7-d) of a finished run: one verdict table
+    over data integrity, baselines, confidence / R:R trades and the candle shape. The cost is the battery's."""
+    enabled: bool = True                 # False = ``verification_step`` writes and returns nothing
+    target_acc: float = 0.65             # the confident slice must reach this direction accuracy on TEST
+    rr: float = 2.0                      # reward : risk of the trades (target at rr x the stop distance)
+    stop_mode: str = "nig"               # stop distance: "nig" (NIG std) | "model_levels" (predicted high / low)
+    n_boot: int = 500                    # day-block bootstrap draws of every interval
+    run_candle: bool = True              # also the candle-shape baseline (fits sklearn models on up to 300 000 rows)
+    latest_n: int = 1                    # last test samples per coin in the per-target latest table (0 = no table)
+    latest_coins: int = 3                # how many coins (the ones with most test rows) the latest table shows
+
+    def __post_init__(self):
+        if not 0.0 < self.target_acc < 1.0 or self.rr <= 0 or self.n_boot < 1:
+            raise ValueError("verification: target_acc in (0, 1), rr > 0 and n_boot >= 1")
+        if self.latest_n < 0 or self.latest_coins < 1:
+            raise ValueError("verification: latest_n >= 0 and latest_coins >= 1")
+        if self.stop_mode not in STOP_DISTANCE:
+            raise ValueError(f"verification.stop_mode must be one of {sorted(STOP_DISTANCE)}, got {self.stop_mode!r}")
+
+
+@dataclass(frozen=True)
 class EvalSettings:
     chunk: int = 20_000                  # rows per predict chunk (a big split must fit the device)
     health_max_rows: int = 100_000       # evenly strided subsample of the validation rows for the health report
     battery: BatterySettings = field(default_factory=BatterySettings)
+    verification: VerificationSettings = field(default_factory=VerificationSettings)
 
     def __post_init__(self):
         if self.chunk < 1 or self.health_max_rows < 1:
