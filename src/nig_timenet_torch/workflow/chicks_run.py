@@ -132,9 +132,11 @@ def run_chicks(run: Run, settings: ChicksSettings | None = None, **changes) -> d
         say("chicks_skipped", mode=name)
         run.extra["chicks_skipped"] = name
         return None
+    if not len(run.idx["test"]):
+        raise ValueError("the split has no test rows")
     out_dir = _out_dir(run, s)
     test = stage_data(run, "test")
-    val = stage_data(run, "val") if s.calibrate else None
+    val = stage_data(run, "val") if s.calibrate and len(run.idx["val"]) else None
     res = run_full_analysis(
         test, out_dir=out_dir, val_stage=val, calibration_method=s.calibration_method,
         batch_analysis_size=s.batch_analysis_size, make_plots=s.make_plots, run_integrity_check=s.run_integrity_check,

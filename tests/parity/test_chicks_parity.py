@@ -14,7 +14,6 @@ import json
 import os
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -148,4 +147,4 @@ def test_nothing_in_the_figures_is_empty_or_unreadable(run):
         assert any(titles) and all(isinstance(t, str) for t in titles), name
         assert not any(any("؀" <= ch <= "ۿ" for ch in a["title"] + a["xlabel"] + a["ylabel"])
                        for a in sig["axes"]), f"{name}: Arabic in a figure label (matplotlib cannot shape it)"
-    assert np.isfinite(len(sigs))
+    assert sigs
