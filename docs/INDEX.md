@@ -26,7 +26,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Results notes
 
-37 notes (rule C7: the failure reading is inside each).
+38 notes (rule C7: the failure reading is inside each).
 
 - `docs/results/arm-i-001.md`: arm-i-001: arm I of rolling-ind-001 (7 indicator channels, lr 1e-5) read against R (exploratory, rule C5)
 - `docs/results/b1-btc-timing-001.md`: b1-btc-timing-001: buy BTC at the times the model is bullish across coins (owner 2026-11-19; exploratory, rule C5)
@@ -37,6 +37,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/results/btc-hedge-long-001.md`: btc-hedge-long-001: the long book minus BTC (owner 2026-11-19, the free test; exploratory, rule C5)
 - `docs/results/btc-hedged-book-001.md`: btc-hedged-book-001: long the top coins against BTC, versus the market-neutral book (owner 2026-11-19)
 - `docs/results/btc-relative-001.md`: btc-relative-001: BTC-relative inputs, GRU, 2 seeds (owner 2026-11-19; exploratory, rule C5)
+- `docs/results/chicks-port-001.md`: chicks-port-001: the TF project's chicks report in this project (W1; owner 2026-11-23; a parity port, no model result)
 - `docs/results/deep-side-001.md`: Deep side — is "the side where price goes deeper" predicted? (`baseline-002-s0`, seed 0)
 - `docs/results/dominance-look-001.md`: dominance-look-001: USDT.D / BTC.D, and BTC + ETH instead of the cross-section as the panel's reference
 - `docs/results/dw1-001.md`: dw1-001: day-balanced, failure-weighted loss (owner 2026-11-20; exploratory, C5)
@@ -92,7 +93,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 
 ## Handoffs
 
-11 handoffs (each carries a `Status:` line: open or closed with a pointer).
+12 handoffs (each carries a `Status:` line: open or closed with a pointer).
 
 - `docs/handoff/2026-11-16-panel-session.md`: Status: closed (PN1 / WF1 #61; `docs/results/panel-001.md`)
 - `docs/handoff/2026-11-18-batch-by-60.md`: Status: closed (`docs/results/batch-by-wf-002.md`)
@@ -105,6 +106,7 @@ Also `CLAUDE.md` (the reading order), `NOTES.md`, `docs/MAP.md` (code map, gener
 - `docs/handoff/2026-11-20-dw1-running.md`: Status: closed (DW1 #73; `docs/results/dw1-001.md`)
 - `docs/handoff/2026-11-20-start-here.md`: Status: closed (AI1 #71 and AI2 #72 merged in MG4 #74; `docs/results/br1-001.md`, `docs/results/m3-full-001.md`)
 - `docs/handoff/2026-11-21-hardening-2026-11b.md`: Status: closed (PR #75 merged 2026-11-22 as 2d0404c; the items under "Left" stay open in the plan and STATUS)
+- `docs/handoff/2026-11-23-reports-charts-pipeline.md`: Status: open (plan written 2026-11-23 before the work starts; the owner is asleep, the lead runs it alone)
 
 ## Decisions
 
