@@ -234,7 +234,7 @@ def test_target_norm_and_the_panel_rolling_switches_reach_the_settings(tmp_path,
     small = {"train.epochs": 1, "train.batch_size": 64, "train.device": "cpu", "evaluation.health_max_rows": 50}
     rolling = {"train_span": "20D", "test_span": "7D", "step": "10D", "embargo": "1D", "max_folds": 2}
     base = {"ARTIFACT": str(art), "WORK_ON": "local", "DRIVE_RUNS": str(tmp_path / "drive"), "BATTERY_FOLDER": "",
-            "LOCAL_RUNS": str(tmp_path / "local"), "CHANGES": small, "LEGACY_REPORT": False, "PLOT_PRED_VS_TRUE": False}
+            "LOCAL_RUNS": str(tmp_path / "local"), "CHANGES": small, "LEGACY_REPORT": False, "CHICKS_REPORT": False, "PLOT_PRED_VS_TRUE": False}
     ns = run_notebook("main", {**base, "RUN_NAME": "tn", "TARGET_NORM": "logret_std"})
     assert ns["settings"].model.overrides["target_norm"] == "logret_std"
     assert "target_norm" not in run_notebook("main", {**base, "RUN_NAME": "tn0"})["settings"].model.overrides
