@@ -19,7 +19,12 @@ import numpy as np
 
 from nig_timenet_torch.core.constants import NIG_ALPHA_DEN_MIN
 
-__all__ = ["student_t_quantile", "nig_predictive_std", "nig_interval_halfwidth", "nig_nll"]
+__all__ = ["student_t_quantile", "nig_predictive_std", "nig_interval_halfwidth", "nig_nll", "nig_uncertainty_bounded",
+           "NIG_UNC_MAX"]
+
+#: the cap of the TF evaluation (``evaluation/targets.py``) on epistemic / aleatoric, in label units; the model layer
+#: (``model.nig_layers.NIGUncertainty``) caps at its own ``unc_max`` (20.0 by default), the same number
+NIG_UNC_MAX = 20.0
 
 _LGAMMA = np.frompyfunc(math.lgamma, 1, 1)
 
@@ -44,6 +49,23 @@ def nig_predictive_std(nu: np.ndarray, alpha: np.ndarray, beta: np.ndarray) -> n
     """sqrt(beta (1 + nu) / (nu max(alpha - 1, NIG_ALPHA_DEN_MIN))): the total predictive std, in target units."""
     nu, alpha, beta = (np.asarray(a, dtype=np.float64) for a in (nu, alpha, beta))
     return np.sqrt(beta * (1.0 + nu) / (nu * np.maximum(alpha - 1.0, NIG_ALPHA_DEN_MIN)))
+
+
+def nig_uncertainty_bounded(nu, alpha, beta, unc_max: float | None = NIG_UNC_MAX,
+                            alpha_den_min: float = NIG_ALPHA_DEN_MIN):
+    """(epistemic, aleatoric, clipped) from the NIG parameters, as the TF evaluation recomputed them: aleatoric =
+    sqrt(beta / max(alpha - 1, eps)), epistemic = sqrt(beta / (nu max(alpha - 1, eps))); a non-finite value becomes
+    ``unc_max``, a larger one is capped there (``unc_max`` None or inf = no cap); ``clipped`` marks both."""
+    nu, alpha, beta = (np.asarray(v, dtype=np.float64) for v in (nu, alpha, beta))
+    a1 = np.maximum(alpha - 1.0, alpha_den_min)
+    with np.errstate(all="ignore"):
+        ale, epi = np.sqrt(beta / a1), np.sqrt(beta / (nu * a1))
+    clipped = np.zeros(ale.shape, dtype=bool)
+    if unc_max is not None and np.isfinite(unc_max):
+        for v in (ale, epi):
+            clipped |= ~np.isfinite(v) | (v > unc_max)
+        ale, epi = (np.where(~np.isfinite(v), unc_max, np.minimum(v, unc_max)) for v in (ale, epi))
+    return epi, ale, clipped
 
 
 def nig_interval_halfwidth(nu: np.ndarray, alpha: np.ndarray, beta: np.ndarray, level: float) -> np.ndarray:
